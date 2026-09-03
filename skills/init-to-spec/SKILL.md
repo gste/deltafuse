@@ -10,6 +10,6 @@ This skill carries no rules of its own. The repository files are the source of t
 
 1. Read `docs/process/agent-prompt.md` and follow its core prompt.
 2. Read `docs/process/prompts/02-init-to-spec.md` and follow it as the procedure for this job.
-3. Inputs are `docs/init/**` plus ADRs with `status: accepted` only.
+3. Inputs are `docs/init/**` plus ADRs with `accepted: true` only.
 
 `docs/spec/README.md` is the single review and acceptance entry of the pack. Do not open stories, do not write product code, do not flip `docs/process/STATUS.md`.
