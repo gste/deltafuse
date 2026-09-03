@@ -31,9 +31,9 @@ flowchart TD
     S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Draft)"]
 
     SpecDraft --> S3["/audit-spec<br><b>03. Auditor</b>"]:::skill
-    S6 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Accept/Reject ADR"}}:::human
+    S6 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Decide ADR (`accepted: true`)"}}:::human
 
-    Gate1 -->|"All ADRs accepted & mirrored"| SpecLaw["⚖️ docs/spec/<br><b>SOLE IMPLEMENTATION LAW</b>"]:::law
+    Gate1 -->|"All ADRs accepted (`true`) & mirrored"| SpecLaw["⚖️ docs/spec/<br><b>SOLE IMPLEMENTATION LAW</b>"]:::law
 
     SpecLaw -->|"Plan new Story"| S4["/spec-to-story<br><b>04. Planner</b>"]:::skill
     SpecLaw -->|"Plan from git diff"| S5["/plan-spec-patch<br><b>05. Planner</b>"]:::skill
