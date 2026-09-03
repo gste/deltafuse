@@ -64,6 +64,8 @@
      stage=spec-first, файл в docs/todo/<story>/task/ -> 04-implement-task.md    (Implementer)
      stage=spec-first, файл в docs/todo/<story>/bug/
        или наблюдение бага                           -> 05-fix-bug.md
+      нужен аудит спеки / ADR / валидация готовности    -> 06-audit-spec.md        (Auditor)
+      нужна нарезка задач по git diff -- docs/spec/    -> 07-plan-spec-patch.md   (Planner)
    Подходят две записи или ни одна — стоп и вопрос, работу не выбираешь молча.
    Реестр работ: docs/process/prompts/README.md. Job-промпт не повторяет это ядро:
    в нём только процедура своего артефакта.
