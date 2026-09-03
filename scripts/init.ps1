@@ -10,12 +10,10 @@ Write-Host "Initializing DeltaFuse in $TargetDir..." -ForegroundColor Cyan
 
 $dirs = @(
     "docs/process",
-    "docs/init",
+    "docs/inbox",
     "docs/decisions",
     "docs/spec",
     "docs/todo",
-    "docs/todo/inbox",
-    "docs/archive/init",
     "docs/archive/inbox",
     ".cursor/skills",
     ".agents/skills",
