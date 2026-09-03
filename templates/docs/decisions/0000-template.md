@@ -6,8 +6,13 @@
 
 > [!NOTE]
 > **How to decide:**
-> - To approve: change status to `accepted`. Then run `/audit-spec` to mirror into `docs/spec/`.
-> - To decline: change status to `rejected` and add 1-2 sentences with the reason in Decision Outcome.
+> - **To approve:**
+>   1. Change status to `accepted` and fill in **Decision Owner**.
+>   2. In **Decision Outcome**, confirm or refine the chosen option and rationale.
+>   3. Run `/audit-spec` (the agent will automatically mirror the decision into `docs/spec/`).
+> - **To decline:**
+>   1. Change status to `rejected` and fill in **Decision Owner**.
+>   2. In **Decision Outcome**, write 1–2 sentences explaining why the proposed options are rejected or what alternative is expected.
 
 ## Context and Problem Statement
 What problem are we trying to solve? Why is this decision non-obvious?
