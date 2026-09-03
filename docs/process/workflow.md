@@ -15,11 +15,11 @@ idea
     → classify change type
         → [if adr+spec] draft ADR → human accepts
         → [if contract/behaviour] patch docs/spec → human merges spec
-            → [if multi-slice] open epic under docs/todo/<epic>/
+            → [if multi-slice] open story under docs/todo/<story>/
                 → slice tasks (links to spec only)
                     → agent implements task → PR
                         → human review gate → merge
-                            → close epic (delete docs/todo/<epic>/)
+                            → close story (delete docs/todo/<story>/)
 ```
 
 Никогда не реализуй поведение из голой идеи, ветки чата или архивных Init Requirements.
@@ -55,18 +55,18 @@ idea
   5. Опционально: аудит агентом «ADR против спеки»
   6. Затем реализация как в `spec-patch`
 
-### `epic`
+### `story`
 
 - Несколько модулей или много упорядоченных задач.
 - Предпосылки:
   - нужные секции `docs/spec/` существуют и смерджены;
   - открытые развилки закрыты принятым ADR **и** отражены в спеке.
 - Поток:
-  1. Создать `docs/todo/<epic-id>/README.md` (цель, упорядоченные слайсы, ссылки в `docs/spec/`)
+  1. Создать `docs/todo/<story-id>/README.md` (цель, упорядоченные слайсы, ссылки в `docs/spec/`)
   2. Добавить файлы `task/NN-<slug>.md` или `bug/NN-<slug>.md` — цель, ссылки на спеку, DoD, out of scope, `kind`
   3. Опционально `agent-prompt.md` для реализатора
   4. По умолчанию один слайс — один PR (`task/` → `/implement-task`, `bug/` → `/fix-bug`)
-  5. В том же PR: удалить закрытый файл и строку README эпика; дописать Closed в `docs/todo/README.md`; пункт в `CHANGELOG.md` → `## Unreleased`. Когда слайсов не осталось — удалить `docs/todo/<epic-id>/` и убрать эпик из Open.
+  5. В том же PR: удалить закрытый файл и строку README истории; дописать Closed в `docs/todo/README.md`; пункт в `CHANGELOG.md` → `## Unreleased`. Когда слайсов не осталось — удалить `docs/todo/<story-id>/` и убрать история из Open.
 
 ## Spec delta and surgical edits
 
@@ -95,9 +95,9 @@ idea
 
 ```text
 docs/todo/README.md
-docs/todo/<epic>/README.md
-docs/todo/<epic>/task/NN-<slug>.md
-docs/todo/<epic>/bug/NN-<slug>.md
+docs/todo/<story>/README.md
+docs/todo/<story>/task/NN-<slug>.md
+docs/todo/<story>/bug/NN-<slug>.md
 ```
 
 | Inbox | `kind` | Ветка | Скилл |
@@ -105,18 +105,18 @@ docs/todo/<epic>/bug/NN-<slug>.md
 | `task/` | `task` | `feature/<slug>` | `/implement-task` |
 | `bug/` | `bug` | `bugfix/<slug>` | `/fix-bug` |
 
-`feature` / `bugfix` — только префиксы git. Пустую подпапку не создавать. README эпика: таблицы **Task** и **Bug** (у Bug — колонка `Opened`). Имя файла — `NN-<slug>.md` без префикса `task`/`bug`.
+`feature` / `bugfix` — только префиксы git. Пустую подпапку не создавать. README истории: таблицы **Task** и **Bug** (у Bug — колонка `Opened`). Имя файла — `NN-<slug>.md` без префикса `task`/`bug`.
 
-`NN` сквозной по репозиторию: все эпики, `task/` и `bug/`. Не путать с номерами job-промптов `01`–`05` и с ADR `NNNN`. Следующий номер = `1 + max(NN в Closed ∪ NN живых файлов task/ и bug/)`. Номер не переиспользуется.
+`NN` сквозной по репозиторию: все истории, `task/` и `bug/`. Не путать с номерами job-промптов `01`–`05` и с ADR `NNNN`. Следующий номер = `1 + max(NN в Closed ∪ NN живых файлов task/ и bug/)`. Номер не переиспользуется.
 
-Индекс inbox — [`docs/todo/README.md`](../todo/README.md): список **Open** (живые эпики) и таблица **Closed** (`NN`, `kind`, `slug`, `epic`, `closed`). Closed — только append; `NN` в строке не менять. Спеку и DoD туда не копировать. Открытый слайс в Closed не пишется.
+Индекс inbox — [`docs/todo/README.md`](../todo/README.md): список **Open** (живые истории) и таблица **Closed** (`NN`, `kind`, `slug`, `story`, `closed`). Closed — только append; `NN` в строке не менять. Спеку и DoD туда не копировать. Открытый слайс в Closed не пишется.
 
 Закрытие слайса **в том же PR**, что реализация:
 
-1. удалить файл из `task/` или `bug/` и строку README эпика;
+1. удалить файл из `task/` или `bug/` и строку README истории;
 2. дописать строку в Closed;
 3. дописать один пункт в корневой `CHANGELOG.md` под `## Unreleased`;
-4. если слайсов не осталось — удалить `docs/todo/<epic>/` и убрать эпик из Open.
+4. если слайсов не осталось — удалить `docs/todo/<story>/` и убрать история из Open.
 
 ## Agent commits
 
@@ -134,7 +134,7 @@ docs/todo/<epic>/bug/NN-<slug>.md
 
 Агент может: создать каркас, если файла нет; дописать один bullet под `## Unreleased` (создать секцию, если её нет) при закрытии слайса. Форма: `- NN краткая фраза`, либо `- RBANK-… NN фраза`, если тикет уже есть в слайсе.
 
-Агент не ставит `## Версия` и `### Релиз`, не переносит Unreleased в релиз и не парсит файл для следующего номера. Нарезка эпика (работа 03) CHANGELOG не трогает.
+Агент не ставит `## Версия` и `### Релиз`, не переносит Unreleased в релиз и не парсит файл для следующего номера. Нарезка истории (работа 03) CHANGELOG не трогает.
 
 ## Task file contract (`docs/todo/`)
 
@@ -166,7 +166,7 @@ docs/todo/<epic>/bug/NN-<slug>.md
 5. Если изменился операторский контур — обновить корневой `README.md` (how-to, не закон). Иначе не трогать.
 6. Коммитить каждый законченный шаг (см. «Agent commits»).
 7. Открыть PR с цитатами путей `docs/spec/…`.
-8. В том же PR закрыть слайс: файл очереди, README эпика, Closed, `CHANGELOG.md` Unreleased; пустой эпик снести.
+8. В том же PR закрыть слайс: файл очереди, README истории, Closed, `CHANGELOG.md` Unreleased; пустой история снести.
 9. Если ревью меняет поведение → сначала правится спека, когда затронут контракт.
 
 ## Contradiction audit (ADR ↔ spec)
@@ -200,6 +200,6 @@ docs/todo/<epic>/bug/NN-<slug>.md
 - [ ] `git diff -- docs/spec/` является подмножеством объявленной Spec delta, changelog-лент в спеку не добавлено
 - [ ] человеческие гейты для этого типа изменения пройдены
 - [ ] корневой `README.md` — how-to оператора, не закон; обновлён только если сменился операторский контур
-- [ ] закрытый файл очереди удалён в этом PR; строка Closed и пункт Unreleased в `CHANGELOG.md` добавлены; `docs/todo/<epic>/` снесён, если слайсов не осталось
+- [ ] закрытый файл очереди удалён в этом PR; строка Closed и пункт Unreleased в `CHANGELOG.md` добавлены; `docs/todo/<story>/` снесён, если слайсов не осталось
 
 Доменные пункты DoD принадлежат `docs/spec/` и файлам задач — не этому процессному файлу.

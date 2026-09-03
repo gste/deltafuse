@@ -1,6 +1,6 @@
 ---
 name: fix-bug
-description: Takes exactly one bug from a live observation or a file under docs/todo/<epic>/bug/ — optional run, spec-gap analysis, ADR if needed, spec patch, then surgical code. Use for kind: bug. Do not use for files under docs/todo/<epic>/task/ (that is implement-task).
+description: Takes exactly one bug from a live observation or a file under docs/todo/<story>/bug/ — optional run, spec-gap analysis, ADR if needed, spec patch, then surgical code. Use for kind: bug. Do not use for files under docs/todo/<story>/task/ (that is implement-task).
 disable-model-invocation: true
 ---
 

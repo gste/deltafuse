@@ -12,7 +12,7 @@ Job prompt для одной работы: превратить Init Requirement
 
 - `stage: bootstrap` в `docs/process/STATUS.md`. Если `spec-first` — стоп: пакет уже принят, изменения идут как `spec-patch`, а не как сборка.
 - `docs/init/` существует и непуст. Пусто или нет файла — stop-and-ask, продукт не выдумывать.
-- Роль на сессию: **Spec editor (draft)**. Не Implementer, не нарезка эпиков (это другой промпт).
+- Роль на сессию: **Spec editor (draft)**. Не Implementer, не нарезка историй (это другой промпт).
 - Это одноразовая bootstrap-последовательность (`docs/process/workflow.md`), а не один из четырёх change type. В преамбуле указывай `change type: bootstrap (spec pack draft)`.
 
 ## 1. Inputs
