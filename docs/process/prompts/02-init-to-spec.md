@@ -17,8 +17,8 @@ Job prompt для одной работы: превратить Init Requirement
 
 ## 1. Inputs
 
-- Смысл берётся только из `docs/init/**` и ADR со `status: accepted`.
-- ADR со `status: proposed` законом не является: развилку сам не закрываешь.
+- Смысл берётся только из `docs/init/**` и ADR со `accepted: true`.
+- ADR со `accepted: false` законом не является: развилку сам не закрываешь.
 - Требований, которых нет в этих двух источниках, в пакете быть не может.
 
 ## 2. Output: modular pack
@@ -69,7 +69,7 @@ docs/spec/<NN>-<slug>.md     # один bounded context = один файл
 
 - выбор не делаешь;
 - ставишь пометку в месте нормы и запись в README;
-- заводишь черновик `docs/decisions/NNNN-<slug>.md` со `status: proposed`;
+- заводишь черновик `docs/decisions/NNNN-<slug>.md` со `accepted: false`;
 - модуль с `OPEN DECISION` не является законом для реализации, пока ADR не принят и не отражён императивом (`workflow.md`, `adr+spec`);
 - остальной пакет из-за этого не блокируется.
 

@@ -76,7 +76,7 @@ Full rules: `docs/process/workflow.md`.
 
 Stop and request a human when:
 
-- Accepting or rejecting an ADR
+- Setting ADR to `accepted: true`
 - Merging contract changes in `docs/spec/`
 - Merging non-trivial work to the default branch
 - Security, credentials, or trust-boundary changes
