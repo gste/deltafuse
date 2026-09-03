@@ -2,16 +2,15 @@
 
 - **Status:** proposed  <!-- Allowed values: [proposed] (draft by AI) | [accepted] (approved by human) | [rejected] | [superseded by NNNN] -->
 - **Date:** YYYY-MM-DD
-- **Decision Owner (Human):** Name / Handle
 
 > [!NOTE]
 > **How to decide:**
 > - **To approve:**
->   1. Change status to `accepted` and fill in **Decision Owner**.
+>   1. Change status to `accepted`.
 >   2. In **Decision Outcome**, confirm or refine the chosen option and rationale.
 >   3. Run `/audit-spec` (the agent will automatically mirror the decision into `docs/spec/`).
 > - **To decline:**
->   1. Change status to `rejected` and fill in **Decision Owner**.
+>   1. Change status to `rejected`.
 >   2. In **Decision Outcome**, write 1–2 sentences explaining why the proposed options are rejected or what alternative is expected.
 
 ## Context and Problem Statement

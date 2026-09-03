@@ -2,9 +2,9 @@
 
 Index of architecture decisions.
 
-| Number | Title | Status | Date | Decision Owner |
-|--------|-------|--------|------|----------------|
-| [0000](./0000-template.md) | Decision Template | draft | YYYY-MM-DD | @handle |
+| Number | Title | Status | Date |
+|--------|-------|--------|------|
+| [0000](./0000-template.md) | Decision Template | draft | YYYY-MM-DD |
 
 ## Status Lifecycle & Cheat-sheet
 
@@ -16,5 +16,5 @@ Index of architecture decisions.
 | `superseded` | **Human Only** | Replaced by a newer decision (`superseded by ADR-NNNN`). |
 
 ## Key Rules
-1. **Human Gate:** Only a human decision owner may set status to `accepted` or `rejected`.
+1. **Human Gate:** Only a human may set status to `accepted` or `rejected` (verified by `git log`).
 2. **Mirroring to Law:** An `accepted` ADR must be mirrored into `docs/spec/` as binding imperative text (via `/audit-spec`).
