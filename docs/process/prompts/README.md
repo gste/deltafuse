@@ -1,4 +1,4 @@
-# Prompts directory
+﻿# Prompts directory
 
 Процедурные промпты для стандартных работ (jobs) процесса DeltaFuse. Каждый промпт задаёт пошаговый алгоритм для конкретной роли и вызывается соответствующим Agent Skill.
 
@@ -12,10 +12,11 @@
 | **04** | [`04-spec-to-story.md`](./04-spec-to-story.md) | Planner | `docs/todo/<story>/**` | `stage: spec-first`, нарезка принятой спецификации на Story и атомарные задачи |
 | **05** | [`05-plan-spec-patch.md`](./05-plan-spec-patch.md) | Planner | `docs/todo/<story>/task/` | нарезка задач по `git diff -- docs/spec/` (после применения `spec-patch`) |
 | **06** | [`06-implement-task.md`](./06-implement-task.md) | Implementer | код, тесты, PR | `stage: spec-first`, есть файл задачи в `docs/todo/<story>/task/` |
-| **07** | [`07-fix-bug.md`](./07-fix-bug.md) | Spec editor → Implementer | спека, код, PR | `stage: spec-first`, файл в `docs/todo/<story>/bug/` или запрос «почини баг» |
+| **07** | [`07-report-bug.md`](./07-report-bug.md) | Auditor / Bug Triage | `docs/todo/<story>/bug/` | `stage: spec-first`, триаж входящего сырого бага, комментария ревью или дампа |
+| **08** | [`08-fix-bug.md`](./08-fix-bug.md) | Implementer / Spec editor | спека, код, тесты, PR | `stage: spec-first`, реализация бага из `docs/todo/<story>/bug/` |
 
 ## Conventions
 
 - Каждый промпт самодостаточен: он описывает вход, шаги, DoD и правила коммитов для своей работы.
 - Все промпты подчиняются базовым инвариантам из [`../agent-prompt.md`](../agent-prompt.md) и правилам ролей из [`../roles.md`](../roles.md).
-- В GUI агентов (Cursor, Antigravity, Claude Code) работы вызываются одноимёнными командами скиллов: `/init-requirements`, `/init-to-spec`, `/audit-spec`, `/spec-to-story`, `/plan-spec-patch`, `/implement-task`, `/fix-bug`.
+- В GUI агентов (Cursor, Antigravity, Claude Code) работы вызываются одноимёнными командами скиллов: `/init-requirements`, `/init-to-spec`, `/audit-spec`, `/spec-to-story`, `/plan-spec-patch`, `/implement-task`, `/report-bug`, `/fix-bug`.
