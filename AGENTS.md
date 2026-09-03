@@ -53,6 +53,8 @@ Do not load the entire Specification pack unless the task explicitly spans multi
 - Do not implement from chat history, Init Requirements, archive, or ADR text alone.
 - Do not expand scope beyond what the active Specification states as in-scope.
 - Do not log or commit secrets, tokens, or raw credential files.
+- **ABSOLUTE PROHIBITION:** Never execute `git push` under any circumstances (to any remote or branch). Pushing to remote is strictly Human-Only.
+- Never execute destructive git commands (`git push --force`, `git reset --hard`, `git clean -f`).
 - Do not change `docs/spec/**` or `docs/decisions/**` unless the task explicitly allows it.
 - Do not edit spec anchors outside the declared Spec delta, and do not rewrite a chapter "while you are in there".
 - Do not add changelog ledgers to `docs/spec/**` (`ADDED` / `MODIFIED` / `REMOVED` lists, "was / now", dated entries). The pack states only how the system works now; intent lives in `docs/todo/` and the PR.
@@ -92,7 +94,7 @@ Details: `docs/process/roles.md`.
 3. Write the tests the DoD names and run them on the current code — they must fail for this slice's behaviour. If they already pass, stop.
 4. Implement the smallest change that turns those tests green.
 5. If the operator surface changed (CLI, env, input, exit codes, output layout, report/manifest shape), update the root `README.md` how-to; it is not a second specification. Otherwise say `README unchanged`.
-6. Commit each completed step yourself (`git add` only that step's files). For `spec-patch`: spec commit, then code commit. Do not wait to be asked. Commit messages in English. Do not amend, push, or merge to the default branch.
+6. Commit each completed step yourself (`git add` only that step's files). For `spec-patch`: spec commit, then code commit. Do not wait to be asked. Commit messages in English. Do not amend, do not merge to default branch, and NEVER run `git push`.
 7. When closing the slice: delete the inbox file, append Closed in `docs/todo/README.md`, add one Unreleased bullet to `CHANGELOG.md` (`- NN short phrase`). PR description cites spec paths (e.g. `docs/spec/0X-name.md#anchor`).
 8. If blocked by a missing or contradictory requirement → stop; propose `spec-patch` (and ADR if non-obvious). Do not guess product intent.
 
