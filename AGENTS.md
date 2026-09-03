@@ -18,7 +18,7 @@ Init Requirements + Architecture Decisions (ADR)
 | What to implement       | `docs/spec/**` only                                       |
 | Why a decision was made | `docs/decisions/**`                                       |
 | How we work             | DeltaFuse: `docs/process/**` + this file                  |
-| Current epic tasks      | `docs/todo/<epic>/` (if present)                          |
+| Current story tasks      | `docs/todo/<story>/` (if present)                          |
 | Init Requirements       | `docs/init/` (pre-accept) or `docs/archive/` (historical) |
 
 Rules:
@@ -26,7 +26,7 @@ Rules:
 - **Implementation law** = `docs/spec/`. If code and spec disagree, spec wins; open a `spec-patch`, do not "fix in code only".
 - **ADR does not replace spec.** An accepted ADR must be reflected as imperative text in `docs/spec/` in the same change set.
 - **Init Requirements do not replace spec.** After the Specification pack is accepted, do not implement from Init or archive.
-- Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<epic>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<epic>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Implement `task/` with `/implement-task`; take a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty epic directory is removed.
+- Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<story>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<story>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Implement `task/` with `/implement-task`; take a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty story directory is removed.
 - User-facing chat follows the Language table in `docs/process/README.md` (Russian by default for RU teams), even though this file is English. Exception: the human wrote this turn in English.
 
 ## Default reading order
@@ -37,7 +37,7 @@ Rules:
 2. `docs/process/workflow.md`
 3. `docs/process/roles.md`
 4. `docs/spec/README.md` → only sections linked from the current task
-5. Task file under `docs/todo/<epic>/task/` or `docs/todo/<epic>/bug/` if provided
+5. Task file under `docs/todo/<story>/task/` or `docs/todo/<story>/bug/` if provided
 
 **Planner / auditor agent**
 
@@ -66,7 +66,7 @@ Do not load the entire Specification pack unless the task explicitly spans multi
 | `trivial`    | no               | no              | no contract/behaviour change                |
 | `spec-patch` | yes              | no              | behaviour/contract change; decision obvious |
 | `adr+spec`   | yes              | yes             | non-obvious design fork                     |
-| `epic`       | yes (spec green) | if forks remain | multi-slice delivery                        |
+| `story`       | yes (spec green) | if forks remain | multi-slice delivery                        |
 
 Full rules: `docs/process/workflow.md`.
 
@@ -85,7 +85,7 @@ Details: `docs/process/roles.md`.
 
 ## How to implement a task
 
-`/implement-task` is only for `docs/todo/<epic>/task/`. A bug is `/fix-bug`.
+`/implement-task` is only for `docs/todo/<story>/task/`. A bug is `/fix-bug`.
 
 1. Read the task file — including its Spec delta — and **linked** spec sections only. A branch diff replaces neither.
 2. If the task allows spec edits: change only the anchors listed in the Spec delta, phrased as if the requirement had always been that way, then check `git diff -- docs/spec/` against that list. Anything extra is reverted or escalated. Commit the spec. If `docs/spec/**` was not edited, say `spec unchanged` in the closing answer.
@@ -99,8 +99,8 @@ Details: `docs/process/roles.md`.
 ## PR expectations
 
 - Prefer one task ≈ one PR.
-- The implementing PR deletes the closed inbox file (`task/` or `bug`), appends Closed, adds a `CHANGELOG.md` Unreleased bullet, and removes the epic README row; delete `docs/todo/<epic>/` if nothing remains.
+- The implementing PR deletes the closed inbox file (`task/` or `bug`), appends Closed, adds a `CHANGELOG.md` Unreleased bullet, and removes the story README row; delete `docs/todo/<story>/` if nothing remains.
 - No drive-by refactors outside task scope.
 - Behaviour change ⇒ spec updated in the same PR or an already-merged prior PR.
 - `docs/spec/**` changed ⇒ PR body carries the Spec delta (`ADDED` / `MODIFIED` / `REMOVED` + anchors) and the diff stays inside it.
-- After the last remaining slice of an epic: delete `docs/todo/<epic>/`. Each implementing PR already deletes its own inbox file.
+- After the last remaining slice of a story: delete `docs/todo/<story>/`. Each implementing PR already deletes its own inbox file.

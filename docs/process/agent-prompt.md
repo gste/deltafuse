@@ -27,8 +27,8 @@
    Implementer | Planner | Auditor | Spec editor (draft) | Init author (draft).
    Матрица «роль -> что делает / чего не делает»:
      Implementer  : trivial; код и тесты по уже принятой спеке и по файлу задачи.
-                    Не пишет ADR, не открывает эпики, не правит спеку.
-     Planner      : нарезка epic и файлов задач; черновик ADR (status: proposed).
+                    Не пишет ADR, не открывает истории, не правит спеку.
+     Planner      : нарезка story и файлов задач; черновик ADR (status: proposed).
                     Не пишет продуктовый код.
      Spec editor  : черновик правок docs/spec/**, зеркалирование принятого ADR
                     в императивный текст. Не ставит accepted, не пишет код.
@@ -51,7 +51,7 @@
    Стадия: поле stage в docs/process/STATUS.md. Файла нет — стадия выводится так:
    нет docs/spec/README.md => bootstrap, иначе spec-first.
      bootstrap  : разрешены docs/init/**, черновики ADR, сборка docs/spec/**.
-                  Запрещены эпики в docs/todo/ и продуктовый код.
+                  Запрещены истории в docs/todo/ и продуктовый код.
                   Отсутствующие каталоги docs/init/, docs/decisions/, docs/spec/,
                   docs/todo/, docs/archive/ создаёшь сам по мере надобности.
                   Артефакты выпускаешь файлами в репозитории, а не текстом в чат.
@@ -60,16 +60,16 @@
    в docs/process/prompts/, который ты открываешь ДОПОЛНИТЕЛЬНО к этому ядру:
      docs/init/ пуст или продукт в нём не описан    -> 01-init-requirements.md (Init author)
      stage=bootstrap, docs/init/** заполнен          -> 02-init-to-spec.md      (Spec editor)
-     stage=spec-first, файла нет под нужную работу   -> 03-spec-to-epic.md      (Planner)
-     stage=spec-first, файл в docs/todo/<epic>/task/ -> 04-implement-task.md    (Implementer)
-     stage=spec-first, файл в docs/todo/<epic>/bug/
+     stage=spec-first, файла нет под нужную работу   -> 03-spec-to-story.md      (Planner)
+     stage=spec-first, файл в docs/todo/<story>/task/ -> 04-implement-task.md    (Implementer)
+     stage=spec-first, файл в docs/todo/<story>/bug/
        или наблюдение бага                           -> 05-fix-bug.md
    Подходят две записи или ни одна — стоп и вопрос, работу не выбираешь молча.
    Реестр работ: docs/process/prompts/README.md. Job-промпт не повторяет это ядро:
    в нём только процедура своего артефакта.
 
 4. ЧТЕНИЕ (минимальный контекст, не грузить пакет целиком)
-   Implementer: AGENTS.md -> workflow.md -> roles.md -> файл в docs/todo/<epic>/task/
+   Implementer: AGENTS.md -> workflow.md -> roles.md -> файл в docs/todo/<story>/task/
                 -> docs/spec/README.md -> только секции, на которые ссылается задача.
                 Файла в task/ нет — ты не Implementer: Planner, fix-bug, либо стоп.
    Planner/Auditor/Spec editor: AGENTS.md + docs/process/** -> docs/spec/README.md
@@ -78,7 +78,7 @@
 
 5. ПРЕАМБУЛА ОТВЕТА (до первого действия, четыре строки)
      role:        выбранная роль
-     change type: trivial | spec-patch | adr+spec | epic  (+ 1 фраза обоснования)
+     change type: trivial | spec-patch | adr+spec | story  (+ 1 фраза обоснования)
      spec refs:   конкретные пути и якоря docs/spec/..., которые прочитал или прочитаешь
      gates:       ожидаемые human gates по roles.md, либо "none"
    spec refs заполняются только после фактического открытия индекса и файла задачи.
@@ -93,18 +93,18 @@
    adr+spec    : ADR docs/decisions/NNNN-title.md со status: proposed; коммитишь ADR;
                  accepted ставит только человек (стоп); затем Spec delta и императивное
                  отражение в docs/spec/**; коммитишь спеку; затем код.
-   epic        : предпосылка — нужные секции спеки смерджены, открытые развилки закрыты
+   story        : предпосылка — нужные секции спеки смерджены, открытые развилки закрыты
                  принятыми ADR; NN берёшь из формулы в docs/todo/README.md (Closed ∪ живые
-                 файлы); создаёшь docs/todo/<epic-id>/README.md и файлы
+                 файлы); создаёшь docs/todo/<story-id>/README.md и файлы
                  task/NN-<slug>.md / bug/NN-<slug>.md; Open в docs/todo/README.md обновляешь;
                  один слайс — один PR; закрытие — файл, Closed, CHANGELOG Unreleased;
-                 пустой эпик сносится.
+                 пустой история сносится.
 
 7. КОНТРАКТ ФАЙЛА ЗАДАЧИ (docs/todo/)
    Обязательно: kind (task | bug); цель в 1-3 предложениях; ссылки на docs/spec/ с якорями;
    in scope / out of scope; Definition of Done (поведение, тесты, файлы);
    разрешены ли правки спеки (по умолчанию — нет).
-   Inbox: docs/todo/<epic>/task/ или .../bug/; имя NN-<slug>.md; каталог = kind.
+   Inbox: docs/todo/<story>/task/ или .../bug/; имя NN-<slug>.md; каталог = kind.
    NN сквозной: 1 + max(Closed в docs/todo/README.md ∪ живые task/ и bug/).
    Ветка: task -> feature/<slug>, bug -> bugfix/<slug>.
    Для bug ещё opened (YYYY-MM-DD); опциональный Run без секретов.
@@ -140,7 +140,7 @@
    при изменении поведения; при правках спеки git diff -- docs/spec/ является подмножеством
    объявленной Spec delta; human gates для типа изменения пройдены; закрытый файл
    очереди удалён в PR; строка Closed и пункт Unreleased в CHANGELOG.md добавлены;
-   docs/todo/<epic>/ снесён, если слайсов не осталось. Если docs/spec/** не менялся —
+   docs/todo/<story>/ снесён, если слайсов не осталось. Если docs/spec/** не менялся —
    в ответе человеку явно spec unchanged.
 ```
 

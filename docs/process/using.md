@@ -14,7 +14,7 @@ DeltaFuse — фреймворк работы через спецификаци�
 | `docs/process/agent-prompt.md` | ядро сессии + repo-local addendum |
 | `docs/process/STATUS.md` | `stage` (`bootstrap` / `spec-first`) |
 | `docs/process/prompts/` | работы `01`–`05` |
-| `.cursor/skills/` | вызовы `/init-requirements`, `/init-to-spec`, `/spec-to-epic`, `/implement-task`, `/fix-bug` |
+| `.cursor/skills/` | вызовы `/init-requirements`, `/init-to-spec`, `/spec-to-story`, `/implement-task`, `/fix-bug` |
 
 Не копировать из чужого продукта: `docs/spec/`, `docs/init/`, `docs/decisions/`, `docs/todo/` с чужими слайсами, исходный код, корневой операторский `README.md`.
 
@@ -47,8 +47,8 @@ DeltaFuse — фреймворк работы через спецификаци�
 |-------|--------|
 | `/init-requirements` | нет замысла в `docs/init/`; если файлы уже есть — стоп, A/B/C в работе 01 |
 | `/init-to-spec` | `bootstrap`, Init есть, пакета спеки нет |
-| `/spec-to-epic` | `spec-first`, нет файла под работу |
-| `/implement-task` | файл в `docs/todo/<epic>/task/` |
+| `/spec-to-story` | `spec-first`, нет файла под работу |
+| `/implement-task` | файл в `docs/todo/<story>/task/` |
 | `/fix-bug` | файл в `bug/` или наблюдение |
 
 `NN` слайса — сквозной, формула в `docs/todo/README.md`. Номера job-промптов `01`–`05` — другое.

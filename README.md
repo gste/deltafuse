@@ -67,9 +67,9 @@ DeltaFuse structures the software delivery lifecycle into 5 distinct, single-res
 |---|---|---|---|---|
 | **01** | [\/init-requirements\](docs/process/prompts/01-init-requirements.md) | Init author (draft) | docs/init/** | Capturing initial project intent and external constraints. |
 | **02** | [\/init-to-spec\](docs/process/prompts/02-init-to-spec.md) | Spec editor (draft) | docs/spec/** | Compiling Init Requirements & ADRs into a modular Specification pack. |
-| **03** | [\/spec-to-epic\](docs/process/prompts/03-spec-to-epic.md) | Planner | docs/todo/<epic>/** | Slicing accepted specification into atomic, verifiable tasks and bugs. |
-| **04** | [\/implement-task\](docs/process/prompts/04-implement-task.md) | Implementer | Code, Tests, PR | Implementing a single task under docs/todo/<epic>/task/. |
-| **05** | [\/fix-bug\](docs/process/prompts/05-fix-bug.md) | Spec editor → Implementer | Spec, Code, PR | Diagnosing and resolving a bug from docs/todo/<epic>/bug/ or observation. |
+| **03** | [\/spec-to-story\](docs/process/prompts/03-spec-to-story.md) | Planner | docs/todo/<story>/** | Slicing accepted specification into atomic, verifiable tasks and bugs. |
+| **04** | [\/implement-task\](docs/process/prompts/04-implement-task.md) | Implementer | Code, Tests, PR | Implementing a single task under docs/todo/<story>/task/. |
+| **05** | [\/fix-bug\](docs/process/prompts/05-fix-bug.md) | Spec editor → Implementer | Spec, Code, PR | Diagnosing and resolving a bug from docs/todo/<story>/bug/ or observation. |
 
 ---
 
@@ -80,7 +80,7 @@ Every change in a DeltaFuse-governed repository is classified into one of four t
 - **\	rivial\**: Pure refactoring, typos, internal test improvements. Spec is unchanged.
 - **\spec-patch\**: Behavioral change where the decision is obvious. Spec anchor updated and committed first, followed by code and tests.
 - **\dr+spec\**: Non-obvious architectural choice. Human accepts ADR (docs/decisions/), then spec is updated, then code is written.
-- **\pic\**: Multi-slice delivery sliced into atomic tasks under docs/todo/<epic>/.
+- **\pic\**: Multi-slice delivery sliced into atomic tasks under docs/todo/<story>/.
 
 ---
 
@@ -92,7 +92,7 @@ Every change in a DeltaFuse-governed repository is classified into one of four t
 | Draft ADR (\status: proposed\) | Consulted | Responsible | **Accountable** |
 | Accept / Reject ADR | — | Consulted | **Accountable (Human Only)** |
 | Modify Specification (\docs/spec/\) | Responsible (Draft) | Consulted | **Accountable (Merge)** |
-| Plan & Slice Epics (\docs/todo/\) | Consulted | Responsible | **Accountable (Review)** |
+| Plan & Slice Stories (\docs/todo/\) | Consulted | Responsible | **Accountable (Review)** |
 | Code & Automated Tests | **Responsible** | Consulted | Accountable (Review) |
 | Merge to Default Branch | — | — | **Accountable (Human Only)** |
 
@@ -136,7 +136,7 @@ your-project/
 │   ├── spec/                  # Modular specification pack (the Law)
 │   │   ├── README.md          # Single acceptance entry & TOC
 │   │   └── 00-context.md      # Domain boundaries & scope
-│   ├── todo/                  # Active epics and task inboxes
+│   ├── todo/                  # Active stories and task inboxes
 │   └── archive/               # Historical specifications and inits
 └── CHANGELOG.md               # Keep-a-Changelog unreleased ledger
 \

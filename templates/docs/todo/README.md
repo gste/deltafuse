@@ -1,9 +1,9 @@
 # Tasks Inbox & History
 
-## Open Epics
-| Epic ID | Title | Status |
+## Open Stories
+| Story ID | Title | Status |
 |---------|-------|--------|
 
 ## Closed Slices
-| NN | Kind | Slug | Epic | Closed |
+| NN | Kind | Slug | Story | Closed |
 |----|------|------|------|--------|
