@@ -19,10 +19,10 @@ flowchart TD
     classDef law fill:#d4edda,stroke:#155724,stroke-width:2px,color:#155724;
     classDef inbox fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,color:#383d41;
 
-    Raw["💡 Raw Idea / Problem"] --> S1["/init-requirements<br><b>01. Init Author</b>"]:::skill
-    S1 --> InitDoc["📄 docs/init/"]
+    Raw["💡 Raw Idea / PRD / Error Log / Review"] --> Inbox["📥 docs/inbox/<br><b>UNIFIED ENTRY POINT</b>"]:::inbox
 
-    InitDoc --> S2["/init-to-spec<br><b>02. Spec Editor</b>"]:::skill
+    Inbox -->|"Raw feature requirements"| S1["/init-requirements<br><b>01. Init Author</b>"]:::skill
+    S1 --> S2["/init-to-spec<br><b>02. Spec Editor</b>"]:::skill
     S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Draft)"]
 
     SpecDraft --> S3["/audit-spec<br><b>03. Auditor</b>"]:::skill
@@ -33,11 +33,11 @@ flowchart TD
     SpecLaw -->|"Plan new Story"| S4["/spec-to-story<br><b>04. Planner</b>"]:::skill
     SpecLaw -->|"Plan from git diff"| S5["/plan-spec-patch<br><b>05. Planner</b>"]:::skill
 
-    RawBug["🐛 Bug Report / Review Comment / Dump"] --> S7["/report-bug<br><b>07. Bug Triage</b>"]:::skill
+    Inbox -->|"Bug Report / Review Comment / Dump"| S7["/report-bug<br><b>07. Bug Triage</b>"]:::skill
 
-    S4 --> TaskInbox["📋 docs/todo/&lt;story&gt;/task/<br><b>Task Inbox</b>"]:::inbox
+    S4 --> TaskInbox["📋 docs/todo/&lt;story&gt;/task/<br><b>Task Queue</b>"]:::inbox
     S5 --> TaskInbox
-    S7 --> BugInbox["🐞 docs/todo/&lt;story&gt;/bug/<br><b>Bug Inbox</b>"]:::inbox
+    S7 --> BugInbox["🐞 docs/todo/&lt;story&gt;/bug/<br><b>Bug Queue</b>"]:::inbox
 
     TaskInbox -->|"Execute task"| S6["/implement-task<br><b>06. Implementer</b>"]:::skill
     BugInbox -->|"Fix bug"| S8["/fix-bug<br><b>08. Implementer</b>"]:::skill
@@ -55,23 +55,24 @@ flowchart TD
 **DeltaFuse** is an operational framework for AI-native software engineering. It bridges the gap between chaotic LLM chat interactions and disciplined software development by establishing:
 
 - **Specification (`docs/spec/`)** as the single source of truth and implementation law.
+- **Unified Ingestion (`docs/inbox/`)** as the sole entry point for all raw external inputs (PRDs, exports, error dumps, review notes) triaged via Inbox Zero into `docs/archive/inbox/`.
 - **AI Agents** constrained into distinct specialized roles (RACI).
 - **Humans in the loop** holding absolute control over architectural forks and production deployments.
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
-│          Initial Requirements  +  Decisions             │
-│             (docs/init/  +  docs/decisions/)            │
+│              Raw Intake (docs/inbox/)                   │ ◄── UNIFIED ENTRY POINT
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │               Specification (docs/spec/)                │ ◄── SOLE IMPLEMENTATION LAW
+│              + Architecture (docs/decisions/)           │
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│               Atomic Tasks (docs/todo/)                 │ ◄── INBOX & DEFINITION OF DONE
+│               Atomic Tasks (docs/todo/)                 │ ◄── QUEUE & DEFINITION OF DONE
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
@@ -111,13 +112,13 @@ The development lifecycle is divided into 8 distinct jobs:
 
 | # | Command / Skill | Role | Primary Artifact | When to Run |
 |---|---|---|---|---|
-| **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Init Author | `docs/init/**` | Capture early product requirements, user stories, constraints. |
-| **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Spec Editor | `docs/spec/**`, `docs/decisions/**` | Compile initial requirements into a modular specification pack and ADR drafts. |
+| **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Init Author | `docs/inbox/**` | Capture early product requirements, user stories, constraints in unified inbox. |
+| **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Spec Editor | `docs/spec/**`, `docs/decisions/**` | Compile initial requirements from `docs/inbox/` into modular specification pack and ADR drafts. |
 | **03** | [`/audit-spec`](docs/process/prompts/03-audit-spec.md) | Auditor | Report, ADRs, `docs/spec/**` | Validate consistency, mirror accepted ADRs, identify hidden forks. |
 | **04** | [`/spec-to-story`](docs/process/prompts/04-spec-to-story.md) | Planner | `docs/todo/<story>/**` | Slice accepted specification modules into atomic task files. |
 | **05** | [`/plan-spec-patch`](docs/process/prompts/05-plan-spec-patch.md) | Planner | `docs/todo/<story>/task/` | Automatically plan tasks directly from specification `git diff`. |
 | **06** | [`/implement-task`](docs/process/prompts/06-implement-task.md) | Implementer | Code, Tests, PR | Implement single task slice with TDD strictly against spec. |
-| **07** | [`/report-bug`](docs/process/prompts/07-report-bug.md) | Auditor / Triage | `docs/todo/<story>/bug/` | Triage raw bug report, review comment, or error dump without modifying code. |
+| **07** | [`/report-bug`](docs/process/prompts/07-report-bug.md) | Auditor / Triage | `docs/todo/<story>/bug/` | Triage raw bug report, review comment, or error dump from `docs/inbox/` without modifying code. |
 | **08** | [`/fix-bug`](docs/process/prompts/08-fix-bug.md) | Implementer | Code, Tests, PR | Fix bug from task file in `docs/todo/<story>/bug/` with regression test. |
 
 ---
@@ -137,11 +138,12 @@ Every change is categorized into one of four deterministic types:
 
 | Activity | AI Implementer | AI Planner / Auditor | Human |
 |---|:---:|:---:|:---:|
-| Draft Init Requirements (`docs/init/`) | Consulted | Consulted | **Responsible / Accountable** |
+| Draft Requirements (`docs/inbox/`) | Consulted | Consulted | **Responsible / Accountable** |
 | Draft ADR (`docs/decisions/`) | — | Responsible (draft) | **Accountable** |
 | **Accept ADR (`accepted: true`)** | ❌ Forbidden | ❌ Forbidden | **Human-Only** |
 | Update Specification (`docs/spec/`) | Responsible (within delta) | Consulted | **Accountable (PR Merge)** |
 | Slice Story into Tasks (`docs/todo/`) | — | Responsible | **Accountable** |
+| Triage Bugs (`/report-bug`) | — | **Responsible** | **Accountable** |
 | Code & Unit Tests | **Responsible** | Consulted | **Accountable (PR Review)** |
 | **`git push` and Default Branch Merge** | ❌ **ABSOLUTELY FORBIDDEN** | ❌ **ABSOLUTELY FORBIDDEN** | **Human-Only** |
 
@@ -157,16 +159,14 @@ Every change is categorized into one of four deterministic types:
 ├── docs/
 │   ├── process/              # DeltaFuse methodology, roles, workflows
 │   │   └── prompts/          # Procedural job prompts (01..08)
-│   ├── init/                 # Raw input requirements (pre-specification)
+│   ├── inbox/                # UNIFIED INBOX for all incoming raw files (PRD, logs, dumps, reviews)
 │   ├── decisions/            # Architecture Decision Records (ADRs)
 │   ├── spec/                 # Modular specification (IMPLEMENTATION LAW)
 │   │   ├── README.md         # Single acceptance entry (TOC, Tour, Coverage)
 │   │   └── 00-context.md     # In/out of scope, actors, human-gated areas
 │   ├── todo/                 # Atomic task queues
-│   │   ├── inbox/            # Raw dumps, logs, comment files for triage
 │   │   └── <story>/          # Story task slices (task/ and bug/)
-│   └── archive/              # Historical artifacts and processed requirements
-│       ├── init/
+│   └── archive/              # Processed historical artifacts
 │       └── inbox/
 ├── .cursor/skills/           # Cursor skills
 ├── .gemini/skills/           # Google Antigravity / Gemini CLI skills

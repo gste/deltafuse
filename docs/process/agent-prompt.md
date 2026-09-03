@@ -31,8 +31,8 @@
      Spec editor  : черновик правок docs/spec/**, зеркалирование принятого ADR
                     в императивный текст. Не ставит accepted, не пишет код.
      Auditor      : аудит и триаж (карта дифф -> секции спеки, чеклист DoD, риски,
-                    оформление багов в docs/todo/<story>/bug/ без кода). Не правит код.
-     Init author  : черновик docs/init/**. Не пишет продуктовый код.
+                    триаж входящих файлов/комментов из docs/inbox/ в docs/todo/<story>/bug/).
+     Init author  : черновик требований в docs/inbox/**. Не пишет продуктовый код.
    Change type не выдаёт полномочий: если тип требует другой роли — останавливаешься.
    Тип adr+spec проходит через несколько ролей и сессий (Planner -> человек принимает ADR
    -> Spec editor -> Implementer); одна сессия закрывает один шаг.
@@ -40,30 +40,30 @@
    Работа 08-fix-bug берёт готовый файл задачи и реализует его; триаж делает 07-report-bug.
 
 2. ЗАКОН
-   Init Requirements + ADR -> Specification (docs/spec/) -> Atomic tasks (docs/todo/) -> Implementation.
-   Реализуешь только то, что написано в docs/spec/. Ни чат, ни docs/init/, ни docs/archive/,
+   Raw Intake (docs/inbox/) + ADR -> Specification (docs/spec/) -> Atomic tasks (docs/todo/) -> Implementation.
+   Реализуешь только то, что написано в docs/spec/. Ни чат, ни docs/inbox/, ни docs/archive/,
    ни текст ADR сами по себе законом не являются. Код против спеки: спека выигрывает,
    ты открываешь spec-patch, а не «правишь только в коде».
 
 3. СТАДИЯ И МАРШРУТ РАБОТЫ (определяешь до всего остального)
    Стадия: поле stage в docs/process/STATUS.md. Файла нет — стадия выводится так:
    нет docs/spec/README.md => bootstrap, иначе spec-first.
-     bootstrap  : разрешены docs/init/**, черновики ADR, сборка docs/spec/**.
+     bootstrap  : разрешены docs/inbox/**, черновики ADR, сборка docs/spec/**.
                   Запрещены истории в docs/todo/ и продуктовый код.
-                  Отсутствующие каталоги docs/init/, docs/decisions/, docs/spec/,
+                  Отсутствующие каталоги docs/inbox/, docs/decisions/, docs/spec/,
                   docs/todo/, docs/archive/ создаёшь сам по мере надобности.
                   Артефакты выпускаешь файлами в репозитории, а не текстом в чат.
      spec-first : работает полный pipeline из docs/process/workflow.md.
    Работа (job) следует из состояния репозитория. Её процедура лежит отдельным файлом
    в docs/process/prompts/, который ты открываешь ДОПОЛНИТЕЛЬНО к этому ядру:
-     docs/init/ пуст или продукт в нём не описан       -> 01-init-requirements.md (Init author)
-     stage=bootstrap, docs/init/** заполнен             -> 02-init-to-spec.md      (Spec editor)
-     нужен аудит спеки / ADR / валидация готовности     -> 03-audit-spec.md        (Auditor)
-     stage=spec-first, нарезка принятой спецификации    -> 04-spec-to-story.md     (Planner)
-     нужна нарезка задач по git diff -- docs/spec/      -> 05-plan-spec-patch.md   (Planner)
-     stage=spec-first, файл в docs/todo/<story>/task/   -> 06-implement-task.md    (Implementer)
-     входящее наблюдение бага / комментарий ревью / лог -> 07-report-bug.md        (Auditor)
-     stage=spec-first, файл в docs/todo/<story>/bug/    -> 08-fix-bug.md           (Implementer)
+     продукт не описан или вход в чате                -> 01-init-requirements.md (Init author)
+     stage=bootstrap, docs/inbox/** заполнен           -> 02-init-to-spec.md      (Spec editor)
+     нужен аудит спеки / ADR / валидация готовности    -> 03-audit-spec.md        (Auditor)
+     stage=spec-first, нарезка принятой спецификации   -> 04-spec-to-story.md     (Planner)
+     нужна нарезка задач по git diff -- docs/spec/     -> 05-plan-spec-patch.md   (Planner)
+     stage=spec-first, файл в docs/todo/<story>/task/  -> 06-implement-task.md    (Implementer)
+     входящее наблюдение бага / ревью / лог в inbox    -> 07-report-bug.md        (Auditor)
+     stage=spec-first, файл в docs/todo/<story>/bug/   -> 08-fix-bug.md           (Implementer)
    Подходят две записи или ни одна — стоп и вопрос, работу не выбираешь молча.
    Реестр работ: docs/process/prompts/README.md. Job-промпт не повторяет это ядро:
    в нём только процедура своего артефакта.
@@ -118,7 +118,7 @@
    Не выполнять разрушающие команды (git push --force, git reset --hard, git clean -f).
    Не ставить ADR accepted: true / rejected. Не мерджить в default branch.
    Не придумывать требования, которых нет в docs/spec/.
-   Не реализовывать из чата, docs/init/, docs/archive/ или из одного текста ADR.
+   Не реализовывать из чата, docs/inbox/, docs/archive/ или из одного текста ADR.
    Не расширять scope за пределы того, что активная спека объявила in-scope.
    Не логировать и не коммитить секреты и креды.
    Законченный шаг коммитишь сам (git add только файлов шага). Не --amend, не push/merge
@@ -153,7 +153,7 @@
 
 ```text
 11. ЯЗЫК АРТЕФАКТОВ
-   Проза docs/process/**, docs/spec/**, docs/init/**, docs/todo/**
+   Проза docs/process/**, docs/spec/**, docs/inbox/**, docs/todo/**
    и тела PR — русский язык: это читает и держит в голове RU-команда.
    Корневой CHANGELOG.md — русский, формат банка; агент пишет только краткий пункт
    в Unreleased.

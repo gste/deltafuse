@@ -4,7 +4,7 @@ Instructions for autonomous AI agents and AI CLI tools (Cursor, Google Antigravi
 
 ## One-line mandate
 
-The active specification pack under `docs/spec/` is the **only implementation law**. If code and spec disagree, the specification wins. Implement from `docs/spec/` and task files under `docs/todo/`, never from chat history, Init Requirements, archives, or ADR text alone.
+The active specification pack under `docs/spec/` is the **only implementation law**. If code and spec disagree, the specification wins. Implement from `docs/spec/` and task files under `docs/todo/`, never from chat history, raw intake files, archives, or ADR text alone.
 
 ## Repository layout (quick index)
 
@@ -14,14 +14,14 @@ The active specification pack under `docs/spec/` is the **only implementation la
 | Why a decision was made | `docs/decisions/**`                                       |
 | How we work             | DeltaFuse: `docs/process/**` + this file                  |
 | Current story tasks      | `docs/todo/<story>/` (if present)                          |
-| Raw inbox / error dumps  | `docs/todo/inbox/` (for triage)                           |
-| Init Requirements       | `docs/init/` (pre-accept) or `docs/archive/` (historical) |
+| Raw intake / dumps      | `docs/inbox/` (for triage)                                |
+| Processed archive       | `docs/archive/inbox/`                                     |
 
 Rules:
 
 - **Implementation law** = `docs/spec/`. If code and spec disagree, spec wins; open a `spec-patch`, do not "fix in code only".
 - **ADR does not replace spec.** An accepted ADR must be reflected as imperative text in `docs/spec/` in the same change set.
-- **Init Requirements do not replace spec.** After the Specification pack is accepted, do not implement from Init or archive.
+- **Raw intake does not replace spec.** After the Specification pack is accepted, do not implement directly from `docs/inbox/` or `docs/archive/`.
 - Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<story>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<story>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Triage raw observations with `/report-bug`; implement `task/` with `/implement-task`; execute a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty story directory is removed.
 - User-facing chat follows the Language table in `docs/process/README.md` (Russian by default for RU teams), even though this file is English. Exception: the human wrote this turn in English.
 
@@ -39,14 +39,14 @@ Rules:
 
 1. This file + `docs/process/**`
 2. Spec index + relevant ADRs in `docs/decisions/`
-3. Diff, draft, or raw inbox dump under review
+3. Diff, draft, or raw intake file in `docs/inbox/` under review
 
 Do not load the entire Specification pack unless the task explicitly spans multiple modules.
 
 ## Hard prohibitions
 
 - Do not invent requirements missing from `docs/spec/`.
-- Do not implement from chat history, Init Requirements, archive, or ADR text alone.
+- Do not implement from chat history, raw intake files in `docs/inbox/`, archive, or ADR text alone.
 - Do not expand scope beyond what the active Specification states as in-scope.
 - Do not log or commit secrets, tokens, or raw credential files.
 - **ABSOLUTE PROHIBITION:** Never execute `git push` under any circumstances (to any remote or branch). Pushing to remote is strictly Human-Only.
@@ -113,7 +113,7 @@ Details: `docs/process/roles.md`.
 ## How to implement a task or bug
 
 - Implement a task with `/implement-task <task-path>`.
-- Triage a raw bug or review comment with `/report-bug [raw-input]`.
+- Triage a raw bug or review comment with `/report-bug [raw-input-or-inbox-file]`.
 - Fix a registered bug with `/fix-bug <bug-path>`.
 
 1. Read the task/bug file — including its Spec delta — and **linked** spec sections only. A branch diff replaces neither.
