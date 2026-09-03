@@ -25,19 +25,19 @@ flowchart TD
     InitDoc --> S2["/init-to-spec<br><b>02. Spec Editor</b>"]:::skill
     S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Draft)"]
 
-    SpecDraft --> S6["/audit-spec<br><b>06. Auditor</b>"]:::skill
+    SpecDraft --> S3["/audit-spec<br><b>03. Auditor</b>"]:::skill
     S6 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Accept/Reject ADR"}}:::human
 
     Gate1 -->|"All ADRs accepted & mirrored"| SpecLaw["⚖️ docs/spec/<br><b>SOLE IMPLEMENTATION LAW</b>"]:::law
 
-    SpecLaw -->|"Plan new Story"| S3["/spec-to-story<br><b>03. Planner</b>"]:::skill
-    SpecLaw -->|"Plan from git diff"| S7["/plan-spec-patch<br><b>07. Planner</b>"]:::skill
+    SpecLaw -->|"Plan new Story"| S4["/spec-to-story<br><b>04. Planner</b>"]:::skill
+    SpecLaw -->|"Plan from git diff"| S5["/plan-spec-patch<br><b>05. Planner</b>"]:::skill
 
     S3 --> Inbox["📋 docs/todo/&lt;story&gt;/<br><b>Task & Bug Inbox</b>"]:::inbox
     S7 --> Inbox
 
-    Inbox -->|"Execute task"| S4["/implement-task<br><b>04. Implementer</b>"]:::skill
-    Inbox -->|"Execute bug"| S5["/fix-bug<br><b>05. Fixer</b>"]:::skill
+    Inbox -->|"Execute task"| S6["/implement-task<br><b>06. Implementer</b>"]:::skill
+    Inbox -->|"Execute bug"| S7["/fix-bug<br><b>07. Fixer</b>"]:::skill
 
     S4 --> Code["🧪 Code + Automated Tests (Green)"]
     S5 --> Code
@@ -104,11 +104,13 @@ DeltaFuse structures the software delivery lifecycle into 7 distinct, single-res
 
 | # | Job Prompt / Skill | Role | Primary Output | Trigger |
 |---|---|---|---|---|
-| **01** | [\/init-requirements\](docs/process/prompts/01-init-requirements.md) | Init author (draft) | docs/init/** | Capturing initial project intent and external constraints. |
-| **02** | [\/init-to-spec\](docs/process/prompts/02-init-to-spec.md) | Spec editor (draft) | docs/spec/** | Compiling Init Requirements & ADRs into a modular Specification pack. |
-| **03** | [\/spec-to-story\](docs/process/prompts/03-spec-to-story.md) | Planner | docs/todo/<story>/** | Slicing accepted specification into atomic, verifiable tasks and bugs. |
-| **04** | [\/implement-task\](docs/process/prompts/04-implement-task.md) | Implementer | Code, Tests, PR | Implementing a single task under docs/todo/<story>/task/. |
-| **05** | [\/fix-bug\](docs/process/prompts/05-fix-bug.md) | Spec editor → Implementer | Spec, Code, PR | Diagnosing and resolving a bug from docs/todo/<story>/bug/ or observation. |
+| **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Init author (draft) | `docs/init/**` | Capturing initial project intent and external constraints. |
+| **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Spec editor (draft) | `docs/spec/**`, `docs/decisions/**` | Compiling Init Requirements & ADRs into a modular Specification pack. |
+| **03** | [`/audit-spec`](docs/process/prompts/03-audit-spec.md) | Auditor / Spec editor | Audit Report, ADRs, Spec updates | Validating spec against ADRs, mirroring accepted ADRs into law, identifying open forks. |
+| **04** | [`/spec-to-story`](docs/process/prompts/04-spec-to-story.md) | Planner | `docs/todo/<story>/**` | Slicing accepted specification into atomic, verifiable tasks and bugs. |
+| **05** | [`/plan-spec-patch`](docs/process/prompts/05-plan-spec-patch.md) | Planner | `docs/todo/<story>/task/` | Automatically slicing specification diffs/patches into atomic tasks. |
+| **06** | [`/implement-task`](docs/process/prompts/06-implement-task.md) | Implementer | Code, Tests, PR | Implementing a single task under `docs/todo/<story>/task/`. |
+| **07** | [`/fix-bug`](docs/process/prompts/07-fix-bug.md) | Spec editor → Implementer | Spec, Code, PR | Diagnosing and resolving a bug from `docs/todo/<story>/bug/` or observation. |
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: implement-task
-description: Implements exactly one task file from docs/todo/<story>/task/ with its tests and opens a PR that cites the specification. Use when kind is task. Do not use for docs/todo/<story>/bug/ or kind: bug (that is fix-bug).
+description: Implements a single atomic task from docs/todo/<story>/task/ under TDD against docs/spec/. Use when an explicit task file is provided or requested. For bug files under docs/todo/<story>/bug/, use /fix-bug instead.
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 This skill carries no rules of its own. The repository files are the source of truth.
 
 1. Read `docs/process/agent-prompt.md` and follow its core prompt.
-2. Read `docs/process/prompts/04-implement-task.md` and follow it as the procedure for this job.
-3. Read the given file under `docs/todo/<story>/task/`, then only the spec anchors it lists.
+2. Read `docs/process/prompts/06-implement-task.md` and follow it as the procedure for this job.
+3. Read the task file in `docs/todo/<story>/task/` and only the spec modules it links to.
 
-A path under `bug/` or `kind: bug` is the wrong job: stop and point to `/fix-bug`. No task file means plan it first or stop and ask. Commit each completed step; tests of the slice must fail on current code before the fix, then go green. On close append Closed and a CHANGELOG Unreleased bullet. If spec was not edited, say `spec unchanged`. Do not merge or push to the default branch.
+Follow TDD: failing tests first, smallest code change to pass, commit per step. Do not edit spec unless allowed by the task. Follow operator surface rule for root README.md. Close the slice (delete task file, append Closed in docs/todo/README.md, add one Unreleased bullet to CHANGELOG.md, remove empty story dir).
