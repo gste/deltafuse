@@ -1,4 +1,4 @@
-# DeltaFuse ⚡
+﻿# DeltaFuse ⚡
 
 [ **English** ](README.md) | [ Русский ](README.ru.md)
 
@@ -26,36 +26,42 @@ flowchart TD
     S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Draft)"]
 
     SpecDraft --> S3["/audit-spec<br><b>03. Auditor</b>"]:::skill
-    S6 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Decide ADR (`accepted: true`)"}}:::human
+    S3 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Decide ADR (`accepted: true`)"}}:::human
 
     Gate1 -->|"All ADRs accepted (`true`) & mirrored"| SpecLaw["⚖️ docs/spec/<br><b>SOLE IMPLEMENTATION LAW</b>"]:::law
 
     SpecLaw -->|"Plan new Story"| S4["/spec-to-story<br><b>04. Planner</b>"]:::skill
     SpecLaw -->|"Plan from git diff"| S5["/plan-spec-patch<br><b>05. Planner</b>"]:::skill
 
-    S3 --> Inbox["📋 docs/todo/&lt;story&gt;/<br><b>Task & Bug Inbox</b>"]:::inbox
-    S7 --> Inbox
+    RawBug["🐛 Bug Report / Review Comment / Dump"] --> S7["/report-bug<br><b>07. Bug Triage</b>"]:::skill
 
-    Inbox -->|"Execute task"| S6["/implement-task<br><b>06. Implementer</b>"]:::skill
-    Inbox -->|"Execute bug"| S7["/fix-bug<br><b>07. Fixer</b>"]:::skill
+    S4 --> TaskInbox["📋 docs/todo/&lt;story&gt;/task/<br><b>Task Inbox</b>"]:::inbox
+    S5 --> TaskInbox
+    S7 --> BugInbox["🐞 docs/todo/&lt;story&gt;/bug/<br><b>Bug Inbox</b>"]:::inbox
 
-    S4 --> Code["🧪 Code + Automated Tests (Green)"]
-    S5 --> Code
+    TaskInbox -->|"Execute task"| S6["/implement-task<br><b>06. Implementer</b>"]:::skill
+    BugInbox -->|"Fix bug"| S8["/fix-bug<br><b>08. Implementer</b>"]:::skill
+
+    S6 --> Code["🧪 Code + Automated Tests (Green)"]
+    S8 --> Code
 
     Code --> Gate2{{"👤 Human Gate<br>PR Review & git push"}}:::human
 ```
 
 ---
 
-## 🎯 Why DeltaFuse?
+## 🎯 What is DeltaFuse?
 
-Modern AI coding agents fail not because they lack coding intelligence, but because they **drift from architectural intent**. When agents work directly from chat prompts or imprecise issue descriptions, they accumulate hidden regressions, hallucinate APIs, and blur domain boundaries.
+**DeltaFuse** is an operational framework for AI-native software engineering. It bridges the gap between chaotic LLM chat interactions and disciplined software development by establishing:
 
-**DeltaFuse** solves this by establishing a strict, unskippable **Law Chain**:
+- **Specification (`docs/spec/`)** as the single source of truth and implementation law.
+- **AI Agents** constrained into distinct specialized roles (RACI).
+- **Humans in the loop** holding absolute control over architectural forks and production deployments.
 
-\\	ext
+```text
 ┌─────────────────────────────────────────────────────────┐
-│     Init Requirements  +  Architecture Decisions (ADR)  │
+│          Initial Requirements  +  Decisions             │
+│             (docs/init/  +  docs/decisions/)            │
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
@@ -65,135 +71,128 @@ Modern AI coding agents fail not because they lack coding intelligence, but beca
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│              Atomic Tasks (docs/todo/)                  │ ◄── INBOX & DEFINITION OF DONE
+│               Atomic Tasks (docs/todo/)                 │ ◄── INBOX & DEFINITION OF DONE
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│                     Implementation                      │ ◄── CODE + AUTOMATED TESTS
-└───────────────────────────┘
-\
+│                    Implementation                       │ ◄── CODE + AUTOMATED TESTS
+└─────────────────────────────────────────────────────────┘
+```
+
 ### Core Invariants
 
-1. **Specification is Law:** Code never defines behavior; docs/spec/ does. If code and specification diverge, the specification always wins.
-2. **No Spec, No Code:** Agents are strictly prohibited from implementing features or guessing business rules without an explicit imperative in docs/spec/.
-3. **Surgical Spec Deltas:** Every specification modification is declared in advance via explicit ADDED / MODIFIED / REMOVED anchor lists.
-4. **Zero AI Hallucination:** Architecture decisions (docs/decisions/) require human approval (status: accepted) before becoming law in the specification.
-5. **Human Gates:** Humans retain sole authority over architectural acceptance, ADR state, and merging to the default branch.
+1. **Specification is Law:** Code does not define system behaviour — `docs/spec/` does. When code and spec disagree, the specification always wins.
+2. **No Spec, No Code:** Agents are strictly forbidden from implementing unstated requirements or inventing business logic.
+3. **Surgical Spec Deltas:** Every specification modification is declared through precise anchors (`ADDED`, `MODIFIED`, `REMOVED`).
+4. **Hallucination Prevention:** Architectural forks must be recorded as ADR drafts (`docs/decisions/`) and require human acceptance (`accepted: true`).
+5. **Strict Human Gates:** Humans retain exclusive authority over ADR acceptance, PR approvals, and `git push` to remotes.
 
 ---
 
-## 🤖 Agent-Agnostic Design
+## 🤖 Agent-Agnostic Architecture
 
-DeltaFuse is designed to be completely independent of any single IDE or LLM vendor. It provides out-of-the-box adapters and standard Agent Skills for:
+DeltaFuse is designed to work seamlessly across any modern IDE and LLM agent environment:
 
-| Environment | Supported Interfaces | Adapter File |
+| Tool / Environment | Supported Interfaces | Adapter Files |
 |---|---|---|
-| **Cursor** | Composer, Chat, Agent Skills (/commands) | .cursorrules, .cursor/skills/ |
-| **Google Antigravity** | Agent CLI, Subagents, Skills | AGENTS.md, .agents/skills/ |
-| **Claude Code** | CLI commands, Compact contexts | CLAUDE.md, AGENTS.md |
-| **GitHub Copilot** | Workspace instructions, Chat | .github/copilot-instructions.md |
-| **IntelliJ IDEA / JetBrains** | AI Assistant, Junkyard junctions, MCP | AGENTS.md, docs/process/ |
-| **Windsurf / Cascade** | Rules, Prompts | AGENTS.md, .cursorrules |
+| **Cursor** | Composer, Chat, Agent Skills (`/commands`) | `.cursorrules`, `.cursor/skills/` |
+| **Google Antigravity** | Agent CLI, Subagents, Skills | `AGENTS.md`, `.gemini/skills/`, `.agents/skills/` |
+| **Claude Code** | CLI commands, Compact context | `CLAUDE.md`, `AGENTS.md` |
+| **GitHub Copilot** | Workspace instructions, Chat | `.github/copilot-instructions.md` |
+| **IntelliJ IDEA / JetBrains** | AI Assistant, Junkyard junctions, MCP | `AGENTS.md`, `docs/process/` |
+| **Windsurf / Cascade** | Rules, Prompts | `AGENTS.md`, `.cursorrules` |
 
 ---
 
-## 🔄 The DeltaFuse Pipeline
+## 🔄 DeltaFuse Skill & Job Suite
 
-DeltaFuse structures the software delivery lifecycle into 7 distinct, single-responsibility jobs:
+The development lifecycle is divided into 8 distinct jobs:
 
-| # | Job Prompt / Skill | Role | Primary Output | Trigger |
+| # | Command / Skill | Role | Primary Artifact | When to Run |
 |---|---|---|---|---|
-| **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Init author (draft) | `docs/init/**` | Capturing initial project intent and external constraints. |
-| **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Spec editor (draft) | `docs/spec/**`, `docs/decisions/**` | Compiling Init Requirements & ADRs into a modular Specification pack. |
-| **03** | [`/audit-spec`](docs/process/prompts/03-audit-spec.md) | Auditor / Spec editor | Audit Report, ADRs, Spec updates | Validating spec against ADRs, mirroring accepted ADRs into law, identifying open forks. |
-| **04** | [`/spec-to-story`](docs/process/prompts/04-spec-to-story.md) | Planner | `docs/todo/<story>/**` | Slicing accepted specification into atomic, verifiable tasks and bugs. |
-| **05** | [`/plan-spec-patch`](docs/process/prompts/05-plan-spec-patch.md) | Planner | `docs/todo/<story>/task/` | Automatically slicing specification diffs/patches into atomic tasks. |
-| **06** | [`/implement-task`](docs/process/prompts/06-implement-task.md) | Implementer | Code, Tests, PR | Implementing a single task under `docs/todo/<story>/task/`. |
-| **07** | [`/fix-bug`](docs/process/prompts/07-fix-bug.md) | Spec editor → Implementer | Spec, Code, PR | Diagnosing and resolving a bug from `docs/todo/<story>/bug/` or observation. |
+| **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Init Author | `docs/init/**` | Capture early product requirements, user stories, constraints. |
+| **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Spec Editor | `docs/spec/**`, `docs/decisions/**` | Compile initial requirements into a modular specification pack and ADR drafts. |
+| **03** | [`/audit-spec`](docs/process/prompts/03-audit-spec.md) | Auditor | Report, ADRs, `docs/spec/**` | Validate consistency, mirror accepted ADRs, identify hidden forks. |
+| **04** | [`/spec-to-story`](docs/process/prompts/04-spec-to-story.md) | Planner | `docs/todo/<story>/**` | Slice accepted specification modules into atomic task files. |
+| **05** | [`/plan-spec-patch`](docs/process/prompts/05-plan-spec-patch.md) | Planner | `docs/todo/<story>/task/` | Automatically plan tasks directly from specification `git diff`. |
+| **06** | [`/implement-task`](docs/process/prompts/06-implement-task.md) | Implementer | Code, Tests, PR | Implement single task slice with TDD strictly against spec. |
+| **07** | [`/report-bug`](docs/process/prompts/07-report-bug.md) | Auditor / Triage | `docs/todo/<story>/bug/` | Triage raw bug report, review comment, or error dump without modifying code. |
+| **08** | [`/fix-bug`](docs/process/prompts/08-fix-bug.md) | Implementer | Code, Tests, PR | Fix bug from task file in `docs/todo/<story>/bug/` with regression test. |
 
 ---
 
-## 🚦 Change Types & Classification
+## 🚦 Change Types
 
-Every change in a DeltaFuse-governed repository is classified into one of four types:
+Every change is categorized into one of four deterministic types:
 
-- **\	rivial\**: Pure refactoring, typos, internal test improvements. Spec is unchanged.
-- **\spec-patch\**: Behavioral change where the decision is obvious. Spec anchor updated and committed first, followed by code and tests.
-- **\dr+spec\**: Non-obvious architectural choice. Human accepts ADR (docs/decisions/), then spec is updated, then code is written.
-- **\pic\**: Multi-slice delivery sliced into atomic tasks under docs/todo/<story>/.
+- **`trivial`**: Refactoring, typos, internal tests. No contract or behavioral change.
+- **`spec-patch`**: Behavioral change with an obvious technical design. Update spec first, commit, then code.
+- **`adr+spec`**: Non-obvious architectural fork. Record ADR, wait for human acceptance, mirror into spec, then code.
+- **`story`**: Multi-slice deliverable planned into atomic tasks in `docs/todo/<story>/`.
 
 ---
 
-## 👥 Human vs AI Roles (RACI Matrix)
+## 👥 Roles & Responsibility Matrix (RACI)
 
-| Activity | AI Implementer | AI Planner/Auditor | Human |
+| Activity | AI Implementer | AI Planner / Auditor | Human |
 |---|:---:|:---:|:---:|
-| Draft Init Requirements | Consulted | Consulted | **Responsible / Accountable** |
-| Draft ADR (\status: proposed\) | Consulted | Responsible | **Accountable** |
-| Decide ADR (`accepted: true`) | — | Consulted | **Accountable (Human Only)** |
-| Modify Specification (\docs/spec/\) | Responsible (Draft) | Consulted | **Accountable (Merge)** |
-| Plan & Slice Stories (\docs/todo/\) | Consulted | Responsible | **Accountable (Review)** |
-| Code & Automated Tests | **Responsible** | Consulted | Accountable (Review) |
-| Merge to Default Branch | — | — | **Accountable (Human Only)** |
+| Draft Init Requirements (`docs/init/`) | Consulted | Consulted | **Responsible / Accountable** |
+| Draft ADR (`docs/decisions/`) | — | Responsible (draft) | **Accountable** |
+| **Accept ADR (`accepted: true`)** | ❌ Forbidden | ❌ Forbidden | **Human-Only** |
+| Update Specification (`docs/spec/`) | Responsible (within delta) | Consulted | **Accountable (PR Merge)** |
+| Slice Story into Tasks (`docs/todo/`) | — | Responsible | **Accountable** |
+| Code & Unit Tests | **Responsible** | Consulted | **Accountable (PR Review)** |
+| **`git push` and Default Branch Merge** | ❌ **ABSOLUTELY FORBIDDEN** | ❌ **ABSOLUTELY FORBIDDEN** | **Human-Only** |
+
+---
+
+## 📁 Repository Directory Layout
+
+```text
+├── .cursorrules              # Cursor IDE instructions
+├── AGENTS.md                 # Autonomous Agent & AI CLI instructions
+├── CLAUDE.md                 # Claude Code CLI instructions
+├── CHANGELOG.md              # Project changelog
+├── docs/
+│   ├── process/              # DeltaFuse methodology, roles, workflows
+│   │   └── prompts/          # Procedural job prompts (01..08)
+│   ├── init/                 # Raw input requirements (pre-specification)
+│   ├── decisions/            # Architecture Decision Records (ADRs)
+│   ├── spec/                 # Modular specification (IMPLEMENTATION LAW)
+│   │   ├── README.md         # Single acceptance entry (TOC, Tour, Coverage)
+│   │   └── 00-context.md     # In/out of scope, actors, human-gated areas
+│   ├── todo/                 # Atomic task queues
+│   │   ├── inbox/            # Raw dumps, logs, comment files for triage
+│   │   └── <story>/          # Story task slices (task/ and bug/)
+│   └── archive/              # Historical artifacts and processed requirements
+│       ├── init/
+│       └── inbox/
+├── .cursor/skills/           # Cursor skills
+├── .gemini/skills/           # Google Antigravity / Gemini CLI skills
+└── .agents/skills/           # Universal Agent skills
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Initialize DeltaFuse in your repository
+### Initialize DeltaFuse in a new or existing repository
 
-**Linux / macOS:**
-\\ash
-curl -fsSL https://raw.githubusercontent.com/gste/delta-fuse/main/scripts/init.sh | bash
-\
-**Windows (PowerShell):**
-\\powershell
-iwr -useb https://raw.githubusercontent.com/gste/delta-fuse/main/scripts/init.ps1 | iex
-\
-Or copy manually from this repository:
-\\ash
-git clone https://github.com/gste/delta-fuse.git
-./delta-fuse/scripts/init.sh /path/to/your-project
-\
-### 2. Recommended Directory Structure
+Run the initialization script from the root of your target project:
 
-\\	ext
-your-project/
-├── AGENTS.md                  # Universal standing orders for AI agents
-├── CLAUDE.md                  # Pointers for Claude Code CLI
-├── .cursorrules               # Pointers for Cursor IDE
-├── .agents/skills/            # Agent skills (Antigravity, Gemini CLI)
-├── .cursor/skills/            # Agent skills (Cursor)
-├── docs/
-│   ├── process/               # DeltaFuse core process documentation
-│   │   ├── STATUS.md          # Lifecycle stage (bootstrap | spec-first)
-│   │   ├── agent-prompt.md    # Session prompt & routing invariants
-│   │   ├── workflow.md        # Change types, commits, inboxes
-│   │   ├── roles.md           # Human gates and RACI
-│   │   └── prompts/           # 01-05 job prompts
-│   ├── init/                  # Pre-specification project intentions
-│   ├── decisions/             # Architecture Decision Records (ADR)
-│   ├── spec/                  # Modular specification pack (the Law)
-│   │   ├── README.md          # Single acceptance entry & TOC
-│   │   └── 00-context.md      # Domain boundaries & scope
-│   ├── todo/                  # Active stories and task inboxes
-│   └── archive/               # Historical specifications and inits
-└── CHANGELOG.md               # Keep-a-Changelog unreleased ledger
-\
----
+**PowerShell (Windows):**
+```powershell
+& "path/to/delta-fuse/scripts/init.ps1"
+```
 
-## 📖 Documentation Reference
-
-- [Adoption & Usage Guide](docs/process/using.md) — How humans and agents interact day-to-day.
-- [Workflow & Change Protocol](docs/process/workflow.md) — Change types, inbox management, git commits, and DoD rules.
-- [Roles & Human Gates](docs/process/roles.md) — Exact rules on what AI may do and what is strictly Human-Only.
-- [Core Agent Prompt & Routing](docs/process/agent-prompt.md) — Session prompt invariants 0–10.
-- [Job Prompts Directory](docs/process/prompts/README.md) — Deep dive into jobs 01 through 07.
+**Bash (Linux / macOS):**
+```bash
+path/to/delta-fuse/scripts/init.sh
+```
 
 ---
 
 ## 📄 License
 
-DeltaFuse is open-source software licensed under the [MIT License](LICENSE).
-Copyright (c) 2026 gste.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
