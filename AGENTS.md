@@ -85,6 +85,35 @@ Stop and request a human when:
 
 Details: `docs/process/roles.md`.
 
+## How to plan tasks (Planner protocol)
+
+`/spec-to-story` is used for full story scoping; `/plan-spec-patch` is used for planning atomic tasks directly from a specification diff / patch.
+
+1. **Diff Analysis Algorithm:**
+   - Execute `git diff HEAD~1 -- docs/spec/` (or diff against base branch `git diff origin/main...HEAD -- docs/spec/`).
+   - Identify all modified, added, or removed specification chapters and anchors (`Spec delta`).
+2. **Task Atomicity & Slicing:**
+   - Slice the diff into atomic, single-responsibility task files (`NN-<slug>.md`) under `docs/todo/<story-id>/task/`.
+   - Each task must touch at most ~300 lines of code diff + tests and map to exactly one primary spec module.
+3. **Task File Schema:**
+   ```markdown
+   # Task NN: <Short Title>
+
+   - **kind**: task
+   - **branch**: feature/<slug>
+   - **Spec delta**: docs/spec/0X-module.md#anchor
+
+   ## Definition of Done
+   - [ ] Component / Layer: specific implementation change
+   - [ ] Tests: specific named test case (must fail before implementation)
+   ```
+4. **Auto-registration in Inbox:**
+   - Compute `NN = 1 + max(Closed ∪ live task/bug files)` from `docs/todo/README.md`.
+   - Create or update `docs/todo/<story-id>/README.md` with the Task table.
+   - Add the story to `## Open Stories` in `docs/todo/README.md` if not present.
+5. **Commit the Plan:**
+   - Commit the generated task files and updated todo README locally (`git add docs/todo/ && git commit -m "plan: slice story into atomic tasks"`). Never push.
+
 ## How to implement a task
 
 `/implement-task` is only for `docs/todo/<story>/task/`. A bug is `/fix-bug`.

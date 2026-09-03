@@ -61,7 +61,7 @@ DeltaFuse is designed to be completely independent of any single IDE or LLM vend
 
 ## 🔄 The DeltaFuse Pipeline
 
-DeltaFuse structures the software delivery lifecycle into 6 distinct, single-responsibility jobs:
+DeltaFuse structures the software delivery lifecycle into 7 distinct, single-responsibility jobs:
 
 | # | Job Prompt / Skill | Role | Primary Output | Trigger |
 |---|---|---|---|---|
@@ -148,7 +148,7 @@ your-project/
 - [Workflow & Change Protocol](docs/process/workflow.md) — Change types, inbox management, git commits, and DoD rules.
 - [Roles & Human Gates](docs/process/roles.md) — Exact rules on what AI may do and what is strictly Human-Only.
 - [Core Agent Prompt & Routing](docs/process/agent-prompt.md) — Session prompt invariants 0–10.
-- [Job Prompts Directory](docs/process/prompts/README.md) — Deep dive into jobs 01 through 06.
+- [Job Prompts Directory](docs/process/prompts/README.md) — Deep dive into jobs 01 through 07.
 
 ---
 
