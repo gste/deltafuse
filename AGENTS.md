@@ -8,40 +8,23 @@ The active specification pack under `docs/spec/` is the **only implementation la
 
 ## Repository layout (quick index)
 
-| Topic                   | Source of truth                                           |
-|-------------------------|-----------------------------------------------------------|
-| What to build / change  | `docs/spec/**` (the Specification pack)                   |
-| Why a decision was made | `docs/decisions/**`                                       |
-| How we work             | DeltaFuse: `docs/process/**` + this file                  |
-| Current story tasks      | `docs/todo/<story>/` (if present)                          |
-| Raw intake / dumps      | `docs/inbox/` (for triage)                                |
-| Processed archive       | `docs/archive/inbox/`                                     |
+| Topic | Source of truth |
+|---|---|
+| What to build / change | `docs/spec/**` (the Specification pack) |
+| Why a decision was made | `docs/decisions/**` |
+| How we work | DeltaFuse: `docs/process/**` + this file |
+| Current story tasks | `docs/todo/<story>/NN-<slug>.md` |
+| Raw intake / dumps | `docs/inbox/` (for `/triage`) |
+| Processed archive | `docs/archive/inbox/` |
 
-Rules:
+## 4 Core Agent Skills
 
-- **Implementation law** = `docs/spec/`. If code and spec disagree, spec wins; open a `spec-patch`, do not "fix in code only".
-- **ADR does not replace spec.** An accepted ADR must be reflected as imperative text in `docs/spec/` in the same change set.
-- **Raw intake does not replace spec.** After the Specification pack is accepted, do not implement directly from `docs/inbox/` or `docs/archive/`.
-- Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<story>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<story>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Triage raw observations with `/report-bug`; implement `task/` with `/implement-task`; execute a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty story directory is removed.
-- User-facing chat follows the Language table in `docs/process/README.md` (Russian by default for RU teams), even though this file is English. Exception: the human wrote this turn in English.
-
-## Default reading order
-
-**Implementer agent**
-
-1. `AGENTS.md` (this file)
-2. `docs/process/workflow.md`
-3. `docs/process/roles.md`
-4. `docs/spec/README.md` → only sections linked from the current task
-5. Task file under `docs/todo/<story>/task/` or `docs/todo/<story>/bug/` if provided
-
-**Planner / auditor agent**
-
-1. This file + `docs/process/**`
-2. Spec index + relevant ADRs in `docs/decisions/`
-3. Diff, draft, or raw intake file in `docs/inbox/` under review
-
-Do not load the entire Specification pack unless the task explicitly spans multiple modules.
+| Skill | Role | Purpose |
+|---|---|---|
+| `/triage [path/text]` | Auditor / Triage | Universal intake: processes chat input or files from `docs/inbox/`, clarifies ambiguities, compiles spec/ADR or outputs atomic task `docs/todo/<story>/NN-<slug>.md`, and archives input to `docs/archive/inbox/`. |
+| `/audit-spec` | Auditor | Audits spec consistency, mirrors accepted ADRs into `docs/spec/`, checks coverage matrix. |
+| `/plan-story` | Planner | Slices an accepted spec module or `git diff -- docs/spec/` into atomic tasks in `docs/todo/<story>/NN-<slug>.md`. |
+| `/implement-task <path>` | Implementer | Universal TDD engine: implements any task from `docs/todo/<story>/NN-<slug>.md` (failing test -> code -> closes task -> updates CHANGELOG). |
 
 ## Hard prohibitions
 
@@ -52,84 +35,12 @@ Do not load the entire Specification pack unless the task explicitly spans multi
 - **ABSOLUTE PROHIBITION:** Never execute `git push` under any circumstances (to any remote or branch). Pushing to remote is strictly Human-Only.
 - Never execute destructive git commands (`git push --force`, `git reset --hard`, `git clean -f`).
 - Do not change `docs/spec/**` or `docs/decisions/**` unless the task explicitly allows it.
-- Do not edit spec anchors outside the declared Spec delta, and do not rewrite a chapter "while you are in there".
-- Do not add changelog ledgers to `docs/spec/**` (`ADDED` / `MODIFIED` / `REMOVED` lists, "was / now", dated entries). The pack states only how the system works now; intent lives in `docs/todo/` and the PR.
-- Do not treat a branch diff as the source of requirements — it is evidence, `docs/spec/**` is law.
-- Do not duplicate long requirement text under `docs/todo/` (links + DoD only).
-
-## Change types (summary)
-
-| Type         | Spec first?      | ADR?            | When                                        |
-|--------------|------------------|-----------------|---------------------------------------------|
-| `trivial`    | no               | no              | no contract/behaviour change                |
-| `spec-patch` | yes              | no              | behaviour/contract change; decision obvious |
-| `adr+spec`   | yes              | yes             | non-obvious design fork                     |
-| `story`       | yes (spec green) | if forks remain | multi-slice delivery                        |
-
-Full rules: `docs/process/workflow.md`.
-
-## Human gates (do not skip)
-
-Stop and request a human when:
-
-- Setting ADR to `accepted: true`
-- Merging contract changes in `docs/spec/`
-- Merging non-trivial work to the default branch
-- Security, credentials, or trust-boundary changes
-- Spec is silent or contradictory and a product choice is required
-- The task touches a human-gated area declared in `docs/spec/`
-
-Details: `docs/process/roles.md`.
-
-## How to plan tasks (Planner protocol)
-
-`/spec-to-story` is used for full story scoping; `/plan-spec-patch` is used for planning atomic tasks directly from a specification diff / patch.
-
-1. **Diff Analysis Algorithm:**
-   - Execute `git diff HEAD~1 -- docs/spec/` (or diff against base branch `git diff origin/main...HEAD -- docs/spec/`).
-   - Identify all modified, added, or removed specification chapters and anchors (`Spec delta`).
-2. **Task Atomicity & Slicing:**
-   - Slice the diff into atomic, single-responsibility task files (`NN-<slug>.md`) under `docs/todo/<story-id>/task/`.
-   - Each task must touch at most ~300 lines of code diff + tests and map to exactly one primary spec module.
-3. **Task File Schema:**
-   ```markdown
-   # Task NN: <Short Title>
-
-   - **kind**: task
-   - **branch**: feature/<slug>
-   - **Spec delta**: docs/spec/0X-module.md#anchor
-
-   ## Definition of Done
-   - [ ] Component / Layer: specific implementation change
-   - [ ] Tests: specific named test case (must fail before implementation)
-   ```
-4. **Auto-registration in Inbox:**
-   - Compute `NN = 1 + max(Closed ∪ live task/bug files)` from `docs/todo/README.md`.
-   - Create or update `docs/todo/<story-id>/README.md` with the Task table.
-   - Add the story to `## Open Stories` in `docs/todo/README.md` if not present.
-5. **Commit the Plan:**
-   - Commit the generated task files and updated todo README locally (`git add docs/todo/ && git commit -m "plan: slice story into atomic tasks"`). Never push.
-
-## How to implement a task or bug
-
-- Implement a task with `/implement-task <task-path>`.
-- Triage a raw bug or review comment with `/report-bug [raw-input-or-inbox-file]`.
-- Fix a registered bug with `/fix-bug <bug-path>`.
-
-1. Read the task/bug file — including its Spec delta — and **linked** spec sections only. A branch diff replaces neither.
-2. If the task allows spec edits: change only the anchors listed in the Spec delta, phrased as if the requirement had always been that way, then check `git diff -- docs/spec/` against that list. Anything extra is reverted or escalated. Commit the spec. If `docs/spec/**` was not edited, say `spec unchanged` in the closing answer.
-3. Write the tests the DoD names and run them on the current code — they must fail for this slice's behaviour. If they already pass, stop.
-4. Implement the smallest change that turns those tests green.
-5. If the operator surface changed (CLI, env, input, exit codes, output layout, report/manifest shape), update the root `README.md` how-to; it is not a second specification. Otherwise say `README unchanged`.
-6. Commit each completed step yourself (`git add` only that step's files). For `spec-patch`: spec commit, then code commit. Do not wait to be asked. Commit messages in English. Do not amend, do not merge to default branch, and NEVER run `git push`.
-7. When closing the slice: delete the inbox file, append Closed in `docs/todo/README.md`, add one Unreleased bullet to `CHANGELOG.md` (`- NN short phrase`). PR description cites spec paths (e.g. `docs/spec/0X-name.md#anchor`).
-8. If blocked by a missing or contradictory requirement → stop; propose `spec-patch` (and ADR if non-obvious). Do not guess product intent.
+- Do not edit spec anchors outside the declared Spec delta.
+- Do not accept ADRs (`accepted: true`).
 
 ## PR expectations
 
 - Prefer one task ≈ one PR.
-- The implementing PR deletes the closed inbox file (`task/` or `bug`), appends Closed, adds a `CHANGELOG.md` Unreleased bullet, and removes the story README row; delete `docs/todo/<story>/` if nothing remains.
+- The implementing PR deletes the closed task file in `docs/todo/<story>/`, appends Closed in `docs/todo/README.md`, adds a `CHANGELOG.md` Unreleased bullet, and removes the story README row; delete `docs/todo/<story>/` if nothing remains.
 - No drive-by refactors outside task scope.
-- Behaviour change ⇒ spec updated in the same PR or an already-merged prior PR.
 - `docs/spec/**` changed ⇒ PR body carries the Spec delta (`ADDED` / `MODIFIED` / `REMOVED` + anchors) and the diff stays inside it.
-- After the last remaining slice of a story: delete `docs/todo/<story>/`. Each implementing PR already deletes its own inbox file.
