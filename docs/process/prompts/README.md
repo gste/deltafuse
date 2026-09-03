@@ -22,9 +22,9 @@ Job-промпт никогда не пересказывает ядро и пр
 |----|--------------------------------------------------------|---------------------------|-----------------------|--------------------------------------------------------------------------------|
 | 01 | [`01-init-requirements.md`](./01-init-requirements.md) | Init author (draft)       | `docs/init/**`        | замысел ещё не зафиксирован; непустой `docs/init/` — стоп и A/B/C               |
 | 02 | [`02-init-to-spec.md`](./02-init-to-spec.md)           | Spec editor (draft)       | пакет `docs/spec/**`  | `stage: bootstrap`, Init заполнен, пакета нет или он неполон                   |
-| 03 | [`03-spec-to-epic.md`](./03-spec-to-epic.md)           | Planner                   | `docs/todo/<epic>/**` | `stage: spec-first`, файла под нужную работу нет                               |
-| 04 | [`04-implement-task.md`](./04-implement-task.md)       | Implementer               | код, тесты, PR        | `stage: spec-first`, файл в `docs/todo/<epic>/task/`                           |
-| 05 | [`05-fix-bug.md`](./05-fix-bug.md)                     | Spec editor → Implementer | спека, код, PR        | `stage: spec-first`, файл в `docs/todo/<epic>/bug/` или наблюдение             |
+| 03 | [`03-spec-to-story.md`](./03-spec-to-story.md)           | Planner                   | `docs/todo/<story>/**` | `stage: spec-first`, файла под нужную работу нет                               |
+| 04 | [`04-implement-task.md`](./04-implement-task.md)       | Implementer               | код, тесты, PR        | `stage: spec-first`, файл в `docs/todo/<story>/task/`                           |
+| 05 | [`05-fix-bug.md`](./05-fix-bug.md)                     | Spec editor → Implementer | спека, код, PR        | `stage: spec-first`, файл в `docs/todo/<story>/bug/` или наблюдение             |
 
 Совпали две записи или ни одна — стоп и вопрос человеку.
 
@@ -32,7 +32,7 @@ Job-промпт никогда не пересказывает ядро и пр
 
 Вручную: вставить core prompt из ядра, затем файл работы, затем указать входные данные, которые эта работа запрашивает.
 
-В GUI: каждой работе соответствует тонкий скилл `.cursor/skills/<name>/SKILL.md`, вызываемый как `/init-requirements`, `/init-to-spec`, `/spec-to-epic`, `/implement-task`, `/fix-bug`. Скиллы не несут собственных правил — они указывают на ядро и файл работы, которые и остаются источником правды. У всех выставлен `disable-model-invocation: true`, поэтому они срабатывают только при явном вызове. `Alt+Enter` вместо `Enter` закрепляет скилл на всю задачу, а не на одно сообщение.
+В GUI: каждой работе соответствует тонкий скилл `.cursor/skills/<name>/SKILL.md`, вызываемый как `/init-requirements`, `/init-to-spec`, `/spec-to-story`, `/implement-task`, `/fix-bug`. Скиллы не несут собственных правил — они указывают на ядро и файл работы, которые и остаются источником правды. У всех выставлен `disable-model-invocation: true`, поэтому они срабатывают только при явном вызове. `Alt+Enter` вместо `Enter` закрепляет скилл на всю задачу, а не на одно сообщение.
 
 ## Conventions
 

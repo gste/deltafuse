@@ -79,6 +79,6 @@ Init Requirements + Architecture Decisions (ADR)
 | человек, принимаете пакет  | `docs/spec/README.md` — единственная точка ревью (TOC + review tour)  |
 | человек, меняете поведение | `docs/spec/` (и ADR, если выбор неочевиден)                           |
 | агент, начинает сессию     | `agent-prompt.md` (core prompt) → job-промпт из таблицы маршрутизации |
-| агент, реализует `task`    | `AGENTS.md` → файл в `docs/todo/<epic>/task/` → связанные секции спеки |
-| агент, исправляет баг      | `AGENTS.md` → файл в `docs/todo/<epic>/bug/` → связанные секции спеки |
-| агент, планирует эпик      | `workflow.md` (раздел epic) + `docs/todo/README.md` + `docs/spec/README.md` |
+| агент, реализует `task`    | `AGENTS.md` → файл в `docs/todo/<story>/task/` → связанные секции спеки |
+| агент, исправляет баг      | `AGENTS.md` → файл в `docs/todo/<story>/bug/` → связанные секции спеки |
+| агент, планирует история      | `workflow.md` (раздел story) + `docs/todo/README.md` + `docs/spec/README.md` |
