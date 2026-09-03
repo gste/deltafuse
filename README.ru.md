@@ -25,19 +25,19 @@ flowchart TD
     InitDoc --> S2["/init-to-spec<br><b>02. Редактор спеки</b>"]:::skill
     S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Черновик)"]
 
-    SpecDraft --> S6["/audit-spec<br><b>06. Аудитор</b>"]:::skill
+    SpecDraft --> S3["/audit-spec<br><b>03. Аудитор</b>"]:::skill
     S6 <-->|"Итеративное согласование ADR"| Gate1{{"👤 Human Gate<br>Приёмка/отклонение ADR"}}:::human
 
     Gate1 -->|"Все ADR приняты и отзеркалены"| SpecLaw["⚖️ docs/spec/<br><b>ЕДИНСТВЕННЫЙ ЗАКОН РЕАЛИЗАЦИИ</b>"]:::law
 
-    SpecLaw -->|"Планирование новой Story"| S3["/spec-to-story<br><b>03. Планировщик</b>"]:::skill
-    SpecLaw -->|"Планирование по git diff"| S7["/plan-spec-patch<br><b>07. Планировщик</b>"]:::skill
+    SpecLaw -->|"Планирование новой Story"| S4["/spec-to-story<br><b>04. Планировщик</b>"]:::skill
+    SpecLaw -->|"Планирование по git diff"| S5["/plan-spec-patch<br><b>05. Планировщик</b>"]:::skill
 
     S3 --> Inbox["📋 docs/todo/&lt;story&gt;/<br><b>Инбокс задач и багов</b>"]:::inbox
     S7 --> Inbox
 
-    Inbox -->|"Взять задачу"| S4["/implement-task<br><b>04. Разработчик</b>"]:::skill
-    Inbox -->|"Взять баг"| S5["/fix-bug<br><b>05. Исправление бага</b>"]:::skill
+    Inbox -->|"Взять задачу"| S6["/implement-task<br><b>06. Разработчик</b>"]:::skill
+    Inbox -->|"Взять баг"| S7["/fix-bug<br><b>07. Исправление бага</b>"]:::skill
 
     S4 --> Code["🧪 Код + Автотесты (Зелёные)"]
     S5 --> Code
@@ -108,9 +108,11 @@ DeltaFuse полностью нейтрален к используемой IDE 
 |---|---|---|---|---|
 | **01** | [`/init-requirements`](docs/process/prompts/01-init-requirements.md) | Автор требований | `docs/init/**` | Фиксация входящих сырых требований и ограничений. |
 | **02** | [`/init-to-spec`](docs/process/prompts/02-init-to-spec.md) | Редактор спеки | `docs/spec/**`, `docs/decisions/**` | Компиляция сырых требований в модульный пакет спецификации и черновики ADR. |
-| **03** | [`/spec-to-story`](docs/process/prompts/03-spec-to-story.md) | Планировщик | `docs/todo/<story>/**` | Нарезка принятой спецификации на Story и атомарные задачи. |
-| **04** | [`/implement-task`](docs/process/prompts/04-implement-task.md) | Разработчик | Код, Тесты, PR | Реализация отдельной задачи из `docs/todo/<story>/task/` по TDD. |
-| **05** | [`/fix-bug`](docs/process/prompts/05-fix-bug.md) | Редактор → Разработчик | Спека, Код, PR | Локализация дефекта, обновление спеки (при необходимости) и исправление бага. |
+| **03** | [`/audit-spec`](docs/process/prompts/03-audit-spec.md) | Аудитор спеки и ADR | Отчёт, ADR, `docs/spec/**` | Проверка непротиворечивости, зеркалирование принятых ADR в закон, поиск скрытых развилок. |
+| **04** | [`/spec-to-story`](docs/process/prompts/04-spec-to-story.md) | Планировщик | `docs/todo/<story>/**` | Нарезка принятой спецификации на Story и атомарные задачи. |
+| **05** | [`/plan-spec-patch`](docs/process/prompts/05-plan-spec-patch.md) | Планировщик | `docs/todo/<story>/task/` | Автоматическая нарезка задач по `git diff -- docs/spec/` после применения патча к спеке. |
+| **06** | [`/implement-task`](docs/process/prompts/06-implement-task.md) | Разработчик | Код, Тесты, PR | Реализация отдельной задачи из `docs/todo/<story>/task/` по TDD. |
+| **07** | [`/fix-bug`](docs/process/prompts/07-fix-bug.md) | Редактор → Разработчик | Спека, Код, PR | Локализация дефекта, обновление спеки (при необходимости) и исправление бага. |
 | **06** | [`/audit-spec`](docs/process/prompts/06-audit-spec.md) | Аудитор спеки и ADR | Отчёт, ADR, `docs/spec/**` | Проверка непротиворечивости, зеркалирование принятых ADR в закон, поиск скрытых развилок. |
 | **07** | [`/plan-spec-patch`](docs/process/prompts/07-plan-spec-patch.md) | Планировщик | `docs/todo/<story>/task/` | Автоматическая нарезка задач по `git diff -- docs/spec/` после применения патча к спеке. |
 

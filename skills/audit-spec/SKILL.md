@@ -9,7 +9,7 @@ disable-model-invocation: true
 This skill carries no rules of its own. The repository files are the source of truth.
 
 1. Read `docs/process/agent-prompt.md` and follow its core prompt.
-2. Read `docs/process/prompts/06-audit-spec.md` and follow it as the procedure for this job.
+2. Read `docs/process/prompts/03-audit-spec.md` and follow it as the procedure for this job.
 3. Inspect `docs/init/**`, `docs/decisions/**`, and `docs/spec/**`.
 
 Check ADR completeness, mirror accepted ADRs to spec imperatives, draft proposed ADRs for open forks, and report readiness to the human.
