@@ -15,6 +15,43 @@ Init Requirements + Architecture Decisions (ADR)
             → Implementation
 ```
 
+## 🗺️ How DeltaFuse Works (End-to-End Lifecycle)
+
+```mermaid
+flowchart TD
+    classDef human fill:#fff3cd,stroke:#856404,stroke-width:2px,color:#856404;
+    classDef skill fill:#e8f4fd,stroke:#1d70b8,stroke-width:2px,color:#0c5460;
+    classDef law fill:#d4edda,stroke:#155724,stroke-width:2px,color:#155724;
+    classDef inbox fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,color:#383d41;
+
+    Raw["💡 Raw Idea / Problem"] --> S1["/init-requirements<br><b>01. Init Author</b>"]:::skill
+    S1 --> InitDoc["📄 docs/init/"]
+
+    InitDoc --> S2["/init-to-spec<br><b>02. Spec Editor</b>"]:::skill
+    S2 --> SpecDraft["📄 docs/spec/ & docs/decisions/ (Draft)"]
+
+    SpecDraft --> S6["/audit-spec<br><b>06. Auditor</b>"]:::skill
+    S6 <-->|"Iterative ADR review"| Gate1{{"👤 Human Gate<br>Accept/Reject ADR"}}:::human
+
+    Gate1 -->|"All ADRs accepted & mirrored"| SpecLaw["⚖️ docs/spec/<br><b>SOLE IMPLEMENTATION LAW</b>"]:::law
+
+    SpecLaw -->|"Plan new Story"| S3["/spec-to-story<br><b>03. Planner</b>"]:::skill
+    SpecLaw -->|"Plan from git diff"| S7["/plan-spec-patch<br><b>07. Planner</b>"]:::skill
+
+    S3 --> Inbox["📋 docs/todo/<story>/<br><b>Task & Bug Inbox</b>"]:::inbox
+    S7 --> Inbox
+
+    Inbox -->|"Execute task"| S4["/implement-task<br><b>04. Implementer</b>"]:::skill
+    Inbox -->|"Execute bug"| S5["/fix-bug<br><b>05. Fixer</b>"]:::skill
+
+    S4 --> Code["🧪 Code + Automated Tests (Green)"]
+    S5 --> Code
+
+    Code --> Gate2{{"👤 Human Gate<br>PR Review & git push"}}:::human
+```
+
+---
+
 ## Rules
 
 1. **Реализация читает только `docs/spec/`.**  
