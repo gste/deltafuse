@@ -1,5 +1,7 @@
 # DeltaFuse ⚡
 
+[ **English** ](README.md) | [ Русский ](README.ru.md)
+
 > **Specification-Driven AI Engineering Framework**
 > A deterministic, agent-agnostic methodology for human-in-the-loop software development with autonomous AI agents.
 
