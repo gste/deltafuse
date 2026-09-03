@@ -1,24 +1,20 @@
-# AGENTS.md
+﻿# AGENTS.md
 
-Standing orders for any AI agent working in a **DeltaFuse** repository (`delta-fuse`: this file + `docs/process/`).
+Instructions for autonomous AI agents and AI CLI tools (Cursor, Google Antigravity, Claude Code, Copilot, etc.).
 
-This file is **process-only**. Product behaviour lives exclusively under `docs/spec/` (the Specification / SDD pack), derived from Init Requirements and accepted ADRs. How to adopt the framework: `docs/process/using.md`.
+## One-line mandate
 
-## Source of truth chain (Law Chain)
+The active specification pack under `docs/spec/` is the **only implementation law**. If code and spec disagree, the specification wins. Implement from `docs/spec/` and task files under `docs/todo/`, never from chat history, Init Requirements, archives, or ADR text alone.
 
-```text
-Init Requirements + Architecture Decisions (ADR)
-    → Specification (docs/spec/)      ← sole implementation law
-        → Atomic tasks (docs/todo/)
-            → Implementation
-```
+## Repository layout (quick index)
 
-| Need                    | Read                                                      |
+| Topic                   | Source of truth                                           |
 |-------------------------|-----------------------------------------------------------|
-| What to implement       | `docs/spec/**` only                                       |
+| What to build / change  | `docs/spec/**` (the Specification pack)                   |
 | Why a decision was made | `docs/decisions/**`                                       |
 | How we work             | DeltaFuse: `docs/process/**` + this file                  |
 | Current story tasks      | `docs/todo/<story>/` (if present)                          |
+| Raw inbox / error dumps  | `docs/todo/inbox/` (for triage)                           |
 | Init Requirements       | `docs/init/` (pre-accept) or `docs/archive/` (historical) |
 
 Rules:
@@ -26,7 +22,7 @@ Rules:
 - **Implementation law** = `docs/spec/`. If code and spec disagree, spec wins; open a `spec-patch`, do not "fix in code only".
 - **ADR does not replace spec.** An accepted ADR must be reflected as imperative text in `docs/spec/` in the same change set.
 - **Init Requirements do not replace spec.** After the Specification pack is accepted, do not implement from Init or archive.
-- Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<story>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<story>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Implement `task/` with `/implement-task`; take a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty story directory is removed.
+- Task files under `docs/todo/` are an inbox (links + DoD only), not a second specification. Layout: `docs/todo/<story>/task/` (`kind: task`, branch `feature/<slug>`) and `docs/todo/<story>/bug/` (`kind: bug`, branch `bugfix/<slug>`). `NN` is repo-wide: next = `1 + max(Closed ∪ live task/bug files)` in `docs/todo/README.md`. A `bug` file carries `opened` (YYYY-MM-DD) and may include a `Run` note without secrets. Triage raw observations with `/report-bug`; implement `task/` with `/implement-task`; execute a bug with `/fix-bug`. Closing a slice deletes the file, appends Closed, and adds one `CHANGELOG.md` Unreleased bullet; an empty story directory is removed.
 - User-facing chat follows the Language table in `docs/process/README.md` (Russian by default for RU teams), even though this file is English. Exception: the human wrote this turn in English.
 
 ## Default reading order
@@ -43,7 +39,7 @@ Rules:
 
 1. This file + `docs/process/**`
 2. Spec index + relevant ADRs in `docs/decisions/`
-3. Diff or draft under review
+3. Diff, draft, or raw inbox dump under review
 
 Do not load the entire Specification pack unless the task explicitly spans multiple modules.
 
@@ -114,11 +110,13 @@ Details: `docs/process/roles.md`.
 5. **Commit the Plan:**
    - Commit the generated task files and updated todo README locally (`git add docs/todo/ && git commit -m "plan: slice story into atomic tasks"`). Never push.
 
-## How to implement a task
+## How to implement a task or bug
 
-`/implement-task` is only for `docs/todo/<story>/task/`. A bug is `/fix-bug`.
+- Implement a task with `/implement-task <task-path>`.
+- Triage a raw bug or review comment with `/report-bug [raw-input]`.
+- Fix a registered bug with `/fix-bug <bug-path>`.
 
-1. Read the task file — including its Spec delta — and **linked** spec sections only. A branch diff replaces neither.
+1. Read the task/bug file — including its Spec delta — and **linked** spec sections only. A branch diff replaces neither.
 2. If the task allows spec edits: change only the anchors listed in the Spec delta, phrased as if the requirement had always been that way, then check `git diff -- docs/spec/` against that list. Anything extra is reverted or escalated. Commit the spec. If `docs/spec/**` was not edited, say `spec unchanged` in the closing answer.
 3. Write the tests the DoD names and run them on the current code — they must fail for this slice's behaviour. If they already pass, stop.
 4. Implement the smallest change that turns those tests green.

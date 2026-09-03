@@ -1,4 +1,4 @@
-# DeltaFuse Project Initializer for PowerShell
+﻿# DeltaFuse Project Initializer for PowerShell
 param (
     [string]$TargetDir = "."
 )
@@ -14,9 +14,12 @@ $dirs = @(
     "docs/decisions",
     "docs/spec",
     "docs/todo",
+    "docs/todo/inbox",
     "docs/archive/init",
+    "docs/archive/inbox",
     ".cursor/skills",
-    ".agents/skills"
+    ".agents/skills",
+    ".gemini/skills"
 )
 
 foreach ($d in $dirs) {
@@ -32,6 +35,7 @@ Copy-Item (Join-Path $ScriptDir "docs/process/*") (Join-Path $TargetDir "docs/pr
 
 Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".cursor/skills") -Recurse -Force
 Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".agents/skills") -Recurse -Force
+Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".gemini/skills") -Recurse -Force
 
 # Templates
 if (-not (Test-Path (Join-Path $TargetDir "docs/todo/README.md"))) {

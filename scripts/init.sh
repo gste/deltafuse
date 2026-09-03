@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # DeltaFuse Project Initializer
 set -euo pipefail
 
@@ -12,9 +12,12 @@ mkdir -p "$TARGET_DIR/docs/init"
 mkdir -p "$TARGET_DIR/docs/decisions"
 mkdir -p "$TARGET_DIR/docs/spec"
 mkdir -p "$TARGET_DIR/docs/todo"
+mkdir -p "$TARGET_DIR/docs/todo/inbox"
 mkdir -p "$TARGET_DIR/docs/archive/init"
+mkdir -p "$TARGET_DIR/docs/archive/inbox"
 mkdir -p "$TARGET_DIR/.cursor/skills"
 mkdir -p "$TARGET_DIR/.agents/skills"
+mkdir -p "$TARGET_DIR/.gemini/skills"
 
 # Copy core
 cp "$SCRIPT_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
@@ -24,6 +27,7 @@ cp -r "$SCRIPT_DIR/docs/process/"* "$TARGET_DIR/docs/process/"
 # Copy skills
 cp -r "$SCRIPT_DIR/skills/"* "$TARGET_DIR/.cursor/skills/"
 cp -r "$SCRIPT_DIR/skills/"* "$TARGET_DIR/.agents/skills/"
+cp -r "$SCRIPT_DIR/skills/"* "$TARGET_DIR/.gemini/skills/"
 
 # Copy templates if targets don't exist
 [ -f "$TARGET_DIR/docs/todo/README.md" ] || cp "$SCRIPT_DIR/templates/docs/todo/README.md" "$TARGET_DIR/docs/todo/README.md"
