@@ -31,7 +31,7 @@ stateDiagram-v2
     
     implemented --> verifying: verify-change
     verifying --> converged: all claims verified & traced
-    converged --> archived: move to docs/archive/changes/
+    converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
     normalized --> rejected: invalid / out of scope
     analyzing --> rejected: unfeasible
@@ -62,7 +62,7 @@ stateDiagram-v2
 | `implemented` | All tasks implemented and verified locally. | `verifying` | All task targets green; no regression failures. |
 | `verifying` | End-to-end traceability and convergence check. | `converged` | All claims mapped to green tests and spec. |
 | `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded in `verification/run.yaml`. |
-| `archived` | Moved to `docs/archive/changes/CHG-NNN`. | *Terminal* | Directory moved to archive root. |
+| `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |
 | `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented in `analysis.md`. |
 | `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
 | `not-reproduced` | Defect not reproduced during analysis/targeting. | *Terminal* | Evidence of non-reproducibility documented. |
