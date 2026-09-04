@@ -1,2 +1,13 @@
 change: CHG-000-example
-claims: {}
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks:
+      - TASK-001
+    spec_refs: []
+    evidence:
+      red: evidence/red/TASK-001.yaml
+      green: evidence/green/TASK-001.yaml
+      regression: evidence/regression/TASK-001.yaml
+      verification: evidence/verification/run.yaml
+    status: pending
