@@ -81,15 +81,27 @@ DeltaFuse разграничивает зоны ответственности �
 
 ## Уровни оркестрации
 
-Жизненный цикл поддерживает два уровня взаимодействия:
+Жизненный цикл DeltaFuse базируется на 7 канонических скиллах-примитивах (`process/skills/*`):
+- `intake` — нормализация входящего запроса в `CHG-NNN`;
+- `analyze-change` — маршрутизация по capabilities и вычисление дельт;
+- `specify-change` — применение дельт к нормативной спецификации;
+- `decompose-change` — нарезка на атомарные задачи реализации;
+- `target-task` — подготовка исполняемого тест-таргета и фиксация Red evidence;
+- `implement-task` — реализация кода и фиксация Green/Regression evidence;
+- `verify-change` — проверка сходимости артефактов и архивация.
 
-1. **Специализированные примитивы (Primitives)**:
-   - `/intake`, `/analyze-change`, `/specify-change`, `/decompose-change`, `/target-task`, `/implement-task`, `/verify-change`.
-   - Используются для точечного контроля, сложных архитектурных изменений и ручной пошаговой проводки.
+### Профили исполнения (Execution Profiles)
 
-2. **Высокоуровневые сценарии (Entry Points)**:
-   - `/bootstrap` — сквозная инициализация проекта с baseline;
-   - `/change` — сквозное проведение доработки;
-   - `/fix-bug` — проведение дефекта по пути воспроизведения и исправления.
+Высокоуровневые сценарии работы формируются последовательным вызовом канонических примитивов:
 
-Любой композитный сценарий (например, `/change --quick`) обязан внутренне выполнять те же самые примитивы, формировать полные наборы артефактов и останавливаться перед Human Gates. Автоматизация не имеет права размывать ответственность ролей или обходить контроль человека.
+1. **Стандартная доработка (Feature / Specification Change)**:
+   `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → цикл по задачам (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
+2. **Исправление дефекта реализации (Implementation Bug)**:
+   `intake` → `analyze-change` *(дельта spec: unchanged)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+3. **Инициализация проекта (Bootstrap Profile)**:
+   Формирование начального каталога `docs/spec/_capabilities.yaml`, принятие базовых архитектурных решений (`docs/decisions/DEC-*` с `change: null`) и фиксация `project.baseline: active` в `.deltafuse/config.yaml` до запуска первого Change.
+
+Любая внешняя автоматизация или сквозное проведение агентом (composite orchestration) обязаны:
+- Использовать исключительно 7 канонических примитивов фреймворка;
+- Формировать полные наборы нормативных артефактов на каждом шаге;
+- Безусловно останавливаться перед Human Gates. Автоматизация не имеет права размывать ответственность ролей или обходить контроль человека.
