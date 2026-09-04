@@ -92,7 +92,6 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
 | [roles.md](./roles.md) ([ru](./roles.ru.md)) | AI and human authority boundaries |
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
-| [context-sliced-workflow-proposal.md](./context-sliced-workflow-proposal.md) | Design rationale for v2.0 architecture |
 
 Executable step contracts live in `process/skills/**`; structural schemas live in `process/schemas/**`.
 
