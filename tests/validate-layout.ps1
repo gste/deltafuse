@@ -41,6 +41,9 @@ if (Test-Path -LiteralPath $configPath) {
         if ($line -match '^\s{2}version:\s*(\S+)\s*$') {
             $configVersion = $Matches[1]
         }
+        if ($line -match '^\s{2}source:\s*(\S+)\s*$') {
+            $configSource = $Matches[1]
+        }
         if ($line -match '^paths:\s*$') { $inPaths = $true; $inAdapters = $false; $inRoots = $false; continue }
         if ($line -match '^adapters:\s*$') { $inAdapters = $true; $inPaths = $false; continue }
         if ($inPaths) {
@@ -62,6 +65,9 @@ if (Test-Path -LiteralPath $configPath) {
     }
     if (-not $configVersion) {
         $Errors.Add("Config file has no requested framework version")
+    }
+    if (-not $configSource) {
+        $Errors.Add("Config file has no requested framework source")
     }
 }
 
@@ -85,11 +91,17 @@ foreach ($forbidden in @("docs/process", "docs/init", "docs/todo")) {
 if (Test-Path -LiteralPath $lockPath) {
     $lock = Get-Content -LiteralPath $lockPath -Raw
     $versionMatch = [regex]::Match($lock, '(?m)^\s{2}version:\s*(\S+)\s*$')
+    $sourceMatch = [regex]::Match($lock, '(?m)^\s{2}source:\s*(\S+)\s*$')
     $hashMatch = [regex]::Match($lock, '(?m)^\s{2}content_hash:\s*(sha256:[a-fA-F0-9]{64})\s*$')
     if (-not $versionMatch.Success) {
         $Errors.Add("Lock file has no framework version")
     } else {
         $lockVersion = $versionMatch.Groups[1].Value
+    }
+    if (-not $sourceMatch.Success) {
+        $Errors.Add("Lock file has no framework source")
+    } else {
+        $lockSource = $sourceMatch.Groups[1].Value
     }
     if (-not $hashMatch.Success) {
         $Errors.Add("Lock file has no valid framework content hash")
@@ -100,6 +112,13 @@ if (Test-Path -LiteralPath $lockPath) {
 
 if ($configVersion -and $lockVersion -and $configVersion -ne $lockVersion) {
     $Errors.Add("Requested framework version $configVersion does not match locked version $lockVersion")
+}
+
+if ($configSource -and $lockSource) {
+    $normalizedConfigSource = if ($configSource -eq "deltafuse") { "deltafuse://v$configVersion" } else { $configSource }
+    if ($normalizedConfigSource -ne $lockSource) {
+        $Errors.Add("Requested framework source '$configSource' does not match locked source '$lockSource'")
+    }
 }
 
 # 1. Validate capability catalog structure
