@@ -34,7 +34,7 @@ Use these names consistently:
 
 ## Change rules
 
-- Treat [context-sliced-workflow-proposal.md](docs/context-sliced-workflow-proposal.md) as the accepted redesign rationale until it is replaced by a versioned specification.
+- Treat canonical documentation in [docs/](docs/README.md) as the authoritative process specification.
 - Update canonical docs, skills, schemas, templates, installers, validators, and tests together when a contract changes.
 - Keep skills concise and self-contained enough to work as generated snapshots.
 - Preserve user intent and do not invent product requirements.
