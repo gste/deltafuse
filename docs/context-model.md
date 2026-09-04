@@ -1,48 +1,49 @@
-# Context Model and Slicing
+# Context Slicing Model
 
-DeltaFuse построен на парадигме строго ограниченных контекстов (Bounded Contexts). Любая операция искусственного интеллекта выполняется в минимальном окне внимания, достаточном для решения задачи, что исключает галлюцинации, размывание требований и неконтролируемое изменение кода.
+[**English**](context-model.md) | [Русский](context-model.ru.md)
 
----
-
-## Проблема монолитного контекста
-
-При подаче в контекст модели всей кодовой базы, документации и истории правок возникают критические деградации:
-1. **Context Pollution**: нерелевантные куски кода и старые обсуждения влияют на принятие текущих решений.
-2. **Hallucinations & Scope Drift**: модель додумывает связи и берется исправлять код, который её не просили трогать.
-3. **Потеря трассируемости**: невозможно точно установить, какое именно требование привело к появлению конкретной строки кода.
-
-DeltaFuse решает эту проблему через **слайсинг** (Context Slicing) — расщепление изменений на изолированные срезы с формальными декларативными контрактами на входы и выходы.
+DeltaFuse solves the problem of context degradation (hallucinations, loss of attention, silent contract violations) by strictly partitioning requirements and code into bounded, autonomous slices.
 
 ---
 
-## Метамодель возможностей (Capability Metamodel)
+## Core Problem: Context Saturation
 
-В основе разбиения системы лежит каталог функциональных возможностей продукта (Product Capabilities). Фреймворк фиксирует универсальные классы:
+Large AI context windows do not solve the problem of reasoning quality:
+- Loading the entire codebase and all requirements into an agent prompt leads to loss of focus, skipped edge cases, and hallucinations;
+- Unbounded changes inevitably introduce latent side effects;
+- Lack of strict boundary contracts makes verification non-reproducible.
 
-- **Domain** — крупная предметная область системы (например, `identity`, `billing`, `documents`);
-- **Capability** — неделимая единица функциональной ответственности, предоставляющая наблюдаемый результат;
-- **Requirement (`REQ-*`)** — атомарное нормативное требование к поведению системы;
-- **Scenario (`SC-*`)** — конкретный сценарий выполнения или граничный случай требования;
-- **Policy** — сквозное правило или инвариант, применяемый ко множеству capabilities (например, `policy.security`, `policy.audit`);
-- **Integration Boundary** — граница интеграции с внешней системой;
-- **Actor** — участник процесса (пользователь, сервис, таймер);
-- **Entity** — доменная сущность, которой владеет capability.
+DeltaFuse addresses this by mandating that:
+1. **Product domains are separate from artifact layers**;
+2. Changes are routed through a finite **Capability Catalog**;
+3. Each task executes within a strictly bounded **Context Budget** (`max_tokens: 16000`, `max_files: 24`).
 
 ---
 
-## Каталог продукта (`docs/spec/_capabilities.yaml`)
+## Domain and Capability Taxonomy
 
-Принятый каталог возможностей продукта является нормативным источником для маршрутизации:
+- **Domain** — top-level business area of the system (e.g., `identity`, `billing`, `analytics`);
+- **Capability** — autonomous, verifiable business function owned by a single domain;
+- **Policy** — cross-cutting rules or standards affecting multiple capabilities (e.g., `policy.security`, `policy.audit`);
+- **Integration Boundary** — contractual interface with external systems;
+- **Actor** — external user or system interacting with a capability;
+- **Entity** — domain entity owned by a capability.
+
+---
+
+## Product Capability Catalog (`docs/spec/_capabilities.yaml`)
+
+The accepted capability catalog serves as the authoritative normative source for routing:
 
 ```yaml
 schema_version: 2
 
 domains:
   identity:
-    summary: Управление учётными записями и доступом
+    summary: User account management and access control
     capabilities:
       authentication:
-        summary: Проверка учётных данных и выдача первичных токенов доступа
+        summary: Credential validation and primary access token issuance
         spec:
           - docs/spec/identity/authentication.md
         policies:
@@ -54,7 +55,7 @@ domains:
         depends_on:
           - identity.session-management
       session-management:
-        summary: Управление сессиями, обновление токенов и завершение сеансов
+        summary: Session management, token renewal, and sign-out handling
         spec:
           - docs/spec/identity/session.md
         policies:
@@ -67,78 +68,52 @@ domains:
 ```
 
 ### Controlled Open-World Assumption
-Каталог считается полным относительно **текущей принятой спецификации**, но не считается полным относительно всех будущих требований:
-- Если входящий запрос укладывается в границы существующей capability, он маршрутизируется в неё (`matched`).
-- Если запрос затрагивает спорную границу нескольких capabilities, маршрутизация возвращает статус `ambiguous` и требует уточнения.
-- Если запрос требует принципиально новой ответственности, агент формирует `capability-gap`, предлагает проект расширения каталога (`catalog delta`) и ожидает решения человека (Human Gate).
+The catalog is considered complete relative to the **currently accepted specification**, but open relative to future requirements:
+- If an incoming claim maps to a single known capability, it is assigned directly (`matched`).
+- If an incoming claim maps to multiple capabilities, it is marked `ambiguous` and resolved via a Decision.
+- If an incoming claim maps to no existing capability, a `capability-gap` is raised requiring catalog extension (`catalog delta`) approved by a human (Human Gate).
 
-### Критерии выделения новой Capability
-Новая capability создаётся только при наличии:
-1. Отдельной наблюдаемой продуктовой ответственности;
-2. Собственных независимых сущностей, инвариантов и жизненного цикла;
-3. Необходимости изолированного тестирования и развития без связывания с соседними модулями.
+### Capability Invariants
+Each capability must strictly specify:
+1. Exact specification files (`spec`);
+2. Code roots and test suites implementing it (`code_roots`, `test_roots`);
+3. Dependent capabilities and applicable policies (`depends_on`, `policies`).
 
 ---
 
-## Маршрутизация и нарезка слайсов (Slicing)
+## Change Slicing
 
-### Двухпроходный анализ (Two-Pass Analysis)
+### Two-Pass Analysis
 1. **Pass A: Routing**
-   - На входе: только `request.md` и `_capabilities.yaml`.
-   - Цель: распределить входящие claims (`CR-*`) по owning capabilities без загрузки текста спецификаций и кода.
-   - Выход: `routing.yaml`.
+   - Inputs: strictly `request.md` and `_capabilities.yaml`.
+   - Action: map claims (`CR-*`) to owning capabilities and evaluate confidence.
+   - Output: `routing.yaml`.
 2. **Pass B: Slice Analysis**
-   - На входе: один срез требований и **только** файлы спецификации, привязанные к выбранным capabilities.
-   - Цель: определить точную дельту по спецификации, коду и тестам.
-   - Выход: артефакты `slices/SLICE-NN.md` и типизированные дельты.
+   - Inputs: claims belonging to **one** capability slice, targeted specification modules, accepted decisions.
+   - Action: compute typed deltas, detect contradictions, formulate questions.
+   - Output: `slices/SLICE-NN.md` and `spec-delta.md`.
+
+### Slicing Invariants
+1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts.
+2. **Independent Verifiability**: each slice can be specified, implemented, and tested independently of other non-dependent slices.
+3. **Claim Exhaustiveness**: every normalized claim `CR-*` must belong to exactly one primary slice.
 
 ---
 
-## Декларативные контекстные контракты (Skill Context Contracts)
+## Context Budgets and Contracts
 
-Каждый рабочий шаг фреймворка подчиняется строгому контекстному контракту:
+Each lifecycle step operates under a strict Context Contract defining what an agent MUST, MAY, and MUST NOT read:
 
-```yaml
-context:
-  reads:
-    required: []
-    optional: []
-  writes: []
-  must_not_read: []
-  must_not_write: []
-  budget:
-    max_tokens: 8000
-    max_files: 5
-  escalation:
-    on_missing_context: stop-and-ask
-    on_budget_exceeded: split-slice
-```
-
-### Матрица контекстов жизненного цикла
-
-| Шаг процесса | Разрешённый контекст на чтение (Reads) | Запрещённый контекст (Must NOT read) | Результат (Writes) |
+| Step | Allowed Read Scope (Context In) | Forbidden Read Scope | Primary Output Artifact |
 |---|---|---|---|
-| **Intake** | Сообщение пользователя, файлы в `docs/intake/**`, шаблоны. | `docs/spec/**`, код, тесты, задачи, decisions. | `change.yaml`, `request.md` |
-| **Route & Analyze** | `request.md`, `_capabilities.yaml`, точечные модули спеки для выбранного слайса, принятые decisions. | Вся кодовая база, несвязанные модули спецификации. | `routing.yaml`, `analysis.md`, `slices/**`, `coverage.yaml` |
-| **Specify** | Один слайс, точечные файлы спеки, принятые decisions. | Код продукта, несвязанные разделы документации. | `docs/spec/**`, `spec-delta.md` |
-| **Decompose** | Один специфицированный слайс, точные требования (`REQ-*`), интерфейсы модулей. | Весь сырой интейк, несвязанный код, чужие Changes. | Задачи `tasks/TASK-NNN-*.md` |
-| **Target** | Ровно одна задача, ссылки на спеку, тестовые фикстуры, публичные контракты. | Внутренняя реализация продуктового кода. | Новый/изменённый тест, `evidence/red/` |
-| **Implement** | Ровно одна задача, упавший тест, Red evidence, разрешённые файлы кода. | Другие задачи, нерелевантные файлы репозитория. | Минимальный код, `evidence/green/` |
-| **Verify** | `coverage.yaml`, summaries задач, evidence, дифы спеки и кода. | Загрузка полных файлов, не затронутых дельтой. | `verification.md`, перенос в архив |
+| **Intake** | Raw input, issue description, logs, review comments. | `docs/spec/**`, repository source code. | `request.md` |
+| **Route & Analyze** | `request.md`, `_capabilities.yaml`, targeted spec modules for selected slice, accepted decisions. | Entire codebase, unrelated specification modules. | `routing.yaml`, `analysis.md`, `slices/**`, `coverage.yaml` |
+| **Specify** | `request.md`, `analysis.md`, `slices/SLICE-NN.md`, target spec module, accepted decisions. | Product source code. | `spec-delta.md`, updated `docs/spec/**` |
+| **Decompose** | Updated spec modules, slice definition, target test suite paths. | Full codebase. | `tasks/TASK-NNN-*.md` |
+| **Target** | Single `TASK-NNN.md`, test suite file, public interface signatures. | Implementation code under test. | Executable failing test, `evidence/red/<task-id>.yaml` |
+| **Implement** | Single `TASK-NNN.md`, Red evidence, target test, target implementation file. | Unrelated modules and packages. | Passing code, `evidence/green/<task-id>.yaml`, `evidence/regression/<task-id>.yaml` |
+| **Verify** | `change.yaml`, `request.md`, `routing.yaml`, `slices/**`, `tasks/**`, `coverage.yaml`, test suite results. | Arbitrary refactoring of code. | `verification.md`, `evidence/verification/run.yaml`, archive move |
 
-### Политики эскалации
-- **On missing context**: если агенту не хватает данных или спецификация неоднозначна — **Stop-and-Ask** (остановка и оформление вопроса/Decision вместо додумывания).
-- **On budget exceeded**: если контекст слайса превышает установленный лимит — **Split-Slice** (деление слайса на более мелкие изолированные части).
-
----
-
-## Стабильная идентичность требований и сценариев
-
-Для исключения битых ссылок при рефакторинге документации используются устойчивые символические идентификаторы:
-
-- **Требование**: `REQ-<CAPABILITY>-<NNN>`  
-  *Пример:* `REQ-AUTH-001: Валидация времени жизни refresh-токена`
-- **Сценарий / Edge case**: `SC-<CAPABILITY>-<NNN>-<LETTER>`  
-  *Пример:* `SC-AUTH-001-A: Попытка обновления с просроченным токеном вызывает 401 Unauthorized`
-
-Задачи (`TASK-NNN`), тест-таргеты и матрица покрытия (`coverage.yaml`) ссылаются исключительно на стабильные идентификаторы `REQ-*` и `SC-*`, гарантируя неразрывную трассируемость от замысла до кода.
+### Strict Enforcement
+- Exceeding the context budget (`max_tokens` or `max_files` from `.deltafuse/config.yaml`) is treated as a design defect requiring finer decomposition.
+- Violating the context contract (e.g., an Implementer modifying specification, or an Intake author reading product code) renders the resulting artifacts invalid and halts the lifecycle gate.
