@@ -1,0 +1,25 @@
+schema_version: 2
+id: CHG-000-example
+title: Change title
+status: normalized
+
+framework:
+  version: 2.0.0
+  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+intent: unknown
+risk: unknown
+
+source:
+  request: request.md
+  intake_refs: []
+
+analysis:
+  routing: null
+  summary: null
+
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
