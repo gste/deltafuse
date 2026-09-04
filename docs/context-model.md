@@ -35,35 +35,35 @@ DeltaFuse решает эту проблему через **слайсинг** (
 Принятый каталог возможностей продукта является нормативным источником для маршрутизации:
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 domains:
   identity:
-    title: Управление учётными записями и доступом
-    responsibility: Аутентификация, сессии и профили пользователей.
-
-capabilities:
-  identity.authentication:
-    title: Аутентификация пользователей
-    type: business
-    responsibility: Проверка учётных данных и выдача первичных токенов.
-    excludes:
-      - Управление сессиями и обновление токенов (относится к identity.session-management)
-      - Разграничение прав доступа и ролей
-    actors: [anonymous-user, registered-user]
-    entities: [credentials, auth-token]
-    events: [login-succeeded, login-failed]
-    spec:
-      - docs/spec/identity/authentication.md
-    depends_on: [policy.security]
-    status: active
-
-policies:
-  policy.security:
-    title: Стандарты безопасности и парольной защиты
-    spec:
-      - docs/spec/policies/security.md
-    applies_to: [identity.*]
+    summary: Управление учётными записями и доступом
+    capabilities:
+      authentication:
+        summary: Проверка учётных данных и выдача первичных токенов доступа
+        spec:
+          - docs/spec/identity/authentication.md
+        policies:
+          - docs/spec/policies/security.md
+        code_roots:
+          - src/identity/auth
+        test_roots:
+          - tests/identity/auth
+        depends_on:
+          - identity.session-management
+      session-management:
+        summary: Управление сессиями, обновление токенов и завершение сеансов
+        spec:
+          - docs/spec/identity/session.md
+        policies:
+          - docs/spec/policies/security.md
+        code_roots:
+          - src/identity/session
+        test_roots:
+          - tests/identity/session
+        depends_on: []
 ```
 
 ### Controlled Open-World Assumption

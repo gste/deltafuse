@@ -43,8 +43,8 @@ Unchecked items are active problems. Items marked `[x]` are verified as fixed.
 
 ### Мелочи/гигиена
 
-- [ ] .gitignore — шаблонный Java-мусор (*.jar, hs_err_pid), не относящийся к репозиторию.
-- [ ] CHANGELOG ссылается на keepachangelog 1.0.0 (текущая 1.1.0) — мелочь.
+- [x] .gitignore — шаблонный Java-мусор (*.jar, hs_err_pid), не относящийся к репозиторию. *(Review-02: .gitignore очищен от Java-мусора и адаптирован под shell/Python/IDE/OS).* 
+- [x] CHANGELOG ссылается на keepachangelog 1.0.0 (текущая 1.1.0) — мелочь. *(Исправлено: обновлено на 1.1.0 в CHANGELOG.md и шаблоне).* 
 - [x] Инсталлятор копирует пустые README в продукты → пользователям непонятно назначение директорий. *(Review-02: README-шаблоны наполнены.)*
 - [x] Двойной источник правды по путям: skills говорят "paths shown below are defaults" и ссылаются на config, но при этом validate/skills используют буквальные docs/... — рассинхрон при кастомизации paths.* в конфиге (валидатор вообще не читает config paths и требует фиксированные docs/...). Это серьёзнее мелочи: если продукт переопределит paths.changes, валидатор завалит его. *(Review-02: validate-layout.ps1 и validate-layout.sh считывают paths.* из .deltafuse/config.yaml и валидируют структуру по настроенным путям)*
 
@@ -62,13 +62,13 @@ Unchecked items are active problems. Items marked `[x]` are verified as fixed.
 - [x] evidence.schema.yaml: фазы `regression` и `verification` по-прежнему не имеют определённого места в layout *(Исправлено: task сделан опциональным/null для verification, определены пути evidence/red/, evidence/green/, evidence/regression/ и evidence/verification/run.yaml)* — скиллы пишут только evidence/red/ и evidence/green/; regression свёрнут в green evidence, verification существует только как verification.md без YAML-артефакта.
 - [x] decision.schema.yaml: поле `change` обязательное — глобальные/Bootstrap-решения без Change невозможны. *(Исправлено: change убрано из required, разрешён null для Bootstrap и глобальных политик)*
 - [x] Инсталляторы хардкодят корни адаптеров (.agents/.cursor/.gemini) вместо чтения adapters.roots из config.yaml — поле конфига фактически мертво. *(Исправлено в init.ps1/init.sh/validate-layout)*
-- [ ] .gitignore — Java-шаблонный мусор.
+- [x] .gitignore — Java-шаблонный мусор. *(Исправлено)*
 - [x] Двойной источник правды по путям (config paths.* vs буквальные docs/... в валидаторе и скиллах). *(Исправлено: валидаторы динамически считывают paths.* из config.yaml)*
 
 ### Новые проблемы (несоответствия в восстановленных документах)
 
 - [x] state-machine.md «Инвариант версионирования»: пример фиксирует `schema_version: 1` *(Исправлено: обновлено на schema_version: 2)* в change.yaml — противоречит change.schema.yaml (`schema_version: const 2`) и шаблону change.yaml (schema_version: 2). Живой Change, оформленный по примеру из канонического документа, не пройдёт валидацию схемой.
-- [ ] context-model.md: пример каталога `_capabilities.yaml` структурно противоречит capability.schema.yaml — `schema_version: 1` вместо const 2; плоская структура (title/responsibility/excludes/actors/entities/events/status,顶层-level ключи `capabilities:` и `policies:`) вместо вложенной `domains.<id>.capabilities.<id>` со полями summary/spec; поля title, responsibility, excludes, actors, entities, events, status отсутствуют в схеме.
-- [ ] roles.md «Уровни оркестрации» ссылается на несуществующие скиллы `/bootstrap`, `/change`, `/fix-bug` — в process/skills/ только 7 примитивов; составные entry points нигде не определены и не генерируются инсталлятором.
+- [x] context-model.md: пример каталога `_capabilities.yaml` структурно противоречит capability.schema.yaml — `schema_version: 1` вместо const 2; плоская структура (title/responsibility/excludes/actors/entities/events/status,顶层-level ключи `capabilities:` и `policies:`) вместо вложенной `domains.<id>.capabilities.<id>` со полями summary/spec; поля title, responsibility, excludes, actors, entities, events, status отсутствуют в схеме. *(Review-02: пример каталога в context-model.md приведён в строгое соответствие с capability.schema.yaml — schema_version: 2, вложенная структура domains.<id>.capabilities.<id> со свойствами summary, spec, policies, code_roots, test_roots, depends_on)*
+- [x] roles.md «Уровни оркестрации» ссылается на несуществующие скиллы `/bootstrap`, `/change`, `/fix-bug` — в process/skills/ только 7 примитивов; составные entry points нигде не определены и не генерируются инсталлятором. *(Review-02: раздел «Уровни оркестрации» в roles.md переписан — убраны фиктивные команды, зафиксированы 7 канонических примитивов и профили исполнения)*
 - [x] verify-change/SKILL.md не обновлён под восстановленную модель *(Исправлено: добавлен шаг перевода реализованных задач в verified)*: не содержит шага перевода задач в `verified` (workflow.md §7 и state-machine.md его требуют) и противоречит им, оперируя только «terminal task states».
 - [ ] Четыре канонических документа (workflow.md, state-machine.md, roles.md, context-model.md) существуют только на русском, тогда как весь остальной фреймворк (README, AGENTS.md, skills, schemas, templates) англоязычный; docs/README.md рекламирует пару English|Русский, но для этих четырёх документов русской версии нет — наоборот, английской нет.
