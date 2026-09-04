@@ -1,0 +1,12 @@
+schema_version: 2
+change: CHG-000-example
+task: TASK-001
+phase: green
+timestamp: 1970-01-01T00:00:00Z
+command: <sanitized command>
+exit_code: 0
+result: passed
+failure_category: null
+summary: <target and scoped regressions passed>
+changed_paths: []
+spec_status: unchanged

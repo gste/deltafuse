@@ -1,0 +1,56 @@
+# Подключение DeltaFuse
+
+[English](using.md) | [**Русский**](using.ru.md)
+
+DeltaFuse устанавливается как versioned external framework. Product repository хранит product state и тонкий integration layer, но не копию канонической process documentation.
+
+## Install
+
+Из доверенного DeltaFuse checkout или package:
+
+```powershell
+./scripts/init.ps1 -TargetDir C:\path\to\product
+```
+
+```bash
+bash ./scripts/init.sh /path/to/product
+```
+
+Installer создаёт без перезаписи существующих product files по умолчанию:
+
+```text
+.deltafuse/config.yaml
+.deltafuse/lock.yaml
+AGENTS.md
+docs/intake/
+docs/changes/
+docs/spec/
+docs/decisions/
+docs/archive/intake/
+docs/archive/changes/
+```
+
+Также генерируются tool-specific skill snapshots в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. Каждый snapshot помечен `DO NOT EDIT` и содержит installed framework version, source и content hash.
+
+Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
+
+## Pinning and upgrades
+
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings. `.deltafuse/lock.yaml` фиксирует resolved version, schema version и framework content hash.
+
+Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
+
+1. Проверить active Changes и записанные в них framework/schema versions.
+2. Завершить их на прежней версии либо закрыть Change.
+3. Перегенерировать adapters и проверить product layout.
+
+Нельзя вручную редактировать generated skills и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
+
+## First operation
+
+| Product state | Operation |
+|---|---|
+| Нет accepted specification baseline | Установить `project.baseline: draft`, выполнить `/intake`, затем Bootstrap через Analyze и Specify |
+| Accepted specification существует | Установить `project.baseline: accepted`, создавать Changes через `/intake` |
+
+Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.

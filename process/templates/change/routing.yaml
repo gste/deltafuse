@@ -1,0 +1,7 @@
+change: CHG-000-example
+claims:
+  CR-001:
+    primary_capability: unresolved
+    related_capabilities: []
+    policies: []
+    confidence: unknown

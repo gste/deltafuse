@@ -1,0 +1,12 @@
+schema_version: 2
+change: CHG-000-example
+task: TASK-001
+phase: red
+timestamp: 1970-01-01T00:00:00Z
+command: <sanitized command>
+exit_code: 1
+result: expected-failure
+failure_category: behavioral-mismatch
+summary: <why this is the expected failure>
+changed_paths: []
+spec_status: unchanged

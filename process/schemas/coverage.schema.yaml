@@ -1,0 +1,42 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/coverage.schema.yaml
+title: DeltaFuse Claim Coverage
+type: object
+additionalProperties: false
+required: [change, claims]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  claims:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        slice:
+          type: string
+          pattern: '^SLICE-[0-9]{2,}$'
+        tasks:
+          type: array
+          items:
+            type: string
+            pattern: '^TASK-[0-9]{3,}$'
+        spec_refs:
+          type: array
+          items:
+            type: string
+        evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            red:
+              type: string
+            green:
+              type: string
+            regression:
+              type: string
+            verification:
+              type: string
+        status:
+          enum: [pending, analyzing, analyzed, specified, decomposed, targeting, target-confirmed, implementing, implemented, verified, rejected, not-reproduced]
