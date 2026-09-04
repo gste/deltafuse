@@ -1,107 +1,109 @@
 # Roles and Permissions
 
-DeltaFuse разграничивает зоны ответственности между человеком и искусственным интеллектом. Ни одна роль не имеет права объединять в одном неконтролируемом шаге «придумать требование» и «написать под него код».
+[**English**](roles.md) | [Русский](roles.ru.md)
+
+DeltaFuse separates responsibilities between humans and AI. No role is permitted to conflate "inventing a requirement" and "writing code for it" into a single unconstrained step.
 
 ---
 
-## Фундаментальные принципы
+## Fundamental Principles
 
-1. **Спецификация первична**: ИИ реализует только то, что явно предписано принятой спецификацией (`docs/spec/**`). Прямая реализация кода из чата, тикета или переписки запрещена.
-2. **Человек утверждает развилки**: любые существенные развилки (архитектурные, продуктовые, границы доменов) оформляются через Decision Records и утверждаются человеком.
-3. **Строгий TDD-барьер**: реализация кода заблокирована до тех пор, пока тест-таргет не упадёт на неизменённом коде с фиксацией Red evidence.
-4. **Неизменяемость границ**: при обнаружении неизвестных или противоречий в ходе реализации задача возвращается на анализ; агент не имеет права неявно додумывать контракт.
-
----
-
-## Границы полномочий ИИ (AI Must NOT)
-
-Искусственному интеллекту **категорически запрещено**:
-
-- **Выполнять `git push`** в удалённый репозиторий.
-- Выполнять разрушающие git-команды (`git push --force`, `git reset --hard`, `git clean -f`, удаление веток).
-- Мерджить изменения в ветку по умолчанию (`main` / `master`).
-- Самостоятельно устанавливать статус `accepted` или `rejected` в решениях (`docs/decisions/**`).
-- Самостоятельно менять границы capabilities в `docs/spec/_capabilities.yaml` в обход Human Gate.
-- Вносить изменения в `docs/spec/**` без авторизованного Change и утверждённого Spec delta.
-- Придумывать поведение продукта, контракты или валидации, отсутствующие в принятой спецификации.
-- Ослаблять проверочные утверждения (assertions) в тестах ради прохождения таргета.
-- Вносить правки в продуктовый код до записи подтверждённого Red evidence.
-- Коммитить секреты, реальные токены, пароли или локальные абсолютные пути.
+1. **Specification is Primary**: AI only implements what is explicitly mandated by the accepted specification (`docs/spec/**`). Direct code implementation based on chat discussions, tickets, or correspondence is forbidden.
+2. **Humans Approve Trade-offs**: All significant trade-offs (architectural, product, domain boundaries) must be documented in Decision Records and approved by a human.
+3. **Strict TDD Gate**: Code implementation is blocked until an executable test target fails on unchanged code with recorded Red evidence.
+4. **Immutability of Boundaries**: If unknowns or contradictions arise during implementation, the task returns to analysis; an agent is not allowed to implicitly invent a contract.
 
 ---
 
-## Человеческие рубежи (Human Gates)
+## AI Authority Limits (AI Must NOT)
 
-Человек остаётся финальным арбитром и принимает решения на пяти ключевых рубежах:
+The AI is **strictly forbidden** from:
 
-| Рубеж (Human Gate) | Описание ответственности человека | Артефакт |
+- **Executing `git push`** to a remote repository.
+- Executing destructive git commands (`git push --force`, `git reset --hard`, `git clean -f`, branch deletion).
+- Merging changes into the default branch (`main` / `master`).
+- Autonomously setting status to `accepted` or `rejected` in decision records (`docs/decisions/**`).
+- Autonomously altering capability boundaries in `docs/spec/_capabilities.yaml` bypassing Human Gates.
+- Making modifications to `docs/spec/**` without an authorized Change and approved Spec delta.
+- Inventing product behaviors, contracts, or validations missing from the accepted specification.
+- Relaxing assertions in tests merely to pass a test target.
+- Modifying product code before recording verified Red evidence.
+- Committing secrets, real tokens, passwords, or local absolute file paths.
+
+---
+
+## Human Gates
+
+Humans remain the final arbiters and make decisions at five key gates:
+
+| Human Gate | Description of Human Responsibility | Artifact |
 |---|---|---|
-| **Capability Boundary** | Утверждение начальной карты возможностей или изменений каталога (`catalog delta`). | `docs/spec/_capabilities.yaml` |
-| **Decision** | Принятие или отклонение архитектурных, продуктовых, интеграционных или инфраструктурных решений. | `docs/decisions/DEC-NNNN-*.md` (`status: accepted`) |
-| **Specification** | Принятие базовой спецификации (Baseline) или изменений существующих требований (`spec delta`). | `docs/spec/**` (PR / merge) |
-| **Scope Expansion** | Санкционирование существенного расширения границ задачи или разделения Change на несколько независимых. | `change.yaml`, `routing.yaml` |
-| **Final Integration** | Финальный code review, разрешение конфликтов слияния, мердж в `main` и выполнение `git push`. | Git commit / PR merge / push |
+| **Capability Boundary** | Approval of the initial capability map or capability catalog changes (`catalog delta`). | `docs/spec/_capabilities.yaml` |
+| **Decision** | Acceptance or rejection of architectural, product, integration, or infrastructure decisions. | `docs/decisions/DEC-NNNN-*.md` (`status: accepted`) |
+| **Specification** | Acceptance of baseline specification or updates to existing requirements (`spec delta`). | `docs/spec/**` (PR / merge) |
+| **Scope Expansion** | Authorizing significant scope expansion or splitting a Change into multiple independent units. | `change.yaml`, `routing.yaml` |
+| **Final Integration** | Final code review, merge conflict resolution, merging into `main`, and performing `git push`. | Git commit / PR merge / push |
 
 ---
 
-## Роли участников процесса
+## Process Participant Roles
 
-| Роль | Исполнитель | Основные обязанности |
+| Role | Performer | Primary Responsibilities |
 |---|---|---|
-| **Intake Author / Auditor** | ИИ-агент или человек | Приём сырого ввода, структурирование утверждений `CR-*`, валидация артефактов без анализа спеки. |
-| **Analyst** | ИИ-агент | Маршрутизация по capabilities, вычисление типизированных дельт, подготовка черновиков решений (`DEC-*`). |
-| **Spec Editor** | ИИ готовит черновик, **человек утверждает** | Актуализация `docs/spec/**`, зеркалирование принятых Decisions в императивный текст требований. |
-| **Task Planner** | ИИ-агент | Декомпозиция принятой спецификации на упорядоченные атомарные задачи с явным Test Oracle. |
-| **Implementer** | ИИ-агент | Написание минимального теста (Target / Red) и минимального продуктового кода (Implement / Green). |
-| **Verifier** | ИИ-агент | Проверка сквозной трассируемости, сходимости слоёв и архивация завершённого пакета. |
-| **Maintainer** | **Только человек** | Утверждение baseline, мердж спецификации и кода, управление релизами и публикацией. |
+| **Intake Author / Auditor** | AI agent or human | Receive raw input, structure `CR-*` claims, validate artifacts without consulting spec. |
+| **Analyst** | AI agent | Route claims to capabilities, compute typed deltas, draft decision proposals (`DEC-*`). |
+| **Spec Editor** | AI drafts, **human approves** | Update `docs/spec/**`, mirror accepted Decisions into imperative requirement text. |
+| **Task Planner** | AI agent | Decompose accepted specification into dependency-ordered atomic tasks with an explicit Test Oracle. |
+| **Implementer** | AI agent | Author minimal test target (Target / Red) and minimal product code (Implement / Green). |
+| **Verifier** | AI agent | Verify end-to-end traceability, cross-layer convergence, and archive completed package. |
+| **Maintainer** | **Human only** | Baseline approval, specification and code merge, release management and publishing. |
 
 ---
 
-## Матрица ответственности (RACI)
+## Responsibility Matrix (RACI)
 
-| Этап / Активность | AI Analyst / Planner | AI Implementer | AI Verifier | Человек (Maintainer) |
+| Stage / Activity | AI Analyst / Planner | AI Implementer | AI Verifier | Human (Maintainer) |
 |---|:---:|:---:|:---:|:---:|
-| Нормализация сырого ввода (`/intake`) | **R** | — | — | **A** |
-| Маршрутизация и дельты (`/analyze-change`) | **R** | — | — | **A** |
-| Черновик решения (`DEC-NNNN proposed`) | **R** | — | — | C |
-| **Принятие решения (`accepted: true`)** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
-| Подготовка правок спеки (`/specify-change`) | **R** | — | — | C |
-| **Принятие спецификации (`docs/spec/`)** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
-| Декомпозиция на задачи (`/decompose-change`) | **R** | C | — | **A** |
-| Написание теста и Red evidence (`/target-task`) | — | **R** | — | C |
-| Написание кода и Green evidence (`/implement-task`) | — | **R** | — | C |
-| Проверка сходимости и архив (`/verify-change`) | — | — | **R** | **A** |
-| **Code Review и Merge в main** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
-| **Git Push в удалённый репозиторий** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
+| Raw intake normalization (`intake`) | **R** | — | — | **A** |
+| Routing and deltas (`analyze-change`) | **R** | — | — | **A** |
+| Decision drafting (`DEC-NNNN proposed`) | **R** | — | — | C |
+| **Decision acceptance (`status: accepted`)** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
+| Spec drafting (`specify-change`) | **R** | — | — | C |
+| **Specification acceptance (`docs/spec/`)** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
+| Task decomposition (`decompose-change`) | **R** | C | — | **A** |
+| Test writing & Red evidence (`target-task`) | — | **R** | — | C |
+| Code writing & Green evidence (`implement-task`) | — | **R** | — | C |
+| Convergence check & archive (`verify-change`) | — | — | **R** | **A** |
+| **Code Review and Merge into main** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
+| **Git Push to remote repository** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
 
-*Обозначения: **R** (Responsible) — выполняет работу; **A** (Accountable) — утверждает / несёт ответственность; **C** (Consulted) — консультирует; **—** — не участвует.*
+*Legend: **R** (Responsible) — does work; **A** (Accountable) — approves / is accountable; **C** (Consulted) — provides input; **—** — not involved.*
 
 ---
 
-## Уровни оркестрации
+## Orchestration Levels
 
-Жизненный цикл DeltaFuse базируется на 7 канонических скиллах-примитивах (`process/skills/*`):
-- `intake` — нормализация входящего запроса в `CHG-NNN`;
-- `analyze-change` — маршрутизация по capabilities и вычисление дельт;
-- `specify-change` — применение дельт к нормативной спецификации;
-- `decompose-change` — нарезка на атомарные задачи реализации;
-- `target-task` — подготовка исполняемого тест-таргета и фиксация Red evidence;
-- `implement-task` — реализация кода и фиксация Green/Regression evidence;
-- `verify-change` — проверка сходимости артефактов и архивация.
+The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/skills/*`):
+- `intake` — normalize raw request into `CHG-NNN`;
+- `analyze-change` — route claims to capabilities and compute deltas;
+- `specify-change` — apply deltas to normative specification;
+- `decompose-change` — decompose into atomic implementation tasks;
+- `target-task` — prepare executable test target and record Red evidence;
+- `implement-task` — implement code and record Green/Regression evidence;
+- `verify-change` — verify artifact convergence and archive package.
 
-### Профили исполнения (Execution Profiles)
+### Execution Profiles
 
-Высокоуровневые сценарии работы формируются последовательным вызовом канонических примитивов:
+High-level operational workflows are orchestrated by invoking these canonical primitives in sequence:
 
-1. **Стандартная доработка (Feature / Specification Change)**:
-   `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → цикл по задачам (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
-2. **Исправление дефекта реализации (Implementation Bug)**:
-   `intake` → `analyze-change` *(дельта spec: unchanged)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
-3. **Инициализация проекта (Bootstrap Profile)**:
-   Формирование начального каталога `docs/spec/_capabilities.yaml`, принятие базовых архитектурных решений (`docs/decisions/DEC-*` с `change: null`) и фиксация `project.baseline: active` в `.deltafuse/config.yaml` до запуска первого Change.
+1. **Standard Change (Feature / Specification Change)**:
+   `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → task loop (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
+2. **Implementation Bug**:
+   `intake` → `analyze-change` *(delta spec: unchanged)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+3. **Bootstrap Profile**:
+   Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: active` in `.deltafuse/config.yaml` before running the first Change.
 
-Любая внешняя автоматизация или сквозное проведение агентом (composite orchestration) обязаны:
-- Использовать исключительно 7 канонических примитивов фреймворка;
-- Формировать полные наборы нормативных артефактов на каждом шаге;
-- Безусловно останавливаться перед Human Gates. Автоматизация не имеет права размывать ответственность ролей или обходить контроль человека.
+Any external automation or end-to-end agent orchestration (composite orchestration) must:
+- Use strictly the 7 canonical framework primitives;
+- Produce complete sets of normative artifacts at every step;
+- Unconditionally halt at Human Gates. Automation must never blur role responsibilities or bypass human oversight.

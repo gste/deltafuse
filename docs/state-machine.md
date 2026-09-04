@@ -1,195 +1,191 @@
-# State Machine
+# State Machine Specification
 
-DeltaFuse управляет жизненным циклом артефактов через явные машины состояний (State Machines). Состояние фиксируется непосредственно в метаданных каждого артефакта (`change.yaml`, заголовок задачи, frontmatter решения). 
+[**English**](state-machine.md) | [Русский](state-machine.ru.md)
 
-Перемещение файлов по файловой системе **не используется** для кодирования активного состояния процесса. Единственное допустимое перемещение директорий — перенос полностью завершённого и сошедшегося пакета Change в `docs/archive/changes/`.
-
----
-
-## Project Baseline State
-
-Глобальное состояние проекта определяется в конфигурационном файле `.deltafuse/config.yaml`:
-
-```yaml
-project:
-  baseline: draft | accepted
-```
-
-| Состояние | Описание | Ограничения |
-|---|---|---|
-| `draft` | Профиль **Bootstrap**: проект находится на этапе первичной инициализации, выделения доменов/возможностей и формирования базовой спецификации. | Продуктовая реализация (код) заблокирована. Разрешены только Intake, анализ и спецификация. |
-| `accepted` | Базовая спецификация принята человеком. Проект находится в регулярной разработке. | Разрешён полный цикл разработки Change. Любые доработки и создание новых сервисов идут как Change. |
+This document formally defines the state machines for the primary DeltaFuse entities: **Change**, **Slice**, **Task**, **Decision**, and **Evidence**.
 
 ---
 
-## Change State Machine
+## Change Lifecycle State Machine
 
-Жизненный цикл контейнера изменений (`docs/changes/<change-id>/change.yaml`):
+A Change is the complete lifecycle container for an atomic set of modifications to a product.
 
-```text
-               +-------------------------------------------+
-               |                                           |
-               v                                           |
-[normalized] ---> [analyzing] <---> [blocked-on-decision]  | (Backtracking)
-                      |                                    |
-                      v                                    |
-                 [analyzed]                                |
-                      |                                    |
-                      v                                    |
-           [specification-proposed]                        |
-                      |                                    |
-                      v                                    |
-                  [specified]                              |
-                      |                                    |
-                      v                                    |
-                 [decomposed]                              |
-                      |                                    |
-                      v                                    |
-                  [targeting]                              |
-                      |                                    |
-                      v                                    |
-              [target-confirmed]                           |
-                      |                                    |
-                      v                                    |
-                [implementing]                             |
-                      |                                    |
-                      v                                    |
-                 [implemented]                             |
-                      |                                    |
-                      v                                    |
-                  [verifying] -----------------------------+
-                      |
-                      v
-                 [converged]
-                      |
-                      v
-                 [archived]
+```mermaid
+stateDiagram-v2
+    [*] --> normalized: intake
+    normalized --> analyzing: analyze-change
+    analyzing --> blocked_on_decision: decision required
+    blocked_on_decision --> analyzing: decision accepted/rejected
+    analyzing --> analyzed: analysis complete
+    
+    analyzed --> specification_proposed: specify-change
+    specification_proposed --> specified: human gate passed
+    analyzed --> targeting: implementation bug (spec unchanged)
+    
+    specified --> decomposed: decompose-change
+    decomposed --> targeting: target-task
+    
+    targeting --> target_confirmed: red evidence verified
+    target_confirmed --> implementing: implement-task
+    implementing --> implemented: green & regression evidence
+    
+    implemented --> verifying: verify-change
+    verifying --> converged: all claims verified & traced
+    converged --> archived: move to docs/archive/changes/
+    
+    normalized --> rejected: invalid / out of scope
+    analyzing --> rejected: unfeasible
+    normalized --> duplicate: duplicate of existing change
+    analyzing --> duplicate: duplicate of existing change
+    analyzing --> superseded: superseded by newer change
+    
+    archived --> [*]
+    rejected --> [*]
+    duplicate --> [*]
+    superseded --> [*]
 ```
 
-### Альтернативные терминальные состояния
-Change может быть переведён в терминальное состояние на ранних этапах:
-- `rejected`: запрос отклонён человеком как нецелесообразный или противоречащий видению продукта;
-- `duplicate`: запрос дублирует уже существующий или обрабатываемый Change;
-- `not-reproduced`: дефект не подтверждён надёжным Red evidence;
-- `superseded`: запрос заменён более широким или реструктурированным Change.
+### Complete Change Status Table
 
-### Таблица переходов Change
-
-| Исходное состояние | Целевое состояние | Событие / Условие перехода | Gate |
+| Status | Description | Allowed Next Statuses | Transition Gate / Precondition |
 |---|---|---|---|
-| *none* | `normalized` | Завершён `/intake`. Создан `request.md` с claim IDs `CR-*`. | Каждое утверждение пользователя представлено claim либо исключено. |
-| `normalized` | `analyzing` | Начало шага `/analyze-change`. Маршрутизация claims по capabilities. | Существует каталог capabilities (или создаётся в Bootstrap). |
-| `analyzing` | `blocked-on-decision` | Обнаружена развилка, требующая Decision Record со статусом `proposed`. | Создан документ `docs/decisions/DEC-NNNN-*.md`. |
-| `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
-| `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. | Все claims покрыты, дельты типизированы, `coverage.yaml` валиден. |
-| `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). | Сформирован проект правок в `docs/spec/**` и `spec-delta.md`. |
-| `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
-| `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
-| `specified` | `decomposed` | Завершён `/decompose-change`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
-| `decomposed` | `targeting` | Выбрана задача для реализации, запущен `/target-task`. | Предшествующие зависимые задачи выполнены. |
-| `targeting` | `target-confirmed` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
-| `target-confirmed` | `implementing` | Запущен `/implement-task`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
-| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. |
-| `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
-| `verifying` | `converged` | Запущен `/verify-change`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
-| `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |
-| `converged` | `archived` | Пакет Change целиком перемещён в `docs/archive/changes/<date>-<change-id>/`. | Change удалён из активных списков, история неизменна. |
+| `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
+| `analyzing` | Routing and slice analysis in progress. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded` | Initial capability routing mapped. |
+| `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
+| `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `targeting` (bug) | Zero unaccepted blocking decisions. |
+| `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
+| `specified` | Normative specification updated in repository. | `decomposed` | Specification changes merged into product spec. |
+| `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
+| `targeting` | Preparing failing test targets for tasks. | `target-confirmed` | Test target executed; fails with Red evidence. |
+| `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
+| `implementing` | Authoring minimal code to turn tests green. | `implemented` | Tests pass; Green and Regression evidence recorded. |
+| `implemented` | All tasks implemented and verified locally. | `verifying` | All task targets green; no regression failures. |
+| `verifying` | End-to-end traceability and convergence check. | `converged` | All claims mapped to green tests and spec. |
+| `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded in `verification/run.yaml`. |
+| `archived` | Moved to `docs/archive/changes/CHG-NNN`. | *Terminal* | Directory moved to archive root. |
+| `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented in `analysis.md`. |
+| `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
+| `not-reproduced` | Defect not reproduced during analysis/targeting. | *Terminal* | Evidence of non-reproducibility documented. |
+| `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
 
 ---
 
-## Slice State Machine
+## Slice Lifecycle State Machine
 
-Слайсы (`slices/SLICE-NN.md`) управляют параллельным или независимым анализом крупных частей Change:
+A Slice is an autonomous, independently verifiable capability slice within a Change.
 
-```text
-draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
+```mermaid
+stateDiagram-v2
+    [*] --> draft: analyze-change
+    draft --> analyzing: boundary mapping
+    analyzing --> blocked: blocked on decision
+    blocked --> analyzing: decision resolved
+    analyzing --> analyzed: delta computed
+    analyzed --> specified: specify-change
+    specified --> decomposed: decompose-change
+    decomposed --> verified: all tasks verified
+    verified --> [*]
 ```
 
-- `draft`: слайс выделен на этапе маршрутизации;
-- `analyzing`: читаются релевантные модули спецификации, формируется дельта;
-- `blocked`: слайс ожидает разрешения зависимого Decision или соседнего слайса;
-- `analyzed`: дельта слайса полностью типизирована;
-- `specified`: нормативная база слайса зафиксирована в спецификации;
-- `decomposed`: сформированы задачи по реализации слайса;
-- `verified`: все задачи слайса завершены и проверены.
+### Slice Statuses
+
+| Status | Description | Allowed Next Statuses |
+|---|---|---|
+| `draft` | Slice boundary draft created during routing. | `analyzing` |
+| `analyzing` | Delta computation and dependency analysis. | `blocked`, `analyzed` |
+| `blocked` | Blocked waiting for architectural or domain decision. | `analyzing` |
+| `analyzed` | Boundary, deltas, and affected modules resolved. | `specified` |
+| `specified` | Applicable spec modifications completed and approved. | `decomposed` |
+| `decomposed` | Tasks for slice created and dependency-ordered. | `verified` |
+| `verified` | All slice tasks implemented and verified. | *Terminal* |
 
 ---
 
-## Task State Machine
+## Task Lifecycle State Machine
 
-Состояния отдельных атомарных задач (`tasks/TASK-NNN-<slug>.md`):
+A Task is an atomic, independently verifiable work unit owned by a specific Slice.
 
-```text
-               +-----------------------------+
-               |                             |
-               v                             |
-[pending] ---> [targeting] ---> [target-confirmed] ---> [implementing] ---> [implemented] ---> [verified]
-  |               |
-  |               +------------> [blocked]
-  |
-  +----------------------------> [cancelled / superseded]
+```mermaid
+stateDiagram-v2
+    [*] --> pending: decompose-change
+    pending --> targeting: target-task
+    targeting --> target_confirmed: red evidence verified
+    target_confirmed --> implementing: implement-task
+    implementing --> implemented: green evidence verified
+    implemented --> verified: verify-change
+    
+    pending --> blocked: external dependency
+    blocked --> pending: unblocked
+    pending --> cancelled: task cancelled
+    pending --> superseded: task replaced
+    
+    verified --> [*]
+    cancelled --> [*]
+    superseded --> [*]
 ```
 
-- `pending`: задача создана, ожидает выполнения зависимостей;
-- `targeting`: пишется минимальный тест, доказывающий Red;
-- `target-confirmed`: зафиксирован воспроизводимый Red evidence;
-- `implementing`: пишется минимальный продуктовый код;
-- `implemented`: тест и регрессии прошли успешно (Green evidence);
-- `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
-- `blocked`: обнаружено внешнее препятствие или ошибка в контракте;
-- `cancelled`: задача отменена по решению архитектора/разработчика;
-- `superseded`: заменена другой задачей.
+### Task Statuses
 
-Задачи не удаляются после выполнения. Они сохраняются в пакете Change для сохранения полной истории и трассируемости.
+| Status | Description | Allowed Next Statuses | Gate / Precondition |
+|---|---|---|---|
+| `pending` | Task defined in `tasks/TASK-NNN.md`. | `targeting`, `blocked`, `cancelled`, `superseded` | Task matches `task.schema.yaml`. |
+| `targeting` | Test target being written. | `target_confirmed` | Test runs and fails for expected reason. |
+| `target-confirmed` | Verified Red evidence recorded. | `implementing` | Evidence file in `evidence/red/<task-id>.yaml`. |
+| `implementing` | Implementation code being authored. | `implemented` | Tests pass; regression suite passes. |
+| `implemented` | Green & regression evidence recorded. | `verified` | Evidence in `evidence/green/` & `regression/`. |
+| `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
+| `blocked` | Implementation blocked by dependency or issue. | `pending` | Blocking reason documented. |
+| `cancelled` | Task cancelled during Change lifecycle. | *Terminal* | Cancellation rationale documented. |
+| `superseded` | Task replaced by finer-grained tasks. | *Terminal* | Superseding task IDs documented. |
 
 ---
 
-## Decision State Machine
+## Decision Lifecycle State Machine
 
-Состояния решений в реестре `docs/decisions/DEC-NNNN-*.md` (решения могут быть привязаны к Change через `change: CHG-NNN` либо создаваться на уровне репозитория/Bootstrap с `change: null`):
+Decisions are recorded in `docs/decisions/DEC-NNNN-*.md` (decisions may be bound to a Change via `change: CHG-NNN`, or created at repository/Bootstrap level with `change: null`):
 
-```text
-[proposed] ---> [accepted]
-           ---> [rejected]
-           ---> [superseded]
+```mermaid
+stateDiagram-v2
+    [*] --> proposed: create DEC-NNNN
+    proposed --> accepted: human gate approval
+    proposed --> rejected: human gate rejection
+    accepted --> superseded: newer decision accepted
+    rejected --> [*]
+    superseded --> [*]
 ```
 
-- `proposed`: черновик решения сформирован аналитиком или ИИ, содержит варианты (options) и контекст;
-- `accepted`: решение принято человеком (Human Gate); последствия зеркалируются в `docs/spec/**`;
-- `rejected`: решение отклонено человеком, выбран альтернативный путь или сохранён статус-кво;
-- `superseded`: решение устарело и заменено более новым принятым решением.
-
-ИИ строго запрещено переводить Decision в статус `accepted` или `rejected`.
+### Decision Invariants
+- **AI may only draft** decisions in `status: proposed`.
+- **Only a human** may transition a decision to `accepted` or `rejected`.
+- An accepted decision becomes repository policy; its rationale cannot be silently revoked without a new superseding Decision.
 
 ---
 
-## Evidence State Machine
+## Evidence Lifecycle State Machine
 
-Фазы доказательной базы (`evidence.schema.yaml`):
+Evidence is the machine-verifiable proof of behavior recorded at each critical stage:
 
-```text
-[none] ---> [red] ---> [green]
-             \          /
-         [regression]  /
-              \       /
-            [verification]
+```mermaid
+stateDiagram-v2
+    [*] --> red: target-task fails on unchanged code
+    red --> green: implement-task succeeds on new code
+    green --> regression: full regression suite passes
+    regression --> verification: change-level verification passes
+    verification --> [*]
 ```
 
-- `red`: таргетный тест падает на исходном коде по строго ожидаемой причине (`evidence/red/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
-- `green`: таргетный тест и регрессионный набор проходят успешно (`evidence/green/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
-- `regression`: выделенный отчёт о запуске регрессионного набора тестов (`evidence/regression/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
-- `verification`: Change-level автоматизированный верификационный прогон перед архивацией (`evidence/verification/run.yaml`, поле `task: null`, так как относится ко всему Change).
+### Evidence Phases and Locations
+
+| Phase | Required Path | Scope | Task ID Requirement |
+|---|---|---|---|
+| `red` | `evidence/red/<task-id>.yaml` | Task test fails on unmodified production code. | Required (`task: TASK-NNN`) |
+| `green` | `evidence/green/<task-id>.yaml` | Task test passes on updated production code. | Required (`task: TASK-NNN`) |
+| `regression` | `evidence/regression/<task-id>.yaml` | Full domain regression suite passes without regression failures. | Required (`task: TASK-NNN`) |
+| `verification` | `evidence/verification/run.yaml` | End-to-end Change verification run confirms all claims and deltas. | Optional / Null (`task: null`) |
 
 ---
 
-## Инвариант версионирования (Framework & Schema Pinning)
+## Versioning Invariants
 
-При нормализации Change в `change.yaml` фиксируются:
-```yaml
-schema_version: 2
-framework:
-  version: 2.0.0
-  content_hash: sha256:...
-```
-
-Активный Change обязан завершаться в соответствии с зафиксированной версией фреймворка. Обновление внешнего DeltaFuse фреймворка не меняет семантику активных Changes автоматически; миграция активных процессов требует явной процедуры.
+1. **Schema Version Compatibility**: All product artifacts (`change.yaml`, `routing.yaml`, `coverage.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, `decisions/DEC-*.md`) must strictly match `schema_version: 2`.
+2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, and content hash. Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`.

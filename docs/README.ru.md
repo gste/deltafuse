@@ -95,3 +95,4 @@ product/
 | [context-sliced-workflow-proposal.md](./context-sliced-workflow-proposal.md) | Обоснование дизайна архитектуры v2.0 |
 
 Исполнимые контракты шагов находятся в `process/skills/**`, структурные контракты — в `process/schemas/**`.
+

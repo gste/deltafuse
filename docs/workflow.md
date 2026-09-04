@@ -1,21 +1,16 @@
 # Workflow
 
-DeltaFuse — specification-driven workflow, преобразующий сырой запрос (Raw intent) в проверенное изменение кодовой базы через изолированные типизированные дельты (Delta) и доказанную сходимость (Convergence).
+[**English**](workflow.md) | [Русский](workflow.ru.md)
+
+DeltaFuse establishes a specification-driven, context-sliced development lifecycle. Every modification is processed through strictly bounded steps, deterministic evidence, and cross-artifact convergence.
 
 ```text
 Request -> Analyze -> Delta -> Fuse -> Converge
 ```
 
-- **Change** — неизменяемый изолированный контейнер полного жизненного цикла запроса (`docs/changes/<change-id>/`).
-- **Delta** — строго типизированный набор различий по слоям артефактов, вычисленный на этапе анализа.
-- **Fuse** — контролируемое применение дельты исключительно к затронутым слоям артефактов без побочных эффектов.
-- **Convergence** — математически и логически проверяемая согласованность между claims, specification, tasks, tests и implementation code.
-
 ---
 
 ## Lifecycle Overview
-
-Жизненный цикл любого изменения состоит из семи последовательных этапов:
 
 ```text
 Intake
@@ -27,280 +22,274 @@ Intake
   -> Verify, Converge and Archive
 ```
 
-`Red` и `Green` не являются этапами верхнего уровня; это внутренние состояния TDD-evidence на этапах **Target** и **Implement**.
-
 ---
 
 ## 1. Intake
 
-### Цель
-Нормализовать сырой пользовательский ввод (тикет, багрепорт, лог, идея, заметка) в неизменяемый запрос на изменение без интерпретации против текущей спецификации продукта или кодовой базы.
+### Purpose
+Normalize an incoming raw request (issue, chat transcript, bug report, review note) into an immutable, structured Change package without consulting product specification or source code.
 
 ### Context Contract
-- **Reads**: только сообщение пользователя, явно переданные файлы из `docs/intake/**`, шаблоны артефактов (`process/templates/change/**`) и правила санитизации.
-- **Must NOT Read**: `docs/spec/**`, `docs/decisions/**`, задачи, тесты, исходный код продукта.
-- **Writes**:
-  - `docs/changes/<change-id>/change.yaml` со статусом `normalized` и зафиксированными версиями фреймворка и схем;
-  - `docs/changes/<change-id>/request.md` со стабильными идентификаторами утверждений `CR-*` (Claims) и метаданными источника (provenance).
+- **Allowed Read Scope**: Raw user prompt, issue text, logs, bug attachments.
+- **Forbidden Read Scope**: `docs/spec/**`, repository source code, existing tasks.
 
-### Правила
-1. Все высказывания пользователя классифицируются на:
-   - **Observation** (наблюдение: что произошло в рантайме или зафиксировано);
-   - **Expectation** (ожидание: чего пользователь хотел достичь);
-   - **Constraint** (ограничения: сроки, окружение, совместимость, запреты);
-   - **Hypothesis** (гипотеза: догадки пользователя о причинах или путях решения).
-2. Intake не валидирует reported type (баг/фича), не придумывает acceptance criteria и не выбирает техническое решение.
-3. Любое последующее уточнение от пользователя оформляется как ревизия или суперсессия конкретного claim, а не перезаписывает историю запроса.
+### Rules
+1. Allocate a unique Change ID matching `CHG-[0-9]{3,}(-[a-z0-9-]+)?` (e.g., `CHG-001-user-auth`).
+2. Create `docs/changes/<change-id>/request.md` with:
+   - Verbatim user request preserved intact;
+   - Normalized context;
+   - Extracted atomic claims numbered sequentially (`CR-01`, `CR-02`, etc.);
+   - Non-functional requirements, constraints, and known uncertainties.
+3. Initialize `docs/changes/<change-id>/change.yaml` with `status: normalized`.
+4. The Intake step must never guess implementation details or propose architecture.
 
 ### Gate
-Каждое существенное утверждение входного документа представлено стабильным `CR-*` либо явно помечено как исключённое из скоупа.
+- `change.yaml` passes `change.schema.yaml` with `status: normalized`.
+- `request.md` contains at least one atomic claim (`CR-01`).
+- Neither `docs/spec/**` nor product source code was read during this step.
 
 ---
 
 ## 2. Route and Analyze
 
-### Цель
-Сопоставить требования (claims) с принятым состоянием продукта (`docs/spec/**`), сгруппировать их в изолированные слайсы (Slices), выявить развилки решений и сформировать типизированную дельту (Delta) по каждому затронутому слою.
+### Purpose
+Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, compute typed deltas, detect contradictions, and formulate architectural decisions.
 
 ### Pass A: Routing
-1. Читаются `request.md`, каталог возможностей `docs/spec/_capabilities.yaml` и краткие сводки глобальных политик.
-2. Не загружается вся спецификация и кодовая база.
-3. Каждому claim назначается:
-   - ровно одна основная capability (`owning capability`);
-   - опциональные связанные capabilities и применимые политики (`policies`).
-4. Результат маршрутизации фиксируется в `routing.yaml`.
+1. Read `request.md`, `docs/spec/_capabilities.yaml`, and compact global policy summaries.
+2. Map each claim (`CR-*`) to its owning primary capability:
+   - **Matched**: claim maps cleanly to an existing capability;
+   - **Ambiguous**: claim spans or conflicts across multiple capabilities;
+   - **Capability-Gap**: claim requires behavior not covered by any existing capability.
+3. Record mapping and confidence scores in `routing.yaml`.
 
 ### Pass B: Slice Analysis
-1. Связанные claims группируются в изолированные аналитические слайсы (`slices/SLICE-NN.md`).
-2. Для каждого слайса загружаются **только** закреплённые за ним модули спецификации, релевантные принятые решения (`docs/decisions/**`) и явно запрошенные диагностические данные.
-3. Формируются артефакты:
-   - `analysis.md` (общий аналитический отчёт);
-   - `slices/SLICE-NN.md` (границы слайса, затронутые требования, контекстный бюджет);
-   - `coverage.yaml` (матрица покрытия claims -> capabilities -> spec -> tasks);
-   - типизированные проекции дельты в `change.yaml`.
+For each capability slice:
+1. Load only the specification modules referenced by the capability.
+2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies.
+3. Compute typed deltas across artifact layers:
+   - `spec`: `added`, `modified`, `removed`, or `unchanged`;
+   - `architecture`: `unchanged` or `decision-required`;
+   - `contract`: `unchanged` or list of modified API/interface schemas;
+   - `test`: list of expected new or modified test scenarios;
+   - `code`: list of affected code packages/roots.
+4. Record analysis narrative and findings in `analysis.md`.
+5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
 
-### Типизированная дельта (Typed Delta)
-Для каждого слайса явно декларируются проекции по всем слоям артефактов:
-```yaml
-deltas:
-  specification: none | add | modify | remove | mixed
-  catalog: none | add | modify | remove
-  decisions: none | propose | supersede
-  tasks: none | derive | modify | remove
-  tests: none | add | modify | remove
-  implementation: none | add | modify | remove | mixed
-  evidence: none | record
-```
+### Typed Delta Invariants
+- If `spec` is `unchanged`, the Change is classified as an **Implementation Bug** or **Refactoring**.
+- If `spec` is `added`, `modified`, or `removed`, the Change MUST pass through the **Specify** step.
+- If `architecture` is `decision-required`, the Change is blocked until a human accepts the decision.
 
-### Аналитические исходы (Outcomes)
-| Исход | Значение | Следующее действие |
-|---|---|---|
-| `already-specified` | Спецификация уже требует ожидаемого поведения | Переход к баг-флоу (`requirement_delta: none`) |
-| `spec-gap` | Требуемое поведение отсутствует в спецификации | Формирование `spec delta` для этапа Specify |
-| `spec-conflict` | Запрос противоречит принятому поведению | Эскалация человеку или оформление Decision |
-| `decision-required` | Архитектурная, продуктовая или технологическая развилка | Создание проекта решения `DEC-NNNN` в `docs/decisions/` |
-| `capability-gap` | Запрос выходит за границы существующих capabilities | Предложение catalog delta и ожидание Human Gate |
-| `out-of-scope` | Запрос не относится к продукту или отклонён | Завершение Change с терминальным статусом `rejected` |
-| `not-enough-information` | Недостаточно данных для локализации и границ | Остановка и запрос информации у пользователя (Stop-and-Ask) |
+### Analytical Outcomes
+- **Feasible**: all claims mapped, deltas computed, ready for specification or targeting.
+- **Decision Required**: architectural or product uncertainty identified; create `docs/decisions/DEC-NNNN-*.md` in `status: proposed` and transition Change to `blocked-on-decision`.
+- **Capability Gap**: new capability required; draft catalog delta for `_capabilities.yaml` requiring human approval.
+- **Duplicate**: Change duplicates an existing active or archived Change; mark `duplicate`.
+- **Rejected**: Request conflicts with core architecture or is unfeasible; mark `rejected`.
 
 ### Decision Convergence Loop
-Route and Analyze — итеративный шаг. Если возникают существенные развилки:
-1. Создаются черновики решений `DEC-NNNN` со статусом `proposed`.
-2. Change переходит в состояние `blocked-on-decision`.
-3. Человек принимает (`accepted`) или отклоняет (`rejected`) решения.
-4. Проводится повторный анализ затронутых слайсов и глобальное согласование (reconciliation).
-5. Итерация повторяется до тех пор, пока все блокирующие развилки не будут закрыты терминальными решениями.
+If decisions are required:
+```text
+Analyze -> Draft DEC-NNNN (proposed) -> Human Gate -> Decision (accepted/rejected) -> Re-analyze
+```
+Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 
 ### Gate
-Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис.
+- `change.yaml` status transitioned to `analyzed` (or `blocked-on-decision`).
+- `routing.yaml` validates against `routing.schema.yaml`.
+- `coverage.yaml` validates against `coverage.schema.yaml`.
+- Each slice validates against `slice.schema.yaml`.
+- Zero unresolved blocking decisions.
 
 ---
 
 ## 3. Specify
 
-### Цель
-Сделать спецификацию продукта (`docs/spec/**`) достаточной для однозначной реализации либо строго доказать, что текущая спецификация уже достаточна.
+### Purpose
+Apply analyzed specification deltas to the authoritative product specification in `docs/spec/**`, or verify that the accepted specification is unchanged.
 
 ### Context Contract
-- **Reads**: один анализируемый слайс, точечные файлы спецификации, принятые решения (`docs/decisions/**`), одобренные изменения каталога capabilities.
-- **Writes**:
-  - изменения в `docs/spec/**`;
-  - ненормативный журнал изменений `spec-delta.md` внутри пакета Change.
+- **Allowed Read Scope**: `request.md`, `analysis.md`, `slices/**`, target spec modules, accepted decisions.
+- **Forbidden Read Scope**: Product implementation source code.
 
-### Правила
-1. **Спецификация — единственный закон**: только `docs/spec/**` является законом для реализации (Implementation Law). Никакие задачи, чаты или тексты тикетов не могут диктовать поведение коду в обход спеки.
-2. Если `requirement_delta: none`, спецификация остаётся неизменной; достаточность фиксируется ссылками на существующие стабильные требования (`REQ-*`).
-3. Если требуется изменение спецификации:
-   - обновляются только объявленные модули спецификации;
-   - сохраняются стабильные идентификаторы требований `REQ-*` и сценариев `SC-*`;
-   - принятые архитектурные и продуктовые решения из `docs/decisions/**` зеркалируются в императивный текст `docs/spec/**`.
-4. `spec-delta.md` в пакете Change служит аудиторским журналом и не является источником истины после завершения Change.
+### Rules
+1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
+2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
+4. If `spec` delta was marked `unchanged` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
-Изменения в спецификации приняты человеком (Human Gate) либо доказан статус `requirement_delta: none`. Нормативное поведение зафиксировано в `docs/spec/**`.
+- `spec-delta.md` validates against `spec-delta.schema.yaml`.
+- Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
+- `change.yaml` status transitioned to `specified`.
 
 ---
 
 ## 4. Decompose
 
-### Цель
-Преобразовать один специфицированный слайс в последовательность упорядоченных по зависимостям атомарных задач (Tasks).
+### Purpose
+Decompose each specified slice into atomic, dependency-ordered task files inside `docs/changes/<change-id>/tasks/`.
 
 ### Context Contract
-- **Reads**: слайс, точечные ссылки на требования спецификации (`REQ-*`), опциональный `design.md`, граф зависимостей capabilities, компактные интерфейсы затронутых модулей кода/тестов.
-- **Must NOT Read**: весь сырой интейк, несвязанные части кодовой базы или другие Changes.
-- **Writes**: задачи в директории `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md`.
+- **Allowed Read Scope**: Updated `docs/spec/**`, slice definitions, target test suite signatures.
+- **Forbidden Read Scope**: Full codebase exploration.
 
-### Контракт атомарной задачи
-Каждая задача `TASK-NNN` обязана содержать:
-- **Outcome**: один конкретный проверяемый результат, укладывающийся в одну рабочую сессию;
-- **Spec refs**: точные ссылки на `REQ-*` и `SC-*`;
-- **Test Oracle**: однозначные условия проверки (входы, ожидаемые выходы, проверяемые инварианты);
-- **Unchanged Behavior**: список инвариантов и функциональности, которые запрещено ломать;
-- **Scope**: разрешённые и запрещённые пути к файлам и пакетам;
-- **Verification Commands**: точные консольные команды для прогона тестов и проверок.
-
-Задача не должна дублировать полный текст спецификации или маскировать нерешённые архитектурные выборы.
+### Atomic Task Contract
+Each task is authored in `tasks/TASK-NNN-<slug>.md` with YAML frontmatter conforming to `task.schema.yaml`:
+```yaml
+---
+id: TASK-001
+change: CHG-001-user-auth
+slice: SLICE-01
+title: Task title
+status: pending
+kind: feature
+test_target: tests/unit/test_auth.py
+test_oracle: Test fails with 401 when token is expired
+depends_on: []
+---
+```
+Every task must specify:
+1. **Explicit Test Target**: path to the test file that will verify the behavior.
+2. **Deterministic Test Oracle**: exact expected failure reason and assertion condition.
+3. **Strict Scope**: minimal production code changes required to satisfy the Oracle.
 
 ### Gate
-Каждое требование слайса покрыто задачами; граф зависимостей между задачами ацикличен и разрешим; скоуп строго ограничен объявленной дельтой.
+- All tasks validate against `task.schema.yaml`.
+- Task dependencies form an acyclic directed graph (DAG).
+- All claims in `coverage.yaml` mapped to at least one task.
+- `change.yaml` status transitioned to `decomposed`.
 
 ---
 
 ## 5. Target
 
-### Цель
-Сформировать исполняемый тестовый таргет, доказывающий наличие дефекта или отсутствие функциональности **до** внесения любых изменений в рабочий код (Red Evidence).
+### Purpose
+Create or update an executable test target for a single atomic task and verify that it fails on unchanged production code for the exact expected reason (TDD Red Evidence).
 
 ### Context Contract
-- **Reads**: ровно одна задача `TASK-NNN`, ссылки на требования спеки, публичные интерфейсы системы, тестовые утилиты и фикстуры.
-- **Must NOT Read**: внутренности реализации рабочего кода, если таргет можно выразить через публичный контракт.
-- **Writes**: новый или модифицированный тест; артефакт `evidence/red/<task-id>.yaml`.
+- **Allowed Read Scope**: Single `TASK-NNN.md`, target test file, public API signatures of target module.
+- **Forbidden Read Scope**: Production implementation code under test.
 
-### Правила
-1. Фиксируется тестовый оракул (Test Oracle) из задачи и спецификации.
-2. Пишется минимальный тест, проверяющий требуемое поведение.
-3. Тест запускается на **неизменённом** коде продукта.
-4. Тест обязан упасть (**Red**) строго по ожидаемой поведенческой причине (assertion failure / missing contract), а не из-за ошибки компиляции окружения, синтаксиса или инфраструктуры.
-5. Результаты выполнения, санитизированные логи, код возврата и категория падения сохраняются в `evidence/red/<task-id>.yaml`.
-
-Если тест проходит успешно на исходном коде (`already-satisfied`) или падает по неверной причине (`invalid-target`), изменение продуктового кода запрещено.
+### Rules
+1. Implement the minimal test case in the file indicated by `test_target`.
+2. Execute the test target against the unmodified codebase.
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures.
+4. Record execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
+   ```yaml
+   schema_version: 2
+   change: CHG-001-user-auth
+   task: TASK-001
+   phase: red
+   status: passed
+   test_target: tests/unit/test_auth.py::test_expired_token
+   output_summary: "AssertionError: Expected 401 Unauthorized, got 200 OK"
+   ```
+5. Transition task status to `target-confirmed`.
 
 ### Gate
-Тест создан, стабильно воспроизводит падение на исходном коде по ожидаемой причине; рабочий код продукта не модифицирован; Red evidence сохранён.
+- Executable test fails with the expected failure signature.
+- `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
+- Task status transitioned to `target-confirmed`.
 
 ---
 
 ## 6. Implement
 
-### Цель
-Сделать упавший таргет зелёным (Green) через минимально необходимое, соответствующее спецификации изменение продуктового кода.
+### Purpose
+Author the minimal production code necessary to turn the failing test target green without introducing regressions.
 
 ### Context Contract
-- **Reads**: одна задача `TASK-NNN`, точные ссылки на спецификацию, зафиксированный таргет, Red evidence, разрешённые продуктовые файлы.
-- **Must NOT Read**: чужие задачи, нерелевантные модули репозитория.
-- **Writes**: минимальный диф продуктового кода; артефакт `evidence/green/<task-id>.yaml`.
+- **Allowed Read Scope**: Single `TASK-NNN.md`, Red evidence, target test, target implementation source file.
+- **Forbidden Read Scope**: Unrelated modules and packages.
 
-### Правила
-1. Разработчик/агент не имеет права ослаблять тестовые ассерты таргета или менять спецификацию.
-2. Вносится минимальный код, переводящий тест в зелёное состояние (**Green**).
-3. Запускается таргетный тест, затем запускается scoped regression suite для проверки неизменности остального поведения (`Unchanged Behavior`).
-4. Команды запуска, санитизированные логи, статус прохождения и список изменённых файлов фиксируются в `evidence/green/<task-id>.yaml`.
+### Rules
+1. Author only the production code required to satisfy the test assertions.
+2. Execute the test target and prove it passes:
+   - Record `evidence/green/<task-id>.yaml` with `phase: green`, `status: passed`.
+3. Execute the capability/domain regression test suite:
+   - Record `evidence/regression/<task-id>.yaml` with `phase: regression`, `status: passed`.
+4. Transition task status to `implemented`.
 
 ### Gate
-Таргетный тест стал Green без изменения своего оракула; регрессионные тесты прошли успешно; изменения укладываются в объявленный скоуп; Green evidence зафиксирован.
+- Test target passes cleanly.
+- Full regression suite passes without failures.
+- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid.
+- Task status transitioned to `implemented`.
 
 ---
 
 ## 7. Verify, Converge and Archive
 
-### Цель
-Доказать полную сходимость (Convergence) всех объявленных проекций дельты, проверить сквозную трассируемость и перенести завершённый Change в архив без потери истории.
+### Purpose
+Verify cross-artifact consistency across all layers of the Change package, verify that all tasks are green, confirm claim coverage, and archive the completed package.
 
-### Сквозная трассируемость (Traceability)
-Проверяется непрерывная цепочка артефактов:
-```text
-Raw intent (docs/intake/...)
-  -> Claim (CR-* в request.md)
-  -> Owning Capability (routing.yaml)
-  -> Slice Delta (slices/SLICE-NN.md, change.yaml)
-  -> Specification Requirement (docs/spec/... REQ-*)
-  -> Atomic Task (tasks/TASK-NNN-*.md)
-  -> Target Test (evidence/red/...)
-  -> Implementation & Regressions (evidence/green/...)
-  -> Verification Report (verification.md)
-```
+### Traceability Verification
+The Verifier checks that:
+1. Every normalized claim `CR-*` in `request.md` traces to a slice in `routing.yaml`.
+2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
+3. Every claim traces to at least one completed task in `coverage.yaml`.
+4. Every task has verified `red`, `green`, and `regression` evidence artifacts.
+5. All tasks in the Change are transitioned to `verified`.
 
-### Анализ сходимости
-- `converged`: все проекции дельты реализованы, подтверждены тестами и evidence, спецификация синхронизирована;
-- `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`: сходимость нарушена; Change возвращается на соответствующий этап жизненного цикла;
-- `not-reproduced`: подтверждённое отсутствие воспроизведения с фиксацией диагностического evidence.
+### Convergence Analysis
+1. Execute full project verification suite.
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`).
+3. Generate `docs/changes/<change-id>/verification.md` detailing:
+   - Traceability matrix;
+   - Evidence audit;
+   - Delta verification;
+   - Residual risks and verification sign-off.
+4. Transition `change.yaml` status to `converged`.
 
-### Архивация
-После подтверждения сходимости:
-1. Задачи переводятся в статус `verified`.
-2. Фиксируется итоговый статус в `change.yaml` (`converged` -> `archived`).
-3. При необходимости обновляется `CHANGELOG.md`.
-4. Вся директория изменения целиком перемещается в `docs/archive/changes/<date>-<change-id>/`.
-5. Архив исключается из активного контекста агентов и разработчиков.
+### Archiving
+1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<change-id>`.
+2. Update any related intake requests in `docs/intake/` and move them to `docs/archive/intake/`.
+3. Update `change.yaml` status to `archived`.
+4. The archived Change package remains an immutable historical record.
 
 ---
 
-## Классификация дефектов (Bug Workflow)
-
-Любой входящий репорт о дефекте изначально является утверждением (`CR-*`), а не доказанным багом.
+## Defect Classification (Bug Workflow)
 
 ### 1. Implementation Bug
-Спецификация продукта однозначно описывает корректное поведение, но фактическое поведение в рантайме ему противоречит:
-```text
-Request -> Route and Analyze -> conformance Delta
-  -> requirement_delta: none -> Decompose -> Target (Red)
-  -> Implement (Green) -> Verify -> Archive
-```
-Баг считается подтверждённым только после записи воспроизводимого Red evidence.
+- **Definition**: Production code deviates from existing accepted specification.
+- **Workflow**:
+  1. Intake normalizes report into `CHG-NNN`.
+  2. Analyze verifies that existing specification already requires the expected behavior (`spec: unchanged`).
+  3. Specify is bypassed (or documents proof in `spec-delta.md`).
+  4. Decompose creates bugfix task.
+  5. Target writes reproducing test; records Red evidence.
+  6. Implement fixes code; records Green & Regression evidence.
+  7. Verify checks convergence and archives package.
 
 ### 2. Specification Bug
-Спецификация отсутствует, неоднозначна, содержит логические противоречия или требует изменения продуктового инварианта:
-```text
-Request -> Route and Analyze -> requirement_delta: modify/add
-  -> optional Decision (Human Gate) -> Specify -> Decompose
-  -> Target -> Implement -> Verify -> Archive
-```
+- **Definition**: Existing specification is incomplete, ambiguous, or incorrect.
+- **Workflow**: Standard 7-step Change with `spec-delta.md` modifying `docs/spec/**` through Human Gate.
 
 ### 3. Not a Bug
-Наблюдаемое поведение полностью соответствует принятой спецификации продукта. Change закрывается как отклонённый (`rejected`) либо переоформляется в предложение новой функциональности.
+- **Definition**: Reported behavior matches accepted specification and product intent.
+- **Workflow**: Intake -> Analyze (Decision: Rejected / Closed) -> Verify / Archive with explanatory evidence.
 
 ---
 
-## Профиль начальной загрузки (Bootstrap Profile)
+## Bootstrap Profile
 
-Bootstrap применяется исключительно при инициализации нового проекта, когда в `.deltafuse/config.yaml` установлено:
-```yaml
-project:
-  baseline: draft
-```
-
-В этом профиле:
-1. Intake нормализует исходные требования к продукту.
-2. Analyze выявляет кандидаты в домены и возможности (capabilities), формируя черновик каталога `docs/spec/_capabilities.yaml`.
-3. Человек утверждает границы capabilities (Human Gate).
-4. Создаётся базовый пакет спецификации в `docs/spec/**`.
-5. Разрешаются фундаментальные архитектурные решения и глобальные политики в `docs/decisions/**` (с `change: null`).
-6. Человек принимает спецификацию и переводит проект в рабочий режим:
-   ```yaml
-   project:
-     baseline: accepted
-   ```
-7. Любая последующая разработка ведётся исключительно через стандартный Change workflow.
+When initializing a new product repository:
+1. `.deltafuse/config.yaml` starts with `project.baseline: draft`.
+2. Initial capability catalog `docs/spec/_capabilities.yaml` is drafted.
+3. Foundational architecture decisions and global policies are resolved in `docs/decisions/**` (with `change: null`).
+4. Core baseline specification is authored in `docs/spec/**`.
+5. Once baseline is approved by human maintainer, `project.baseline` transitions to `active`.
+6. Subsequent modifications must proceed exclusively through DeltaFuse Changes.
 
 ---
 
-## Общие критерии завершения (Completion Criteria)
+## Completion Criteria
 
-1. Каждый claim имеет ровно одну owning capability и полную трассировку до кода и тестов.
-2. Все дельты строго типизированы и объявлены до декомпозиции.
-3. Изменения в спецификации приняты человеком до начала декомпозиции задач.
-4. Все блокирующие Decisions закрыты терминальными статусами и зеркалированы в спеку.
-5. Любое изменение продуктового кода предваряется Red evidence и завершается Green evidence.
-6. Регрессионный прогон подтверждает сохранность объявленного неизменного поведения.
-7. Завершённый пакет Change архивирован целиком и удалён из активного рабочего контекста.
+A DeltaFuse Change is considered complete when:
+- All claims (`CR-*`) are traced to passing tests and accepted specification.
+- All tasks are in `verified` status.
+- Red, Green, Regression, and Verification evidence files are recorded and valid.
+- Package is archived in `docs/archive/changes/<change-id>/`.
