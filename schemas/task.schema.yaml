@@ -1,0 +1,28 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/task.schema.yaml
+title: DeltaFuse Task frontmatter
+type: object
+additionalProperties: false
+required: [id, change, slice, kind, status, depends_on, requirement_delta, spec_refs, allowed_paths, forbidden_paths]
+properties:
+  id: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
+  slice: {type: string, pattern: '^SLICE-[0-9]{2,}$'}
+  kind: {enum: [feature, bugfix, refactor, maintenance, documentation]}
+  status: {enum: [pending, targeting, target-confirmed, implementing, implemented, verified, blocked, cancelled, superseded]}
+  depends_on:
+    type: array
+    items: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  requirement_delta: {enum: [none, added, modified, removed, mixed]}
+  spec_refs:
+    type: array
+    minItems: 1
+    items: {type: string}
+  design_ref:
+    type: [string, 'null']
+  allowed_paths:
+    type: array
+    items: {type: string}
+  forbidden_paths:
+    type: array
+    items: {type: string}

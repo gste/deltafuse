@@ -1,208 +1,233 @@
-﻿# Workflow
+# Workflow
 
-Сквозной процесс изменений **DeltaFuse** для репозиториев, работающих по схеме:
-
-```text
-Init Requirements + ADR → Specification (docs/spec/) → Atomic tasks (docs/todo/) → Implementation
-```
-
-Файл **продукт-агностичен**. Доменные правила, имена модулей и выбор стека живут только в `docs/spec/`.
-
-## Pipeline
+DeltaFuse преобразует raw intent в bounded Delta, применяет её к затронутым artifact layers и доказывает convergence.
 
 ```text
-idea
-    → classify change type
-        → [if adr+spec] draft ADR → human accepts
-        → [if contract/behaviour] patch docs/spec → human merges spec
-            → [if multi-slice] open story under docs/todo/<story>/
-                → slice tasks (links to spec only)
-                    → agent implements task → PR
-                        → human review gate → merge
-                            → close story (delete docs/todo/<story>/)
+Raw intent
+  -> Intake
+  -> Route and Analyze
+  -> Specify
+  -> Decompose
+  -> Target
+  -> Implement
+  -> Verify, Converge and Archive
 ```
 
-Никогда не реализуй поведение из голой идеи, ветки чата или архивных Init Requirements.
+## 1. Intake
 
-## Change types
+Цель: нормализовать raw user input без интерпретации against product.
 
-### `trivial`
+Шаг читает только user message, явно переданные файлы `docs/intake/**`, artifact templates и sanitization rules. Он не читает product specification, Decisions, tasks, tests или code.
 
-- Контракты и наблюдаемое поведение не меняются; требования те же.
-- Примеры: опечатка в логе, чистый рефакторинг с теми же тестами, починка теста, который и так соответствует спеке.
-- Поток: ветка → тесты, которые не проходят → код → PR → ревью человека → merge.
-- `docs/spec/` **не трогать**, кроме исправления опечатки в самой документации.
+Writes:
 
-### `spec-patch`
+- `docs/changes/<change-id>/change.yaml` со `status: normalized` и pinned framework/schema versions;
+- immutable `request.md` со stable `CR-*` claim IDs и provenance.
 
-- Меняется поведение или контракт, выбор очевиден (серьёзных альтернатив нет).
-- Поток:
-  1. Ветка
-  2. Объявить **Spec delta** (`ADDED` / `MODIFIED` / `REMOVED` + якоря) в файле задачи
-  3. Точечно править `docs/spec/**` — только объявленные якоря (см. «Spec delta and surgical edits»)
-  4. Агент коммитит спеку и **продолжает** к коду (ревью коммита — позже, человеком)
-  5. Тесты слайса красные на текущем коде; затем код до зелёных; агент коммитит код
-  6. Ревью человека → merge
+Observation, expectation, constraint и hypothesis разделяются. Intake не подтверждает reported change type, не придумывает acceptance criteria и не выбирает technical solution. Позднее уточнение добавляется как revision или superseding claim, а не молча переписывает историю.
 
-### `adr+spec`
+Gate: каждое существенное входное утверждение представлено claim либо явно исключено.
 
-- Неочевидная развилка дизайна (два и более рабочих варианта с реальными компромиссами).
-- Поток:
-  1. Добавить `docs/decisions/NNNN-title.md` (контекст, варианты, решение, следствия, `status`)
-  2. Человек выставляет `accepted: true` (или отклоняет)
-  3. Объявить **Spec delta**, вытекающую из решения (`ADDED` / `MODIFIED` / `REMOVED` + якоря)
-  4. Переписать эти якоря в `docs/spec/**` так, чтобы решение звучало **императивом** (без «см. варианты в ADR»)
-  5. Опционально: аудит агентом «ADR против спеки»
-  6. Затем реализация как в `spec-patch`
+## 2. Route and Analyze
 
-### `story`
+Цель: сопоставить claims с accepted product state и вычислить typed slice-level deltas.
 
-- Несколько модулей или много упорядоченных задач.
-- Предпосылки:
-  - нужные секции `docs/spec/` существуют и смерджены;
-  - открытые развилки закрыты принятым ADR **и** отражены в спеке.
-- Поток:
-  1. Создать `docs/todo/<story-id>/README.md` (цель, упорядоченные слайсы, ссылки в `docs/spec/`)
-  2. Добавить файлы `task/NN-<slug>.md` или `bug/NN-<slug>.md` — цель, ссылки на спеку, DoD, out of scope, `kind`
-  3. Опционально `agent-prompt.md` для реализатора
-  4. По умолчанию один слайс — один PR (`task/` → `/implement-task`, `bug/` → `/fix-bug`)
-  5. В том же PR: удалить закрытый файл и строку README истории; дописать Closed в `docs/todo/README.md`; пункт в `CHANGELOG.md` → `## Unreleased`. Когда слайсов не осталось — удалить `docs/todo/<story-id>/` и убрать история из Open.
+### Routing pass
 
-## Spec delta and surgical edits
+Прочитать request, `docs/spec/_capabilities.yaml` и compact summaries глобальных policies. Назначить каждому claim одну owning capability, optional related capabilities и policies. Не загружать всю specification или codebase.
 
-`docs/spec/**` — связное императивное описание того, как система устроена **сейчас**. Намерение изменения живёт снаружи.
+### Slice analysis
 
-- **Spec delta** объявляется в файле задачи и повторяется в теле PR:
-  - `ADDED` — якоря или файлы, которых не было;
-  - `MODIFIED` — якоря, чей императив меняется;
-  - `REMOVED` — якоря или требования, которые удаляются.
-- **Хирургическая правка**: переписываются только объявленные якоря, формулировка — как будто требование всегда было таким. Минимум hunks.
-- **Никаких лент внутри спеки**: ни списков `ADDED` / `MODIFIED` / `REMOVED`, ни «было / стало», ни changelog-секций, ни датированных записей. Это принадлежит задаче, PR и системе контроля версий.
-- **Дифф — доказательство, а не закон**: `git diff` подтверждает, что именно затронуто. Он никогда не становится источником требований, и «дифф всей ветки» не заменяет ни спеку, ни объявленную дельту.
+Сгруппировать связанные claims в bounded analytical slices. Для каждого slice читать только выбранные spec modules, relevant Decisions и явно запрошенный diagnostic evidence. Создать:
 
-## Bootstrapping a new repository
+- `routing.yaml`;
+- `analysis.md`;
+- `slices/<slice-id>.md`;
+- typed deltas в `change.yaml` и slice artifacts;
+- proposed Decision или catalog records при необходимости;
+- initial `coverage.yaml`.
 
-Одноразовая последовательность (не повторяющийся тип изменения):
+Каждая Delta явно проецируется на:
 
-1. Написать Init Requirements в `docs/inbox/`.
-2. Закрыть неочевидные развилки через ADR в `docs/decisions/`, если они есть.
-3. Собрать SDD-пакет в `docs/spec/` из Init Requirements и принятых ADR так, чтобы `docs/spec/README.md` был единственной точкой ревью (TOC + review tour + открытые решения + покрытие Init).
-4. Человек принимает пакет из этой точки. Отдельный документ приёмки не создаётся, второй вход для чтения не добавляется.
-5. Перенести Init Requirements в необязывающий статус (рекомендуется `docs/archive/`).
-6. Дальнейшая поставка идёт только по конвейеру выше (spec-first).
+```yaml
+specification: none | add | modify | remove | mixed
+catalog: none | add | modify | remove
+decisions: none | propose | supersede
+tasks: none | derive | modify | remove
+tests: none | add | modify | remove
+implementation: none | add | modify | remove | mixed
+evidence: none | record
+```
 
-## Inbox layout (`docs/todo/`)
+### Analysis outcomes
+
+| Outcome | Meaning |
+|---|---|
+| `already-specified` | Existing spec уже требует ожидаемое behavior |
+| `spec-gap` | Required behavior отсутствует |
+| `spec-conflict` | Request противоречит accepted behavior |
+| `decision-required` | Существенный выбор требует Decision и human gate |
+| `capability-gap` | Routing требует catalog delta |
+| `out-of-scope` | Change отклоняется или делится |
+| `not-enough-information` | Stop and ask for exact missing information |
+
+### Decision convergence loop
+
+Route and Analyze является итеративным шагом:
 
 ```text
-docs/todo/README.md
-docs/todo/<story>/README.md
-docs/todo/<story>/task/NN-<slug>.md
-docs/todo/<story>/bug/NN-<slug>.md
+analyze affected slices
+  -> propose/refine Decisions
+  -> human clarification or terminal decision
+  -> re-analyze affected slices
+  -> global reconciliation
+  -> repeat while new blocking questions appear
 ```
 
-| Inbox | `kind` | Ветка | Скилл |
-|-------|--------|--------|-------|
-| `task/` | `task` | `feature/<slug>` | `/implement-task` |
-| `bug/` | `bug` | `bugfix/<slug>` | `/fix-bug` |
+Выход разрешён, только когда все blocking Decisions terminal, accepted choices отражены в typed deltas, global reconciliation не создаёт новых blocking questions, а каждый slice имеет normative basis для Specify.
 
-`feature` / `bugfix` — только префиксы git. Пустую подпапку не создавать. README истории: таблицы **Task** и **Bug** (у Bug — колонка `Opened`). Имя файла — `NN-<slug>.md` без префикса `task`/`bug`.
+Если последующий шаг обнаруживает существенный unknown, только затронутые projections возвращаются в Analyze. Downstream-step не принимает решение самостоятельно.
 
-`NN` сквозной по репозиторию: все истории, `task/` и `bug/`. Не путать с номерами job-промптов `01`–`05` и с ADR `NNNN`. Следующий номер = `1 + max(NN в Closed ∪ NN живых файлов task/ и bug/)`. Номер не переиспользуется.
+## 3. Specify
 
-Индекс inbox — [`docs/todo/README.md`](../todo/README.md): список **Open** (живые истории) и таблица **Closed** (`NN`, `kind`, `slug`, `story`, `closed`). Closed — только append; `NN` в строке не менять. Спеку и DoD туда не копировать. Открытый слайс в Closed не пишется.
+Цель: сделать accepted specification достаточной для implementation либо доказать, что она уже достаточна.
 
-Закрытие слайса **в том же PR**, что реализация:
+Для одного analyzed slice читаются exact spec modules, accepted relevant Decisions, accepted catalog delta и только необходимые соседние requirements.
 
-1. удалить файл из `task/` или `bug/` и строку README истории;
-2. дописать строку в Closed;
-3. дописать один пункт в корневой `CHANGELOG.md` под `## Unreleased`;
-4. если слайсов не осталось — удалить `docs/todo/<story>/` и убрать история из Open.
+- Если `requirement_delta` меняет requirements, редактируются только объявленные files/requirements с сохранением stable IDs.
+- Если `requirement_delta: none`, spec не меняется, а sufficiency подтверждается exact accepted `spec_refs`.
+- Accepted Decision, влияющий на observable behavior, contract, policy или required invariant, зеркалируется в `docs/spec/**`.
+- `spec-delta.md` остаётся ненормативным change journal; live specification содержит только текущее imperative behavior.
 
-## Agent commits & Git Safety
+Gate: spec change принят либо unchanged status доказан; normative behavior не осталось только в Change или Decision.
 
-> [!CAUTION]
-> **КАТЕГОРИЧЕСКИЙ ЗАПРЕТ НА git push:** Агенту под страхом смерти запрещено выполнять команду git push (в любой remote, любую ветку, при любых обстоятельствах). Пуш в удалённый репозиторий выполняет исключительно человек.
+## 4. Decompose
 
-Законченный шаг агент коммитит сам. Просьба «закоммить» не нужна. Ревью и squash — человек позже.
+Цель: преобразовать один specified slice-level Delta в dependency-ordered atomic tasks.
 
-- Один логический артефакт — один коммит. `spec-patch`: сначала коммит спеки, затем коммит кода. Не держать незакоммиченные спеку и код в одном дереве.
-- `adr+spec`: коммит ADR (`accepted: false`), затем **стоп** (`accepted` ставит человек); после зеркала — коммит спеки, затем коммит кода.
-- Код коммитить только с зелёными тестами этого шага. Красный прогон тестов слайса — проверка, не коммит.
-- `git add` только файлов шага. Не стейджить `input/`, `.env`, корневой `TODO.md`, секреты и чужое dirty.
-- Сообщения коммитов — английский, в стиле истории репозитория. `--amend`, push и merge в default branch — нет.
+Читаются slice, exact spec refs, optional `design.md`, capability dependency map, compact code/test index либо точечные files и existing task dependencies. Не читаются весь raw intake, вся specification/codebase или unrelated Changes.
 
-## CHANGELOG.md
+Tasks создаются в `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md`. Каждая task содержит:
 
-Корневой файл в формате банка (версия → дата релиза → пункты). Это не источник `NN`.
+- один verifiable outcome и контекст размером с одну implementation session;
+- exact Change, slice, requirement и scenario refs;
+- test oracle и unchanged behavior;
+- dependencies и allowed/forbidden paths или symbols, если известны;
+- verification commands;
+- отсутствие скопированного normative text и hidden design choice.
 
-Агент может: создать каркас, если файла нет; дописать один bullet под `## Unreleased` (создать секцию, если её нет) при закрытии слайса. Форма: `- NN краткая фраза`, либо `- RBANK-… NN фраза`, если тикет уже есть в слайсе.
+Implementation bug декомпозируется из observed behavior, exact existing spec refs, reproduction, oracle, unchanged behavior и scope. Spec delta для его tasks не требуется.
 
-Агент не ставит `## Версия` и `### Релиз`, не переносит Unreleased в релиз и не парсит файл для следующего номера. Нарезка истории (работа 03) CHANGELOG не трогает.
+Gate: каждый slice requirement покрыт, dependencies разрешимы, blocking Decisions/specification приняты, scope не расширен.
 
-## Task file contract (`docs/todo/`)
+## 5. Target
 
-Каждый файл задачи ОБЯЗАН содержать:
+Цель: создать executable target, доказывающий gap до изменения production code.
 
-- `kind`: `task` или `bug` (это не change type);
-- цель в 1–3 предложениях;
-- ссылки на спеку (пути и якоря внутри `docs/spec/`);
-- in scope / out of scope;
-- Definition of Done (поведение, тесты, файлы);
-- Spec delta: `ADDED` / `MODIFIED` / `REMOVED` + якоря — обязательно для задач типа `spec-patch` и `adr+spec`, `none` для остальных;
-- разрешены ли правки спеки (по умолчанию **нет**; `yes` только для задач `spec-patch` / `adr+spec` и в границах объявленной дельты).
+Читаются одна task, exact spec refs, reproduction/unchanged behavior, relevant test conventions/fixtures и только public product interfaces, нужные для oracle. Implementation internals не читаются, если target можно выразить без них.
 
-`kind` отвечает, **зачем** слайс: `task` — поведение, которого ещё не было в действующей спеке; `bug` — наблюдаемое расхождение с уже принятым императивом либо дыра/противоречие в спеке. Change type (`trivial` | `spec-patch` | `adr+spec`) отвечает, **как** проводить изменение. Каталог обязан совпадать с `kind`.
+Rules:
 
-Для `kind: bug` обязательно `opened: YYYY-MM-DD` — дата попадания наблюдения в очередь (не дата merge). Блок `## Run` опционален: команда без секретов, код выхода, счётчики, одна-две фразы что увидели; нет тел страниц, токенов, живых URL с кредами. `kind: task` этих полей не несёт.
+1. Freeze test oracle из task и specification.
+2. Добавить или изменить минимальный executable test.
+3. Запустить narrow target на неизменённом production code.
+4. Потребовать failure по ожидаемой behavioral причине, а не из-за compilation/setup noise.
+5. Сохранить sanitized command, exit status, failure category и summary в `evidence/red/`.
 
-Файл задачи НЕ ДОЛЖЕН содержать:
+Если test уже Green, причина failure неверна или environment ненадёжен, implementation не начинается. Outcome возвращается как `already-satisfied`, `invalid-target`, `environment-blocked` или `not-reproduced`.
 
-- копий требований из SDD-пакета;
-- альтернативных вариантов дизайна (их место — ADR).
+## 6. Implement
 
-## Agent loop (single task)
+Цель: сделать frozen target Green минимальным compliant production change.
 
-1. Если запрос требует изменения контракта, а спека молчит → стоп, предложить `spec-patch` или `adr+spec`.
-2. Читать только связанные секции спеки. Слайс с правкой спеки — сначала дельта и коммит спеки.
-3. Тесты слайса на текущем коде должны не пройти; затем минимальный код до зелёных.
-4. Самопроверка по DoD задачи и по человеческим гейтам из `roles.md`.
-5. Если изменился операторский контур — обновить корневой `README.md` (how-to, не закон). Иначе не трогать.
-6. Коммитить каждый законченный шаг (см. «Agent commits»).
-7. Открыть PR с цитатами путей `docs/spec/…`.
-8. В том же PR закрыть слайс: файл очереди, README истории, Closed, `CHANGELOG.md` Unreleased; пустой история снести.
-9. Если ревью меняет поведение → сначала правится спека, когда затронут контракт.
+Читаются одна task, exact spec refs, frozen target, Red evidence, allowed production files/symbols и только required local dependencies.
 
-## Contradiction audit (ADR ↔ spec)
+Implementer не изменяет specification, Decisions, task oracle, expected assertions или unrelated code. Если это необходимо, работа возвращается upstream.
 
-Когда ADR принят или изменён:
+Сначала запускается targeted test, затем scoped regression suite. Commands, exit status, results, changed paths и spec status сохраняются в `evidence/green/`.
 
-1. Перечислить секции спеки, на которые влияет решение.
-2. Убрать остаточные альтернативы и TBD, которые это решение закрыло.
-3. Минимальный дифф спеки; merge делает человек.
-4. Только после этого планировать задачи реализации.
+Gate: Red стал Green без ослабления target, regressions прошли, scope соблюдён, evidence не содержит secrets.
 
-Не пересобирай весь пакет спецификации из одного ADR, если этот ADR не заменяет целую подсистему.
+## 7. Verify, Converge and Archive
 
-## Spec delta audit (auditor)
+Цель: доказать применение каждой объявленной Delta projection и удалить завершённый Change из active context без потери provenance.
 
-На любом PR, который затрагивает `docs/spec/**`:
+Проверяется traceability:
 
-1. Прочитать `git diff <base>..HEAD -- docs/spec/` — только как доказательный слой.
-2. Проверить, что изменённые файлы и якоря являются **подмножеством** объявленной Spec delta.
-3. Hunks за пределами дельты нарушают DoD задачи: стоп с вопросом либо откат лишнего. Не «раз уж я здесь, улучшу главу».
-4. Записи дельты, которым не соответствует ни один hunk, означают незавершённое изменение.
+```text
+raw source
+  -> CR claim
+  -> analysis
+  -> slice-level Delta
+  -> requirement/spec reference
+  -> task
+  -> test
+  -> implementation evidence
+```
 
-## Definition of done (generic)
+Читаются compact summaries, coverage, task states, exact refs, evidence, code/spec diffs и Decision statuses. Контекст углубляется только для найденного gap.
 
-Изменение выполнено, когда:
+Possible results:
 
-- [ ] соответствует `docs/spec/**` (или классифицировано как `trivial`)
-- [ ] тесты, требуемые задачей или testing-секцией спеки, проходят
-- [ ] секретов нет в логах, фикстурах и коммитах
-- [ ] PR цитирует пути спеки, если затронуто поведение
-- [ ] `git diff -- docs/spec/` является подмножеством объявленной Spec delta, changelog-лент в спеку не добавлено
-- [ ] человеческие гейты для этого типа изменения пройдены
-- [ ] корневой `README.md` — how-to оператора, не закон; обновлён только если сменился операторский контур
-- [ ] закрытый файл очереди удалён в этом PR; строка Closed и пункт Unreleased в `CHANGELOG.md` добавлены; `docs/todo/<story>/` снесён, если слайсов не осталось
+- `converged` — все affected layers согласованы;
+- `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift` или `decision-gap` — возврат owning upstream step;
+- `not-reproduced` — закрытие с evidence вместо недоказанного fix.
 
-Доменные пункты DoD принадлежат `docs/spec/` и файлам задач — не этому процессному файлу.
+После convergence сохраняются terminal task states и evidence, Change удаляется из active index, при необходимости обновляется `CHANGELOG.md`, весь package перемещается в `docs/archive/changes/<date>-<change-id>/`. Archive исключён из default implementation context.
+
+## Bug classification
+
+Входящий bug сначала является claim, а не подтверждённой classification.
+
+### Implementation bug
+
+Accepted spec однозначно задаёт correct behavior, а runtime observation ему противоречит:
+
+```text
+Request -> Analyze against spec -> conformance Delta
+  -> requirement_delta: none -> Decompose -> Target/Red
+  -> Implement/Green -> Verify
+```
+
+Bug становится подтверждённым только после reproducible Red или эквивалентного reliable runtime evidence.
+
+### Specification bug
+
+Spec отсутствует, противоречива или нормативно неверна:
+
+```text
+Request -> Analyze -> requirements Delta -> optional Decision
+  -> human acceptance -> Specify -> Decompose -> Target -> Implement -> Verify
+```
+
+### Not a bug
+
+Observed behavior соответствует accepted spec. Change отклоняется или переклассифицируется в feature/specification change.
+
+## Bootstrap profile
+
+Bootstrap применяется только при `.deltafuse/config.yaml` с `project.baseline: draft`:
+
+```text
+normalize initial claims
+  -> discover candidate domains/capabilities
+  -> human review of boundaries
+  -> create capability catalog
+  -> create baseline spec modules
+  -> resolve Decisions
+  -> audit and accept baseline
+  -> Decompose -> Target -> Implement -> Verify
+```
+
+После acceptance устанавливается `project.baseline: accepted`. Вся дальнейшая работа, включая новый service, входит как Change и использует те же primitives.
+
+## Generic completion criteria
+
+- Каждый claim имеет одну owning capability и полную traceability.
+- Каждый ready slice имеет explicit typed Delta.
+- Specification changes приняты до Decompose.
+- Blocking Decisions terminal, normative consequences зеркалированы.
+- Каждый production change имеет expected Red и Green evidence.
+- Regression run покрывает declared unchanged behavior.
+- Ни один affected Delta layer не потерян, ни один undeclared layer не изменён.
+- Completed Change history архивируется целиком и исключается из default context.
