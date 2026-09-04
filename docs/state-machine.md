@@ -146,7 +146,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 
 ## Decision State Machine
 
-Состояния решений в реестре `docs/decisions/DEC-NNNN-*.md`:
+Состояния решений в реестре `docs/decisions/DEC-NNNN-*.md` (решения могут быть привязаны к Change через `change: CHG-NNN` либо создаваться на уровне репозитория/Bootstrap с `change: null`):
 
 ```text
 [proposed] ---> [accepted]
@@ -165,14 +165,20 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 
 ## Evidence State Machine
 
-Состояния доказательной базы на уровне выполнения задач:
+Фазы доказательной базы (`evidence.schema.yaml`):
 
 ```text
 [none] ---> [red] ---> [green]
+             \          /
+         [regression]  /
+              \       /
+            [verification]
 ```
 
-- `red`: таргетный тест падает на исходном коде по строго ожидаемой причине (зафиксировано в `evidence/red/evidence.yaml`);
-- `green`: таргетный тест и регрессионный набор проходят успешно (зафиксировано в `evidence/green/evidence.yaml`).
+- `red`: таргетный тест падает на исходном коде по строго ожидаемой причине (`evidence/red/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
+- `green`: таргетный тест и регрессионный набор проходят успешно (`evidence/green/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
+- `regression`: выделенный отчёт о запуске регрессионного набора тестов (`evidence/regression/<task-id>.yaml`, обязательное поле `task: TASK-NNN`);
+- `verification`: Change-level автоматизированный верификационный прогон перед архивацией (`evidence/verification/run.yaml`, поле `task: null`, так как относится ко всему Change).
 
 ---
 
@@ -180,7 +186,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 
 При нормализации Change в `change.yaml` фиксируются:
 ```yaml
-schema_version: 1
+schema_version: 2
 framework:
   version: 2.0.0
   content_hash: sha256:...
