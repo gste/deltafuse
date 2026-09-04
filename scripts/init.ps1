@@ -1,52 +1,155 @@
-﻿# DeltaFuse Project Initializer for PowerShell
-param (
-    [string]$TargetDir = "."
+# DeltaFuse v2 product installer for PowerShell
+[CmdletBinding()]
+param(
+    [string]$TargetDir = ".",
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$FrameworkRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
+$FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
+$SchemaVersion = 2
 
-Write-Host "Initializing DeltaFuse in $TargetDir..." -ForegroundColor Cyan
+function Get-FrameworkContentHash {
+    $roots = @("docs", "process", "validators", "scripts")
+    $records = foreach ($root in $roots) {
+        $absolute = Join-Path $FrameworkRoot $root
+        if (Test-Path -LiteralPath $absolute) {
+            Get-ChildItem -LiteralPath $absolute -Recurse -File | ForEach-Object {
+                $relative = $_.FullName.Substring($FrameworkRoot.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
+                $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$relative`:$fileHash"
+            }
+        }
+    }
+    $versionPath = Join-Path $FrameworkRoot "VERSION"
+    $versionHash = (Get-FileHash -LiteralPath $versionPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $records += "version:$versionHash"
 
-$dirs = @(
-    "docs/process",
-    "docs/inbox",
-    "docs/decisions",
-    "docs/spec",
-    "docs/todo",
-    "docs/archive/inbox",
-    ".cursor/skills",
-    ".agents/skills",
-    ".gemini/skills"
-)
-
-foreach ($d in $dirs) {
-    $fullPath = Join-Path $TargetDir $d
-    if (-not (Test-Path $fullPath)) {
-        New-Item -ItemType Directory -Path $fullPath -Force | Out-Null
+    $orderedRecords = [string[]]$records
+    [System.Array]::Sort($orderedRecords, [System.StringComparer]::Ordinal)
+    $payload = ($orderedRecords -join "`n") + "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $hasher.Dispose()
     }
 }
 
-Copy-Item (Join-Path $ScriptDir "AGENTS.md") (Join-Path $TargetDir "AGENTS.md") -Force
-Copy-Item (Join-Path $ScriptDir "CLAUDE.md") (Join-Path $TargetDir "CLAUDE.md") -Force
-Copy-Item (Join-Path $ScriptDir "docs/process/*") (Join-Path $TargetDir "docs/process") -Recurse -Force
+function Copy-TemplateFile {
+    param([string]$SourceRelative, [string]$TargetRelative)
 
-Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".cursor/skills") -Recurse -Force
-Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".agents/skills") -Recurse -Force
-Copy-Item (Join-Path $ScriptDir "skills/*") (Join-Path $TargetDir ".gemini/skills") -Recurse -Force
+    $source = Join-Path $FrameworkRoot $SourceRelative
+    $target = Join-Path $TargetRoot $TargetRelative
+    $parent = Split-Path -Parent $target
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
 
-# Templates
-if (-not (Test-Path (Join-Path $TargetDir "docs/todo/README.md"))) {
-    Copy-Item (Join-Path $ScriptDir "templates/docs/todo/README.md") (Join-Path $TargetDir "docs/todo/README.md")
-}
-if (-not (Test-Path (Join-Path $TargetDir "docs/decisions/README.md"))) {
-    Copy-Item (Join-Path $ScriptDir "templates/docs/decisions/README.md") (Join-Path $TargetDir "docs/decisions/README.md")
-}
-if (-not (Test-Path (Join-Path $TargetDir "docs/decisions/0000-template.md"))) {
-    Copy-Item (Join-Path $ScriptDir "templates/docs/decisions/0000-template.md") (Join-Path $TargetDir "docs/decisions/0000-template.md")
-}
-if (-not (Test-Path (Join-Path $TargetDir "CHANGELOG.md"))) {
-    Copy-Item (Join-Path $ScriptDir "templates/CHANGELOG.md") (Join-Path $TargetDir "CHANGELOG.md")
+    if (Test-Path -LiteralPath $target) {
+        Write-Host "Preserving existing $TargetRelative" -ForegroundColor DarkYellow
+        return
+    }
+
+    Copy-Item -LiteralPath $source -Destination $target -Force
 }
 
-Write-Host "DeltaFuse initialized successfully!" -ForegroundColor Green
+function Install-GeneratedSkills {
+    param([string]$AdapterRootRelative, [string]$ContentHash)
+
+    $adapterRoot = Join-Path $TargetRoot $AdapterRootRelative
+    New-Item -ItemType Directory -Path $adapterRoot -Force | Out-Null
+
+    foreach ($skillDirectory in Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot "process/skills") -Directory) {
+        $skillName = $skillDirectory.Name
+        $destination = Join-Path $adapterRoot $skillName
+        $marker = Join-Path $destination ".deltafuse-generated.yaml"
+
+        if (Test-Path -LiteralPath $destination) {
+            if (-not (Test-Path -LiteralPath $marker)) {
+                Write-Warning "Preserving non-generated skill: $AdapterRootRelative/$skillName"
+                continue
+            }
+            Remove-Item -LiteralPath $destination -Recurse -Force
+        }
+
+        Copy-Item -LiteralPath $skillDirectory.FullName -Destination $destination -Recurse -Force
+
+        $skillFile = Join-Path $destination "SKILL.md"
+        $skillContent = Get-Content -LiteralPath $skillFile -Raw
+        $banner = "---`n# DO NOT EDIT: generated by DeltaFuse installer.`n# deltafuse-version: $FrameworkVersion`n# deltafuse-source: deltafuse://v$FrameworkVersion/skills/$skillName`n# deltafuse-content-hash: sha256:$ContentHash`n"
+        $skillContent = [regex]::Replace($skillContent, '\A---\r?\n', $banner)
+        Set-Content -LiteralPath $skillFile -Value $skillContent -Encoding utf8 -NoNewline
+
+        @"
+generated_by: deltafuse@$FrameworkVersion
+source: deltafuse://v$FrameworkVersion/skills/$skillName
+content_hash: sha256:$ContentHash
+"@ | Set-Content -LiteralPath $marker -Encoding utf8 -NoNewline
+    }
+}
+
+Write-Host "Installing DeltaFuse $FrameworkVersion into $TargetRoot..." -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
+
+$FrameworkHash = Get-FrameworkContentHash
+$configPath = Join-Path $TargetRoot ".deltafuse/config.yaml"
+$lockPath = Join-Path $TargetRoot ".deltafuse/lock.yaml"
+if ((Test-Path -LiteralPath $lockPath) -and -not $Force) {
+    $existingLock = Get-Content -LiteralPath $lockPath -Raw
+    if ($existingLock -notmatch [regex]::Escape("content_hash: sha256:$FrameworkHash")) {
+        throw "A different DeltaFuse lock already exists. Review migrations and rerun with -Force for an explicit upgrade."
+    }
+}
+
+$directories = @(
+    ".deltafuse",
+    "docs/intake",
+    "docs/changes",
+    "docs/spec",
+    "docs/decisions",
+    "docs/archive/intake",
+    "docs/archive/changes"
+)
+foreach ($directory in $directories) {
+    New-Item -ItemType Directory -Path (Join-Path $TargetRoot $directory) -Force | Out-Null
+}
+
+Copy-TemplateFile "process/templates/AGENTS.md" "AGENTS.md"
+Copy-TemplateFile "process/templates/.deltafuse/config.yaml" ".deltafuse/config.yaml"
+Copy-TemplateFile "process/templates/docs/intake/README.md" "docs/intake/README.md"
+Copy-TemplateFile "process/templates/docs/changes/README.md" "docs/changes/README.md"
+Copy-TemplateFile "process/templates/docs/spec/README.md" "docs/spec/README.md"
+Copy-TemplateFile "process/templates/docs/spec/context.md" "docs/spec/context.md"
+Copy-TemplateFile "process/templates/docs/spec/_capabilities.yaml" "docs/spec/_capabilities.yaml"
+Copy-TemplateFile "process/templates/docs/decisions/README.md" "docs/decisions/README.md"
+Copy-TemplateFile "process/templates/docs/decisions/DEC-0000-template.md" "docs/decisions/DEC-0000-template.md"
+Copy-TemplateFile "process/templates/docs/archive/README.md" "docs/archive/README.md"
+Copy-TemplateFile "process/templates/docs/archive/intake/README.md" "docs/archive/intake/README.md"
+Copy-TemplateFile "process/templates/docs/archive/changes/README.md" "docs/archive/changes/README.md"
+Copy-TemplateFile "process/templates/CHANGELOG.md" "CHANGELOG.md"
+
+if ((Test-Path -LiteralPath $configPath) -and $Force) {
+    $configContent = Get-Content -LiteralPath $configPath -Raw
+    if ($configContent -notmatch '(?m)^\s{2}version:\s*\S+\s*$') {
+        throw "Cannot update framework version: .deltafuse/config.yaml has no indented version field."
+    }
+    $configContent = [regex]::Replace($configContent, '(?m)^(\s{2}version:\s*)\S+(\s*)$', "`${1}$FrameworkVersion`${2}", 1)
+    Set-Content -LiteralPath $configPath -Value $configContent -Encoding utf8 -NoNewline
+}
+
+@"
+schema_version: $SchemaVersion
+framework:
+  version: $FrameworkVersion
+  source: deltafuse://v$FrameworkVersion
+  content_hash: sha256:$FrameworkHash
+"@ | Set-Content -LiteralPath $lockPath -Encoding utf8 -NoNewline
+
+Install-GeneratedSkills ".agents/skills" $FrameworkHash
+Install-GeneratedSkills ".cursor/skills" $FrameworkHash
+Install-GeneratedSkills ".gemini/skills" $FrameworkHash
+
+Write-Host "DeltaFuse installed. Canonical process remains external; product state is under docs/." -ForegroundColor Green
