@@ -292,7 +292,7 @@ The Verifier checks that:
 - **Workflow**:
   1. Intake normalizes report into `CHG-NNN`.
   2. Analyze verifies that existing specification already requires the expected behavior (`specification.operation: none`).
-  3. Specify is bypassed (or documents proof in `spec-delta.md`).
+  3. Specify transitions Change from `analyzed` to `specified`, recording proof in `spec-delta.md` that existing specification already requires the behavior without modifying normative spec.
   4. Decompose creates bugfix task.
   5. Target writes reproducing test; records Red evidence.
   6. Implement fixes code; records Green & Regression evidence.
