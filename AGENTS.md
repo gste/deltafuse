@@ -45,8 +45,8 @@ Use these names consistently:
 
 For a framework change:
 
-1. Validate every skill with the skill validator.
-2. Run both installer smoke tests when the host supports them.
+1. Run the smoke tests: 	ests/smoke-test.ps1 and 	ests/smoke-test.sh.
+2. Validate layout on target repositories using 	ests/validate-layout.ps1 / 	ests/validate-layout.sh.
 3. Validate the generated product layout.
 4. Search for legacy runtime paths and commands outside migration/history documents.
 5. Report any platform check that could not be run.
