@@ -121,7 +121,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language.
 3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
-4. If `spec` delta was marked `unchanged` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
+4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
 - `spec-delta.md` validates against `spec-delta.schema.yaml`.
