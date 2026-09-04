@@ -54,16 +54,16 @@ Unchecked items are active problems. Items marked `[x]` are verified as fixed.
 
 ### Подтверждено исправленным
 
-См. отметки `[x]` в Review-01 выше: восстановлены все канонические документы и шаблоны, убраны ссылки на migration guide, исправлен баг пиннинга версий (configExisted-логика в обоих инсталляторах), обновлены пути в AGENTS.md/CLAUDE.md/README, устранена таб-коррупция в Verification, docs/README.md и docs/using.md переведены на английский с добавлением README.ru.md / using.ru.md, CHANGELOG оформлен как [2.0.0], state-machine.md описывает полную таблицу переходов.
+См. отметки `[x]` в Review-01 выше: восстановлены все канонические документы и шаблоны, убраны ссылки на migration guide, исправлен баг пиннинга версий (configExisted-логика в обоих инсталляторах), обновлены пути в AGENTS.md/CLAUDE.md/README, устранена таб-коррупция в Verification, docs/README.md и docs/using.md переведены на английский с добавлением README.ru.md / using.ru.md, CHANGELOG оформлен как [2.0.0], state-machine.md описывает полную таблицу переходов, устранена асимметрия source между lock.yaml и config.yaml с валидацией в validate-layout.
 
 ### Осталось активным из Review-01
 
 - [x] validate-layout не валидирует структуры артефактов (change.yaml, task frontmatter, evidence) ни по одному из 9 schema-файлов — проверяется только наличие change.yaml/request.md. Новые схемы routing/coverage/slice/spec-delta также не подключены ни к какому валидатору.
 - [x] evidence.schema.yaml: фазы `regression` и `verification` по-прежнему не имеют определённого места в layout *(Исправлено: task сделан опциональным/null для verification, определены пути evidence/red/, evidence/green/, evidence/regression/ и evidence/verification/run.yaml)* — скиллы пишут только evidence/red/ и evidence/green/; regression свёрнут в green evidence, verification существует только как verification.md без YAML-артефакта.
 - [x] decision.schema.yaml: поле `change` обязательное — глобальные/Bootstrap-решения без Change невозможны. *(Исправлено: change убрано из required, разрешён null для Bootstrap и глобальных политик)*
-- [ ] Инсталляторы хардкодят корни адаптеров (.agents/.cursor/.gemini) вместо чтения adapters.roots из config.yaml — поле конфига фактически мертво.
+- [x] Инсталляторы хардкодят корни адаптеров (.agents/.cursor/.gemini) вместо чтения adapters.roots из config.yaml — поле конфига фактически мертво. *(Исправлено в init.ps1/init.sh/validate-layout)*
 - [ ] .gitignore — Java-шаблонный мусор.
-- [ ] Двойной источник правды по путям (config paths.* vs буквальные docs/... в валидаторе и скиллах).
+- [x] Двойной источник правды по путям (config paths.* vs буквальные docs/... в валидаторе и скиллах). *(Исправлено: валидаторы динамически считывают paths.* из config.yaml)*
 
 ### Новые проблемы (несоответствия в восстановленных документах)
 
