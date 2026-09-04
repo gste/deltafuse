@@ -99,7 +99,7 @@ DeltaFuse разграничивает зоны ответственности �
 1. **Стандартная доработка (Feature / Specification Change)**:
    `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → цикл по задачам (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
 2. **Исправление дефекта реализации (Implementation Bug)**:
-   `intake` → `analyze-change` *(дельта specification.operation: none)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze-change` *(дельта specification.operation: none)* → `specify-change` *(доказательство неизменности спеки в spec-delta.md)* → `decompose-change` *(создание задачи фикса)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
 3. **Инициализация проекта (Bootstrap Profile)**:
    Формирование начального каталога `docs/spec/_capabilities.yaml`, принятие базовых архитектурных решений (`docs/decisions/DEC-*` с `change: null`) и фиксация `project.baseline: accepted` в `.deltafuse/config.yaml` до запуска первого Change.
 

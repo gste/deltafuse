@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Split TDD into Target/Red and Implement/Green operations while retaining executable evidence.
 - Preserve completed tasks and evidence inside the archived Change package.
+- Formalized `/bootstrap`, `/change`, and `/fix-bug` as workflow Execution Profiles (`docs/roles.md`) composed of canonical primitives rather than monolithic wrapper skills, preserving strict Human Gate boundaries and verifiable evidence at each step.
 
 ## [1.2.0] - 2026-09-04
 

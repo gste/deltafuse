@@ -128,7 +128,7 @@ Each capability must strictly specify:
 2. **Pass B: Slice Analysis**
    - Inputs: claims belonging to **one** capability slice, targeted specification modules, accepted decisions.
    - Action: compute typed deltas, detect contradictions, formulate questions.
-   - Output: `slices/SLICE-NN.md` and `spec-delta.md`.
+   - Output: `slices/SLICE-NN.md` and typed deltas.
 
 ### Slicing Invariants
 1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts.
