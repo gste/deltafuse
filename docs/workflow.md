@@ -38,14 +38,14 @@ Normalize an incoming raw request (issue, chat transcript, bug report, review no
 2. Create `docs/changes/<change-id>/request.md` with:
    - Verbatim user request preserved intact;
    - Normalized context;
-   - Extracted atomic claims numbered sequentially (`CR-01`, `CR-02`, etc.);
+   - Extracted atomic claims numbered sequentially (`CR-001`, `CR-002`, etc.);
    - Non-functional requirements, constraints, and known uncertainties.
 3. Initialize `docs/changes/<change-id>/change.yaml` with `status: normalized`.
 4. The Intake step must never guess implementation details or propose architecture.
 
 ### Gate
 - `change.yaml` passes `change.schema.yaml` with `status: normalized`.
-- `request.md` contains at least one atomic claim (`CR-01`).
+- `request.md` contains at least one atomic claim (`CR-001`).
 - Neither `docs/spec/**` nor product source code was read during this step.
 
 ---
@@ -67,19 +67,23 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
 For each capability slice:
 1. Load only the specification modules referenced by the capability.
 2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies.
-3. Compute typed deltas across artifact layers:
-   - `spec`: `added`, `modified`, `removed`, or `unchanged`;
-   - `architecture`: `unchanged` or `decision-required`;
-   - `contract`: `unchanged` or list of modified API/interface schemas;
-   - `test`: list of expected new or modified test scenarios;
-   - `code`: list of affected code packages/roots.
+3. Compute an explicit typed delta (`DELTA-NN`) across the 7 normative projections defined in `change.schema.yaml`:
+   - `specification`: `none | add | modify | remove | mixed` (with `refs` to affected spec files/sections);
+   - `catalog`: `none | add | modify | remove` (with `refs` to capability IDs in `_capabilities.yaml`);
+   - `decisions`: `none | propose | supersede` (with `refs` to proposed/superseded `DEC-*` records);
+   - `tasks`: `none | derive | modify | remove` (with `refs` to derived tasks);
+   - `tests`: `none | add | modify | remove` (with `refs` to test files);
+   - `implementation`: `none | add | modify | remove | mixed` (with `refs` to production code roots);
+   - `evidence`: `none | record` (with `refs` to evidence files).
+   Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
 4. Record analysis narrative and findings in `analysis.md`.
 5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
 
 ### Typed Delta Invariants
-- If `spec` is `unchanged`, the Change is classified as an **Implementation Bug** or **Refactoring**.
-- If `spec` is `added`, `modified`, or `removed`, the Change MUST pass through the **Specify** step.
-- If `architecture` is `decision-required`, the Change is blocked until a human accepts the decision.
+- If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**, and the **Specify** step records formal proof in `spec-delta.md` that existing specification already requires the behavior.
+- If `specification.operation` is `add`, `modify`, `remove`, or `mixed`, the Change MUST pass through the **Specify** step to update `docs/spec/**`.
+- If `catalog.operation` is `add`, `modify`, or `remove`, a catalog delta for `_capabilities.yaml` is required (Human Gate: Capability Boundary).
+- If `decisions.operation` is `propose`, new decision records are drafted in `docs/decisions/DEC-*` with `status: proposed`, and the Change transitions to `blocked-on-decision` until human approval.
 
 ### Analytical Outcomes
 - **Feasible**: all claims mapped, deltas computed, ready for specification or targeting.
@@ -142,18 +146,43 @@ Each task is authored in `tasks/TASK-NNN-<slug>.md` with YAML frontmatter confor
 id: TASK-001
 change: CHG-001-user-auth
 slice: SLICE-01
-title: Task title
-status: pending
 kind: feature
-test_target: tests/unit/test_auth.py
-test_oracle: Test fails with 401 when token is expired
+status: pending
 depends_on: []
+requirement_delta: added
+spec_refs:
+  - docs/spec/identity/authentication.md#REQ-AUTH-001
+design_ref: null
+allowed_paths:
+  - src/identity/auth/**
+  - tests/identity/auth/**
+forbidden_paths:
+  - src/identity/session/**
 ---
 ```
-Every task must specify:
-1. **Explicit Test Target**: path to the test file that will verify the behavior.
-2. **Deterministic Test Oracle**: exact expected failure reason and assertion condition.
-3. **Strict Scope**: minimal production code changes required to satisfy the Oracle.
+
+The Markdown body defines the operational contract:
+```markdown
+# Task outcome
+
+## Outcome
+Validate credentials and issue an initial access token.
+
+## Test oracle
+- GIVEN valid user credentials
+- WHEN authentication is requested
+- THEN return HTTP 200 with access token
+- GIVEN invalid password
+- WHEN authentication is requested
+- THEN fail with HTTP 401 Unauthorized
+
+## Unchanged behavior
+- Existing session revocation and refresh endpoints remain unaffected.
+
+## Verification
+- Targeted command: `pytest tests/identity/auth/test_auth.py`
+- Regression command: `pytest tests/identity/`
+```
 
 ### Gate
 - All tasks validate against `task.schema.yaml`.
@@ -182,9 +211,14 @@ Create or update an executable test target for a single atomic task and verify t
    change: CHG-001-user-auth
    task: TASK-001
    phase: red
-   status: passed
-   test_target: tests/unit/test_auth.py::test_expired_token
-   output_summary: "AssertionError: Expected 401 Unauthorized, got 200 OK"
+   timestamp: "2026-09-04T12:00:00Z"
+   command: pytest tests/identity/auth/test_auth.py::test_expired_token
+   exit_code: 1
+   result: expected-failure
+   failure_category: behavioral-mismatch
+   summary: "AssertionError: Expected 401 Unauthorized, got 200 OK"
+   changed_paths: []
+   spec_status: unchanged
    ```
 5. Transition task status to `target-confirmed`.
 
@@ -207,9 +241,9 @@ Author the minimal production code necessary to turn the failing test target gre
 ### Rules
 1. Author only the production code required to satisfy the test assertions.
 2. Execute the test target and prove it passes:
-   - Record `evidence/green/<task-id>.yaml` with `phase: green`, `status: passed`.
+   - Record `evidence/green/<task-id>.yaml` with `phase: green`, `result: passed`, and `exit_code: 0`.
 3. Execute the capability/domain regression test suite:
-   - Record `evidence/regression/<task-id>.yaml` with `phase: regression`, `status: passed`.
+   - Record `evidence/regression/<task-id>.yaml` with `phase: regression`, `result: passed`, and `exit_code: 0`.
 4. Transition task status to `implemented`.
 
 ### Gate
@@ -244,7 +278,7 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`.
 
 ### Archiving
-1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<change-id>`.
+1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
 2. Update any related intake requests in `docs/intake/` and move them to `docs/archive/intake/`.
 3. Update `change.yaml` status to `archived`.
 4. The archived Change package remains an immutable historical record.
@@ -257,7 +291,7 @@ The Verifier checks that:
 - **Definition**: Production code deviates from existing accepted specification.
 - **Workflow**:
   1. Intake normalizes report into `CHG-NNN`.
-  2. Analyze verifies that existing specification already requires the expected behavior (`spec: unchanged`).
+  2. Analyze verifies that existing specification already requires the expected behavior (`specification.operation: none`).
   3. Specify is bypassed (or documents proof in `spec-delta.md`).
   4. Decompose creates bugfix task.
   5. Target writes reproducing test; records Red evidence.
@@ -281,7 +315,7 @@ When initializing a new product repository:
 2. Initial capability catalog `docs/spec/_capabilities.yaml` is drafted.
 3. Foundational architecture decisions and global policies are resolved in `docs/decisions/**` (with `change: null`).
 4. Core baseline specification is authored in `docs/spec/**`.
-5. Once baseline is approved by human maintainer, `project.baseline` transitions to `active`.
+5. Once baseline is approved by human maintainer, `project.baseline` transitions to `accepted`.
 6. Subsequent modifications must proceed exclusively through DeltaFuse Changes.
 
 ---
@@ -292,4 +326,4 @@ A DeltaFuse Change is considered complete when:
 - All claims (`CR-*`) are traced to passing tests and accepted specification.
 - All tasks are in `verified` status.
 - Red, Green, Regression, and Verification evidence files are recorded and valid.
-- Package is archived in `docs/archive/changes/<change-id>/`.
+- Package is archived in `docs/archive/changes/<date>-<change-id>/`.

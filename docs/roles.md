@@ -99,9 +99,9 @@ High-level operational workflows are orchestrated by invoking these canonical pr
 1. **Standard Change (Feature / Specification Change)**:
    `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → task loop (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
 2. **Implementation Bug**:
-   `intake` → `analyze-change` *(delta spec: unchanged)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze-change` *(delta specification.operation: none)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
 3. **Bootstrap Profile**:
-   Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: active` in `.deltafuse/config.yaml` before running the first Change.
+   Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: accepted` in `.deltafuse/config.yaml` before running the first Change.
 
 Any external automation or end-to-end agent orchestration (composite orchestration) must:
 - Use strictly the 7 canonical framework primitives;
