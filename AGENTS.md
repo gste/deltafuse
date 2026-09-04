@@ -47,6 +47,5 @@ For a framework change:
 
 1. Run the smoke tests: `tests/smoke-test.ps1` and `tests/smoke-test.sh`.
 2. Validate layout on target repositories using `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
-3. Validate the generated product layout.
-4. Search for legacy runtime paths and commands outside migration/history documents.
-5. Report any platform check that could not be run.
+3. Search for legacy runtime paths and commands.
+4. Report any platform check that could not be run.
