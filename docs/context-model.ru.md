@@ -39,14 +39,30 @@ schema_version: 2
 
 domains:
   identity:
-    summary: Управление учётными записями и доступом
+    summary: Управление пользователями и контроль доступа
+    responsibility: Отвечает за идентификацию пользователей, учетные данные и токены сессий.
     capabilities:
       authentication:
-        summary: Проверка учётных данных и выдача первичных токенов доступа
+        summary: Аутентификация пользователей и первичная выдача токенов
+        type: business
+        status: active
+        responsibility: Проверяет учетные данные и генерирует первичные access-токены.
+        excludes:
+          - Управление жизненным циклом сессий и отзыв токенов
+          - Назначение ролей и гранулярных прав
+        actors:
+          - anonymous-user
+          - registered-user
+        entities:
+          - credentials
+          - authentication-attempt
+        events:
+          - authentication-succeeded
+          - authentication-failed
         spec:
           - docs/spec/identity/authentication.md
         policies:
-          - docs/spec/policies/security.md
+          - policy.security
         code_roots:
           - src/identity/auth
         test_roots:
@@ -54,16 +70,37 @@ domains:
         depends_on:
           - identity.session-management
       session-management:
-        summary: Управление сессиями, обновление токенов и завершение сеансов
+        summary: Управление сессиями, обновление токенов и выход из системы
+        type: business
+        status: active
+        responsibility: Отслеживает активные сессии, обновление токенов и тайм-ауты.
+        excludes:
+          - Хеширование паролей и валидация первичных данных
+        entities:
+          - session
+          - access-token
+          - refresh-token
+        events:
+          - session-created
+          - session-refreshed
+          - session-expired
         spec:
           - docs/spec/identity/session.md
         policies:
-          - docs/spec/policies/security.md
+          - policy.security
         code_roots:
           - src/identity/session
         test_roots:
           - tests/identity/session
         depends_on: []
+
+policies:
+  policy.security:
+    summary: Стандарты безопасности и базовые требования шифрования
+    spec:
+      - docs/spec/policies/security.md
+    applies_to:
+      - identity.*
 ```
 
 ### Controlled Open-World Assumption

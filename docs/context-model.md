@@ -41,13 +41,29 @@ schema_version: 2
 domains:
   identity:
     summary: User account management and access control
+    responsibility: Manages all aspects of user identity, credentials, and access tokens.
     capabilities:
       authentication:
         summary: Credential validation and primary access token issuance
+        type: business
+        status: active
+        responsibility: Validates user identity and issues initial tokens.
+        excludes:
+          - Session revocation and lifecycle management
+          - Role and permission assignments
+        actors:
+          - anonymous-user
+          - registered-user
+        entities:
+          - credentials
+          - authentication-attempt
+        events:
+          - authentication-succeeded
+          - authentication-failed
         spec:
           - docs/spec/identity/authentication.md
         policies:
-          - docs/spec/policies/security.md
+          - policy.security
         code_roots:
           - src/identity/auth
         test_roots:
@@ -56,15 +72,36 @@ domains:
           - identity.session-management
       session-management:
         summary: Session management, token renewal, and sign-out handling
+        type: business
+        status: active
+        responsibility: Tracks active sessions, handles refresh tokens, and enforces timeout policies.
+        excludes:
+          - Password hashing and credential storage
+        entities:
+          - session
+          - access-token
+          - refresh-token
+        events:
+          - session-created
+          - session-refreshed
+          - session-expired
         spec:
           - docs/spec/identity/session.md
         policies:
-          - docs/spec/policies/security.md
+          - policy.security
         code_roots:
           - src/identity/session
         test_roots:
           - tests/identity/session
         depends_on: []
+
+policies:
+  policy.security:
+    summary: Security baseline and encryption standards
+    spec:
+      - docs/spec/policies/security.md
+    applies_to:
+      - identity.*
 ```
 
 ### Controlled Open-World Assumption

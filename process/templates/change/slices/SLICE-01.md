@@ -5,6 +5,8 @@ title: Outcome
 status: draft
 primary_capability: unresolved
 related_capabilities: []
+policies: []
+spec_refs: []
 claims:
   - CR-001
 depends_on: []
