@@ -19,8 +19,9 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 2. Check every declared delta projection and unchanged invariant.
 3. Confirm blocking Decisions are terminal and accepted normative consequences exist in spec.
 4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.
-5. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`.
-6. For a gap, return ownership to the corresponding upstream skill; do not repair it silently.
-7. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
+5. If automated full-suite verification is executed at the Change level, record execution evidence under `evidence/verification/run.yaml` (`phase: verification`).
+6. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Set all implemented tasks to `verified`.
+7. For a gap, return ownership to the corresponding upstream skill; do not repair it silently.
+8. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
 
 Archive is provenance, not default implementation context. Do not delete completed task history.

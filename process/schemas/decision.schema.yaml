@@ -3,7 +3,7 @@ $id: https://deltafuse.dev/schemas/v2/decision.schema.yaml
 title: DeltaFuse Decision Record frontmatter
 type: object
 additionalProperties: false
-required: [id, title, kind, status, owner, change, affects]
+required: [id, title, kind, status, owner, affects]
 properties:
   id: {type: string, pattern: '^DEC-[0-9]{4,}$'}
   title: {type: string, minLength: 1}
@@ -11,7 +11,11 @@ properties:
   status: {enum: [proposed, accepted, rejected, superseded]}
   owner: {type: string, minLength: 1}
   date: {type: string, format: date}
-  change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
+  change:
+    anyOf:
+      - type: string
+        pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+      - type: 'null'
   affects:
     type: object
     required: [capabilities, spec_refs]

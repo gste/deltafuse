@@ -149,8 +149,30 @@ framework:
   content_hash: sha256:$FrameworkHash
 "@ | Set-Content -LiteralPath $lockPath -Encoding utf8 -NoNewline
 
-Install-GeneratedSkills ".agents/skills" $FrameworkHash
-Install-GeneratedSkills ".cursor/skills" $FrameworkHash
-Install-GeneratedSkills ".gemini/skills" $FrameworkHash
+$adapterRoots = @()
+if (Test-Path -LiteralPath $configPath) {
+    $configLines = Get-Content -LiteralPath $configPath
+    $inAdapters = $false
+    $inRoots = $false
+    foreach ($line in $configLines) {
+        if ($line -match "^adapters:\s*$") { $inAdapters = $true; continue }
+        if ($inAdapters -and $line -match "^\s+roots:\s*$") { $inRoots = $true; continue }
+        if ($inRoots) {
+            if ($line -match "^\s+-\s*(.+)\s*$") {
+                $adapterRoots += $Matches[1].Trim()
+            } elseif ($line -match "^\S" -or ($line -match "^\s+\S" -and $line -notmatch "^\s+roots:")) {
+                $inAdapters = $false
+                $inRoots = $false
+            }
+        }
+    }
+}
+if ($adapterRoots.Count -eq 0) {
+    $adapterRoots = @(".agents/skills", ".cursor/skills", ".gemini/skills")
+}
+
+foreach ($root in $adapterRoots) {
+    Install-GeneratedSkills $root $FrameworkHash
+}
 
 Write-Host "DeltaFuse installed. Canonical process remains external; product state is under docs/." -ForegroundColor Green
