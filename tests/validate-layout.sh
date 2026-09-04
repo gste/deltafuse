@@ -17,7 +17,9 @@ config="$PRODUCT_ROOT/.deltafuse/config.yaml"
 [ -e "$lock" ] || fail "Missing required path: .deltafuse/lock.yaml"
 
 config_version=""
+config_source=""
 lock_version=""
+lock_source=""
 lock_hash=""
 
 path_intake="docs/intake"
@@ -30,7 +32,9 @@ adapter_roots=()
 
 if [ -f "$config" ]; then
   config_version="$(sed -n 's/^[[:space:]]\{2\}version:[[:space:]]*//p' "$config" | head -n 1)"
+  config_source="$(sed -n 's/^[[:space:]]\{2\}source:[[:space:]]*//p' "$config" | head -n 1)"
   [ -n "$config_version" ] || fail "Config file has no requested framework version"
+  [ -n "$config_source" ] || fail "Config file has no requested framework source"
 
   val="$(awk '/^paths:[[:space:]]*$/ { in_p=1; next } in_p && /^[[:space:]]+intake:[[:space:]]*/ { sub(/^[[:space:]]+intake:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print; exit } in_p && /^[^[:space:]]/ { in_p=0 }' "$config")"
   [ -z "$val" ] || path_intake="$val"
@@ -82,13 +86,23 @@ done
 
 if [ -f "$lock" ]; then
   lock_version="$(sed -n 's/^[[:space:]]\{2\}version:[[:space:]]*//p' "$lock" | head -n 1)"
+  lock_source="$(sed -n 's/^[[:space:]]\{2\}source:[[:space:]]*//p' "$lock" | head -n 1)"
   lock_hash="$(sed -n 's/^[[:space:]]\{2\}content_hash:[[:space:]]*//p' "$lock" | head -n 1)"
   [ -n "$lock_version" ] || fail "Lock file has no framework version"
+  [ -n "$lock_source" ] || fail "Lock file has no framework source"
   printf '%s' "$lock_hash" | grep -Eq '^sha256:[a-fA-F0-9]{64}$' || fail "Lock file has no valid framework content hash"
 fi
 
 if [ -n "$config_version" ] && [ -n "$lock_version" ] && [ "$config_version" != "$lock_version" ]; then
   fail "Requested framework version $config_version does not match locked version $lock_version"
+fi
+
+if [ -n "$config_source" ] && [ -n "$lock_source" ]; then
+  norm_config_source="$config_source"
+  [ "$config_source" != "deltafuse" ] || norm_config_source="deltafuse://v$config_version"
+  if [ "$norm_config_source" != "$lock_source" ]; then
+    fail "Requested framework source '$config_source' does not match locked source '$lock_source'"
+  fi
 fi
 
 # 1. Validate capability catalog structure

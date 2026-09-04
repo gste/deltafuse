@@ -132,12 +132,30 @@ Copy-TemplateFile "process/templates/docs/archive/intake/README.md" "docs/archiv
 Copy-TemplateFile "process/templates/docs/archive/changes/README.md" "docs/archive/changes/README.md"
 Copy-TemplateFile "process/templates/CHANGELOG.md" "CHANGELOG.md"
 
+$configSource = $null
+if (Test-Path -LiteralPath $configPath) {
+    $configRaw = Get-Content -LiteralPath $configPath -Raw
+    $sourceMatch = [regex]::Match($configRaw, "(?m)^\s{2}source:\s*(\S+)\s*$")
+    if ($sourceMatch.Success) {
+        $configSource = $sourceMatch.Groups[1].Value
+    }
+}
+
+$effectiveSource = if ($configSource -and $configSource -ne "deltafuse" -and -not $configSource.StartsWith("deltafuse://")) {
+    $configSource
+} else {
+    "deltafuse://v$FrameworkVersion"
+}
+
 if ((Test-Path -LiteralPath $configPath) -and (-not $configExisted -or $Force)) {
     $configContent = Get-Content -LiteralPath $configPath -Raw
-    if ($configContent -notmatch '(?m)^\s{2}version:\s*\S+\s*$') {
+    if ($configContent -notmatch "(?m)^\s{2}version:\s*\S+\s*$") {
         throw "Cannot update framework version: .deltafuse/config.yaml has no indented version field."
     }
-    $configContent = [regex]::Replace($configContent, '(?m)^(\s{2}version:\s*)\S+(\s*)$', "`${1}$FrameworkVersion`${2}", 1)
+    $configContent = [regex]::Replace($configContent, "(?m)^(\s{2}version:\s*)\S+(\s*)$", "`${1}$FrameworkVersion`${2}", 1)
+    if ($configContent -match "(?m)^\s{2}source:\s*(deltafuse|deltafuse://\S*)\s*$") {
+        $configContent = [regex]::Replace($configContent, "(?m)^(\s{2}source:\s*)\S+(\s*)$", "`${1}$effectiveSource`${2}", 1)
+    }
     Set-Content -LiteralPath $configPath -Value $configContent -Encoding utf8 -NoNewline
 }
 
@@ -145,7 +163,7 @@ if ((Test-Path -LiteralPath $configPath) -and (-not $configExisted -or $Force)) 
 schema_version: $SchemaVersion
 framework:
   version: $FrameworkVersion
-  source: deltafuse://v$FrameworkVersion
+  source: $effectiveSource
   content_hash: sha256:$FrameworkHash
 "@ | Set-Content -LiteralPath $lockPath -Encoding utf8 -NoNewline
 

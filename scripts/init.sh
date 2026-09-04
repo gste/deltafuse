@@ -136,22 +136,38 @@ copy_template process/templates/docs/archive/intake/README.md docs/archive/intak
 copy_template process/templates/docs/archive/changes/README.md docs/archive/changes/README.md
 copy_template process/templates/CHANGELOG.md CHANGELOG.md
 
-if [ -f "$TARGET_ROOT/.deltafuse/config.yaml" ] && { [ "$config_existed" -eq 0 ] || [ "$FORCE" -eq 1 ]; }; then
-  config_file="$TARGET_ROOT/.deltafuse/config.yaml"
+config_file="$TARGET_ROOT/.deltafuse/config.yaml"
+config_source=""
+if [ -f "$config_file" ]; then
+  config_source="$(awk '/^  source:[[:space:]]*/ { sub(/^  source:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$config_file")"
+fi
+
+effective_source="deltafuse://v$FRAMEWORK_VERSION"
+if [ -n "$config_source" ] && [ "$config_source" != "deltafuse" ] && [[ ! "$config_source" =~ ^deltafuse:// ]]; then
+  effective_source="$config_source"
+fi
+
+if [ -f "$config_file" ] && { [ "$config_existed" -eq 0 ] || [ "$FORCE" -eq 1 ]; }; then
   temporary="$(mktemp)"
-  awk -v version="$FRAMEWORK_VERSION" '
-    !updated && /^  version:[[:space:]]*/ {
+  awk -v version="$FRAMEWORK_VERSION" -v source="$effective_source" '
+    !updated_ver && /^  version:[[:space:]]*/ {
       print "  version: " version
-      updated=1
+      updated_ver=1
+      next
+    }
+    !updated_src && /^  source:[[:space:]]*(deltafuse|deltafuse:\/\/[^[:space:]]*)[[:space:]]*$/ {
+      print "  source: " source
+      updated_src=1
       next
     }
     { print }
-    END { if (!updated) exit 42 }
+    END { if (!updated_ver) exit 42 }
   ' "$config_file" > "$temporary" || {
     status=$?
     rm -f -- "$temporary"
     if [ "$status" -eq 42 ]; then
-      printf 'Cannot update framework version: .deltafuse/config.yaml has no indented version field.\n' >&2
+      printf 'Cannot update framework version: .deltafuse/config.yaml has no indented version field.
+' >&2
     fi
     exit "$status"
   }
@@ -162,7 +178,7 @@ cat > "$LOCK_PATH" <<EOF
 schema_version: $SCHEMA_VERSION
 framework:
   version: $FRAMEWORK_VERSION
-  source: deltafuse://v$FRAMEWORK_VERSION
+  source: $effective_source
   content_hash: sha256:$FRAMEWORK_HASH
 EOF
 
