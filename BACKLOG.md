@@ -87,8 +87,8 @@ Unchecked items are active problems. Items marked `[x]` are verified as fixed.
 
 ### Б. Восстановленный `docs/state-machine.md`
 
-- [ ] **Bug-путь пропускает Decompose**: переход `analyzed → targeting (spec unchanged)` противоречит proposal (bug flow явно включает «Decompose from spec refs + reproduction», L1200) и workflow.md §Bug Workflow (шаг 4 «Decompose creates bugfix task»). Без Decompose задачи вообще не существуют — переход нереализуем.
-- [ ] **`not-reproduced` висит**: статус объявлен терминальным в таблице, но в mermaid-диаграмме нет ни одного входящего перехода, и в таблице не указано, из каких состояний он достижим (proposal: терминал после Red-попытки).
+- [x] **Bug-путь пропускает Decompose**: переход `analyzed → targeting (spec unchanged)` противоречит proposal (bug flow явно включает «Decompose from spec refs + reproduction», L1200) и workflow.md §Bug Workflow (шаг 4 «Decompose creates bugfix task»). Без Decompose задачи вообще не существуют — переход нереализуем. *(Исправлено: в state-machine.md и workflow.md bugflow выровнен: analyzed переходит в specified с фиксацией доказательства неизменности спеки в spec-delta.md, затем через decompose-change создаются задачи TASK-NNN в состоянии decomposed, и только затем запускается target-task)*.
+- [x] **`not-reproduced` висит**: статус объявлен терминальным в таблице, но в mermaid-диаграмме нет ни одного входящего перехода, и в таблице не указано, из каких состояний он достижим (proposal: терминал после Red-попытки). *(Исправлено: в state-machine.md и state-machine.ru.md в диаграмму и таблицы переходов добавлены явные входы в терминальное состояние not-reproduced из analyzing, targeting и verifying с фиксацией диагностического evidence/отчета)*.
 
 ### В. Схемы vs модель proposal
 
