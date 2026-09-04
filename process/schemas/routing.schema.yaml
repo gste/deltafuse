@@ -1,0 +1,32 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/routing.schema.yaml
+title: DeltaFuse Claim Routing
+type: object
+additionalProperties: false
+required: [change, claims]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  claims:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [primary_capability]
+      properties:
+        summary:
+          type: string
+        primary_capability:
+          type: string
+          minLength: 1
+        related_capabilities:
+          type: array
+          items:
+            type: string
+        policies:
+          type: array
+          items:
+            type: string
+        confidence:
+          enum: [low, medium, high, unknown]

@@ -1,0 +1,74 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/capability.schema.yaml
+title: DeltaFuse Capability Catalog
+type: object
+required: [schema_version, domains]
+additionalProperties: false
+properties:
+  schema_version:
+    const: 2
+  domains:
+    type: object
+    additionalProperties:
+      type: object
+      required: [summary, capabilities]
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        responsibility: {type: string}
+        capabilities:
+          type: object
+          additionalProperties:
+            type: object
+            required: [summary, spec]
+            additionalProperties: false
+            properties:
+              summary: {type: string}
+              responsibility: {type: string}
+              type:
+                enum: [business, supporting, integration, data, operational]
+              status:
+                enum: [active, draft, deprecated, removed]
+              excludes:
+                type: array
+                items: {type: string}
+              actors:
+                type: array
+                items: {type: string}
+              entities:
+                type: array
+                items: {type: string}
+              events:
+                type: array
+                items: {type: string}
+              spec:
+                type: array
+                minItems: 1
+                items: {type: string}
+              policies:
+                type: array
+                items: {type: string}
+              code_roots:
+                type: array
+                items: {type: string}
+              test_roots:
+                type: array
+                items: {type: string}
+              depends_on:
+                type: array
+                items: {type: string}
+  policies:
+    type: object
+    additionalProperties:
+      type: object
+      required: [summary, spec]
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        spec:
+          type: array
+          minItems: 1
+          items: {type: string}
+        applies_to:
+          type: array
+          items: {type: string}
