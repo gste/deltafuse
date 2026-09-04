@@ -28,6 +28,7 @@ properties:
             type: string
         evidence:
           type: object
+          additionalProperties: false
           properties:
             red:
               type: string
