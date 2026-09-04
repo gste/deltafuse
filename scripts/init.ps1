@@ -96,11 +96,12 @@ New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
 $FrameworkHash = Get-FrameworkContentHash
 $configPath = Join-Path $TargetRoot ".deltafuse/config.yaml"
+$configExisted = Test-Path -LiteralPath $configPath
 $lockPath = Join-Path $TargetRoot ".deltafuse/lock.yaml"
 if ((Test-Path -LiteralPath $lockPath) -and -not $Force) {
     $existingLock = Get-Content -LiteralPath $lockPath -Raw
     if ($existingLock -notmatch [regex]::Escape("content_hash: sha256:$FrameworkHash")) {
-        throw "A different DeltaFuse lock already exists. Review migrations and rerun with -Force for an explicit upgrade."
+        throw "A different DeltaFuse lock already exists. Rerun with -Force for an explicit upgrade."
     }
 }
 
@@ -131,7 +132,7 @@ Copy-TemplateFile "process/templates/docs/archive/intake/README.md" "docs/archiv
 Copy-TemplateFile "process/templates/docs/archive/changes/README.md" "docs/archive/changes/README.md"
 Copy-TemplateFile "process/templates/CHANGELOG.md" "CHANGELOG.md"
 
-if ((Test-Path -LiteralPath $configPath) -and $Force) {
+if ((Test-Path -LiteralPath $configPath) -and (-not $configExisted -or $Force)) {
     $configContent = Get-Content -LiteralPath $configPath -Raw
     if ($configContent -notmatch '(?m)^\s{2}version:\s*\S+\s*$') {
         throw "Cannot update framework version: .deltafuse/config.yaml has no indented version field."

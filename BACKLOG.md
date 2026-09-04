@@ -12,4 +12,4 @@ No active framework items are recorded here.
 - [x] Keep product, architecture, integration, policy, and operational questions in `decisions/`.
 - [x] Move tasks into their owning Change package and archive task history intact.
 - [x] Keep canonical process files in the external, pinned DeltaFuse framework.
-- [x] Add config/lock pinning, generated adapters, schemas, validators, and v1-to-v2 migration guidance.
+- [x] Add config/lock pinning, generated adapters, schemas, and validators.

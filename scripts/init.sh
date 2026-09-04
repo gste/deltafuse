@@ -104,7 +104,7 @@ FRAMEWORK_HASH="$(framework_hash)"
 LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 
 if [ -f "$LOCK_PATH" ] && [ "$FORCE" -ne 1 ] && ! grep -Fq "content_hash: sha256:$FRAMEWORK_HASH" "$LOCK_PATH"; then
-  printf 'A different DeltaFuse lock already exists. Review migrations and rerun with --force for an explicit upgrade.\n' >&2
+  printf 'A different DeltaFuse lock already exists. Rerun with --force for an explicit upgrade.\n' >&2
   exit 1
 fi
 
@@ -116,6 +116,11 @@ mkdir -p \
   "$TARGET_ROOT/docs/decisions" \
   "$TARGET_ROOT/docs/archive/intake" \
   "$TARGET_ROOT/docs/archive/changes"
+
+config_existed=0
+if [ -f "$TARGET_ROOT/.deltafuse/config.yaml" ]; then
+  config_existed=1
+fi
 
 copy_template process/templates/AGENTS.md AGENTS.md
 copy_template process/templates/.deltafuse/config.yaml .deltafuse/config.yaml
@@ -131,7 +136,7 @@ copy_template process/templates/docs/archive/intake/README.md docs/archive/intak
 copy_template process/templates/docs/archive/changes/README.md docs/archive/changes/README.md
 copy_template process/templates/CHANGELOG.md CHANGELOG.md
 
-if [ -f "$TARGET_ROOT/.deltafuse/config.yaml" ] && [ "$FORCE" -eq 1 ]; then
+if [ -f "$TARGET_ROOT/.deltafuse/config.yaml" ] && { [ "$config_existed" -eq 0 ] || [ "$FORCE" -eq 1 ]; }; then
   config_file="$TARGET_ROOT/.deltafuse/config.yaml"
   temporary="$(mktemp)"
   awk -v version="$FRAMEWORK_VERSION" '

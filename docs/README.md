@@ -1,42 +1,44 @@
-# Процесс DeltaFuse
+# DeltaFuse Process
 
-DeltaFuse — specification-driven workflow, преобразующий сырой запрос в проверенный код через небольшие явно ограниченные контексты.
+[**English**](README.md) | [Русский](README.ru.md)
+
+DeltaFuse is a context-sliced, specification-driven workflow that turns raw intent into verified code through small, strictly bounded contexts.
 
 ```text
 Request -> Analyze -> Delta -> Fuse -> Converge
 ```
 
-- **Change** — контейнер полного lifecycle.
-- **Delta** — типизированный набор различий, вычисленный анализом.
-- **Fuse** — применение Delta только к затронутым слоям артефактов.
-- **Convergence** — доказательство согласованности claims, specification, tasks, tests и code.
+- **Change** — full lifecycle container.
+- **Delta** — typed difference set computed during analysis.
+- **Fuse** — applying Delta only to affected artifact layers.
+- **Convergence** — proof of consistency across claims, specification, tasks, tests, and code.
 
-## Каноническая граница
+## Canonical boundary
 
-Эта директория является канонической только внутри репозитория DeltaFuse framework. Подключённый product repository не должен копировать `docs/**`.
+This directory is canonical only inside the DeltaFuse framework repository. Consuming product repositories must not copy `docs/**`.
 
-Product pin-ит framework через:
+A product pins the framework through:
 
 ```text
 .deltafuse/config.yaml
 .deltafuse/lock.yaml
 ```
 
-Installer может генерировать repository-local skills для конкретных AI tools. Это неизменяемые snapshots с framework version, source и content hash, а не второй process source. Product-specific behavior остаётся за пределами framework.
+The installer can generate repository-local skills for specific AI tools. These are immutable snapshots with framework version, source, and content hash, not a second source of process truth. Product-specific behavior remains outside the framework.
 
-## Источники истины
+## Sources of truth
 
-| Вопрос | Authoritative source в product repository |
+| Question | Authoritative source in product repository |
 |---|---|
-| Как продукт должен себя вести | `docs/spec/**` |
-| Какие вопросы и варианты рассматривались и почему | `docs/decisions/**` |
-| Что и почему меняется сейчас | `docs/changes/<change-id>/**` |
-| Какие исполнимые шаги нужны | `docs/changes/<change-id>/tasks/**` |
-| Доказано ли поведение | Tests и evidence |
-| Как поведение реализовано | Product code |
-| Как работает DeltaFuse | Pinned external framework |
+| Required product behavior | `docs/spec/**` |
+| Questions, trade-offs, and rationale | `docs/decisions/**` |
+| What is changing now and why | `docs/changes/<change-id>/**` |
+| Executable work items | `docs/changes/<change-id>/tasks/**` |
+| Proven behavior evidence | Tests and evidence artifacts |
+| Implementation details | Product code |
+| Process mechanics | Pinned external framework |
 
-Только `docs/spec/**` является implementation law. Raw intake, Change request, Decisions, tasks, chat, diffs и archive не могут переопределять принятую specification.
+Only `docs/spec/**` is implementation law. Raw intake, Change requests, Decisions, tasks, chat, diffs, and archive cannot override accepted specification.
 
 ## Lifecycle
 
@@ -50,7 +52,7 @@ Intake
   -> Verify, Converge and Archive
 ```
 
-`Red` и `Green` являются состояниями evidence внутри Target и Implement, а не шагами верхнего уровня.
+`Red` and `Green` are evidence states inside Target and Implement, not top-level steps.
 
 ## Product artifact layout
 
@@ -79,17 +81,17 @@ product/
         └── changes/
 ```
 
-В product repository нет локальных `docs/process/`, `docs/init/` и `docs/todo/`. Bootstrap — profile, управляемый `project.baseline`; tasks принадлежат owning Change.
+There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Bootstrap is a profile controlled by `project.baseline`; tasks belong to their owning Change.
 
-## Канонические документы
+## Canonical documents
 
-| Документ | Назначение |
+| Document | Purpose |
 |---|---|
-| [workflow.md](./workflow.md) | Lifecycle, gates, bugs, Bootstrap и convergence |
-| [state-machine.md](./state-machine.md) | Состояния Change, slice, task и Decision |
-| [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
-| [roles.md](./roles.md) | Границы полномочий ИИ и человека |
-| [using.md](./using.md) | Установка и product integration |
-| [context-sliced-workflow-proposal.md](./context-sliced-workflow-proposal.md) | Обоснование дизайна и migration proposal |
+| [workflow.md](./workflow.md) | Lifecycle, gates, bugs, Bootstrap, and convergence |
+| [state-machine.md](./state-machine.md) | Change, slice, task, and Decision states |
+| [context-model.md](./context-model.md) | Domain routing, slicing, and context contracts |
+| [roles.md](./roles.md) | AI and human authority boundaries |
+| [using.md](./using.md) | Installation and product integration |
+| [context-sliced-workflow-proposal.md](./context-sliced-workflow-proposal.md) | Design rationale for v2.0 architecture |
 
-Исполнимые контракты шагов находятся в `process/skills/**`, структурные контракты — в `process/schemas/**`.
+Executable step contracts live in `process/skills/**`; structural schemas live in `process/schemas/**`.
