@@ -5,7 +5,7 @@ All notable changes to the DeltaFuse framework will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-04
 
 ### Breaking
 
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Typed slice-level Delta projections, capability routing, context budgets, Decision convergence, and cross-artifact verification.
 - Version/hash-stamped generated agent adapters for Cursor, Gemini, and universal agent discovery.
 - Schemas for Change, capability, Decision, task, and evidence artifacts.
-- Product layout validators, Change templates, and a reviewed v1-to-v2 migration guide.
+- Product layout validators and Change templates.
 
 ### Changed
 

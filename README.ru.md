@@ -91,8 +91,8 @@ Product не копирует канонический `docs/**` и не сод�
 bash ./scripts/init.sh /path/to/product
 ```
 
-Installer сохраняет существующие product files. `-Force`/`--force` обновляет только requested pin, lock и generated adapters; применять его следует после чтения [инструкции миграции v1 -> v2]() и проверки версий активных Changes.
+Installer сохраняет существующие product files. `-Force`/`--force` обновляет только requested pin, lock и generated adapters; применять его следует после проверки версий активных Changes.
 
 Установленный продукт проверяется через `tests/validate-layout.ps1` или `tests/validate-layout.sh`.
 
-Подробнее: [описание процесса](docs/README.md) и [обоснование context-sliced модели](docs/context-sliced-workflow-proposal.md).
+Подробнее: [описание процесса](docs/README.ru.md) и [обоснование context-sliced модели](docs/context-sliced-workflow-proposal.md).

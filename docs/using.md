@@ -1,10 +1,12 @@
-# Подключение DeltaFuse
+# Integrating DeltaFuse
 
-DeltaFuse устанавливается как versioned external framework. Product repository хранит product state и тонкий integration layer, но не копию канонической process documentation.
+[**English**](using.md) | [Русский](using.ru.md)
+
+DeltaFuse is installed as a versioned external framework. The product repository stores product state and a thin integration layer, but never a copy of canonical process documentation.
 
 ## Install
 
-Из доверенного DeltaFuse checkout или package:
+From a trusted DeltaFuse checkout or package:
 
 ```powershell
 ./scripts/init.ps1 -TargetDir C:\path\to\product
@@ -14,7 +16,7 @@ DeltaFuse устанавливается как versioned external framework. Pr
 bash ./scripts/init.sh /path/to/product
 ```
 
-Installer создаёт без перезаписи существующих product files по умолчанию:
+The installer creates the following product structure without overwriting existing files by default:
 
 ```text
 .deltafuse/config.yaml
@@ -28,29 +30,27 @@ docs/archive/intake/
 docs/archive/changes/
 ```
 
-Также генерируются tool-specific skill snapshots в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. Каждый snapshot помечен `DO NOT EDIT` и содержит installed framework version, source и content hash.
+It also generates tool-specific skill snapshots in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. Each snapshot is marked `DO NOT EDIT` and records the installed framework version, source URI, and content hash.
 
-Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
+The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in the product repository.
 
 ## Pinning and upgrades
 
-`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings. `.deltafuse/lock.yaml` фиксирует resolved version, schema version и framework content hash.
+`.deltafuse/config.yaml` specifies the requested framework version and repository settings. `.deltafuse/lock.yaml` pins the resolved version, schema version, and framework content hash.
 
-Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
+Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config, lock, and generated adapters, while preserving product-owned specification, Changes, Decisions, `AGENTS.md`, and any existing templates. Before updating lock:
 
-1. Прочитать relevant migration guide.
-2. Проверить active Changes и записанные в них framework/schema versions.
-3. Завершить их на прежней версии либо явно мигрировать каждый Change.
-4. Перегенерировать adapters и проверить product layout.
+1. Review active Changes and their recorded framework/schema versions.
+2. Complete them on the current version or explicitly close the Change.
+3. Regenerate adapters and validate product layout.
 
-Нельзя вручную редактировать generated skills и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
+Never manually edit generated skills or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
 
 ## First operation
 
 | Product state | Operation |
 |---|---|
-| Нет accepted specification baseline | Установить `project.baseline: draft`, выполнить `/intake`, затем Bootstrap через Analyze и Specify |
-| Accepted specification существует | Установить `project.baseline: accepted`, создавать Changes через `/intake` |
-| Существует legacy DeltaFuse v1 layout | До обычной работы выполнить `migrations/v1-to-v2.md` |
+| No accepted specification baseline | Set `project.baseline: draft`, run `/intake`, then perform Bootstrap via Analyze and Specify |
+| Accepted specification exists | Set `project.baseline: accepted`, create Changes via `/intake` |
 
-Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
+The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
