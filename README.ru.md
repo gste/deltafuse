@@ -36,15 +36,15 @@ flowchart LR
     Verify --> Archive[Archive Change]
 ```
 
-| Шаг | Skill | Основной результат |
-|---|---|---|
-| Intake | `/intake` | Immutable request и корень Change |
-| Route and Analyze | `/analyze-change` | Routing, slices, Decisions, typed deltas |
-| Specify | `/specify-change` | Принятое нормативное состояние или доказанный unchanged spec |
-| Decompose | `/decompose-change` | Atomic tasks внутри Change |
-| Target | `/target-task` | Падающий executable target и Red evidence |
-| Implement | `/implement-task` | Минимальный code и Green evidence |
-| Verify | `/verify-change` | Convergence proof и архивированный Change |
+| Шаг               | Skill               | Основной результат                                           |
+|-------------------|---------------------|--------------------------------------------------------------|
+| Intake            | `/intake`           | Immutable request и корень Change                            |
+| Route and Analyze | `/analyze-change`   | Routing, slices, Decisions, typed deltas                     |
+| Specify           | `/specify-change`   | Принятое нормативное состояние или доказанный unchanged spec |
+| Decompose         | `/decompose-change` | Atomic tasks внутри Change                                   |
+| Target            | `/target-task`      | Падающий executable target и Red evidence                    |
+| Implement         | `/implement-task`   | Минимальный code и Green evidence                            |
+| Verify            | `/verify-change`    | Convergence proof и архивированный Change                    |
 
 Route and Analyze повторяется, пока все blocking Decisions не получат terminal status, а global reconciliation не перестанет находить новые существенные вопросы.
 
@@ -54,13 +54,13 @@ Route and Analyze повторяется, пока все blocking Decisions н�
 
 ```text
 delta-fuse/
-├── docs/process/     # канонический lifecycle и rationale
-├── skills/           # контракты семи операций
-├── schemas/          # Change, capability, Decision, task, evidence
-├── templates/        # product artifacts и шаблоны Change
-├── validators/       # проверки установленного продукта
-├── migrations/       # управляемые upgrade guides
-└── scripts/          # installers
+├── docs/             # канонический lifecycle, роли, контекстная модель и rationale
+├── process/          # исполняемые ресурсы фреймворка
+│   ├── schemas/      # Change, capability, Decision, task, evidence
+│   ├── skills/       # контракты семи операций
+│   └── templates/    # product artifacts и шаблоны Change
+├── scripts/          # installers
+└── tests/            # валидаторы разметки и smoke-тесты
 ```
 
 Подключённый product repository хранит только состояние продукта и pinned integration:
@@ -79,7 +79,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-Product не копирует канонический `docs/process/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills являются generated snapshots с version/hash metadata, а не редактируемым process source.
+Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills являются generated snapshots с version/hash metadata, а не редактируемым process source.
 
 ## Установка
 
@@ -91,8 +91,8 @@ Product не копирует канонический `docs/process/**` и не
 bash ./scripts/init.sh /path/to/product
 ```
 
-Installer сохраняет существующие product files. `-Force`/`--force` обновляет только requested pin, lock и generated adapters; применять его следует после чтения [инструкции миграции v1 -> v2](migrations/v1-to-v2.md) и проверки версий активных Changes.
+Installer сохраняет существующие product files. `-Force`/`--force` обновляет только requested pin, lock и generated adapters; применять его следует после чтения [инструкции миграции v1 -> v2]() и проверки версий активных Changes.
 
-Установленный продукт проверяется через `validators/validate-layout.ps1` или `validators/validate-layout.sh`.
+Установленный продукт проверяется через `tests/validate-layout.ps1` или `tests/validate-layout.sh`.
 
-Подробнее: [описание процесса](docs/process/README.md) и [обоснование context-sliced модели](docs/process/context-sliced-workflow-proposal.md).
+Подробнее: [описание процесса](docs/README.md) и [обоснование context-sliced модели](docs/context-sliced-workflow-proposal.md).

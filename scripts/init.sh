@@ -28,7 +28,7 @@ framework_hash() {
   local manifest result
   manifest="$(mktemp)"
   {
-    for root in docs/process skills schemas templates validators migrations scripts; do
+    for root in docs process scripts tests; do
       if [ -d "$SCRIPT_DIR/$root" ]; then
         find "$SCRIPT_DIR/$root" -type f -print
       fi
@@ -61,7 +61,7 @@ install_generated_skills() {
   local adapter_root="$TARGET_ROOT/$adapter_relative"
   mkdir -p "$adapter_root"
 
-  for source in "$SCRIPT_DIR"/skills/*; do
+  for source in "$SCRIPT_DIR"/process/skills/*; do
     [ -d "$source" ] || continue
     skill_name="$(basename "$source")"
     destination="$adapter_root/$skill_name"
@@ -117,19 +117,19 @@ mkdir -p \
   "$TARGET_ROOT/docs/archive/intake" \
   "$TARGET_ROOT/docs/archive/changes"
 
-copy_template templates/AGENTS.md AGENTS.md
-copy_template templates/.deltafuse/config.yaml .deltafuse/config.yaml
-copy_template templates/docs/intake/README.md docs/intake/README.md
-copy_template templates/docs/changes/README.md docs/changes/README.md
-copy_template templates/docs/spec/README.md docs/spec/README.md
-copy_template templates/docs/spec/context.md docs/spec/context.md
-copy_template templates/docs/spec/_capabilities.yaml docs/spec/_capabilities.yaml
-copy_template templates/docs/decisions/README.md docs/decisions/README.md
-copy_template templates/docs/decisions/DEC-0000-template.md docs/decisions/DEC-0000-template.md
-copy_template templates/docs/archive/README.md docs/archive/README.md
-copy_template templates/docs/archive/intake/README.md docs/archive/intake/README.md
-copy_template templates/docs/archive/changes/README.md docs/archive/changes/README.md
-copy_template templates/CHANGELOG.md CHANGELOG.md
+copy_template process/templates/AGENTS.md AGENTS.md
+copy_template process/templates/.deltafuse/config.yaml .deltafuse/config.yaml
+copy_template process/templates/docs/intake/README.md docs/intake/README.md
+copy_template process/templates/docs/changes/README.md docs/changes/README.md
+copy_template process/templates/docs/spec/README.md docs/spec/README.md
+copy_template process/templates/docs/spec/context.md docs/spec/context.md
+copy_template process/templates/docs/spec/_capabilities.yaml docs/spec/_capabilities.yaml
+copy_template process/templates/docs/decisions/README.md docs/decisions/README.md
+copy_template process/templates/docs/decisions/DEC-0000-template.md docs/decisions/DEC-0000-template.md
+copy_template process/templates/docs/archive/README.md docs/archive/README.md
+copy_template process/templates/docs/archive/intake/README.md docs/archive/intake/README.md
+copy_template process/templates/docs/archive/changes/README.md docs/archive/changes/README.md
+copy_template process/templates/CHANGELOG.md CHANGELOG.md
 
 if [ -f "$TARGET_ROOT/.deltafuse/config.yaml" ] && [ "$FORCE" -eq 1 ]; then
   config_file="$TARGET_ROOT/.deltafuse/config.yaml"
