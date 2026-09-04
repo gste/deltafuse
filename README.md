@@ -95,4 +95,4 @@ The installer preserves existing product files. `-Force`/`--force` updates only 
 
 Validate an installed product with `tests/validate-layout.ps1` or `tests/validate-layout.sh`.
 
-See [canonical process documentation](docs/README.md) and the [context-sliced design rationale](docs/context-sliced-workflow-proposal.md).
+See [canonical process documentation](docs/README.md).

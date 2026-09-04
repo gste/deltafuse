@@ -92,7 +92,6 @@ product/
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
 | [roles.md](./roles.md) | Границы полномочий ИИ и человека |
 | [using.ru.md](./using.ru.md) | Установка и product integration |
-| [context-sliced-workflow-proposal.md](./context-sliced-workflow-proposal.md) | Обоснование дизайна архитектуры v2.0 |
 
 Исполнимые контракты шагов находятся в `process/skills/**`, структурные контракты — в `process/schemas/**`.
 

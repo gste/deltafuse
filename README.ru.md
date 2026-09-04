@@ -95,4 +95,4 @@ Installer сохраняет существующие product files. `-Force`/`-
 
 Установленный продукт проверяется через `tests/validate-layout.ps1` или `tests/validate-layout.sh`.
 
-Подробнее: [описание процесса](docs/README.ru.md) и [обоснование context-sliced модели](docs/context-sliced-workflow-proposal.md).
+Подробнее: [описание процесса](docs/README.ru.md).
