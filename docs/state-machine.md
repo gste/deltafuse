@@ -20,7 +20,7 @@ stateDiagram-v2
     
     analyzed --> specification_proposed: specify-change
     specification_proposed --> specified: human gate passed
-    analyzed --> targeting: implementation bug (spec unchanged)
+    analyzed --> specified: implementation bug (spec unchanged)
     
     specified --> decomposed: decompose-change
     decomposed --> targeting: target-task
@@ -33,16 +33,22 @@ stateDiagram-v2
     verifying --> converged: all claims verified & traced
     converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
+    verifying --> analyzing: gap / drift detected
+    
     normalized --> rejected: invalid / out of scope
     analyzing --> rejected: unfeasible
     normalized --> duplicate: duplicate of existing change
     analyzing --> duplicate: duplicate of existing change
     analyzing --> superseded: superseded by newer change
+    analyzing --> not_reproduced: defect unreproducible
+    targeting --> not_reproduced: unable to reproduce red failure
+    verifying --> not_reproduced: no-op / unreproduced closure
     
     archived --> [*]
     rejected --> [*]
     duplicate --> [*]
     superseded --> [*]
+    not_reproduced --> [*]
 ```
 
 ### Complete Change Status Table
@@ -50,22 +56,22 @@ stateDiagram-v2
 | Status | Description | Allowed Next Statuses | Transition Gate / Precondition |
 |---|---|---|---|
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
-| `analyzing` | Routing and slice analysis in progress. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded` | Initial capability routing mapped. |
+| `analyzing` | Routing and slice analysis in progress. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
-| `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `targeting` (bug) | Zero unaccepted blocking decisions. |
+| `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
-| `specified` | Normative specification updated in repository. | `decomposed` | Specification changes merged into product spec. |
+| `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Specification changes merged into product spec (or proof recorded in spec-delta.md). |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
-| `targeting` | Preparing failing test targets for tasks. | `target-confirmed` | Test target executed; fails with Red evidence. |
+| `targeting` | Preparing failing test targets for tasks. | `target-confirmed`, `not-reproduced` | Test target executed; fails with Red evidence (or proves unreproducible). |
 | `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
 | `implementing` | Authoring minimal code to turn tests green. | `implemented` | Tests pass; Green and Regression evidence recorded. |
 | `implemented` | All tasks implemented and verified locally. | `verifying` | All task targets green; no regression failures. |
-| `verifying` | End-to-end traceability and convergence check. | `converged` | All claims mapped to green tests and spec. |
+| `verifying` | End-to-end traceability and convergence check. | `converged`, `analyzing`, `not-reproduced` | All claims mapped to green tests and spec (or no-op closure). |
 | `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded in `verification/run.yaml`. |
 | `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |
 | `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented in `analysis.md`. |
 | `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
-| `not-reproduced` | Defect not reproduced during analysis/targeting. | *Terminal* | Evidence of non-reproducibility documented. |
+| `not-reproduced` | Defect not reproduced during analysis, targeting, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
 | `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
 
 ---
