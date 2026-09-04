@@ -1,16 +1,29 @@
-﻿---
+---
 name: implement-task
-description: Implements any atomic task from docs/todo/<story>/NN-<slug>.md strictly against docs/spec/. Follows TDD (writes failing test first, then minimal code to pass), commits steps, cleans up the task file, and updates CHANGELOG.
-disable-model-invocation: true
+description: Implement one DeltaFuse task against accepted specification and a frozen failing target, then record Green evidence. Use only after target-task has confirmed Red.
 ---
 
-# Implement task
+# Implement Task
 
-This skill carries no rules of its own. The repository files are the source of truth.
+Make one frozen target Green with the smallest compliant production change.
 
-1. Read `docs/process/agent-prompt.md` and follow its core prompt (role: Implementer).
-2. Read `docs/process/prompts/04-implement-task.md` and follow it as the procedure for this job.
-3. Read the task file in `docs/todo/<story>/NN-<slug>.md` and linked spec sections.
-4. If Spec delta is present, update spec anchors and commit spec first.
-5. Write failing test (TDD Red), implement minimal code (TDD Green), commit changes.
-6. Delete the task file, update `docs/todo/README.md`, and append an Unreleased item in `CHANGELOG.md`.
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one task, exact spec references, frozen target test, Red evidence, allowed production files/symbols, and only required local dependencies.
+
+Do not change specification, Decisions, task scope, target oracle/assertions, or unrelated code.
+
+## Procedure
+
+1. Verify the task is `target-confirmed` and Red evidence matches the frozen target.
+2. Implement the minimum production change inside allowed scope.
+3. Run the targeted test until Green.
+4. Run the declared scoped regression suite for unchanged behavior.
+5. Record sanitized commands, exit status, results, changed paths, and `spec unchanged` under `evidence/green/`.
+6. Set the task to `implemented`; retain the task file and its history inside the Change.
+
+If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.
+
+Recommend the next ready `/target-task`, or `/verify-change <change-id>` when all tasks are terminal.

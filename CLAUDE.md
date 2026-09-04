@@ -1,10 +1,9 @@
 # CLAUDE.md
 
-This repository uses **DeltaFuse** specification-driven development framework.
-Please read and strictly follow the standing orders in `AGENTS.md` and `docs/process/agent-prompt.md`.
+This is the canonical DeltaFuse framework repository. Read and follow `AGENTS.md`.
 
-## Core Guidelines
-- Specification (`docs/spec/`) is the sole implementation law.
-- Follow the Law chain: `Init / ADR -> docs/spec/ -> docs/todo/ -> Implementation`.
-- Always respect Human Gates (`docs/process/roles.md`).
-- Job prompts and workflows are documented in `docs/process/workflow.md` and `docs/process/prompts/`.
+- Canonical workflow documentation is under `docs/process/**`.
+- Executable lifecycle contracts are under `skills/**`.
+- Product scaffolding is under `templates/**`; it must not vendor canonical process files.
+- Use the lifecycle `Intake -> Analyze -> Specify -> Decompose -> Target -> Implement -> Verify`.
+- Never run `git push`.

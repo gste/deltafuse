@@ -1,29 +1,56 @@
-﻿# Using DeltaFuse in your repository
+# Подключение DeltaFuse
 
-Как подключить процесс DeltaFuse к новому или существующему проекту.
+DeltaFuse устанавливается как versioned external framework. Product repository хранит product state и тонкий integration layer, но не копию канонической process documentation.
 
-## 1. Копирование файлов процесса
+## Install
 
-Скопируйте в корень репозитория:
-- `AGENTS.md`, `CLAUDE.md`
-- `.cursorrules`
-- `docs/process/`
-- `skills/` (в `.cursor/skills/`, `.gemini/skills/` и `.agents/skills/`)
-- шаблоны из `templates/` (в `docs/todo/README.md`, `docs/decisions/` и корень `CHANGELOG.md`)
+Из доверенного DeltaFuse checkout или package:
 
-Не копировать из чужого продукта: `docs/spec/`, `docs/inbox/`, `docs/decisions/`, `docs/todo/` с чужими слайсами, исходный код.
+```powershell
+./scripts/init.ps1 -TargetDir C:\path\to\product
+```
 
-## 2. Начальная структура
+```bash
+bash ./scripts/init.sh /path/to/product
+```
 
-1. В `docs/process/STATUS.md` выставить `stage: bootstrap` (или `stage: spec-first`, если спека уже принята).
-2. Создать пустые `docs/inbox/`, `docs/decisions/`, `docs/spec/`, `docs/todo/`, `docs/archive/inbox/`. В `docs/todo/README.md` — **Open** и пустая таблица **Closed**.
+Installer создаёт без перезаписи существующих product files по умолчанию:
 
-## 3. Выбор первой работы
+```text
+.deltafuse/config.yaml
+.deltafuse/lock.yaml
+AGENTS.md
+docs/intake/
+docs/changes/
+docs/spec/
+docs/decisions/
+docs/archive/intake/
+docs/archive/changes/
+```
 
-| Ситуация | Запускаемый скилл |
+Также генерируются tool-specific skill snapshots в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. Каждый snapshot помечен `DO NOT EDIT` и содержит installed framework version, source и content hash.
+
+Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
+
+## Pinning and upgrades
+
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings. `.deltafuse/lock.yaml` фиксирует resolved version, schema version и framework content hash.
+
+Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
+
+1. Прочитать relevant migration guide.
+2. Проверить active Changes и записанные в них framework/schema versions.
+3. Завершить их на прежней версии либо явно мигрировать каждый Change.
+4. Перегенерировать adapters и проверить product layout.
+
+Нельзя вручную редактировать generated skills и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
+
+## First operation
+
+| Product state | Operation |
 |---|---|
-| Продукт ещё не описан | `/init-requirements` или скиньте файл ТЗ в `docs/inbox/` |
-| Есть сырые требования в `docs/inbox/`, нет `docs/spec/` | `/init-to-spec` |
-| `docs/spec/` собран, нужно проверить перед приёмкой | `/audit-spec` |
-| Спека принята человеком (`stage: spec-first`) | `/spec-to-story` |
-| Прилетел баг, замечание с ревью или лог ошибки | `/report-bug` (ввод в чат или файл в `docs/inbox/`) |
+| Нет accepted specification baseline | Установить `project.baseline: draft`, выполнить `/intake`, затем Bootstrap через Analyze и Specify |
+| Accepted specification существует | Установить `project.baseline: accepted`, создавать Changes через `/intake` |
+| Существует legacy DeltaFuse v1 layout | До обычной работы выполнить `migrations/v1-to-v2.md` |
+
+Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.

@@ -1,30 +1,15 @@
-## Inbox
-1. [x] переименовать понятие EPIC в STORY
-2. [x] после генерации постановки из сырых данных нужен дополнительный шаг валидации спеки и генерации ADR, чтобы было удобно итеративно перезапускать при решении старых ADR. этот же шаг должен проверять уже принятые ADR, что они "адекватные" и полные.
-3. [x] запретить под страхом смерти делать git push.
-4. [x] Протокол и команда для роли Planner (/plan-spec-patch)
-~~~
- В AGENTS.md нет протокола/команды для роли Planner
-В текущем файле есть роли и команды для реализации (/implement-task, /fix-bug), но отсутствует протокол автоматического планирования.
-Чтобы агент мог по коммиту/диффу автоматически нарезать задачи, в процесс нужно добавить протокол Planner Agent (например, команду /plan-spec-patch или триггер по diff спеки):
-1. Алгоритм анализа Diff:
-◦ Выполнить git diff HEAD~1 -- docs/spec/ (или diff относительно базовой ветки).
-◦ Найти все измененные секции/анкоры (Spec delta).
-2. Шаблон атомарной задачи (task-NN-<slug>.md):
-◦ Зафиксировать структуру файла задачи:
-```
-# Task NN: <Краткое название>
+# Backlog
 
-- **kind**: task
-- **branch**: feature/<slug>
-- **Spec delta**: docs/spec/01-data-model.md#ext_ip_offlineedofhd_semaphore_status
+No active framework items are recorded here.
 
-## Definition of Done
-- [ ] Liquibase migration: снять ограничение уникальности / обновить PK
-- [ ] JPA Entity & Repository: обновить @Id и типы
-- [ ] Tests: интеграционный тест схемы БД и маппинга
-```
-3. Авто-регистрация в inbox:
-◦ Вычислить NN = 1 + max(Closed ∪ Open) из docs/todo/README.md.
-◦ Добавить строку в таблицу Open в docs/todo/README.md.
-~~~
+## Completed v2 redesign
+
+- [x] Separate product domains from finite artifact layers and route through a repository capability catalog.
+- [x] Make Change the lifecycle container and typed Delta the output of analysis.
+- [x] Split the workflow into Intake, Analyze, Specify, Decompose, Target, Implement, and Verify.
+- [x] Make Route and Analyze iterative until Decision convergence.
+- [x] Support implementation bugs with unchanged specification and Red-first evidence.
+- [x] Keep product, architecture, integration, policy, and operational questions in `decisions/`.
+- [x] Move tasks into their owning Change package and archive task history intact.
+- [x] Keep canonical process files in the external, pinned DeltaFuse framework.
+- [x] Add config/lock pinning, generated adapters, schemas, validators, and v1-to-v2 migration guidance.

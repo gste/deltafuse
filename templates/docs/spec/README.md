@@ -1,20 +1,21 @@
-# Specification (SDD Pack)
+# Specification
 
-Sole implementation law for the project. Derived from Init Requirements and accepted ADRs.
+This directory is the sole implementation law for product behavior.
 
-## Law reminder
-Code follows spec. If code and spec disagree, spec wins.
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
 
-## Table of Contents
-| Document | Scope / Responsibility |
-|----------|------------------------|
-| [`00-context.md`](./00-context.md) | System overview, actors, boundaries, and high-level architecture |
+## Entry points
 
-## Review Tour
-1. Read `00-context.md` for domain boundaries and scope.
-2. Review specific module specs for interface contracts and invariants.
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
 
-## Human-Gated Areas
-- Security and authentication boundaries
-- Public API contract modifications
-- Data persistence schema breaking changes
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.

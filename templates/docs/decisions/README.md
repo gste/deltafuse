@@ -1,18 +1,12 @@
-# Architecture Decision Records (ADR)
+# Decisions
 
-Index of architecture decisions.
+This directory contains the lifecycle of material product and technical choices, including unresolved questions.
 
-| Number | Title | Accepted | Date |
-|--------|-------|:--------:|------|
-| [0000](./0000-template.md) | Decision Template | `false` | YYYY-MM-DD |
+Kinds: `product`, `architecture`, `integration`, `policy`, `operational`.
 
-## Rules & Lifecycle
+Statuses: `proposed`, `accepted`, `rejected`, `superseded`.
 
-| State | Who sets | Meaning & Next Step |
-|---|:---:|---|
-| `accepted: false` | AI Agent | Open draft with multiple options. Awaiting human decision. |
-| `accepted: true` | **Human Only** | Decision made (Option 1, Option 2, or custom Option 3 specified in Decision Outcome). Trigger for `/audit-spec` to mirror into `docs/spec/`. |
+| Decision | Kind | Status | Owner | Change |
+|---|---|---|---|---|
 
-## Key Invariants
-1. **Human Gate:** Only a human may switch `accepted: false` to `accepted: true` (verified by `git log`).
-2. **Mirroring to Law:** An accepted ADR (`accepted: true`) must be mirrored into `docs/spec/` as binding imperative text (via `/audit-spec`).
+Only a human Decision owner changes a proposed record to a terminal status. An accepted Decision is rationale, not implementation law. If it affects observable behavior, a contract, policy, or required invariant, `/specify-change` must mirror that effect into `docs/spec/**`.

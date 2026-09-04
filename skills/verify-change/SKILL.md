@@ -1,0 +1,26 @@
+---
+name: verify-change
+description: Verify traceability and cross-artifact convergence for a DeltaFuse Change, then archive its complete package. Use after all tasks are implemented or for an explicit no-op/not-reproduced closure.
+---
+
+# Verify Change
+
+Prove that the Delta was fully fused before removing the Change from active context.
+
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read Change/slice summaries, coverage, terminal task states, exact spec references, test evidence, code/spec diffs, and Decision statuses. Deepen into source artifacts only for a detected gap.
+
+## Procedure
+
+1. Verify `raw source -> CR claim -> analysis -> slice Delta -> requirement -> task -> test -> result` coverage.
+2. Check every declared delta projection and unchanged invariant.
+3. Confirm blocking Decisions are terminal and accepted normative consequences exist in spec.
+4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.
+5. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`.
+6. For a gap, return ownership to the corresponding upstream skill; do not repair it silently.
+7. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
+
+Archive is provenance, not default implementation context. Do not delete completed task history.

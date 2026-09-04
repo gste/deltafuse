@@ -1,4 +1,3 @@
 # Archive
 
-Historical artifacts, superseded specifications, and processed Init Requirements.
-Documents here are historical and not binding for code implementation.
+Historical intake and completed Change packages live here. Archive preserves provenance but is excluded from default agent context and is never implementation law.
