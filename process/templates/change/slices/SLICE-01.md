@@ -1,10 +1,19 @@
-# SLICE-01: Outcome
+---
+id: SLICE-01
+change: CHG-000-example
+title: Outcome
+status: draft
+primary_capability: unresolved
+related_capabilities: []
+claims:
+  - CR-001
+depends_on: []
+context_budget:
+  max_tokens: 16000
+  max_files: 24
+---
 
-- Primary capability:
-- Related capabilities:
-- Claims:
-- Depends on:
-- Context budget:
+# SLICE-01: Outcome
 
 ## Outcome
 

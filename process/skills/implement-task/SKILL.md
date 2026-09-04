@@ -21,7 +21,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 2. Implement the minimum production change inside allowed scope.
 3. Run the targeted test until Green.
 4. Run the declared scoped regression suite for unchanged behavior.
-5. Record sanitized commands, exit status, results, changed paths, and `spec unchanged` under `evidence/green/`.
+5. Record sanitized commands, exit status, results, changed paths, and `spec unchanged` under `evidence/green/<task-id>.yaml` (or dedicated regression evidence under `evidence/regression/<task-id>.yaml`).
 6. Set the task to `implemented`; retain the task file and its history inside the Change.
 
 If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.

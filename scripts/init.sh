@@ -166,8 +166,29 @@ framework:
   content_hash: sha256:$FRAMEWORK_HASH
 EOF
 
-install_generated_skills .agents/skills "$FRAMEWORK_HASH"
-install_generated_skills .cursor/skills "$FRAMEWORK_HASH"
-install_generated_skills .gemini/skills "$FRAMEWORK_HASH"
+adapter_roots=()
+if [ -f "$config_file" ]; then
+  while IFS= read -r root; do
+    [ -n "$root" ] && adapter_roots+=("$root")
+  done < <(awk '
+    /^adapters:[[:space:]]*$/ { in_adapters=1; next }
+    in_adapters && /^[[:space:]]+roots:[[:space:]]*$/ { in_roots=1; next }
+    in_roots && /^[[:space:]]+-[[:space:]]+/ {
+      sub(/^[[:space:]]+-[[:space:]]+/, "")
+      sub(/[[:space:]]+$/, "")
+      print
+      next
+    }
+    in_roots && /^[^[:space:]]/ { in_adapters=0; in_roots=0 }
+  ' "$config_file")
+fi
+
+if [ ${#adapter_roots[@]} -eq 0 ]; then
+  adapter_roots=(.agents/skills .cursor/skills .gemini/skills)
+fi
+
+for root in "${adapter_roots[@]}"; do
+  install_generated_skills "$root" "$FRAMEWORK_HASH"
+done
 
 printf 'DeltaFuse installed. Canonical process remains external; product state is under docs/.\n'
