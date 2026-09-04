@@ -6,19 +6,19 @@ This repository is the canonical source of the DeltaFuse framework. It is not a 
 
 Keep the framework internally consistent across:
 
-- `docs/process/**` — lifecycle, roles, context slicing, and state machine;
-- `skills/**` — executable agent contracts;
-- `schemas/**` — artifact schemas;
-- `templates/**` — product-owned files created by the installer;
-- `validators/**` — product layout and compatibility checks;
-- `migrations/**` — controlled upgrade guidance.
+- `docs/**` — canonical workflow, state machine, roles, context model, and integration guidance;
+- `process/skills/**` — executable agent contracts;
+- `process/schemas/**` — artifact schemas;
+- `process/templates/**` — product-owned files created by the installer;
+- `tests/**` — product layout validators and smoke tests;
+- `scripts/**` — installation and upgrade tooling.
 
 Product behavior belongs only in a consuming repository's `docs/spec/**`. Never add product-specific requirements to this framework.
 
 ## Framework/product boundary
 
-- Canonical process files stay in this repository.
-- The installer must not copy `docs/process/**` into a product repository.
+- Canonical process files stay in this repository under `docs/**`.
+- The installer must not copy canonical docs into a product repository.
 - A product repository pins DeltaFuse in `.deltafuse/config.yaml` and `.deltafuse/lock.yaml`.
 - Tool-specific local skills are generated snapshots. Mark them `DO NOT EDIT`, stamp framework version/source/hash, and validate them against the lock file.
 - Product tasks live under `docs/changes/<change-id>/tasks/**`; do not recreate `docs/todo/**`.
@@ -34,8 +34,8 @@ Use these names consistently:
 
 ## Change rules
 
-- Treat [context-sliced-workflow-proposal.md](docs/process/context-sliced-workflow-proposal.md) as the accepted redesign rationale until it is replaced by a versioned specification.
-- Update canonical docs, skills, schemas, templates, installers, validators, and migration notes together when a contract changes.
+- Treat [context-sliced-workflow-proposal.md](docs/context-sliced-workflow-proposal.md) as the accepted redesign rationale until it is replaced by a versioned specification.
+- Update canonical docs, skills, schemas, templates, installers, validators, and tests together when a contract changes.
 - Keep skills concise and self-contained enough to work as generated snapshots.
 - Preserve user intent and do not invent product requirements.
 - Never run `git push`, destructive git commands, or merge into the default branch.
@@ -45,8 +45,8 @@ Use these names consistently:
 
 For a framework change:
 
-1. Run the smoke tests: 	ests/smoke-test.ps1 and 	ests/smoke-test.sh.
-2. Validate layout on target repositories using 	ests/validate-layout.ps1 / 	ests/validate-layout.sh.
+1. Run the smoke tests: `tests/smoke-test.ps1` and `tests/smoke-test.sh`.
+2. Validate layout on target repositories using `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
 3. Validate the generated product layout.
 4. Search for legacy runtime paths and commands outside migration/history documents.
 5. Report any platform check that could not be run.

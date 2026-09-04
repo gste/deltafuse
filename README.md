@@ -54,13 +54,13 @@ This repository is the canonical framework package:
 
 ```text
 delta-fuse/
-├── docs/process/     # canonical lifecycle and rationale
-├── skills/           # seven executable operation contracts
-├── schemas/          # Change, capability, Decision, task, evidence
-├── templates/        # product artifacts and Change templates
+├── docs/             # canonical lifecycle, roles, context model, and rationale
+├── process/          # executable framework assets
+│   ├── schemas/      # Change, capability, Decision, task, evidence
+│   ├── skills/       # seven operation contracts
+│   └── templates/    # product artifacts and Change templates
+├── scripts/          # installers
 └── tests/            # product layout validators and smoke tests
-├── migrations/       # controlled upgrade guides
-└── scripts/          # installers
 ```
 
 A consuming product repository contains only product state and a pinned integration:
@@ -79,7 +79,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-The product does not copy canonical `docs/process/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are generated, version/hash-stamped snapshots and are not editable process sources.
+The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are generated, version/hash-stamped snapshots and are not editable process sources.
 
 ## Install
 
@@ -91,8 +91,8 @@ The product does not copy canonical `docs/process/**` and has no runtime `docs/i
 bash ./scripts/init.sh /path/to/product
 ```
 
-The installer preserves existing product files. `-Force`/`--force` updates only the requested pin, lock, and generated adapters; use it after reviewing [the v1 to v2 migration guide](migrations/v1-to-v2.md) and active Change versions.
+The installer preserves existing product files. `-Force`/`--force` updates only the requested pin, lock, and generated adapters; use it after reviewing active Change versions.
 
 Validate an installed product with `tests/validate-layout.ps1` or `tests/validate-layout.sh`.
 
-See [process documentation](docs/process/README.md) and the [context-sliced design rationale](docs/process/context-sliced-workflow-proposal.md).
+See [canonical process documentation](docs/README.md) and the [context-sliced design rationale](docs/context-sliced-workflow-proposal.md).
