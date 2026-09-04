@@ -58,7 +58,7 @@ delta-fuse/
 ├── skills/           # seven executable operation contracts
 ├── schemas/          # Change, capability, Decision, task, evidence
 ├── templates/        # product artifacts and Change templates
-├── validators/       # installed product checks
+└── tests/            # product layout validators and smoke tests
 ├── migrations/       # controlled upgrade guides
 └── scripts/          # installers
 ```
@@ -93,6 +93,6 @@ bash ./scripts/init.sh /path/to/product
 
 The installer preserves existing product files. `-Force`/`--force` updates only the requested pin, lock, and generated adapters; use it after reviewing [the v1 to v2 migration guide](migrations/v1-to-v2.md) and active Change versions.
 
-Validate an installed product with `validators/validate-layout.ps1` or `validators/validate-layout.sh`.
+Validate an installed product with `tests/validate-layout.ps1` or `tests/validate-layout.sh`.
 
 See [process documentation](docs/process/README.md) and the [context-sliced design rationale](docs/process/context-sliced-workflow-proposal.md).

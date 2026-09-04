@@ -12,7 +12,7 @@ $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION
 $SchemaVersion = 2
 
 function Get-FrameworkContentHash {
-    $roots = @("docs", "process", "validators", "scripts")
+    $roots = @("docs", "process", "scripts", "tests")
     $records = foreach ($root in $roots) {
         $absolute = Join-Path $FrameworkRoot $root
         if (Test-Path -LiteralPath $absolute) {
