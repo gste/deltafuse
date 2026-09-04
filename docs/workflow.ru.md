@@ -82,17 +82,21 @@ Intake
    - типизированные проекции дельты в `change.yaml`.
 
 ### Типизированная дельта (Typed Delta)
-Для каждого слайса явно декларируются проекции по всем слоям артефактов:
-```yaml
-deltas:
-  specification: none | add | modify | remove | mixed
-  catalog: none | add | modify | remove
-  decisions: none | propose | supersede
-  tasks: none | derive | modify | remove
-  tests: none | add | modify | remove
-  implementation: none | add | modify | remove | mixed
-  evidence: none | record
-```
+Для каждого слайса вычисляется явная типизированная дельта (`DELTA-NN`) по 7 нормативным проекциям из `change.schema.yaml`:
+- `specification`: `none | add | modify | remove | mixed` (со ссылками `refs` на модули/требования спеки);
+- `catalog`: `none | add | modify | remove` (со ссылками `refs` на идентификаторы capabilities в `_capabilities.yaml`);
+- `decisions`: `none | propose | supersede` (со ссылками `refs` на `DEC-*`);
+- `tasks`: `none | derive | modify | remove` (со ссылками `refs` на атомарные задачи `TASK-*`);
+- `tests`: `none | add | modify | remove` (со ссылками `refs` на тест-файлы);
+- `implementation`: `none | add | modify | remove | mixed` (со ссылками `refs` на корни исходного кода);
+- `evidence`: `none | record` (со ссылками `refs` на файлы доказательств).
+Каждой дельте присваивается `kind`: `requirements | conformance | structural | operational | mixed`.
+
+### Инварианты типизированной дельты (Typed Delta Invariants)
+- Если `specification.operation` равен `none`, Change не меняет нормативную спецификацию; он классифицируется как **дефект реализации (Implementation Bug)** или **рефакторинг**, а этап **Specify** фиксирует доказательство того, что существующая спека уже предписывает требуемое поведение.
+- Если `specification.operation` равен `add`, `modify`, `remove` или `mixed`, Change обязан пройти этап **Specify** с обновлением требований в `docs/spec/**`.
+- Если `catalog.operation` равен `add`, `modify` или `remove`, требуется обновление каталога `_capabilities.yaml` через человеческий рубеж (Human Gate: Capability Boundary).
+- Если `decisions.operation` равен `propose`, формируются черновики решений в `docs/decisions/DEC-*` в статусе `proposed`, а Change блокируется (`blocked-on-decision`) до решения человека.
 
 ### Аналитические исходы (Outcomes)
 | Исход | Значение | Следующее действие |
@@ -154,15 +158,49 @@ Route and Analyze — итеративный шаг. Если возникают
 - **Writes**: задачи в директории `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md`.
 
 ### Контракт атомарной задачи
-Каждая задача `TASK-NNN` обязана содержать:
-- **Outcome**: один конкретный проверяемый результат, укладывающийся в одну рабочую сессию;
-- **Spec refs**: точные ссылки на `REQ-*` и `SC-*`;
-- **Test Oracle**: однозначные условия проверки (входы, ожидаемые выходы, проверяемые инварианты);
-- **Unchanged Behavior**: список инвариантов и функциональности, которые запрещено ломать;
-- **Scope**: разрешённые и запрещённые пути к файлам и пакетам;
-- **Verification Commands**: точные консольные команды для прогона тестов и проверок.
+Каждая задача оформляется в файле `tasks/TASK-NNN-<slug>.md` с YAML frontmatter, соответствующим `task.schema.yaml`:
+```yaml
+---
+id: TASK-001
+change: CHG-001-user-auth
+slice: SLICE-01
+kind: feature
+status: pending
+depends_on: []
+requirement_delta: added
+spec_refs:
+  - docs/spec/identity/authentication.md#REQ-AUTH-001
+design_ref: null
+allowed_paths:
+  - src/identity/auth/**
+  - tests/identity/auth/**
+forbidden_paths:
+  - src/identity/session/**
+---
+```
 
-Задача не должна дублировать полный текст спецификации или маскировать нерешённые архитектурные выборы.
+Тело Markdown определяет операционный контракт:
+```markdown
+# Task outcome
+
+## Outcome
+Проверка учётных данных и выдача первичного токена доступа.
+
+## Test oracle
+- GIVEN корректные учётные данные пользователя
+- WHEN запрошена аутентификация
+- THEN возвращается HTTP 200 с токеном доступа
+- GIVEN неверный пароль
+- WHEN запрошена аутентификация
+- THEN возвращается ошибка HTTP 401 Unauthorized
+
+## Unchanged behavior
+- Действующие механизмы отзыва сессий и обновления токенов остаются неизменными.
+
+## Verification
+- Targeted command: `pytest tests/identity/auth/test_auth.py`
+- Regression command: `pytest tests/identity/`
+```
 
 ### Gate
 Каждое требование слайса покрыто задачами; граф зависимостей между задачами ацикличен и разрешим; скоуп строго ограничен объявленной дельтой.
@@ -207,7 +245,7 @@ Route and Analyze — итеративный шаг. Если возникают
 1. Разработчик/агент не имеет права ослаблять тестовые ассерты таргета или менять спецификацию.
 2. Вносится минимальный код, переводящий тест в зелёное состояние (**Green**).
 3. Запускается таргетный тест, затем запускается scoped regression suite для проверки неизменности остального поведения (`Unchanged Behavior`).
-4. Команды запуска, санитизированные логи, статус прохождения и список изменённых файлов фиксируются в `evidence/green/<task-id>.yaml`.
+4. Команды запуска, санитизированные логи, результат (`result: passed`, `exit_code: 0`) и список изменённых файлов фиксируются в `evidence/green/<task-id>.yaml` и `evidence/regression/<task-id>.yaml`.
 
 ### Gate
 Таргетный тест стал Green без изменения своего оракула; регрессионные тесты прошли успешно; изменения укладываются в объявленный скоуп; Green evidence зафиксирован.
