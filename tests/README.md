@@ -1,29 +1,54 @@
 # Tests and Layout Validators
 
-This directory contains test suites and layout validators for the DeltaFuse framework.
+This directory contains the automated test suites, layout validators, and LLM evaluation benchmarks for the DeltaFuse framework.
 
-## Files
+## Structure
 
-- `validate-layout.ps1` / `validate-layout.sh`: Verifies an installed product repository against DeltaFuse layout rules (required directories, config vs lock version match, absence of internal framework paths, and generated skill signatures).
-- `smoke-test.ps1` / `smoke-test.sh`: Automated end-to-end smoke test verifying clean installation, layout validity, and upgrade behavior against a temporary target repository.
-
-## Usage
-
-### Run smoke test (PowerShell)
-```powershell
-./tests/smoke-test.ps1
+```
+tests/
+├── unit/
+│   ├── test_schemas.py           # JSON Schema compliance for all 9 schemas
+│   ├── test_frontmatter.py       # Markdown YAML frontmatter extraction
+│   ├── test_graph.py             # Dependency DAG topological sort and cycle detection
+│   ├── test_integrity.py         # Claim extraction and specification anchor lookup
+│   ├── test_fsm.py               # FSM canonical states, allowed transitions, gate enforcement
+│   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
+├── integration/
+│   ├── test_installer.py         # Product initialization and framework upgrade
+│   └── test_validator_cli.py     # CLI validator and gate checking commands
+├── e2e/
+│   ├── test_golden_workflow.py   # Full 8-step lifecycle flow with archival
+│   ├── test_noop_workflow.py     # Terminal no-op / not-reproduced bug lifecycle
+│   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
+├── evals/
+│   ├── test_dataset.py           # Eval dataset schema validation and loader
+│   ├── test_mock_provider.py     # Deterministic MockLLMProvider scenarios
+│   ├── test_eval_runner.py       # Benchmark evaluation engine and metric aggregations
+│   └── test_eval_cli.py          # deltafuse eval CLI command and reporting
+├── fixtures/
+│   └── change_builder.py         # Fluent builder for constructing Change packages
+├── validate-layout.ps1 / .sh     # Shell layout validator
+└── smoke-test.ps1 / .sh          # Shell smoke test script
 ```
 
-### Run smoke test (Git Bash / Linux)
+## Running Tests
+
+### Run Full Pytest Suite
 ```bash
-bash ./tests/smoke-test.sh
+python -m pytest -v
 ```
 
-### Validate a specific product directory
-```powershell
-./tests/validate-layout.ps1 -ProductDir C:\path\to\product
-```
-
+### Run with Coverage
 ```bash
-bash ./tests/validate-layout.sh /path/to/product
+python -m pytest --cov=deltafuse --cov-report=term-missing
 ```
+
+### Run LLM Benchmark Evals
+```bash
+deltafuse eval --scenario golden --threshold 90.0
+```
+
+### Continuous Integration (CI)
+All tests run automatically via GitHub Actions (`.github/workflows/test.yml`) across:
+- Operating Systems: `ubuntu-latest`, `windows-latest`, `macos-latest`
+- Python Versions: `3.10`, `3.11`, `3.12`, `3.13`, `3.14`

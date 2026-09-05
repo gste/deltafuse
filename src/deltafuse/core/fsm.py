@@ -6,13 +6,21 @@ from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.graph import topological_sort, DependencyCycleError
-from deltafuse.core.integrity import extract_claims_from_request, validate_coverage_completeness
+from deltafuse.core.integrity import (
+    extract_claims_from_request,
+    validate_coverage_completeness,
+    validate_spec_ref,
+    validate_decision_ref,
+    find_unresolved_decisions_for_change,
+)
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
 VALID_CHANGE_STATUSES = {
     "normalized",
     "analyzing",
+    "blocked-on-decision",
     "analyzed",
+    "specification-proposed",
     "specified",
     "decomposed",
     "targeting",
@@ -27,6 +35,48 @@ VALID_CHANGE_STATUSES = {
     "superseded",
     "not-reproduced",
 }
+
+ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
+    "normalized": {"analyzing", "rejected", "duplicate"},
+    "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
+    "blocked-on-decision": {"analyzing"},
+    "analyzed": {"specification-proposed", "specified", "targeting"},  # targeting for bugfix
+    "specification-proposed": {"specified"},
+    "specified": {"decomposed"},
+    "decomposed": {"targeting"},
+    "targeting": {"target-confirmed", "not-reproduced"},
+    "target-confirmed": {"implementing"},
+    "implementing": {"implemented"},
+    "implemented": {"verifying"},
+    "verifying": {"converged", "analyzing", "not-reproduced"},
+    "converged": {"archived"},
+    "archived": set(),
+    "rejected": set(),
+    "duplicate": set(),
+    "superseded": set(),
+    "not-reproduced": set(),
+}
+
+
+def can_transition(from_status: str, to_status: str) -> bool:
+    """Checks if a transition between two Change lifecycle statuses is canonically allowed."""
+    return to_status in ALLOWED_CHANGE_TRANSITIONS.get(from_status, set())
+
+
+def find_repo_root(start_path: Path) -> Path:
+    """Finds repository root by searching upward for .deltafuse or docs directory."""
+    cur = start_path.resolve()
+    if cur.is_file():
+        cur = cur.parent
+    while cur != cur.parent:
+        if (cur / ".deltafuse").is_dir() or ((cur / "docs").is_dir() and cur.name != "docs"):
+            return cur
+        cur = cur.parent
+    resolved = start_path.resolve()
+    if "docs" in resolved.parts:
+        idx = resolved.parts.index("docs")
+        return Path(*resolved.parts[:idx])
+    return start_path.parent
 
 
 class GateValidationError(Exception):
@@ -50,6 +100,12 @@ def validate_change_package(
     if not change_path.is_dir():
         return [f"Change package directory not found: {change_path}"]
 
+    repo_root = find_repo_root(change_path)
+    spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
+
+    change_id: str | None = None
+    change_status: str | None = None
+
     # 1. Validate change.yaml
     change_file = change_path / "change.yaml"
     if not change_file.is_file():
@@ -59,6 +115,24 @@ def validate_change_package(
             change_data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
             errs = registry.validate("change", change_data)
             errors.extend(f"change.yaml: {e}" for e in errs)
+            if isinstance(change_data, dict):
+                change_id = change_data.get("id")
+                change_status = change_data.get("status")
+                if change_status and change_status not in VALID_CHANGE_STATUSES:
+                    errors.append(f"change.yaml: invalid status '{change_status}'")
+
+                # Status vs Artifacts consistency check (P1 / T5)
+                has_tasks = (change_path / "tasks").is_dir() and any((change_path / "tasks").glob("*.md"))
+                has_evidence = (change_path / "evidence").is_dir() and any((change_path / "evidence").rglob("*.yaml"))
+
+                if change_status == "normalized" and (has_tasks or has_evidence):
+                    errors.append(
+                        "Status mismatch: change.yaml has status 'normalized' but package already contains decomposed tasks or evidence"
+                    )
+                elif change_status == "decomposed" and not has_tasks:
+                    errors.append(
+                        "Status mismatch: change.yaml has status 'decomposed' but no task files exist in tasks/"
+                    )
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}")
 
@@ -96,11 +170,19 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
                 errs = registry.validate("slice", meta)
                 errors.extend(f"{slice_file.name}: {e}" for e in errs)
+
+                # Check spec_refs anchors if spec_dir exists
+                if spec_dir_exists and isinstance(meta, dict):
+                    for sref in meta.get("spec_refs", []):
+                        s_err = validate_spec_ref(sref, repo_root)
+                        if s_err:
+                            errors.append(f"{slice_file.name}: {s_err}")
             except Exception as ex:
                 errors.append(f"{slice_file.name} frontmatter error: {ex}")
 
     # 5. Validate tasks/ and DAG
     tasks_dir = change_path / "tasks"
+    existing_task_ids: set[str] = set()
     if tasks_dir.is_dir():
         task_graph: dict[str, list[str]] = {}
         for task_file in tasks_dir.glob("*.md"):
@@ -108,9 +190,25 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
                 errs = registry.validate("task", meta)
                 errors.extend(f"{task_file.name}: {e}" for e in errs)
-                task_id = meta.get("id")
-                if task_id:
-                    task_graph[task_id] = meta.get("depends_on", [])
+                if isinstance(meta, dict):
+                    task_id = meta.get("id")
+                    if task_id:
+                        existing_task_ids.add(task_id)
+                        task_graph[task_id] = meta.get("depends_on", [])
+                    existing_task_ids.add(task_file.stem)
+
+                    # Validate spec_refs anchors (P4 / T7)
+                    if spec_dir_exists:
+                        for sref in meta.get("spec_refs", []):
+                            s_err = validate_spec_ref(sref, repo_root)
+                            if s_err:
+                                errors.append(f"{task_file.name}: {s_err}")
+
+                    # Validate design_ref (P3)
+                    design_ref = meta.get("design_ref")
+                    if design_ref:
+                        d_errs = validate_decision_ref(design_ref, repo_root)
+                        errors.extend(f"{task_file.name}: {de}" for de in d_errs)
             except Exception as ex:
                 errors.append(f"{task_file.name} frontmatter error: {ex}")
 
@@ -127,10 +225,15 @@ def validate_change_package(
             meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
+            if spec_dir_exists and isinstance(meta, dict):
+                for sref in meta.get("added", []) + meta.get("modified", []):
+                    s_err = validate_spec_ref(sref, repo_root)
+                    if s_err:
+                        errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
 
-    # 7. Validate evidence/
+    # 7. Validate evidence/ (Semantic Validation - P0 / T1, T2, T4)
     evidence_dir = change_path / "evidence"
     if evidence_dir.is_dir():
         for ev_file in evidence_dir.rglob("*.yaml"):
@@ -138,6 +241,67 @@ def validate_change_package(
                 ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
                 errs = registry.validate("evidence", ev_data)
                 errors.extend(f"{ev_file.relative_to(change_path)}: {e}" for e in errs)
+
+                if not isinstance(ev_data, dict):
+                    continue
+
+                rel_path = ev_file.relative_to(evidence_dir)
+                parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
+
+                phase = ev_data.get("phase")
+                result = ev_data.get("result")
+                exit_code = ev_data.get("exit_code")
+                ev_task = ev_data.get("task")
+                ev_change = ev_data.get("change")
+
+                # Cross-check Change ID
+                if ev_change and change_id and ev_change != change_id:
+                    errors.append(
+                        f"{ev_file.relative_to(change_path)}: change id mismatch (evidence has '{ev_change}', expected '{change_id}')"
+                    )
+
+                # Cross-check Task ID (T4)
+                if ev_task:
+                    if existing_task_ids and ev_task not in existing_task_ids:
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: references nonexistent task '{ev_task}'"
+                        )
+                elif phase in {"red", "green", "regression"}:
+                    errors.append(
+                        f"{ev_file.relative_to(change_path)}: missing required 'task' field for phase '{phase}'"
+                    )
+
+                # Phase directory alignment (T1)
+                if parent_phase_dir in {"red", "green", "regression", "verification"}:
+                    if phase != parent_phase_dir:
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: phase mismatch (file in '{parent_phase_dir}/' has phase '{phase}')"
+                        )
+
+                # Phase-specific result & exit_code rules (T2)
+                if phase == "red":
+                    if result not in {"expected-failure", "not-reproduced"}:
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: red evidence must have result 'expected-failure' or 'not-reproduced' (got '{result}')"
+                        )
+                    if exit_code == 0 and result != "not-reproduced":
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: red evidence must have non-zero exit_code (got 0)"
+                        )
+                elif phase in {"green", "regression"}:
+                    if result != "passed":
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have result 'passed' (got '{result}')"
+                        )
+                    if exit_code != 0:
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have exit_code 0 (got {exit_code})"
+                        )
+                elif phase == "verification":
+                    if exit_code != 0:
+                        errors.append(
+                            f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
+                        )
             except Exception as ex:
                 errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
 
@@ -151,13 +315,22 @@ def check_gate(
 ) -> list[str]:
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
-    if errors:
-        return errors
 
+    repo_root = find_repo_root(change_path)
     req_file = change_path / "request.md"
     routing_file = change_path / "routing.yaml"
     spec_delta_file = change_path / "spec-delta.md"
     tasks_dir = change_path / "tasks"
+
+    change_id: str = change_path.name
+    change_file = change_path / "change.yaml"
+    if change_file.is_file():
+        try:
+            cdata = yaml.safe_load(change_file.read_text(encoding="utf-8"))
+            if isinstance(cdata, dict) and "id" in cdata:
+                change_id = cdata["id"]
+        except Exception:
+            pass
 
     gate_lower = gate.lower()
 
@@ -175,9 +348,22 @@ def check_gate(
         if not (change_path / "coverage.yaml").is_file():
             errors.append("Gate analyzed: coverage.yaml is missing")
 
+        # Check blocking decisions (P3)
+        unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
+        if unresolved:
+            errors.append(
+                f"Gate analyzed: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+            )
+
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
             errors.append("Gate specified: spec-delta.md is missing")
+        # Check blocking decisions (P3)
+        unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
+        if unresolved:
+            errors.append(
+                f"Gate specified: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+            )
 
     elif gate_lower == "decomposed":
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
@@ -203,5 +389,35 @@ def check_gate(
             errors.append("Gate converged: verification.md is missing")
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
+
+        # Check all tasks frontmatter status (P1 / T3)
+        if tasks_dir.is_dir():
+            for task_file in tasks_dir.glob("*.md"):
+                try:
+                    meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+                    task_status = meta.get("status")
+                    if task_status not in {"implemented", "verified"}:
+                        errors.append(
+                            f"Gate converged: task '{task_file.name}' has non-terminal status '{task_status}' "
+                            "(must be 'implemented' or 'verified')"
+                        )
+                except Exception as ex:
+                    errors.append(f"Gate converged: failed to parse task '{task_file.name}': {ex}")
+
+        # Coverage evidence mapping check (P4)
+        cov_file = change_path / "coverage.yaml"
+        if cov_file.is_file():
+            try:
+                cov_data = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+                claims_map = cov_data.get("claims", {})
+                for c_id, c_val in claims_map.items():
+                    if isinstance(c_val, dict):
+                        ev_map = c_val.get("evidence", {})
+                        if not ev_map.get("green") or not ev_map.get("regression"):
+                            errors.append(
+                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing green or regression evidence mapping"
+                            )
+            except Exception:
+                pass
 
     return errors

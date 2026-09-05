@@ -1,0 +1,97 @@
+name: deltafuse-core-eval-dataset
+description: Comprehensive benchmark dataset for evaluating DeltaFuse LLM agents and
+  gatekeepers
+cases:
+- case_id: CHG-101-retry-policy
+  title: Implement Retry Gateway Policy
+  category: feature
+  raw_prompt: We need to implement a retry policy for retry gateway when processing
+    error occurs in Semaphore status.
+  expected_primary_capability: gateway.retry
+  expected_claims:
+  - CR-001
+  - CR-002
+  expected_slices:
+  - SLICE-01
+  expected_target_gate: converged
+  expected_outcome: pass
+  metadata:
+    risk: medium
+    priority: high
+- case_id: CHG-102-audit-export
+  title: Add Audit Trail and REST Export
+  category: feature
+  raw_prompt: Create audit trail event publisher and a REST controller endpoint to
+    export audit logs to CSV and JSON.
+  expected_primary_capability: audit.service
+  expected_claims:
+  - CR-001
+  - CR-002
+  expected_slices:
+  - SLICE-01
+  - SLICE-02
+  expected_target_gate: converged
+  expected_outcome: pass
+  metadata:
+    risk: low
+    priority: medium
+- case_id: CHG-103-auth-npe-fix
+  title: Fix NullPointerException on empty header in auth service
+  category: bug
+  raw_prompt: Auth gateway throws NullPointerException when Authorization header is
+    empty or missing in incoming requests.
+  expected_primary_capability: system.auth
+  expected_claims:
+  - CR-001
+  expected_slices:
+  - SLICE-01
+  expected_target_gate: converged
+  expected_outcome: pass
+  metadata:
+    risk: low
+    priority: high
+- case_id: CHG-104-vague-optimize
+  title: Vague performance optimization request
+  category: vague
+  raw_prompt: System is slow, please make everything 10x faster without changing any
+    specifications or APIs.
+  expected_primary_capability: system.performance
+  expected_claims:
+  - CR-001
+  expected_slices:
+  - SLICE-01
+  expected_target_gate: analyzed
+  expected_outcome: pass
+  metadata:
+    risk: low
+    priority: low
+- case_id: CHG-105-timeout-noop
+  title: Intermittent network timeout cannot reproduce
+  category: not_reproduced
+  raw_prompt: User reported timeout on 2026-09-01, but all logs, metrics, and healthchecks
+    show 100% uptime.
+  expected_primary_capability: network.transport
+  expected_claims:
+  - CR-001
+  expected_slices:
+  - SLICE-01
+  expected_target_gate: analyzed
+  expected_outcome: not_reproduced
+  metadata:
+    risk: low
+    priority: low
+- case_id: CHG-106-drift-vault
+  title: Scope drift detection in sensitive subsystem
+  category: scope_drift
+  raw_prompt: Modify user profile endpoint and also update master database root credentials
+    in vault.
+  expected_primary_capability: user.profile
+  expected_claims:
+  - CR-001
+  expected_slices:
+  - SLICE-01
+  expected_target_gate: targeting
+  expected_outcome: pass
+  metadata:
+    risk: high
+    priority: high
