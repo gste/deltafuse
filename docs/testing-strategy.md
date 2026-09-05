@@ -1,77 +1,87 @@
-# Стратегия и план комплексного тестирования DeltaFuse 2.0
+# Стратегия и архитектура тестирования DeltaFuse 2.0
 
-> **Цель**: Построить модульный, детерминированный, кроссплатформенный комплекс тестов и инструментов верификации на базе **Python 3.10+ / pytest**, исключающий дублирование шелл-скриптов (`pwsh`/`bash`), обеспечивающий 100% контроль инвариантов фреймворка и служащий быстрым feedback-loop валидатором для LLM-агентов.
+> **Цель**: Модульный, детерминированный, кроссплатформенный комплекс тестов и инструментов верификации на базе **Python 3.10+ / pytest**, исключающий платформозависимые скрипты, обеспечивающий 100% контроль инвариантов спецификаций и служащий быстрым feedback-loop валидатором для инженеров и LLM-агентов.
 
 ---
 
 ## 1. Архитектурная пирамида тестирования
 
-```
+```text
                      ┌───────────────────────────────┐
                      │          LLM Evals            │  <- Оценка моделей & промптов
-                     │   (Prompt Benchmarks / E2E)   │     (5-10% скоупа, опционально)
+                     │   (Prompt Benchmarks / E2E)   │     (Stage 5: Schema Compliance, Gate Pass)
                      ├───────────────────────────────┤
-                     │     E2E Synthetic Flows       │  <- Полный цикл Intake -> Archive
-                     │    (Deterministic Replays)    │     на синтетических фикстурах (15%)
+                     │     E2E Synthetic Flows       │  <- Полный цикл Intake -> Converged -> Archive
+                     │    (Deterministic Replays)    │     на синтетических фикстурах без внешних API
                      ├───────────────────────────────┤
                      │    Workflow & State Machine   │  <- FSM, гейты, DAG зависимостей,
-                     │       (Process Invariants)    │     матрица покрытия (25%)
+                     │       (Process Invariants)    │     мутационные тесты T1-T8, N10, хэш-локи
                      ├───────────────────────────────┤
-                     │   Schema, Layout & Contracts  │  <- Валидация YAML, Frontmatter,
-                     │      (Structural Invariants)  │     хэшей, установщика (50%)
+                     │   Schema, Layout & Contracts  │  <- Валидация 9 схем JSON Schema 2020-12,
+                     │      (Structural Invariants)  │     frontmatter, шаблоны, раскладка продукта
                      └───────────────────────────────┘
 ```
 
 ---
 
-## 2. Структура тестового фреймворка (`delta-fuse/tests/`)
+## 2. Структура тестового комплекса и инструментов
 
-Предлагается единая раскладка тестов и тулинга:
+Комплекс объединяет движок верификации (`src/deltafuse/`) и многоуровневый тестовый набор (`tests/`):
 
 ```text
 delta-fuse/
-├── src/deltafuse/                    # Легковесный движок валидатора и CLI
+├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Точка входа: df init, df validate, df check-gate
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, lint-context, eval)
 │   ├── core/
-│   │   ├── hasher.py                 # Вычисление sha256 framework content hash
-│   │   ├── installer.py              # Кроссплатформенная установка/обновление
-│   │   ├── schemas.py                # Загрузчик и валидатор JSON Schema 2020-12
-│   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter
-│   │   ├── fsm.py                    # Движок переходов состояний (State Machine)
-│   │   ├── graph.py                  # DAG анализатор зависимостей (cycle detection)
-│   │   └── context.py                # Калькулятор токенов и линтер контекстных контрактов
-│   └── models/                       # Pydantic / TypedDict модели данных
-│       ├── change.py
-│       ├── task.py
-│       ├── slice.py
-│       ├── capability.py
-│       └── evidence.py
+│   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
+│   │   ├── context.py                # Оценка токенов (~1.3x) и линтер контекстных бюджетов/контрактов
+│   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
+│   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
+│   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
+│   │   ├── hasher.py                 # Вычисление sha256 framework content hash (исключение .git, __pycache__)
+│   │   ├── installer.py              # Кроссплатформенная установка, генерация адаптеров (.agents, .cursor, .gemini)
+│   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, требования CR-*
+│   │   ├── layout.py                 # Валидатор эталонной раскладки продукта, lock-файлов и маркеров DO-NOT-EDIT
+│   │   └── schemas.py                # Загрузчик и валидатор 9 схем JSON Schema Draft 2020-12
+│   └── evals/                        # Подсистема бенчмаркинга и оценки LLM (Stage 5)
+│       ├── dataset.py                # Загрузчик датасета и валидация схемы бенчмарков
+│       ├── default_cases.yaml        # Базовый набор синтетических сценариев
+│       ├── metrics.py                # Расчёт Schema Compliance, Gate Pass, Routing Accuracy, Claim F1
+│       ├── providers.py              # Провайдеры: MockLLMProvider (детерминированный CI) и RealLLMProvider (API)
+│       ├── reporter.py               # Экспорт отчётов (text, json, markdown)
+│       └── runner.py                 # Движок выполнения и сбора метрик бенчмарков
 ├── tests/
-│   ├── conftest.py                   # Общие pytest фикстуры, моки файловой системы (tmp_path)
-│   ├── unit/                         # Модульные тесты
-│   │   ├── test_content_hash.py      # Хэширование дистрибутива
-│   │   ├── test_schemas.py           # Валидация самих схем и их рекурсивных $defs
-│   │   ├── test_templates.py         # Проверка, что все process/templates валидны
-│   │   ├── test_frontmatter_parser.py
-│   │   ├── test_dag_dependencies.py  # Топологическая сортировка и циклы в TASK-NNN
-│   │   └── test_state_machine.py     # Все валидные и невалидные переходы Change/Slice
+│   ├── conftest.py                   # Общие pytest фикстуры (repo_root)
+│   ├── fixtures/
+│   │   └── change_builder.py         # Fluent builder (MockChangeBuilder) для синтетической сборки Change-пакетов
+│   ├── unit/                         # Модульные тесты инвариантов
+│   │   ├── test_schemas.py           # Валидация 9 схем JSON Schema 2020-12 и strict-режима
+│   │   ├── test_templates.py         # Self-validation всех шаблонов process/templates
+│   │   ├── test_frontmatter.py       # Парсинг YAML frontmatter в markdown
+│   │   ├── test_graph.py             # Топологическая сортировка и цикл-детектор в задачах
+│   │   ├── test_integrity.py         # Спецификационные якоря #REQ-* и решения #DEC-*
+│   │   ├── test_fsm.py               # 18 канонических статусов, допустимые переходы, гейты
+│   │   ├── test_fsm_mutations.py     # Семантические мутационные тесты (T1-T8, N10, lock-хэш)
+│   │   ├── test_hasher.py            # Чувствительность sha256 content_hash к изменениям дистрибутива
+│   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
-│   │   ├── test_installer.py         # Свежая установка, сохранение пользовательских файлов
-│   │   ├── test_idempotent_upgrade.py# Повторный накакт, флаг force, lock.yaml
-│   │   ├── test_layout_validator.py  # Проверка эталонной структуры продукта
-│   │   └── test_link_integrity.py    # Ссылочная целостность REQ-* / DEC-* / CR-*
-│   ├── e2e_replays/                  # Сквозные синтетические симуляции без LLM
-│   │   ├── fixtures/
-│   │   │   ├── feature_standard/     # Эталонный прогон фичи: от intake до archive
-│   │   │   ├── bug_implementation/   # Эталонный баг (spec unchanged -> red -> green)
-│   │   │   └── not_reproduced_flow/  # Закрытие невоспроизведенного бага
-│   │   └── test_lifecycle_replays.py
-│   └── evals/                        # LLM Evals (тестирование реальных моделей)
-│       ├── cases/                    # Набор сырых пользовательских тикетов
-│       └── test_agent_routing_eval.py# Сравнение вывода агента с Ground Truth
-├── pyproject.toml                    # Конфигурация uv/poetry/pytest
-└── requirements-dev.txt              # pytest, jsonschema, pyyaml
+│   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade
+│   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
+│   │   └── test_validator_cli.py     # Тестирование команд CLI (validate, check-gate, validate-layout, lint-context)
+│   ├── e2e/                          # Сквозные симуляции жизненного цикла
+│   │   ├── test_golden_workflow.py   # Эталонный 8-шаговый цикл фичи от intake до archive
+│   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
+│   │   ├── test_terminal_workflows.py# Невоспроизводимые и отклонённые сценарии
+│   │   └── test_failure_modes.py     # Негативные гейты, циклы задач, потеря/порча request.md
+│   └── evals/                        # Тесты подсистемы LLM Evals
+│       ├── test_dataset.py           # Валидация и загрузка датасета бенчмарков
+│       ├── test_mock_provider.py     # Сценарии MockLLMProvider и RealLLMProvider
+│       ├── test_eval_runner.py       # Движок выполнения и агрегация метрик
+│       └── test_eval_cli.py          # Команда deltafuse eval, CLI аргументы и форматы экспорта
+├── .github/workflows/test.yml        # CI матрица: Linux, Windows, macOS x Python 3.10-3.14
+├── pyproject.toml                    # Конфигурация проекта, метаданных и pytest
+└── tests/README.md                   # Руководство по запуску тестов и CLI
 ```
 
 ---
@@ -79,8 +89,8 @@ delta-fuse/
 ## 3. Детализированная матрица тестовых наборов
 
 ### Набор 1. Структурные тесты схем и шаблонов (`tests/unit/test_schemas.py`, `test_templates.py`)
-* **1.1. Мета-схемы**: проверка, что все схемы в `process/schemas/*.yaml` компилируются по стандарту JSON Schema 2020-12.
-* **1.2. Self-Validation шаблонов**: каждый файл-шаблон в `process/templates/**` обязан на 100% валидироваться своей схемой:
+* **1.1. Мета-схемы**: все 9 схем в `process/schemas/*.yaml` компилируются по стандарту JSON Schema Draft 2020-12.
+* **1.2. Self-Validation шаблонов**: каждый файл-шаблон в `process/templates/**` на 100% валидируется своей схемой:
   - `change.yaml` -> `change.schema.yaml`
   - `tasks/TASK-001-template.md` (frontmatter) -> `task.schema.yaml`
   - `slices/SLICE-01.md` (frontmatter) -> `slice.schema.yaml`
@@ -90,108 +100,121 @@ delta-fuse/
   - `coverage.yaml` -> `coverage.schema.yaml`
   - `routing.yaml` -> `routing.schema.yaml`
   - `spec-delta.md` (frontmatter) -> `spec-delta.schema.yaml`
-* **1.3. Strict-режим (`additionalProperties: false`)**:
-  - Подача YAML с лишними ключами (`foo: bar`) обязана приводить к падению теста.
+* **1.3. Strict-режим (`unevaluatedProperties: false` / `additionalProperties: false`)**:
+  - Подача лишних полей в корневые документы или frontmatter приводит к гарантированной ошибке валидации.
 
 ---
 
-### Набор 2. Тесты графов, ссылок и матрицы покрытия (`tests/unit/test_dag_dependencies.py`, `tests/integration/test_link_integrity.py`)
+### Набор 2. Тесты графов, ссылочной целостности и якорей (`tests/unit/test_graph.py`, `test_integrity.py`)
 * **2.1. DAG задач (Task Graph)**:
-  - Проверка на отсутствие циклов (`TASK-001 -> TASK-002 -> TASK-001`).
-  - Проверка, что `TASK-002` не может быть взят в работу, пока `TASK-001` не находится в статусе `implemented`/`verified`.
-* **2.2. Полнота трассируемости матрицы (`coverage.yaml`)**:
-  - Каждый `CR-*` из `request.md` обязан присутствовать в `coverage.yaml`.
-  - Каждый `CR-*` обязан быть привязан ровно к одному primary slice.
-  - Каждое требование `spec_refs` обязано существовать как физический якорь `#REQ-...` в файлах `docs/spec/**`.
+  - Топологическая сортировка задач по `depends_on`.
+  - Обнаружение циклических зависимостей (`TASK-001 -> TASK-002 -> TASK-001`) с информативной ошибкой.
+* **2.2. Спецификационные якоря (`spec_refs`)**:
+  - Парсинг заголовков спецификаций (`# REQ-...`, `# SC-...`).
+  - Проверка существования целевых якорей.
+  - Spec-root guard (N10): если `docs/spec` отсутствует при наличии `spec_refs`, генерируется ошибка валидации, а не тихий пропуск.
 * **2.3. Decision Anchors**:
-  - Если в задаче или слайсе указан `design_ref: docs/decisions/DEC-0001-...md`, валидатор проверяет, что решение имеет статус `accepted` (не `proposed` и не `rejected`).
+  - Ссылка `design_ref: docs/decisions/DEC-...` требует статус решения `accepted`. Статусы `proposed` и `rejected` блокируют прохождение гейта `analyzed`/`specified`.
 
 ---
 
-### Набор 3. Тесты конечного автомата (State Machine Transitions) (`tests/unit/test_state_machine.py`)
-* **3.1. Матрица положительных переходов**:
-  - `normalized -> analyzing` (при наличии `request.md` с валидными `CR-001`).
-  - `analyzing -> analyzed` (при наличии `routing.yaml` и валидных `slices/**`).
-  - `analyzed -> specified` (при наличии `spec-delta.md`).
-  - `specified -> decomposed` (при наличии задач `TASK-*`).
-  - `decomposed -> targeting` (при выборе готовой задачи).
-  - `targeting -> target-confirmed` (при наличии Red evidence `result: expected-failure`).
-  - `target-confirmed -> implementing -> implemented` (при наличии Green `result: passed` + Regression `result: passed`).
-  - `implemented -> verifying -> converged -> archived` (перемещение в `docs/archive/changes/<date>-<change-id>/`).
-* **3.2. Негативные гейты (Отказ в переходе)**:
-  - Попытка перевести в `implemented`, если `evidence.exit_code != 0`.
-  - Попытка перевести в `specified`, если есть неразрешённые `DEC-*` в статусе `proposed`.
-  - Попытка перевести в `converged`, если хотя бы одна задача пакета осталась в `targeting` или `draft`.
-* **3.3. Специальные пути (Bugflow, Not-reproduced, Rejected)**:
-  - Implementation Bug: `analyzed -> specified (delta: none) -> decomposed -> targeting`.
-  - Not reproduced: переход в `not-reproduced` из `analyzing`, `targeting` и `verifying`.
+### Набор 3. Конечный автомат, семантические мутации и гейты (`tests/unit/test_fsm.py`, `test_fsm_mutations.py`)
+* **3.1. 18 канонических статусов Change**:
+  - Начальные: `intake`, `draft`.
+  - Анализ: `analyzing`, `normalized`, `analyzed`.
+  - Спецификация и декомпозиция: `specifying`, `specified`, `decomposing`, `decomposed`.
+  - Таргетинг и разработка: `targeting`, `target-confirmed`, `implementing`, `implemented`.
+  - Верификация и завершение: `verifying`, `converged`, `archived`.
+  - Терминальные ветви: `not-reproduced`, `rejected`.
+* **3.2. Семантические мутационные инварианты (T1–T8, N10)**:
+  - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
+  - **T2**: Red evidence с `result: passed` или `exit_code: 0` отвергается.
+  - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `targeting` и т.д.).
+  - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
+  - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.
+  - **T7**: Битая ссылка на якорь в спецификации отклоняется.
+  - **T8**: Повторная архивация при наличии существующего архива запрещена (неизменяемость архива, отказ от `rmtree`).
+  - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
+  - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
 
 ---
 
-### Набор 4. Тесты инсталлятора, обновления и целостности (`tests/integration/test_installer.py`)
+### Набор 4. Инсталлятор, целостность и раскладка (`tests/integration/test_installer.py`, `test_layout.py`)
 * **4.1. Fresh Install**:
-  - Установка в чистую директорию `tmp_path`.
-  - Проверка создания структуры: `.deltafuse/`, `docs/intake/`, `docs/changes/`, `docs/spec/`, `docs/decisions/`, `docs/archive/`.
-  - Генерация адаптеров `.agents/skills/`, `.cursor/skills/`, `.gemini/skills/`.
-* **4.2. Идемпотентность и защита пользовательских данных**:
-  - Модификация `AGENTS.md`, `.deltafuse/config.yaml`, `docs/spec/_capabilities.yaml` в проекте.
-  - Запуск повторной установки: кастомный контент **не перезаписывается**.
-  - Запуск с флагом `--force`: обновление только framework core файлов, пользовательские спецификации остаются нетронутыми.
-* **4.3. Хэш-фиксация (`content_hash`)**:
-  - Изменение любого файла в `process/` приводит к изменению `sha256` хэша фреймворка.
-  - Попытка запуска Change с несовпадающим хэшем выдает предупреждение / блокировку миграции.
+  - Разворачивание структуры `.deltafuse/`, `docs/{intake,changes,spec,decisions,archive}`, генерация адаптеров `.agents/`, `.cursor/`, `.gemini/`.
+  - Проверка маркеров `# DO NOT EDIT: generated by DeltaFuse installer.` и метаданных `.deltafuse-generated.yaml`.
+* **4.2. Идемпотентность и защита данных**:
+  - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
+  - Флаг `--force` обновляет только управляемые фреймворком файлы.
+* **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
+  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
 
-### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context_contracts.py`)
-* **5.1. Context Budget Checker**:
-  - Подсчет токенов (через `tiktoken` или эвристику слов) по списку файлов.
-  - Если слайс требует загрузить файлов больше, чем `max_files: 24`, тест генерирует флаг `context-overflow` (требование дополнительной декомпозиции).
-* **5.2. Scope Drift Linter**:
-  - Проверка по git diff: если задача объявляет `allowed_paths: [src/auth/*]`, а изменены файлы в `src/billing/*` — валидатор возвращает фатальную ошибку `Scope Drift Violation`.
+### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context.py`)
+* **5.1. Token Estimator**:
+  - Эвристика `1 word ≈ 1.3 tokens`, проверка лимитов `max_tokens` и `max_files`.
+* **5.2. Интеграция в FSM и CLI**:
+  - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
+  - Команда `deltafuse lint-context <change_dir>`.
 
 ---
 
-### Набор 6. E2E Synthetic Replay Tests (`tests/e2e_replays/`)
-* **6.1. Полный сквозной сценарий (Feature Replay)**:
-  - Создание фикстуры `CHG-001`.
-  - Пошаговое накладывание файлов (`request.md` -> `analysis.md` + `slices/` -> `spec-delta.md` -> `tasks/` -> `evidence/red/` -> `code fix` + `evidence/green/` -> `verification.md`).
-  - Вызов `deltafuse archive CHG-001`.
-  - Проверка: директория переместилась в `docs/archive/changes/2026-09-04-CHG-001/`, в активном `docs/changes/` чисто, `change.yaml` в статусе `archived`.
+### Набор 6. E2E Сквозные сценарии (`tests/e2e/`)
+* **6.1. Golden Workflow (`test_golden_workflow.py`)**:
+  - 8-шаговый цикл: `intake -> analyze -> specify -> decompose -> target -> implement -> verify -> archive`.
+* **6.2. No-op & Not-reproduced (`test_noop_workflow.py`)**:
+  - Исследование багов, генерация `not-reproduced` evidence, переход Change в `not-reproduced`, архивация терминального пакета.
+* **6.3. Failure Modes (`test_failure_modes.py`)**:
+  - Проверка инварианта `request.md`: удаление файла или требований `CR-*` ломает пакет и выявляет orphan claims.
+  - Циклические задачи блокируют гейт декомпозиции.
 
 ---
 
-### Набор 7. LLM Eval Benchmarks (Опциональный слой оценки моделей)
-* **7.1. Intake & Routing Accuracy**:
-  - Подача 10 тестовых пользовательских описаний фич/багов.
-  - Запуск агента через API.
-  - Проверка: сопоставил ли агент тикет с правильной `primary_capability` из каталога `_capabilities.yaml`.
-* **7.2. Red-TDD Verification**:
-  - Проверка, что агент написал тест, который реально падает на существующей кодовой базе с кодом `1` и понятным assertion.
+### Набор 7. LLM Evals бенчмаркинг (`tests/evals/`, `src/deltafuse/evals/`)
+* **7.1. Датасет и метрики**:
+  - Датасет `default_cases.yaml` с категориями feature, bug, vague, not_reproduced, scope_drift.
+  - Расчёт метрик: Schema Compliance Rate, Gate Pass Rate, Routing Accuracy, Claim Extraction F1.
+* **7.2. Провайдеры**:
+  - `MockLLMProvider`: детерминированная симуляция сценариев (`golden`, `schema_violation`, `fsm_violation`, `routing_mismatch`, `claim_hallucination`) для CI.
+  - `RealLLMProvider`: интеграция с удалёнными LLM через API-ключи окружения (`DELTAFUSE_API_KEY`, `OPENAI_API_KEY`).
+* **7.3. CLI команда `deltafuse eval`**:
+  - Флаги: `--scenario`, `--provider [mock|real]`, `--output [text|json|markdown]`, `--min-schema-compliance`, `--min-gate-pass-rate`.
 
 ---
 
-## 4. План реализации по этапам (Roadmap)
-
-| Этап | Скоуп работ | Результат |
-|---|---|---|
-| **Этап 1: Фундамент (Core CLI & Schemas)** | 1. Настройка `pyproject.toml` (pytest, jsonschema, pyyaml).<br>2. Создание `src/deltafuse/core/schemas.py` и `hasher.py`.<br>3. Unit-тесты для всех схем и шаблонов. | `pytest tests/unit/test_schemas.py` проходит за < 1 сек. |
-| **Этап 2: Кроссплатформенный инсталлятор** | 1. Реализация `src/deltafuse/core/installer.py` (замена `init.ps1`/`init.sh`).<br>2. Интеграционные тесты `test_installer.py` (fresh install, idempotent, upgrade). | Полный отказ от шелл-скриптов, единый `df init` / `python -m deltafuse init`. |
-| **Этап 3: Движок валидации и гейтов (Linters & FSM)** | 1. Реализация `frontmatter.py`, `graph.py` (DAG), `fsm.py` (переходы).<br>2. Реализация команды `df validate` и `df check-gate`.<br>3. Тесты на циклы, битые ссылки, матрицу переходов. | Агент может вызывать `df validate` как мгновенный feedback-loop. |
-| **Этап 4: E2E Replays & Сквозные сценарии** | 1. Создание каталога фикстур `tests/e2e_replays/fixtures/`.<br>2. Сквозной тест жизненного цикла (Feature, Bug, No-op). | 100% гарантия надежности перед любыми релизами фреймворка. |
-| **Этап 5: CI/CD Pipeline** | Настройка GitHub Actions / GitLab CI workflow (`python -m pytest tests/ -v`). | Зелёный статус в CI на Linux, Windows и macOS. |
-
----
-
-## 5. Команда быстрого запуска для разработчика / агента
+## 4. Консольные команды для инженера и агентов
 
 ```bash
-# Запуск всех детерминированных тестов (мгновенно, без LLM)
-pytest tests/unit tests/integration -v
+# 1. Запуск полного набора автоматических тестов (89 тестов)
+python -m pytest -v
 
-# Проверка конкретного Change агентом на лету
-python -m deltafuse validate --change CHG-001 --gate decomposed
+# 2. Проверка валидности Change-пакета
+deltafuse validate docs/changes/CHG-001-test
 
-# Сквозной запуск симуляций
-pytest tests/e2e_replays/ -v
+# 3. Проверка гейта жизненного цикла
+deltafuse check-gate docs/changes/CHG-001-test --gate decomposed
+
+# 4. Архивация завершённого пакета
+deltafuse archive docs/changes/CHG-001-test
+
+# 5. Проверка эталонной структуры репозитория и адаптеров
+deltafuse validate-layout .
+
+# 6. Проверка контекстного бюджета пакета
+deltafuse lint-context docs/changes/CHG-001-test
+
+# 7. Запуск детерминированного бенчмарка LLM Evals
+deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
 ```
+
+---
+
+## 5. Непрерывная интеграция (CI Matrix)
+
+Тестовый комплекс выполняется в GitHub Actions (`.github/workflows/test.yml`) по матрице:
+- **Операционные системы**: `ubuntu-latest`, `windows-latest`, `macos-latest`
+- **Версии Python**: `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
+- **Шаги проверки**:
+  1. `python -m pytest -v` (полный набор unit, integration, e2e, evals)
+  2. `deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0`
