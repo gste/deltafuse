@@ -30,7 +30,8 @@ framework_hash() {
   {
     for root in docs process scripts tests; do
       if [ -d "$SCRIPT_DIR/$root" ]; then
-        find "$SCRIPT_DIR/$root" -type f -print
+        # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches
+        find "$SCRIPT_DIR/$root" -type f -print | grep -Ev '/(__pycache__|\.pytest_cache)/' || true
       fi
     done
     printf '%s\n' "$SCRIPT_DIR/VERSION"

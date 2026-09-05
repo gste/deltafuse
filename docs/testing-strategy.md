@@ -119,13 +119,13 @@ delta-fuse/
 ---
 
 ### Набор 3. Конечный автомат, семантические мутации и гейты (`tests/unit/test_fsm.py`, `test_fsm_mutations.py`)
-* **3.1. 18 канонических статусов Change**:
-  - Начальные: `intake`, `draft`.
-  - Анализ: `analyzing`, `normalized`, `analyzed`.
-  - Спецификация и декомпозиция: `specifying`, `specified`, `decomposing`, `decomposed`.
+* **3.1. 18 канонических статусов Change** (соответствуют `VALID_CHANGE_STATUSES` в `core/fsm.py` и `docs/state-machine.md`):
+  - Вход: `normalized`.
+  - Анализ: `analyzing`, `blocked-on-decision`, `analyzed`.
+  - Спецификация и декомпозиция: `specification-proposed`, `specified`, `decomposed`.
   - Таргетинг и разработка: `targeting`, `target-confirmed`, `implementing`, `implemented`.
   - Верификация и завершение: `verifying`, `converged`, `archived`.
-  - Терминальные ветви: `not-reproduced`, `rejected`.
+  - Терминальные ветви: `rejected`, `duplicate`, `superseded`, `not-reproduced`.
 * **3.2. Семантические мутационные инварианты (T1–T8, N10)**:
   - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
   - **T2**: Red evidence с `result: passed` или `exit_code: 0` отвергается.

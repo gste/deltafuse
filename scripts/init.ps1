@@ -17,6 +17,8 @@ function Get-FrameworkContentHash {
         $absolute = Join-Path $FrameworkRoot $root
         if (Test-Path -LiteralPath $absolute) {
             Get-ChildItem -LiteralPath $absolute -Recurse -File | ForEach-Object {
+                # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches
+                if ($_.FullName -match '(__pycache__|\.pytest_cache)[\\/]') { return }
                 $relative = $_.FullName.Substring($FrameworkRoot.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
                 $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
                 "$relative`:$fileHash"
