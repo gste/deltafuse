@@ -47,3 +47,20 @@ def test_mock_provider_fsm_violation_scenario(sample_case: EvalCase, tmp_path: P
 
     gate_errs = check_gate(target_dir, "targeting")
     assert len(gate_errs) > 0, "FSM violation scenario should fail targeting gate due to missing red evidence"
+
+
+def test_real_llm_provider_requires_api_key(tmp_path: Path):
+    from deltafuse.evals.providers import RealLLMProvider
+    from deltafuse.evals.dataset import EvalCase
+    provider = RealLLMProvider(api_key=None)
+    case = EvalCase(
+        case_id="CHG-TEST",
+        title="Test",
+        category="feature",
+        raw_prompt="Test",
+        expected_claims=["CR-001"],
+        expected_primary_capability="system.core",
+    )
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.generate_change_package(case, tmp_path)
+    assert "requires DELTAFUSE_API_KEY or OPENAI_API_KEY" in str(exc_info.value)

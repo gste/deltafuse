@@ -2,9 +2,11 @@
 
 from pathlib import Path
 import pytest
+import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.installer import install
 from tests.fixtures.change_builder import MockChangeBuilder
+
 
 def test_cyclic_tasks_fail_validation(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
@@ -21,6 +23,7 @@ def test_cyclic_tasks_fail_validation(tmp_path: Path, repo_root: Path):
     assert any("Task DAG cycle error" in e for e in errors)
     assert len(check_gate(builder.change_dir, "decomposed")) > 0
 
+
 def test_orphan_claim_in_coverage_fails_gate(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-103", title="Orphan Claim")
@@ -28,7 +31,6 @@ def test_orphan_claim_in_coverage_fails_gate(tmp_path: Path, repo_root: Path):
     builder.step_analyze()
 
     # Mutate coverage.yaml to introduce orphan claim CR-999 not in request.md
-    import yaml
     cov_path = builder.change_dir / "coverage.yaml"
     cov_data = yaml.safe_load(cov_path.read_text(encoding="utf-8"))
     cov_data["claims"]["CR-999"] = {"slice": "SLICE-01", "tasks": ["TASK-001"]}
@@ -36,3 +38,30 @@ def test_orphan_claim_in_coverage_fails_gate(tmp_path: Path, repo_root: Path):
 
     errors = validate_change_package(builder.change_dir)
     assert any("CR-999" in e and "orphan" in e for e in errors)
+
+
+def test_request_md_missing_fails_validation(tmp_path: Path, repo_root: Path):
+    """P7.5: Missing request.md breaks Intake invariant and fails validation."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-104", title="Missing Request")
+    builder.step_intake(claims=["CR-001"])
+
+    (builder.change_dir / "request.md").unlink()
+    errors = validate_change_package(builder.change_dir)
+    assert any("Missing required request.md" in e for e in errors)
+
+
+def test_request_md_claim_tampering_breaks_traceability(tmp_path: Path, repo_root: Path):
+    """P7.5: Silently removing claims from request.md creates orphan claims in routing/coverage."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-105", title="Tampered Request")
+    builder.step_intake(claims=["CR-001", "CR-002"])
+    builder.step_analyze(slices=["SLICE-01"])
+
+    # Tamper with request.md: delete CR-001 from request.md
+    tampered_content = "# Request\n- CR-002: Description for CR-002\n"
+    (builder.change_dir / "request.md").write_text(tampered_content, encoding="utf-8")
+
+    errors = validate_change_package(builder.change_dir)
+    # CR-001 still exists in coverage.yaml/routing.yaml but is now an orphan claim
+    assert any("CR-001" in e and "orphan" in e for e in errors)

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.context import validate_context_budget
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.integrity import (
     extract_claims_from_request,
@@ -121,6 +122,23 @@ def validate_change_package(
                 if change_status and change_status not in VALID_CHANGE_STATUSES:
                     errors.append(f"change.yaml: invalid status '{change_status}'")
 
+                # Lock hash verification (P7.3)
+                lock_file = repo_root / ".deltafuse" / "lock.yaml"
+                if lock_file.is_file():
+                    try:
+                        lock_data = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
+                        if isinstance(lock_data, dict):
+                            expected_hash = lock_data.get("framework", {}).get("content_hash")
+                            change_fw = change_data.get("framework")
+                            if expected_hash and isinstance(change_fw, dict):
+                                change_hash = change_fw.get("content_hash")
+                                if change_hash and change_hash != expected_hash:
+                                    errors.append(
+                                        f"Framework content hash mismatch: change.yaml has '{change_hash}' but .deltafuse/lock.yaml has '{expected_hash}'"
+                                    )
+                    except Exception:
+                        pass
+
                 # Status vs Artifacts consistency check (P1 / T5)
                 has_tasks = (change_path / "tasks").is_dir() and any((change_path / "tasks").glob("*.md"))
                 has_evidence = (change_path / "evidence").is_dir() and any((change_path / "evidence").rglob("*.yaml"))
@@ -135,6 +153,11 @@ def validate_change_package(
                     )
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}")
+
+    # 1b. Validate request.md presence (P7.5)
+    request_file = change_path / "request.md"
+    if not request_file.is_file():
+        errors.append("Missing required request.md in Change directory")
 
     # 2. Validate routing.yaml if present
     routing_file = change_path / "routing.yaml"
@@ -171,12 +194,28 @@ def validate_change_package(
                 errs = registry.validate("slice", meta)
                 errors.extend(f"{slice_file.name}: {e}" for e in errs)
 
-                # Check spec_refs anchors if spec_dir exists
-                if spec_dir_exists and isinstance(meta, dict):
-                    for sref in meta.get("spec_refs", []):
-                        s_err = validate_spec_ref(sref, repo_root)
-                        if s_err:
-                            errors.append(f"{slice_file.name}: {s_err}")
+                # Check spec_refs anchors and context budget (N10, P7.6)
+                if isinstance(meta, dict):
+                    srefs = meta.get("spec_refs", [])
+                    if srefs:
+                        if not spec_dir_exists:
+                            errors.append(f"{slice_file.name}: Specification root directory 'docs/spec' not found")
+                        else:
+                            for sref in srefs:
+                                s_err = validate_spec_ref(sref, repo_root)
+                                if s_err:
+                                    errors.append(f"{slice_file.name}: {s_err}")
+
+                    context_budget = meta.get("context_budget")
+                    if context_budget and isinstance(context_budget, dict):
+                        ref_files = []
+                        for sref in srefs:
+                            sp_rel = sref.split("#")[0]
+                            sp_path = (repo_root / sp_rel).resolve()
+                            if sp_path.is_file():
+                                ref_files.append(sp_path)
+                        b_errs = validate_context_budget(context_budget, ref_files)
+                        errors.extend(f"{slice_file.name}: {be}" for be in b_errs)
             except Exception as ex:
                 errors.append(f"{slice_file.name} frontmatter error: {ex}")
 
@@ -197,12 +236,16 @@ def validate_change_package(
                         task_graph[task_id] = meta.get("depends_on", [])
                     existing_task_ids.add(task_file.stem)
 
-                    # Validate spec_refs anchors (P4 / T7)
-                    if spec_dir_exists:
-                        for sref in meta.get("spec_refs", []):
-                            s_err = validate_spec_ref(sref, repo_root)
-                            if s_err:
-                                errors.append(f"{task_file.name}: {s_err}")
+                    # Validate spec_refs anchors (P4 / T7, N10)
+                    srefs = meta.get("spec_refs", [])
+                    if srefs:
+                        if not spec_dir_exists:
+                            errors.append(f"{task_file.name}: Specification root directory 'docs/spec' not found")
+                        else:
+                            for sref in srefs:
+                                s_err = validate_spec_ref(sref, repo_root)
+                                if s_err:
+                                    errors.append(f"{task_file.name}: {s_err}")
 
                     # Validate design_ref (P3)
                     design_ref = meta.get("design_ref")
@@ -225,11 +268,16 @@ def validate_change_package(
             meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
-            if spec_dir_exists and isinstance(meta, dict):
-                for sref in meta.get("added", []) + meta.get("modified", []):
-                    s_err = validate_spec_ref(sref, repo_root)
-                    if s_err:
-                        errors.append(f"spec-delta.md: {s_err}")
+            if isinstance(meta, dict):
+                added_mod = meta.get("added", []) + meta.get("modified", [])
+                if added_mod:
+                    if not spec_dir_exists:
+                        errors.append("spec-delta.md: Specification root directory 'docs/spec' not found")
+                    else:
+                        for sref in added_mod:
+                            s_err = validate_spec_ref(sref, repo_root)
+                            if s_err:
+                                errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
 
@@ -262,7 +310,7 @@ def validate_change_package(
 
                 # Cross-check Task ID (T4)
                 if ev_task:
-                    if existing_task_ids and ev_task not in existing_task_ids:
+                    if ev_task not in existing_task_ids:
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: references nonexistent task '{ev_task}'"
                         )

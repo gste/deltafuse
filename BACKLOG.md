@@ -108,3 +108,67 @@ Sverка с внешним планом: [BACKLOG-TESTING.md](BACKLOG-TESTING.md
 ### Вердикт по BACKLOG-TESTING.md
 
 План валиден, актуален на дату сверки и покрывает ~90% того же пространства, что BACKLOG.md, но структурно слабее в двух местах: (а) не содержит судьбы shell-валидаторов и циркулярного eval-контура (P6/P7 BACKLOG.md); (б) предлагает опасный `--overwrite`. Дополнения из него поглощены в P0/P2/P6/P7; сам файл оставлен как источник, дублем не является.
+
+---
+
+## Review-03: проверка исполнения P0–P7 (коммит `ef5fa22`)
+
+**Методика**: прогон 76 тестов (все зелёные) + независимая мутационная проба №2 (10 новых мутаций, не совпадающих с T1–T8 — проверка на «заточку под тест»).
+
+### Подтверждено выполненным
+
+- **P0** ✅ — семантика evidence в `validate_change_package`: phase↔каталог, red→`expected-failure|not-reproduced`+non-zero exit, green/regression→`passed`+`exit_code: 0`, cross-check task/change. Мутационный сьют `test_fsm_mutations.py` (7 именованных тестов) реален и содержателен.
+- **P1** ✅ — `ALLOWED_CHANGE_TRANSITIONS` полная и каноничная (18 статусов, баг-путь `analyzed→targeting`, эскалация `verifying→analyzing`, терминалы); гейт `converged` проверяет статусы задач; T5-сверка статус↔артефакты работает.
+- **P2** ✅ — archiver отказывает при существующем назначении («Overwriting historical archive records is strictly prohibited»), rmtree удалён, `is_change_id_archived` + тест на переиспользование ID.
+- **P3** ✅ — `find_unresolved_decisions_for_change` блокирует гейты `analyzed`/`specified` (скоупинг по Change подтверждён пробой N5/N5b); `validate_decision_ref` требует `accepted`; blocked→accepted цикл покрыт в test_fsm.py.
+- **P4** ✅ — `validate_spec_ref` подключён к slices/tasks/spec-delta (файл+якорь); converged сверяет coverage evidence-мэппинг.
+- **P5** ✅ — стратегии обновлены (9 схем, routing/spec-delta в матрице шаблонов, `.cursor/skills`), `archive` вписан в roadmap; builder синхронизирован с каноном (intake без `analysis:`, coverage без задач до Decompose, статусы обновляются по шагам, verify переводит задачи в `verified`).
+- **P6 частично** ✅ — мусор удалён из корня, `.gitignore` схлопнут, `tests/README.md` переписан под pytest-комплекс.
+- **P7 частично** ✅ — terminal e2e (rejected/duplicate + архивация), hash-чувствительность (`test_hasher_sensitivity_on_single_char_change`), context-линтер (эвристика 1.3, PHASE_CONTRACTS) с unit-тестами.
+
+### Проба №2 (независимая): 8/10 пойманы
+
+| Мутация | Результат |
+|---|---|
+| N1: матрица переходов — 6 граничных переходов, вкл. канонические баг-путь и эскалацию | ✅ канонична |
+| N2: regression-evidence в red-каталоге | ✅ phase mismatch |
+| N3: red с `result: failed` (enum-легально, семантически неверно) | ✅ поймано |
+| N4: green с `result: failed`, `exit_code: 1` | ✅ обе ошибки |
+| N5/N5b: proposed DEC блокирует свой Change; чужой DEC — не блокирует | ✅ корректный скоупинг |
+| N6: design_ref → rejected DEC | ✅ поймано |
+| N7: переиспользование архивного ID | ✅ детектируется |
+| N8: coverage без green-мэппинга на гейте converged | ✅ поймано |
+| N10: `docs/spec/` отсутствует → проверка spec_refs тихо пропускается | ❌ молчаливый skip |
+| Доп.: evidence с `task:` при пустом `tasks/` | ❌ фантом проходит (T4-проверка отключается при пустом множестве) |
+
+### Остаточные проблемы (новые пункты)
+
+#### P8. Тихая деградация валидации (из пробы №2)
+
+- [x] **N10 — spec-root guard**: при отсутствии `docs/spec/` в репо-руте `validate_spec_ref` не вызывается вовсе: Change с битыми spec_refs «успешно» валидируется. Тихий skip опаснее явной ошибки — фикс: если пакет содержит spec_refs, а spec-рута нет, выдавать ошибку «specification root not found», а не пропускать проверку.
+- [x] **T4 при пустом tasks/**: условие `if existing_task_ids and ev_task not in existing_task_ids` выключает проверку, если в `tasks/` нет файлов, — evidence с `task:` при отсутствующих задачах должно быть ошибкой всегда (убрать проверку на непустоту множества).
+
+#### P9. Невыполненные хвосты P6/P7
+
+- [x] **P6.1 не завершён — судьба shell-валидаторов**: `validate-layout.ps1/.sh` и `smoke-test.ps1/.sh` остались; их проверки (lock↔config version/source/hash, adapters.roots, DO-NOT-EDIT маркеры) в python не перенесены (findstr по `src/deltafuse` — только installer); CI их не запускает. Два параллельных валидатора с разной логикой никуда не делись. Требуется выбор: перенос в pytest + удаление скриптов, либо запуск в CI, либо явная декларация легаси в README.
+- [x] **P7.4 не решён — eval-циркулярность**: CI-шаг `deltafuse eval --scenario golden --min-schema-compliance 100.0` остался как есть — mock-провайдер против уже pytest-покрытого валидатора, порог 100% на моке создаёт иллюзию защиты. Убрать из CI или добавить реальный провайдер за флагом.
+- [x] **P7.5 не реализован — immutability request.md**: тестов на revision/supersede-инвариант Intake нет (поиск по tests — пусто).
+- [x] **P7.2 не завершён — not-reproduced**: e2e пишет not-reproduced evidence, но Change не закрывается в статус `not-reproduced` (статус в change.yaml не переводится, архивация not-reproduced-пакета не тестируется, входящие переходы из `analyzing`/`verifying` не покрыты).
+- [x] **P7.3 наполовину — hash-блокировка**: тест чувствительности hash есть, но заявленный тест «отказ валидации Change при несовпадении framework hash» отсутствует — `change.yaml.framework.content_hash` не сверяется с `.deltafuse/lock.yaml` в валидаторе.
+- [x] **P7.6 не интегрирован — context-линтер**: `context.py` существует и покрыт unit-тестами, но `validate_context_budget`/`PHASE_CONTRACTS` не вызываются ни из `fsm.py`, ни из `cli.py` — для агентов нет команды (`df lint-context` или проверка в `check-gate`). Модуль практически мёртв.
+
+### Вердикт Review-03: 8.5/10, не 10/10
+
+Ядро (P0–P5) исполнено добротно и подтверждено независимой пробой: валидатор ловит семантические подделки, матрица переходов канонична, архив неизменяем, decision-loop работает со скоупингом. До 10/10 не дотягивает из-за: двух дыр тихой деградации (P8) и шести незакрытых хвостов P6/P7 (P9), из которых критичны судьба shell-валидаторов, циркулярный eval в CI и мёртвый context-линтер. Галочки P6/P7 выше оставлены как стояли (частичное выполнение маскирует остатки) — фактически выполнены 4/5 в P6 и 3/6 в P7.
+
+---
+
+### Резолюция по Review-03 (все пункты P8 и P9 закрыты):
+- **P8.1 (N10 spec-root guard)**: Реализована явная проверка наличия каталога `docs/spec` при непустом `spec_refs` в слайсах, задачах и `spec-delta.md`. Добавлен регрессионный тест `test_mutation_n10_missing_spec_root_fails`.
+- **P8.2 (T4 при пустом tasks/)**: Убрана проверка `existing_task_ids and`; любая ссылка на задачу при отсутствующих задачах теперь гарантированно порождает ошибку `references nonexistent task`. Добавлен тест `test_mutation_t4_evidence_with_empty_tasks_directory_rejected`.
+- **P9.1 (P6.1 судьба shell-валидаторов)**: Реализован модуль валидации раскладки продукта `src/deltafuse/core/layout.py` (`validate_product_layout`), добавлена команда CLI `deltafuse validate-layout`, покрыта интеграционными тестами `tests/integration/test_layout.py`. Скрипты `validate-layout.ps1/.sh` задокументированы как легаси в `tests/README.md`.
+- **P9.2 (P7.4 eval-циркулярность)**: Добавлен `RealLLMProvider` с требованием API-ключа (`DELTAFUSE_API_KEY`/`OPENAI_API_KEY`), в CLI `deltafuse eval` добавлен флаг `--provider [mock|real]`. В `test_mock_provider.py` добавлен тест на изоляцию реального провайдера.
+- **P9.3 (P7.5 immutability request.md)**: Добавлены тесты `test_request_md_missing_fails_validation` и `test_request_md_claim_tampering_breaks_traceability` в `tests/e2e/test_failure_modes.py`.
+- **P9.4 (P7.2 not-reproduced)**: В `tests/e2e/test_noop_workflow.py` полностью реализован сквозной цикл с переходом в статус `not-reproduced` и последующей архивацией терминального пакета, а также протестированы прямые переходы из `analyzing`, `targeting` и `verifying`.
+- **P9.5 (P7.3 hash-блокировка)**: В `validate_change_package` добавлена строгая сверка `change.yaml.framework.content_hash` с `.deltafuse/lock.yaml`. Добавлен тест `test_mutation_lock_hash_mismatch_rejected`.
+- **P9.6 (P7.6 context-линтер)**: Линтер контекста интегрирован в валидацию frontmatter слайсов (`context_budget`) и выведен в отдельную CLI-команду `deltafuse lint-context`. Добавлен интеграционный тест в `test_validator_cli.py`.
