@@ -22,10 +22,6 @@ df-test-*
 __pycache__/
 *.py[cod]
 *$py.class
-# Python / Testing
-__pycache__/
-*.py[cod]
-*$py.class
 *.egg-info/
 .pytest_cache/
 .coverage

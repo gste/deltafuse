@@ -49,3 +49,12 @@ def test_golden_lifecycle_flow(tmp_path: Path, repo_root: Path):
     builder.step_verify()
     assert check_gate(builder.change_dir, "converged") == []
     assert validate_change_package(builder.change_dir) == []
+
+    # Step 8: Archival (Roadmap 4.2)
+    import yaml
+    from deltafuse.core.archiver import archive_change
+    archived_path = archive_change(builder.change_dir, repo_root=tmp_path)
+    assert archived_path.is_dir()
+    assert not builder.change_dir.exists()
+    archived_yaml = yaml.safe_load((archived_path / "change.yaml").read_text(encoding="utf-8"))
+    assert archived_yaml["status"] == "archived"

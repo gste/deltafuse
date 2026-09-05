@@ -88,6 +88,8 @@ delta-fuse/
   - `decisions/DEC-0000-template.md` -> `decision.schema.yaml`
   - `evidence/red/evidence.yaml` -> `evidence.schema.yaml`
   - `coverage.yaml` -> `coverage.schema.yaml`
+  - `routing.yaml` -> `routing.schema.yaml`
+  - `spec-delta.md` (frontmatter) -> `spec-delta.schema.yaml`
 * **1.3. Strict-режим (`additionalProperties: false`)**:
   - Подача YAML с лишними ключами (`foo: bar`) обязана приводить к падению теста.
 
@@ -130,7 +132,7 @@ delta-fuse/
 * **4.1. Fresh Install**:
   - Установка в чистую директорию `tmp_path`.
   - Проверка создания структуры: `.deltafuse/`, `docs/intake/`, `docs/changes/`, `docs/spec/`, `docs/decisions/`, `docs/archive/`.
-  - Генерация адаптеров `.agents/skills/`, `.cursor/rules/`, `.gemini/skills/`.
+  - Генерация адаптеров `.agents/skills/`, `.cursor/skills/`, `.gemini/skills/`.
 * **4.2. Идемпотентность и защита пользовательских данных**:
   - Модификация `AGENTS.md`, `.deltafuse/config.yaml`, `docs/spec/_capabilities.yaml` в проекте.
   - Запуск повторной установки: кастомный контент **не перезаписывается**.

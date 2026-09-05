@@ -26,8 +26,8 @@
    - Гарантия: любой шаблон «из коробки» валиден на 100%.
 
 ### 1.3. Критерии приемки (Definition of Done)
-- [ ] `pytest tests/unit/test_schemas.py` и `pytest tests/unit/test_templates.py` выполняются быстрее чем за 1 секунду.
-- [ ] Покрытие кода тестами для `core/schemas.py` и `core/frontmatter.py` составляет 100%.
+- [x] `pytest tests/unit/test_schemas.py` и `pytest tests/unit/test_templates.py` выполняются быстрее чем за 1 секунду.
+- [x] Покрытие кода тестами для `core/schemas.py` и `core/frontmatter.py` составляет 100%.
 
 ---
 
@@ -42,7 +42,7 @@
 2. **Кроссплатформенный установщик (`src/deltafuse/core/installer.py`)**:
    - Создание структуры целевого продукта (`.deltafuse/`, `docs/intake/`, `docs/changes/`, `docs/spec/`, `docs/decisions/`, `docs/archive/`).
    - Генерация `.deltafuse/lock.yaml` с версией и `content_hash`.
-   - Генерация адаптеров для агентов (`.agents/skills/`, `.cursor/rules/`, `.gemini/skills/`).
+   - Генерация адаптеров для агентов (`.agents/skills/`, `.cursor/skills/`, `.gemini/skills/`).
    - Защита пользовательских файлов (не перезаписывать `_capabilities.yaml`, `config.yaml`, `AGENTS.md`, `CHANGELOG.md` при повторном запуске).
    - Обработка флага `--force`.
 3. **CLI команда инициализации (`src/deltafuse/cli.py`)**:
@@ -55,7 +55,7 @@
    - `test_hash_consistency`: проверка идентичности вычисленного хэша на Windows и Linux.
 
 ### 2.3. Критерии приемки
-- [ ] `pytest tests/integration/test_installer.py` полностью заменяет функционал `tests/smoke-test.ps1` и `tests/smoke-test.sh`.
+- [x] `pytest tests/integration/test_installer.py` полностью заменяет функционал `tests/smoke-test.ps1` и `tests/smoke-test.sh`.
 - [ ] Тесты инсталлятора стабильно проходят на любой ОС без внешних зависимостей шеллов.
 
 ---
@@ -82,9 +82,10 @@
      - Gate *Target Confirmed*: наличие `evidence/red/TASK-*.yaml` со статусом `expected-failure`.
      - Gate *Implemented*: наличие `green` и `regression` evidence с кодом `0`.
      - Gate *Converged*: все задачи закрыты, зафиксирован `verification/run.yaml`.
-4. **CLI команды валидации (`src/deltafuse/cli.py`)**:
+4. **CLI команды валидации и архивации (`src/deltafuse/cli.py`)**:
    - `deltafuse validate --change <id>` (полная статическая проверка пакета изменений).
    - `deltafuse check-gate --change <id> --gate <gate-name>` (проверка готовности к следующему шагу).
+   - `deltafuse archive --change <id>` (проверка сходимости и перемещение пакета в `docs/archive/changes/YYYY-MM-DD-<change-id>/`).
 5. **Unit & Integration тесты валидатора (`tests/unit/test_fsm.py`, `test_dag.py`, `test_integrity.py`)**:
    - Тесты на обнаружение циклических зависимостей.
    - Тесты на отказ в переходе при отсутствии обязательных evidence файлов.

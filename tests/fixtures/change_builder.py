@@ -4,13 +4,28 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import yaml
+from deltafuse.core.frontmatter import parse_frontmatter
+
 
 class MockChangeBuilder:
     def __init__(self, root_dir: Path, change_id: str = "CHG-001", title: str = "Mock Change"): 
+        self.root_dir = root_dir
         self.change_dir = root_dir / "docs" / "changes" / f"{change_id}-test"
         self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
         self.title = title
+        spec_core = self.root_dir / "docs" / "spec" / "core.md"
+        if (self.root_dir / "docs" / "spec").is_dir() and not spec_core.exists():
+            spec_core.write_text("# Core Spec\n## REQ-01\nCore requirement.\n", encoding="utf-8")
+
+    def _update_change_yaml(self, updates: dict[str, Any]) -> None:
+        cfile = self.change_dir / "change.yaml"
+        if cfile.is_file():
+            data = yaml.safe_load(cfile.read_text(encoding="utf-8"))
+        else:
+            data = {}
+        data.update(updates)
+        cfile.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
         if claims is None:
@@ -29,14 +44,13 @@ class MockChangeBuilder:
             "intent": "feature",
             "risk": "low",
             "source": {"request": "request.md", "intake_refs": []},
-            "analysis": {"routing": "routing.yaml", "summary": "analysis.md"},
             "deltas": [],
             "slices": [],
             "decisions": [],
             "tasks": [],
             "verification": None,
         }
-        (self.change_dir / "change.yaml").write_text(yaml.safe_dump(change_yaml), encoding="utf-8")
+        (self.change_dir / "change.yaml").write_text(yaml.safe_dump(change_yaml, sort_keys=False), encoding="utf-8")
         return self
 
     def step_analyze(self, slices: list[str] | None = None) -> MockChangeBuilder:
@@ -58,7 +72,13 @@ class MockChangeBuilder:
         (self.change_dir / "analysis.md").write_text("# Analysis\nAnalysis summary.", encoding="utf-8")
         slices_dir = self.change_dir / "slices"
         slices_dir.mkdir(parents=True, exist_ok=True)
+        slice_objs = []
         for sl in slices:
+            slice_objs.append({
+                "id": sl,
+                "file": f"slices/{sl}.md",
+                "status": "draft",
+            })
             slice_md = (
                 f"---\n"
                 f"id: {sl}\n"
@@ -68,7 +88,7 @@ class MockChangeBuilder:
                 f"primary_capability: system.core\n"
                 f"related_capabilities: []\n"
                 f"policies: []\n"
-                f"spec_refs: [docs/spec/core.md]\n"
+                f"spec_refs: [docs/spec/core.md#REQ-01]\n"
                 f"claims: [CR-001]\n"
                 f"depends_on: []\n"
                 f"context_budget: {{max_tokens: 16000, max_files: 20}}\n"
@@ -80,19 +100,19 @@ class MockChangeBuilder:
             "claims": {
                 "CR-001": {
                     "slice": "SLICE-01",
-                    "tasks": ["TASK-001"],
-                    "spec_refs": ["docs/spec/core.md"],
-                    "evidence": {
-                        "red": "evidence/red/TASK-001.yaml",
-                        "green": "evidence/green/TASK-001.yaml",
-                        "regression": "evidence/regression/TASK-001.yaml",
-                        "verification": "evidence/verification/run.yaml",
-                    },
+                    "tasks": [],
+                    "spec_refs": ["docs/spec/core.md#REQ-01"],
+                    "evidence": {},
                     "status": "pending",
                 }
             },
         }
         (self.change_dir / "coverage.yaml").write_text(yaml.safe_dump(cov), encoding="utf-8")
+        self._update_change_yaml({
+            "status": "analyzed",
+            "analysis": {"routing": "routing.yaml", "summary": "analysis.md"},
+            "slices": slice_objs,
+        })
         return self
 
     def step_specify(self) -> MockChangeBuilder:
@@ -101,12 +121,13 @@ class MockChangeBuilder:
             f"change: {self.change_id}\n"
             f"status: proposed\n"
             f"slices: [SLICE-01]\n"
-            f"added: [docs/spec/core.md#REQ-01]\n"
+            f"added: []\n"
             f"modified: []\n"
             f"removed: []\n"
             f"---\n\n# Spec Delta\nDetails\n"
         )
         (self.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+        self._update_change_yaml({"status": "specified"})
         return self
 
     def step_decompose(self, tasks: list[dict[str, Any]] | None = None) -> MockChangeBuilder:
@@ -118,8 +139,10 @@ class MockChangeBuilder:
             }]
         tasks_dir = self.change_dir / "tasks"
         tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_ids = []
         for t in tasks:
             tid = t["id"]
+            task_ids.append(tid)
             slice_id = t.get("slice", "SLICE-01")
             deps = t.get("depends_on", [])
             deps_str = str(deps).replace("'", "")
@@ -139,6 +162,19 @@ class MockChangeBuilder:
                 f"---\n\n# {tid}\nImplementation details\n"
             )
             (tasks_dir / f"{tid}.md").write_text(task_md, encoding="utf-8")
+
+        # Update coverage with tasks
+        cov_file = self.change_dir / "coverage.yaml"
+        if cov_file.is_file():
+            cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+            if "claims" in cov and "CR-001" in cov["claims"]:
+                cov["claims"]["CR-001"]["tasks"] = task_ids
+            cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
+
+        self._update_change_yaml({
+            "status": "decomposed",
+            "tasks": task_ids,
+        })
         return self
 
     def step_target(self, task_id: str = "TASK-001") -> MockChangeBuilder:
@@ -159,6 +195,15 @@ class MockChangeBuilder:
             "spec_status": "unchanged",
         }
         (red_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev), encoding="utf-8")
+
+        cov_file = self.change_dir / "coverage.yaml"
+        if cov_file.is_file():
+            cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+            if "claims" in cov and "CR-001" in cov["claims"]:
+                cov["claims"]["CR-001"]["evidence"]["red"] = f"evidence/red/{task_id}.yaml"
+            cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
+
+        self._update_change_yaml({"status": "targeting"})
         return self
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:
@@ -194,6 +239,23 @@ class MockChangeBuilder:
             "spec_status": "unchanged",
         }
         (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+
+        task_file = self.change_dir / "tasks" / f"{task_id}.md"
+        if task_file.is_file():
+            meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            meta["status"] = "implemented"
+            front = yaml.safe_dump(meta, sort_keys=False)
+            task_file.write_text(f"---\n{front}---\n{body}", encoding="utf-8")
+
+        cov_file = self.change_dir / "coverage.yaml"
+        if cov_file.is_file():
+            cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+            if "claims" in cov and "CR-001" in cov["claims"]:
+                cov["claims"]["CR-001"]["evidence"]["green"] = f"evidence/green/{task_id}.yaml"
+                cov["claims"]["CR-001"]["evidence"]["regression"] = f"evidence/regression/{task_id}.yaml"
+            cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
+
+        self._update_change_yaml({"status": "implemented"})
         return self
 
     def step_verify(self) -> MockChangeBuilder:
@@ -213,4 +275,22 @@ class MockChangeBuilder:
             "spec_status": "unchanged",
         }
         (ver_dir / "run.yaml").write_text(yaml.safe_dump(ev_ver), encoding="utf-8")
+
+        tasks_dir = self.change_dir / "tasks"
+        if tasks_dir.is_dir():
+            for tf in tasks_dir.glob("*.md"):
+                meta, body = parse_frontmatter(tf.read_text(encoding="utf-8"))
+                meta["status"] = "verified"
+                front = yaml.safe_dump(meta, sort_keys=False)
+                tf.write_text(f"---\n{front}---\n{body}", encoding="utf-8")
+
+        cov_file = self.change_dir / "coverage.yaml"
+        if cov_file.is_file():
+            cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+            if "claims" in cov and "CR-001" in cov["claims"]:
+                cov["claims"]["CR-001"]["evidence"]["verification"] = "evidence/verification/run.yaml"
+                cov["claims"]["CR-001"]["status"] = "verified"
+            cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
+
+        self._update_change_yaml({"status": "converged"})
         return self

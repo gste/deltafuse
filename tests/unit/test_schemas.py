@@ -235,3 +235,22 @@ def test_spec_delta_schema_validation(registry: SchemaRegistry):
         "removed": []
     }
     assert registry.validate("spec-delta", valid_spec_delta) == []
+
+
+def test_bootstrap_decision_schema_validation(registry: SchemaRegistry):
+    valid_bootstrap = {
+        "id": "DEC-0000",
+        "title": "Bootstrap Architecture Decision",
+        "kind": "architecture",
+        "status": "accepted",
+        "owner": "lead-arch",
+        "date": "2026-09-04",
+        "change": None,
+        "affects": {
+            "capabilities": ["identity.auth"],
+            "spec_refs": ["docs/spec/auth.md#REQ-01"],
+        },
+        "supersedes": None,
+        "superseded_by": None,
+    }
+    assert registry.validate("decision", valid_bootstrap) == []
