@@ -213,3 +213,68 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):
     assert "Overwriting historical archive records is strictly prohibited" in str(exc_info.value)
     # Ensure original archive wasn't wiped
     assert archived_dir.is_dir()
+
+
+def test_mutation_n10_missing_spec_root_fails(tmp_path: Path):
+    """N10: If docs/spec directory does not exist, spec_refs must not be silently skipped."""
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-210", title="N10 Mutation Test")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    # Delete docs/spec directory
+    import shutil
+    spec_dir = tmp_path / "docs" / "spec"
+    if spec_dir.exists():
+        shutil.rmtree(spec_dir)
+
+    errs = validate_change_package(builder.change_dir)
+    assert any("Specification root directory 'docs/spec' not found" in e for e in errs)
+
+
+def test_mutation_t4_evidence_with_empty_tasks_directory_rejected(tmp_path: Path):
+    """T4 edge-case: evidence referencing task when tasks/ has no tasks must fail."""
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-211", title="Empty Tasks T4 Test")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    # Note: decompose was not run, tasks/ does not exist or is empty
+    red_dir = builder.change_dir / "evidence" / "red"
+    red_dir.mkdir(parents=True, exist_ok=True)
+    phantom_evidence = {
+        "schema_version": 2,
+        "change": "CHG-211",
+        "task": "TASK-001",  # No tasks exist in package!
+        "phase": "red",
+        "timestamp": "2026-09-05T12:00:00Z",
+        "command": "pytest",
+        "exit_code": 1,
+        "result": "expected-failure",
+        "summary": "Phantom",
+        "changed_paths": ["tests/test.py"],
+        "spec_status": "unchanged",
+    }
+    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(phantom_evidence), encoding="utf-8")
+
+    errs = validate_change_package(builder.change_dir)
+    assert any("references nonexistent task 'TASK-001'" in e for e in errs)
+
+
+def test_mutation_lock_hash_mismatch_rejected(tmp_path: Path, repo_root: Path):
+    """P7.3: change.yaml framework hash mismatch with .deltafuse/lock.yaml must be rejected."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-212", title="Lock Hash Mismatch")
+    builder.step_intake()
+
+    # Tamper with framework content_hash in change.yaml
+    cfile = builder.change_dir / "change.yaml"
+    cdata = yaml.safe_load(cfile.read_text(encoding="utf-8"))
+    cdata["framework"]["content_hash"] = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
+
+    errs = validate_change_package(builder.change_dir)
+    assert any("Framework content hash mismatch" in e for e in errs)

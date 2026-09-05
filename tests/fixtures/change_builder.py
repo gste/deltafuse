@@ -32,6 +32,15 @@ class MockChangeBuilder:
             claims = ["CR-001"]
         claims_text = "\n".join(f"- {c}: Description for {c}" for c in claims)
         (self.change_dir / "request.md").write_text(f"# Request\n{claims_text}\n", encoding="utf-8")
+        lock_file = self.root_dir / ".deltafuse" / "lock.yaml"
+        fw_hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        if lock_file.is_file():
+            try:
+                ldata = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
+                fw_hash = ldata.get("framework", {}).get("content_hash", fw_hash)
+            except Exception:
+                pass
+
         change_yaml = {
             "schema_version": 2,
             "id": self.change_id,
@@ -39,7 +48,7 @@ class MockChangeBuilder:
             "status": "normalized",
             "framework": {
                 "version": "2.0.0",
-                "content_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "content_hash": fw_hash,
             },
             "intent": "feature",
             "risk": "low",

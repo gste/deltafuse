@@ -15,6 +15,7 @@ tests/
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
 ├── integration/
 │   ├── test_installer.py         # Product initialization and framework upgrade
+│   ├── test_layout.py            # Product repository layout and adapter integrity
 │   └── test_validator_cli.py     # CLI validator and gate checking commands
 ├── e2e/
 │   ├── test_golden_workflow.py   # Full 8-step lifecycle flow with archival
@@ -27,8 +28,8 @@ tests/
 │   └── test_eval_cli.py          # deltafuse eval CLI command and reporting
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
-├── validate-layout.ps1 / .sh     # Shell layout validator
-└── smoke-test.ps1 / .sh          # Shell smoke test script
+├── validate-layout.ps1 / .sh     # Legacy shell layout validators (canonical in python `deltafuse validate-layout`)
+└── smoke-test.ps1 / .sh          # Legacy shell smoke test scripts
 ```
 
 ## Running Tests
@@ -36,6 +37,16 @@ tests/
 ### Run Full Pytest Suite
 ```bash
 python -m pytest -v
+```
+
+### Validate Product Layout
+```bash
+deltafuse validate-layout .
+```
+
+### Lint Change Context Budget
+```bash
+deltafuse lint-context docs/changes/CHG-001
 ```
 
 ### Run with Coverage

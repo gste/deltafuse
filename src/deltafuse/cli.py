@@ -5,10 +5,13 @@ import argparse
 import sys
 from pathlib import Path
 from deltafuse.core.installer import install, InstallationError
-from deltafuse.core.fsm import validate_change_package, check_gate
+from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
+from deltafuse.core.layout import validate_product_layout
+from deltafuse.core.context import validate_context_budget
+from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.evals.dataset import EvalDataset
-from deltafuse.evals.providers import MockLLMProvider
+from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
 from deltafuse.evals.reporter import export_report
 from deltafuse.evals.runner import run_eval
 
@@ -43,10 +46,19 @@ def main(argv: list[str] | None = None) -> int:
     arch_parser.add_argument("change_path", help="Path to Change package directory")
     arch_parser.add_argument("--force", "-f", action="store_true", help="Force archive without converged check")
 
+    # validate-layout command (P6.1)
+    layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
+    layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
+
+    # lint-context command (P7.6)
+    ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
+    ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
+
     # eval command (Stage 5)
     eval_parser = subparsers.add_parser("eval", help="Run LLM Eval benchmark against DeltaFuse dataset and gatekeepers")
     eval_parser.add_argument("--dataset", "-d", default=None, help="Path to custom eval dataset YAML/JSON file")
-    eval_parser.add_argument("--scenario", "-s", default="golden", choices=["golden", "schema_violation", "fsm_violation", "routing_mismatch", "claim_hallucination"], help="Mock LLM simulation scenario")
+    eval_parser.add_argument("--provider", "-p", default="mock", choices=["mock", "real"], help="LLM Provider to use (mock or real)")
+    eval_parser.add_argument("--scenario", "-s", default="golden",  choices=["golden", "schema_violation", "fsm_violation", "routing_mismatch", "claim_hallucination"], help="Mock LLM simulation scenario")
     eval_parser.add_argument("--output", "-o", default="text", choices=["text", "json", "markdown"], help="Output format for report")
     eval_parser.add_argument("--out-file", default=None, help="File path to save the eval report")
     eval_parser.add_argument("--min-schema-compliance", type=float, default=0.0, help="Minimum required Schema Compliance Rate (0.0 - 100.0)")
@@ -102,6 +114,46 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Unexpected error during archival: {ex}", file=sys.stderr)
             return 2
 
+    elif args.command == "validate-layout":
+        target = Path(args.product_path)
+        errors = validate_product_layout(target)
+        if errors:
+            print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
+            for err in errors:
+                print(f"  - {err}", file=sys.stderr)
+            return 1
+        print(f"DeltaFuse product layout at {target} is valid.")
+        return 0
+
+    elif args.command == "lint-context":
+        target = Path(args.change_path)
+        repo_root = find_repo_root(target)
+        slices_dir = target / "slices"
+        errors: list[str] = []
+        if slices_dir.is_dir():
+            for sf in slices_dir.glob("*.md"):
+                try:
+                    meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
+                    budget = meta.get("context_budget")
+                    if budget and isinstance(budget, dict):
+                        ref_files: list[Path] = []
+                        for sref in meta.get("spec_refs", []):
+                            sp_rel = sref.split("#")[0]
+                            sp_path = (repo_root / sp_rel).resolve()
+                            if sp_path.is_file():
+                                ref_files.append(sp_path)
+                        b_errs = validate_context_budget(budget, ref_files)
+                        errors.extend(f"{sf.name}: {e}" for e in b_errs)
+                except Exception as ex:
+                    errors.append(f"{sf.name}: {ex}")
+        if errors:
+            print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
+            for err in errors:
+                print(f"  - {err}", file=sys.stderr)
+            return 1
+        print(f"Context budget for {target} is within limits.")
+        return 0
+
     elif args.command == "eval":
         try:
             if args.dataset:
@@ -109,7 +161,10 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 dataset = EvalDataset.get_default_dataset()
 
-            provider = MockLLMProvider(scenario=args.scenario)
+            if args.provider == "real":
+                provider = RealLLMProvider()
+            else:
+                provider = MockLLMProvider(scenario=args.scenario)
             report = run_eval(dataset=dataset, provider=provider)
 
             output_text = export_report(report, format_type=args.output, output_file=args.out_file)

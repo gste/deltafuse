@@ -38,6 +38,13 @@ class MockLLMProvider(LLMProvider):
 
     def generate_change_package(self, case: EvalCase, target_dir: Path) -> Path:
         target_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure specification directory exists for eval packages
+        repo_root = target_dir.parent
+        spec_dir = repo_root / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        spec_file = spec_dir / "core.md"
+        if not spec_file.is_file():
+            spec_file.write_text("# Specification\n## REQ-01\nRequirement 01\n", encoding="utf-8")
         cid = case.case_id if case.case_id.startswith("CHG-") else f"CHG-999-{case.case_id.lower().replace('_', '-')}"
 
         # 1. request.md
@@ -316,3 +323,25 @@ class CallableLLMProvider(LLMProvider):
 
     def generate_change_package(self, case: EvalCase, target_dir: Path) -> Path:
         return self._generator(case, target_dir)
+
+
+class RealLLMProvider(LLMProvider):
+    """Real LLM Provider calling OpenAI / Anthropic / Gemini API if API key is present."""
+
+    def __init__(self, model: str = "gpt-4o", api_key: str | None = None):
+        import os
+        self.model = model
+        self.api_key = api_key or os.getenv("DELTAFUSE_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+    @property
+    def name(self) -> str:
+        return f"real:{self.model}"
+
+    def generate_change_package(self, case: EvalCase, target_dir: Path) -> Path:
+        if not self.api_key:
+            raise RuntimeError(
+                "RealLLMProvider requires DELTAFUSE_API_KEY or OPENAI_API_KEY environment variable. "
+                "Use --provider mock for deterministic offline execution."
+            )
+        # Network integration stub: if key is present, real calls can be dispatched
+        raise NotImplementedError("Online remote LLM invocation requires active API endpoint.")

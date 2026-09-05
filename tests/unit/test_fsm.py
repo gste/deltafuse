@@ -32,7 +32,7 @@ def test_check_gate_lifecycle(tmp_path: Path, repo_root: Path):
         "status: normalized\n"
         "framework:\n"
         "  version: 2.0.0\n"
-        "  content_hash: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+        f"  content_hash: {yaml.safe_load((tmp_path / '.deltafuse' / 'lock.yaml').read_text(encoding='utf-8'))['framework']['content_hash']}\n"
         "intent: feature\n"
         "risk: low\n"
         "source:\n"
@@ -103,7 +103,7 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
         "id": "CHG-001",
         "title": "Test change",
         "status": "analyzed",
-        "framework": {"version": "2.0.0", "content_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+        "framework": {"version": "2.0.0", "content_hash": yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))["framework"]["content_hash"]},
         "source": {"request": "request.md"},
         "analysis": {"routing": "routing.yaml", "summary": "analysis.md"},
         "deltas": [], "slices": [{"id": "SLICE-01", "status": "draft", "file": "slices/SLICE-01.md"}],
