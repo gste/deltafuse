@@ -360,6 +360,9 @@ def phase_context(product: Path, phase: str, case_id: str) -> list[Path]:
             )
             for name in schema_names:
                 files.append(FRAMEWORK / "process" / "schemas" / name)
+            if case_id == "S04":
+                files.append(FRAMEWORK / "process" / "schemas" / "decision.schema.yaml")
+                files.append(FRAMEWORK / "process" / "schemas" / "change.schema.yaml")
         if phase == "specify":
             files.append(FRAMEWORK / "process" / "schemas" / "spec-delta.schema.yaml")
         if phase == "decompose":
@@ -392,29 +395,64 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
             "Use status continue."
         )
     if phase == "analyze" and ANALYZE_FOCUS == "routing":
-        parts.append(
-            "This call writes ONLY docs/changes/<id>/routing.yaml (map every CR-* to a primary capability). "
-            "Do not add schema_version; routing.schema.yaml forbids extra keys. "
-            "Use status continue. Do not set blocked-on-decision and do not write Decision files. "
-            "Do not write analysis.md, slices, or coverage.yaml."
-        )
+        if case_id == "S04":
+            parts.append(
+                "This call writes docs/changes/<id>/routing.yaml (map every CR-* to a primary capability). "
+                "Do not add schema_version; routing.schema.yaml forbids extra keys. "
+                "Do not edit docs/spec/** or src/**. Do not Specify. "
+                "If you already treat the VIP policy fork as blocking, you MUST also write "
+                "docs/decisions/DEC-0001-<slug>.md (status proposed) AND change.yaml with "
+                "status blocked-on-decision and decisions: [that DEC path], and set JSON "
+                "status blocked-on-decision. Writing only the DEC file is not enough. "
+                "Otherwise use status continue and do not write slices or coverage.yaml."
+            )
+        else:
+            parts.append(
+                "This call writes ONLY docs/changes/<id>/routing.yaml (map every CR-* to a primary capability). "
+                "Do not add schema_version; routing.schema.yaml forbids extra keys. "
+                "Use status continue. Do not set blocked-on-decision and do not write Decision files. "
+                "Do not write analysis.md, slices, or coverage.yaml."
+            )
     if phase == "analyze" and ANALYZE_FOCUS == "slices":
-        parts.append(
-            "This call writes ONLY one file: docs/changes/<id>/slices/SLICE-01.md "
-            "(YAML frontmatter matching slice.schema.yaml, then markdown body). "
-            "Keep the body short. Frontmatter claims must list the CR-NNN ids from request.md. "
-            "Use status continue. Do not set blocked-on-decision: unknowns are not blocking Decisions "
-            "for a single unambiguous feature. "
-            "Do not write coverage.yaml, analysis.md, or extra slices."
-        )
+        if case_id == "S04":
+            parts.append(
+                "This request lists mutually exclusive VIP policies. Do NOT pick one. "
+                "Do not edit docs/spec/** or src/**. Do not write coverage.yaml. "
+                "Write files[]: (1) docs/decisions/DEC-0001-<slug>.md with YAML frontmatter matching "
+                "decision.schema.yaml: id DEC-0001, title, kind architecture, status proposed, "
+                "owner pending-human, date (ISO), change <id>, affects.capabilities [security.ratelimit], "
+                "affects.spec_refs [docs/spec/security/ratelimit.md], supersedes null, superseded_by null. "
+                "No schema_version. Body lists the forks without choosing. "
+                "(2) docs/changes/<id>/change.yaml — keep existing fields, set status: blocked-on-decision, "
+                "decisions: [docs/decisions/DEC-0001-<slug>.md]. "
+                "Optional short SLICE-01.md that records the open fork. "
+                "JSON status MUST be blocked-on-decision."
+            )
+        else:
+            parts.append(
+                "This call writes ONLY one file: docs/changes/<id>/slices/SLICE-01.md "
+                "(YAML frontmatter matching slice.schema.yaml, then markdown body). "
+                "Keep the body short. Frontmatter claims must list the CR-NNN ids from request.md. "
+                "Use status continue. Do not set blocked-on-decision: unknowns are not blocking Decisions "
+                "for a single unambiguous feature. "
+                "Do not write coverage.yaml, analysis.md, or extra slices."
+            )
     if phase == "analyze" and ANALYZE_FOCUS == "coverage":
-        parts.append(
-            "This call writes ONLY docs/changes/<id>/coverage.yaml matching coverage.schema.yaml. "
-            "Do not add schema_version. Do not rewrite slices or analysis.md. "
-            "Use status continue. Do not set blocked-on-decision and do not write Decision files: "
-            "intake unknowns (U*) are not blocking Decisions for a single unambiguous feature. "
-            "Map each CR-NNN id from request.md to slice SLICE-01."
-        )
+        if case_id == "S04":
+            parts.append(
+                "Do not write coverage.yaml. The Change must stop for a human Decision. "
+                "Write docs/decisions/DEC-0001-<slug>.md (status proposed) and change.yaml "
+                "status blocked-on-decision. JSON status MUST be blocked-on-decision. "
+                "Do not edit docs/spec/** or src/**."
+            )
+        else:
+            parts.append(
+                "This call writes ONLY docs/changes/<id>/coverage.yaml matching coverage.schema.yaml. "
+                "Do not add schema_version. Do not rewrite slices or analysis.md. "
+                "Use status continue. Do not set blocked-on-decision and do not write Decision files: "
+                "intake unknowns (U*) are not blocking Decisions for a single unambiguous feature. "
+                "Map each CR-NNN id from request.md to slice SLICE-01."
+            )
     if phase == "specify":
         if case_id == "S03":
             parts.append(
@@ -629,6 +667,34 @@ def find_change_dir(product: Path, written: list[str] | None = None) -> Path | N
     return max(candidates, key=lambda p: (p / "change.yaml").stat().st_mtime)
 
 
+def s04_human_gate_complete(product: Path, written: list[str], status: str) -> bool:
+    if status != "blocked-on-decision":
+        return False
+    wrote_decision = any(
+        p.replace("\\", "/").startswith("docs/decisions/")
+        and Path(p).name.startswith("DEC-")
+        and "template" not in Path(p).name.lower()
+        for p in written
+    )
+    if not wrote_decision:
+        change_dir = find_change_dir(product, written=written)
+        if change_dir is not None:
+            wrote_decision = any(
+                p.name.startswith("DEC-") and "template" not in p.name.lower()
+                for p in (product / "docs" / "decisions").glob("DEC-*.md")
+            )
+        if not wrote_decision:
+            return False
+    change_dir = find_change_dir(product, written=written)
+    if change_dir is None:
+        return False
+    data = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8")) or {}
+    if data.get("status") != "blocked-on-decision":
+        return False
+    decisions = data.get("decisions") or []
+    return any("DEC-" in str(item) for item in decisions)
+
+
 def run_gate(product: Path, phase: str, written: list[str] | None = None) -> tuple[int, str]:
     change_dir = find_change_dir(product, written=written)
     if change_dir is None:
@@ -712,6 +778,17 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
                 ]
                 if spec_writes:
                     parse_error = "S03 spec unchanged: must not edit " + ",".join(spec_writes)
+            if not parse_error and case_id == "S04":
+                premature = [
+                    p.replace("\\", "/")
+                    for p in written
+                    if p.replace("\\", "/").startswith("docs/spec/")
+                    or p.replace("\\", "/").startswith("src/")
+                ]
+                if premature:
+                    parse_error = "S04 must not edit spec or code before Decision: " + ",".join(
+                        premature
+                    )
             if not parse_error and phase == "target":
                 prod_writes = [
                     p.replace("\\", "/")
@@ -917,17 +994,52 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
                 and "template" not in Path(p).name.lower()
                 for p in written
             )
-            if status == "blocked-on-decision" and not wrote_decision:
+            if case_id == "S04" and status == "blocked-on-decision" and not s04_human_gate_complete(
+                product, written, status
+            ):
                 last_error = (
-                    "status blocked-on-decision requires writing docs/decisions/DEC-*.md; "
-                    "this request is a single unambiguous feature — use status continue"
+                    "S04 incomplete human gate: write docs/decisions/DEC-*.md AND set "
+                    "change.yaml status blocked-on-decision with decisions: [that path]"
                 )
                 gate_code = 1
                 attempt_row["gate_exit"] = 1
                 metrics["attempts"][-1] = attempt_row
                 (run_dir / f"attempt{attempt}-gate.txt").write_text(last_error, encoding="utf-8")
                 continue
-            if gate_code == 0 or (status == "blocked-on-decision" and wrote_decision):
+            if (
+                case_id == "S04"
+                and phase == "analyze"
+                and ANALYZE_FOCUS in {"slices", "coverage"}
+                and not s04_human_gate_complete(product, written, status)
+            ):
+                last_error = (
+                    "S04 must set status blocked-on-decision and write docs/decisions/DEC-*.md; "
+                    "do not choose a VIP policy and do not Specify"
+                )
+                gate_code = 1
+                attempt_row["gate_exit"] = 1
+                metrics["attempts"][-1] = attempt_row
+                (run_dir / f"attempt{attempt}-gate.txt").write_text(last_error, encoding="utf-8")
+                continue
+            if status == "blocked-on-decision" and not wrote_decision:
+                last_error = (
+                    "status blocked-on-decision requires writing docs/decisions/DEC-*.md"
+                    + (
+                        ""
+                        if case_id == "S04"
+                        else "; this request is a single unambiguous feature — use status continue"
+                    )
+                )
+                gate_code = 1
+                attempt_row["gate_exit"] = 1
+                metrics["attempts"][-1] = attempt_row
+                (run_dir / f"attempt{attempt}-gate.txt").write_text(last_error, encoding="utf-8")
+                continue
+            if gate_code == 0 or (
+                status == "blocked-on-decision"
+                and wrote_decision
+                and (case_id != "S04" or s04_human_gate_complete(product, written, status))
+            ):
                 metrics["outcome"] = "blocked-on-decision" if status == "blocked-on-decision" else "pass"
                 break
             last_error = gate_out

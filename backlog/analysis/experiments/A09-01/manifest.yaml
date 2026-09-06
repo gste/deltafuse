@@ -12,7 +12,7 @@ criterion_ids:
   - "TEST-001"
   - "PROC-004"
   - "PROC-007"
-status: "in-progress"
+status: "done"
 split_reason: "Three cases x three repeats x seven phases exceed one analysis call; repeats must be separate invocations."
 inputs:
   - "backlog/analysis-plan.md:A09"
@@ -46,5 +46,6 @@ notes:
   - "S03 r1-frozen: spec unchanged, authentic Red after oracle hint, Implement Green, hidden suite 2 passed"
   - "S03 r2-frozen: spec unchanged, authentic Red first try, Implement Green, hidden suite 2 passed; decompose needed change.yaml in files[]"
   - "A09-01b closed 2026-09-06: verdict pass; S03 r1–r3; next A09-01c S04"
+  - "A09-01c closed 2026-09-06: S04 r1–r3 blocked-on-decision, no Specify; parent A09-01 done/partial; prompts frozen"
   - "Do not reuse work/S02-r1 for frozen repeats"
   - "Oracle not in ornith prompt"

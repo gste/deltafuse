@@ -1,0 +1,37 @@
+change: CHG-001-vip-quoting
+claims:
+  CR-001:
+    summary: Existing Rate Limiter applies general limits to all users; no VIP differentiation
+      today.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: VIP users must receive special treatment so they are not subject to the
+      general limits.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Mechanism is open-ended (infinite quota, enlarged token pool, or priority
+      servicing); final choice deferred to the team.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Requester explicitly defers the mechanism selection to the implementation
+      team.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: VIP identification method and the baseline "normal" quota value are unspecified
+      and must be resolved during analysis.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low

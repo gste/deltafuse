@@ -1,0 +1,22 @@
+schema_version: 2
+id: CHG-001-vip-quoting
+title: Add rate-limit quotas for VIP users
+status: blocked-on-decision
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S04.md
+  intake_refs:
+    - docs/intake/S04.md
+analysis:
+  routing: docs/changes/CHG-001-vip-quoting/routing.yaml
+  summary: null
+deltas: []
+slices: []
+decisions:
+  - docs/decisions/DEC-0001-vip-quoting-mechanism.md
+tasks: []
+verification: null

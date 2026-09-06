@@ -1,0 +1,39 @@
+case: S04
+repeat: 1
+tag: frozen
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 2048
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: routing
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 11630
+  ttft_s: 15.77385310002137
+  elapsed_s: 71.59954229998402
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-vip-quoting/routing.yaml
+  - docs/decisions/DEC-0001-vip-quoting-mechanism.md
+  - docs/changes/CHG-001-vip-quoting/change.yaml
+  model_status: blocked-on-decision
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5064
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  gpu_after:
+    vram_used_mib: 5187
+    vram_total_mib: 8188
+    gpu_util_pct: 18
+  content_empty: false
+  reasoning_chars: 0
+outcome: blocked-on-decision

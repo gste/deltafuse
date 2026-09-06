@@ -1,0 +1,38 @@
+change: CHG-001-vip-quoting
+claims:
+  CR-001:
+    summary: Rate Limiter currently enforces one shared quota for all clients.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: VIP customers should not be subject to the general limits.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Give VIP users an effectively unlimited quota.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-004:
+    summary: Separate, enlarged token pool for VIP users (~10x normal quota).
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-005:
+    summary: Out-of-order / priority servicing for VIP users.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low
+  CR-006:
+    summary: Mechanism choice is left to the implementer.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high

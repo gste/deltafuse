@@ -2,7 +2,7 @@
 
 - **ID карточки:** A09-01 (дети A09-01a/b/c)
 - **Ревизия старта:** `e57dc9d`; исполнение frozen r2: `55411ea`
-- **Статус исполнения:** **in-progress** (A09-01a done / `partial`; A09-01b done / `pass`; A09-01c planned)
+- **Статус исполнения:** **done** / **partial** (A09-01a `partial`; A09-01b `pass`; A09-01c `pass`). Prompts калибровки заморожены перед holdout.
 - **Критерии:** `SPEC-001`, `SPEC-002`, `CODE-001`, `TEST-001`, `PROC-004`, `PROC-007`
 - **Вердикт A09-01a:** **partial** — r3/r4/r5 TASK-001 Green + hidden suite pass; 0 Verify; r2 = F-008; F-009 устойчив, отложен в A12. r6 не делали.
 
@@ -171,10 +171,47 @@ Hidden suite: **2 passed**. Verify не запускали. Decompose с пер�
 
 Логи: [runs/S03/r3-frozen/](runs/S03/r3-frozen/).
 
+## S04 r1-frozen (A09-01c, `work/S04-r1/`)
+
+Неоднозначный VIP-запрос. Oracle в prompt не входил. Specify не запускали.
+
+| Фаза | Outcome | Попытки | TTFT / elapsed | Независимый gate |
+|---|---|---|---|---|
+| Intake | pass | 1 | 11.1 с / 40.5 с | `intake=[]` |
+| Analyze routing | blocked-on-decision | 1 | 15.8 с / 71.6 с | DEC + `change.yaml` blocked; spec/src не трогали |
+
+Hidden suite: **pass**. DEC `id` не совпадает с `DEC-[0-9]{4,}`.
+
+Логи: [runs/S04/r1-frozen/](runs/S04/r1-frozen/).
+
+## S04 r2-frozen (A09-01c, `work/S04-r2/`)
+
+| Фаза | Outcome | Попытки | TTFT / elapsed | Независимый gate |
+|---|---|---|---|---|
+| Intake | pass | 1 | 0.5 с / 33.8 с | `intake=[]` |
+| Analyze routing | incomplete | 1 | 12.0 с / 42.7 с | DEC есть, `change.yaml` остался `normalized` |
+| Analyze slices | blocked-on-decision | 1 | 20.9 с / 65.5 с | DEC-0001 + status blocked; spec/src нет |
+
+Логи: [runs/S04/r2-frozen/](runs/S04/r2-frozen/).
+
+## S04 r3-frozen (A09-01c, `work/S04-r3/`)
+
+| Фаза | Outcome | Попытки | TTFT / elapsed | Независимый gate |
+|---|---|---|---|---|
+| Intake | pass | 1 | 10.5 с / 36.4 с | `intake=[]` |
+| Analyze routing | pass | 1 | 18.9 с / 37.2 с | только `routing.yaml`, `continue` |
+| Analyze slices | blocked-on-decision | 1 | 18.7 с / 69.1 с | DEC-0001 proposed, forks open |
+
+Specify не запускали. Hidden suite: **pass**.
+
+Логи: [runs/S04/r3-frozen/](runs/S04/r3-frozen/).
+
 ## Handoff
 
 - **Готово A09-01a:** `done` / `partial`. F-007 mitigated, F-008, F-009 → A12.
-- **Готово A09-01b:** `done` / `pass`. S03 r1–r3 Red→Green, spec unchanged, hidden suite pass; 0 Verify. Дальше [A09-01c](../../packets/A09-01c.md) S04. Не holdout. Skills не патчить.
+- **Готово A09-01b:** `done` / `pass`. S03 r1–r3 Red→Green, spec unchanged, hidden suite; 0 Verify.
+- **Готово A09-01c:** `done` / `pass`. S04 r1–r3 `blocked-on-decision` + DEC, без Specify. r1 DEC-id вне схемы; r2 потребовал slices, чтобы проставить status в `change.yaml`.
+- **Родитель A09-01:** `done` / `partial` — калибровка S02/S03/S04 закрыта; prompts заморожены. Holdout = [A09-02](../../packets/A09-02.md). Skills не патчить.
 - **Доработка не сейчас:** борозда/tokenizer/калибровка — [parking/design-questions.md](../../parking/design-questions.md), шаг [A12-04](../../packets/A12-04.md).
 - **Калибровка S03:** seed с `int()` в refill; specify не пишет `docs/spec/**`; Target сначала deplete bucket.
 - **Runtime:** [local-runtime](../local-runtime/README.md).
