@@ -1,0 +1,25 @@
+revision: "839bbe3"
+task_id: "A08-02"
+packet: "backlog/analysis/packets/A08-02.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-002"
+  - "CODE-001"
+  - "TEST-001"
+  - "PROC-004"
+  - "PROC-005"
+inputs:
+  - "src/deltafuse/evals/dataset.py:L1-123"
+  - "src/deltafuse/evals/data/default_cases.yaml:L1-50"
+  - "backlog/criteria.md:L1-67"
+  - "backlog/analysis-plan.md:L169-210"
+method: "Formal design and freeze of calibration/holdout benchmark protocol, expert evaluation rubric, ground truth oracles, and execution boundaries in backlog/analysis/experiments/protocol.md."
+artifacts:
+  - "backlog/analysis/experiments/protocol.md"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-02/result.md"
+verdict: "pass"
