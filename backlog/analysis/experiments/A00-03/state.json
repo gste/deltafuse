@@ -1,0 +1,113 @@
+{
+  "revision": "60ea40438b0142797848356c660ab88286565e7d",
+  "work_dir": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb",
+  "created_at": "2026-09-06T05:37:49.5594241+03:00",
+  "commands": [
+    {
+      "name": "archive",
+      "attempt": 1,
+      "command": "git -c safe.directory=<repo> archive --format=zip --output=<run-root>\\source.zip 60ea40438b0142797848356c660ab88286565e7d",
+      "started_at": "2026-09-06T05:37:49.5913639+03:00",
+      "finished_at": "2026-09-06T05:37:49.7737431+03:00",
+      "duration_seconds": 0.182,
+      "exit_code": 0,
+      "output": "archive-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/archive-1.raw.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "venv",
+      "attempt": 1,
+      "command": "<base-python> -m venv <run-root>\\.venv",
+      "started_at": "2026-09-06T05:39:03.83284+03:00",
+      "finished_at": "2026-09-06T05:39:16.3976379+03:00",
+      "duration_seconds": 12.565,
+      "exit_code": 0,
+      "output": "venv-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/venv-1.raw.txt",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "python-info",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -c import sys, platform, json; print(json.dumps({'python':sys.version,'implementation':platform.python_implementation(),'os':platform.system(),'os_release':platform.release(),'os_version':platform.version(),'architecture':platform.machine(),'isolated_venv':sys.prefix != sys.base_prefix,'executable':'<venv>/Scripts/python.exe'}))",
+      "started_at": "2026-09-06T05:39:16.4470682+03:00",
+      "finished_at": "2026-09-06T05:39:16.6304388+03:00",
+      "duration_seconds": 0.183,
+      "exit_code": 0,
+      "output": "python-info-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/python-info-1.raw.txt",
+      "raw_sha256": "cb42fe8cdb3a7ab07264017b0cbe4a1eda830792efed918482d9836ceb5a3b1b",
+      "output_sha256": "8b0a0f64622299d11a5251f9325ebcc5177b52be27b219c96692af9c1a87981a"
+    },
+    {
+      "name": "requirements",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -c import tomllib,json; p=tomllib.load(open('pyproject.toml','rb'))['project']; print(json.dumps(p['dependencies']+p['optional-dependencies']['dev']))",
+      "started_at": "2026-09-06T05:39:29.0366471+03:00",
+      "finished_at": "2026-09-06T05:39:29.1284082+03:00",
+      "duration_seconds": 0.092,
+      "exit_code": 0,
+      "output": "requirements-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/requirements-1.raw.txt",
+      "raw_sha256": "cf053263a9a3f8440c03dcd686a681fba41ef34e81ad78c2052aa7d61f156de3",
+      "output_sha256": "2ea9fc5632e30b9b8cffd1cb22a9b9869408c9cbbb754637a850dc36c4873163"
+    },
+    {
+      "name": "pip-install",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -m pip --isolated install --disable-pip-version-check --no-input --index-url https://pypi.org/simple --cache-dir <run-root>\\pip-cache jsonschema>=4.20.0 pyyaml>=6.0.1 pytest>=8.0.0",
+      "started_at": "2026-09-06T05:39:29.1846136+03:00",
+      "finished_at": "2026-09-06T05:39:49.4232763+03:00",
+      "duration_seconds": 20.239,
+      "exit_code": 0,
+      "output": "pip-install-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/pip-install-1.raw.txt",
+      "raw_sha256": "fd0680e7c2731cda917431760c93719f3f77c025e33400b63ebaa3d1b1192fa2",
+      "output_sha256": "cd500baae35b8d35c88ddd65b4528559540c67125de8819f3a7d1c7da9a3924d"
+    },
+    {
+      "name": "pip-check",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -m pip --isolated check",
+      "started_at": "2026-09-06T05:39:49.4447585+03:00",
+      "finished_at": "2026-09-06T05:39:50.2086451+03:00",
+      "duration_seconds": 0.764,
+      "exit_code": 0,
+      "output": "pip-check-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/pip-check-1.raw.txt",
+      "raw_sha256": "672aec65a45bed50e70229c70934a7eebf0462595c459b83023027645d57cccf",
+      "output_sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09"
+    },
+    {
+      "name": "pip-freeze",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -m pip --isolated freeze --all",
+      "started_at": "2026-09-06T05:39:50.2286581+03:00",
+      "finished_at": "2026-09-06T05:39:50.7660382+03:00",
+      "duration_seconds": 0.537,
+      "exit_code": 0,
+      "output": "pip-freeze-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/pip-freeze-1.raw.txt",
+      "raw_sha256": "f5ee8afedc89764c47c5b61ec1d5e9f36e6fd11ef84ec1ab9a8f69a2fb66d226",
+      "output_sha256": "4ac4df41c84307272b57ef6ec25aab11bc9605da6bfe5257aba366a9e598472b"
+    },
+    {
+      "name": "pytest",
+      "attempt": 1,
+      "command": "<run-root>\\.venv\\Scripts\\python.exe -m pytest -v",
+      "started_at": "2026-09-06T05:40:11.8966072+03:00",
+      "finished_at": "2026-09-06T05:40:23.9435547+03:00",
+      "duration_seconds": 12.047,
+      "exit_code": 0,
+      "output": "pytest-1.txt",
+      "raw_output": "tmp/a00-03-4eb977e6f5d34231a1c98e74527a9adb/pytest-1.raw.txt",
+      "raw_sha256": "19239769b546f58d5214db1886eedabf28f0b28829866e686e7cee0151776e18",
+      "output_sha256": "1835d8d5ef57fe4a6ec2c6bd0babfb7d1caa5e8de81ba4bdee49e67945b8913b"
+    }
+  ],
+  "source_archive_sha256": "1f9eeeac9b1c0d85b86b1f41288df3551d5e28170d6649f4bb2237d5453a5b45",
+  "log_normalization": "Machine-local root replacement; LF line endings; trailing whitespace and terminal blank lines removed. Original raw files and SHA-256 retained under ignored tmp."
+}
