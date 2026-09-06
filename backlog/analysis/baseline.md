@@ -31,12 +31,12 @@
 
 Во время сбора использовались Windows/PowerShell `7.6.5`; версия Git записана в снимке. Потребовался только локальный параметр `safe.directory` для текущего репозитория: настройки Git глобально не изменялись.
 
-| Проверка | Состояние после A00-04 | Продолжение |
+| Проверка | Состояние после A00-05 | Продолжение |
 |---|---|---|
 | Карта компонентов | выполнена статическая инвентаризация: [116 файлов и связи](matrices/components.md) | A00-02 |
 | Текущие Python/dependencies и pytest | `pass`: Windows 11, CPython 3.14.3; 91/91 passed, exit 0; [лог](experiments/A00-03/pytest-1.txt) | A00-03 завершена |
 | PowerShell smoke и layout | `pass`: Windows 11, PowerShell 7.6.5; smoke 4/4 passed, layout valid, 56 файлов, exit 0; [лог](experiments/A00-04/smoke-1.txt) | A00-04 завершена |
-| Bash/runtime, smoke и layout | `not-tested`: вне этой карточки; недоступность платформы пока не установлена | A00-05 |
+| Bash/runtime, smoke и layout | `pass`: Ubuntu 24.04 WSL2, Bash 5.2.21; smoke 4/4 passed (LF), layout valid, 56 файлов, exit 0; [лог](experiments/A00-05/smoke-1.txt); дефект CRLF в [F-001](../findings/F-001.md) | A00-05 завершена |
 | LM Studio / ornith-1.5-35b-a3b | выбран пользователем; доступность и профиль не проверены | A03-03 |
 | Полный prompt в пределах 6000+2000 токенов | `not-tested`: фактические токены этой сессии не измерены | A03 |
 
@@ -56,4 +56,4 @@
 
 Условие **BASE-001** «ревизия и состояние дерева воспроизводимо зафиксированы, старое evidence отделено» выполнено. Это подготовительный критерий A00-01; критерии качества A01 ещё не определены.
 
-После A00-03 и A00-04 подтверждены прогон pytest и PowerShell smoke/layout; следующий исполнитель берёт [A00-05](packets/A00-05.md) и [handoff A00-04](experiments/A00-04/result.md). Актуальная очередь — в [индексе](index.md).
+Пакет A00 полностью завершён: зафиксированы ревизия, карта компонентов, pytest (91/91 pass), PowerShell smoke/layout и Bash smoke/layout. Оформлен дефект [F-001](../findings/F-001.md). Следующий исполнитель переходит к пакету A01: [A01-01](packets/A01-01.md) и [handoff A00-05](experiments/A00-05/result.md). Актуальная очередь — в [индексе](index.md).

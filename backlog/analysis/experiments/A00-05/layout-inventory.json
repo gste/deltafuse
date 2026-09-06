@@ -1,0 +1,288 @@
+{
+  "product_dir": "<isolated-product>",
+  "file_count": 56,
+  "files": [
+    {
+      "path": ".agents/skills/implement-task/SKILL.md",
+      "size_bytes": 1743,
+      "sha256": "03c6f02e9330a4f214de122f08fc5f91daffa1467992559e1779b74a20ac5f58"
+    },
+    {
+      "path": ".cursor/skills/implement-task/SKILL.md",
+      "size_bytes": 1743,
+      "sha256": "03c6f02e9330a4f214de122f08fc5f91daffa1467992559e1779b74a20ac5f58"
+    },
+    {
+      "path": ".gemini/skills/implement-task/SKILL.md",
+      "size_bytes": 1743,
+      "sha256": "03c6f02e9330a4f214de122f08fc5f91daffa1467992559e1779b74a20ac5f58"
+    },
+    {
+      "path": "docs/intake/README.md",
+      "size_bytes": 391,
+      "sha256": "04d064d8f37e32f324734fa5797eaf7f9ba247c80944675cbffbd7e7769f1b74"
+    },
+    {
+      "path": "docs/archive/README.md",
+      "size_bytes": 175,
+      "sha256": "0779f02b5f3d438ce143a7afbaf216a33268a16ce285cd4656dccb2fc82e19da"
+    },
+    {
+      "path": ".agents/skills/specify-change/SKILL.md",
+      "size_bytes": 1931,
+      "sha256": "1652360eaeb6d8c6af8b7c887f33829f5e78945fb8bf0085e420f227e6beca5d"
+    },
+    {
+      "path": ".cursor/skills/specify-change/SKILL.md",
+      "size_bytes": 1931,
+      "sha256": "1652360eaeb6d8c6af8b7c887f33829f5e78945fb8bf0085e420f227e6beca5d"
+    },
+    {
+      "path": ".gemini/skills/specify-change/SKILL.md",
+      "size_bytes": 1931,
+      "sha256": "1652360eaeb6d8c6af8b7c887f33829f5e78945fb8bf0085e420f227e6beca5d"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size_bytes": 213,
+      "sha256": "1e46288bafd1705c48e498ff9faa0a0f49de54f3af5d143b169be4c967b3d697"
+    },
+    {
+      "path": ".agents/skills/decompose-change/SKILL.md",
+      "size_bytes": 1907,
+      "sha256": "230c2ae7d6e745ea0d79ebc471e79c909a968e80c831d7c3d2528cb0432d70e4"
+    },
+    {
+      "path": ".cursor/skills/decompose-change/SKILL.md",
+      "size_bytes": 1907,
+      "sha256": "230c2ae7d6e745ea0d79ebc471e79c909a968e80c831d7c3d2528cb0432d70e4"
+    },
+    {
+      "path": ".gemini/skills/decompose-change/SKILL.md",
+      "size_bytes": 1907,
+      "sha256": "230c2ae7d6e745ea0d79ebc471e79c909a968e80c831d7c3d2528cb0432d70e4"
+    },
+    {
+      "path": ".agents/skills/decompose-change/.deltafuse-generated.yaml",
+      "size_bytes": 167,
+      "sha256": "2ac27bbe0d57c0fc370d69e8699b5a67cc581d5c007e6b84ef6cd0280246f283"
+    },
+    {
+      "path": ".cursor/skills/decompose-change/.deltafuse-generated.yaml",
+      "size_bytes": 167,
+      "sha256": "2ac27bbe0d57c0fc370d69e8699b5a67cc581d5c007e6b84ef6cd0280246f283"
+    },
+    {
+      "path": ".gemini/skills/decompose-change/.deltafuse-generated.yaml",
+      "size_bytes": 167,
+      "sha256": "2ac27bbe0d57c0fc370d69e8699b5a67cc581d5c007e6b84ef6cd0280246f283"
+    },
+    {
+      "path": ".agents/skills/intake/SKILL.md",
+      "size_bytes": 1973,
+      "sha256": "33d5a0c48b16df198f686ca1ad9e2b215ebe4f3964025a3688e0d7b5a3b2e844"
+    },
+    {
+      "path": ".cursor/skills/intake/SKILL.md",
+      "size_bytes": 1973,
+      "sha256": "33d5a0c48b16df198f686ca1ad9e2b215ebe4f3964025a3688e0d7b5a3b2e844"
+    },
+    {
+      "path": ".gemini/skills/intake/SKILL.md",
+      "size_bytes": 1973,
+      "sha256": "33d5a0c48b16df198f686ca1ad9e2b215ebe4f3964025a3688e0d7b5a3b2e844"
+    },
+    {
+      "path": ".agents/skills/analyze-change/SKILL.md",
+      "size_bytes": 2625,
+      "sha256": "3f62e3338515f7525b1e25e2f6e83b64988989b5642c30343f307b81427dddcb"
+    },
+    {
+      "path": ".cursor/skills/analyze-change/SKILL.md",
+      "size_bytes": 2625,
+      "sha256": "3f62e3338515f7525b1e25e2f6e83b64988989b5642c30343f307b81427dddcb"
+    },
+    {
+      "path": ".gemini/skills/analyze-change/SKILL.md",
+      "size_bytes": 2625,
+      "sha256": "3f62e3338515f7525b1e25e2f6e83b64988989b5642c30343f307b81427dddcb"
+    },
+    {
+      "path": ".agents/skills/implement-task/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "45a5f680075589a6d7319f16bbb1b92446949fad9505da2b563ade05c2a3456d"
+    },
+    {
+      "path": ".cursor/skills/implement-task/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "45a5f680075589a6d7319f16bbb1b92446949fad9505da2b563ade05c2a3456d"
+    },
+    {
+      "path": ".gemini/skills/implement-task/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "45a5f680075589a6d7319f16bbb1b92446949fad9505da2b563ade05c2a3456d"
+    },
+    {
+      "path": ".deltafuse/config.yaml",
+      "size_bytes": 417,
+      "sha256": "49622dc81d8610a0db4fcce58a67b96fe8f71b2d441982a0252632e79884201c"
+    },
+    {
+      "path": "AGENTS.md",
+      "size_bytes": 1011,
+      "sha256": "4a1e0d52870cfeb7c5c94e2788d11e51ee20a1f87109e0ebad4eb5f9c772c1e7"
+    },
+    {
+      "path": "docs/spec/_capabilities.yaml",
+      "size_bytes": 30,
+      "sha256": "5ca4143f4750ff8cf9650df07313db0252165fa0aca464ab4d3fccfb5462eb99"
+    },
+    {
+      "path": "docs/archive/changes/README.md",
+      "size_bytes": 92,
+      "sha256": "6166074ca336265f638c35115fed6cbb74de9f53a5703d9628679a83b8e5d72f"
+    },
+    {
+      "path": ".agents/skills/target-task/SKILL.md",
+      "size_bytes": 1793,
+      "sha256": "6289a59b3b68d8a686fd983f515b3c9d88811e4093190c07fc889b27248370e1"
+    },
+    {
+      "path": ".cursor/skills/target-task/SKILL.md",
+      "size_bytes": 1793,
+      "sha256": "6289a59b3b68d8a686fd983f515b3c9d88811e4093190c07fc889b27248370e1"
+    },
+    {
+      "path": ".gemini/skills/target-task/SKILL.md",
+      "size_bytes": 1793,
+      "sha256": "6289a59b3b68d8a686fd983f515b3c9d88811e4093190c07fc889b27248370e1"
+    },
+    {
+      "path": ".agents/skills/target-task/.deltafuse-generated.yaml",
+      "size_bytes": 162,
+      "sha256": "73e373174167d9f4012ac8b23083dea4dfffe83e5c47a62ec9fccdbc46d9f586"
+    },
+    {
+      "path": ".cursor/skills/target-task/.deltafuse-generated.yaml",
+      "size_bytes": 162,
+      "sha256": "73e373174167d9f4012ac8b23083dea4dfffe83e5c47a62ec9fccdbc46d9f586"
+    },
+    {
+      "path": ".gemini/skills/target-task/.deltafuse-generated.yaml",
+      "size_bytes": 162,
+      "sha256": "73e373174167d9f4012ac8b23083dea4dfffe83e5c47a62ec9fccdbc46d9f586"
+    },
+    {
+      "path": "docs/spec/README.md",
+      "size_bytes": 938,
+      "sha256": "74f6a79c15b24fa16b8e327038e3d64008a0d2e1fa7c19d74a3f25b4efed98fa"
+    },
+    {
+      "path": "docs/decisions/DEC-0000-template.md",
+      "size_bytes": 668,
+      "sha256": "88ee73e7e7dc2b1ee0d31bb6afabc47eb5abbd51d6a2e6f0cb33584f7c24ddec"
+    },
+    {
+      "path": "docs/spec/context.md",
+      "size_bytes": 352,
+      "sha256": "9def5c5da5453b9a148b653809b736e81fd8608cef563a3aff6d94bf7c2f7e30"
+    },
+    {
+      "path": ".agents/skills/intake/.deltafuse-generated.yaml",
+      "size_bytes": 157,
+      "sha256": "a79b813e00b65d1289908ac5aec94d043777e919e328346cf05ab4ccb06a3675"
+    },
+    {
+      "path": ".cursor/skills/intake/.deltafuse-generated.yaml",
+      "size_bytes": 157,
+      "sha256": "a79b813e00b65d1289908ac5aec94d043777e919e328346cf05ab4ccb06a3675"
+    },
+    {
+      "path": ".gemini/skills/intake/.deltafuse-generated.yaml",
+      "size_bytes": 157,
+      "sha256": "a79b813e00b65d1289908ac5aec94d043777e919e328346cf05ab4ccb06a3675"
+    },
+    {
+      "path": "docs/archive/intake/README.md",
+      "size_bytes": 97,
+      "sha256": "abf8948ec5cea9f1be70196df62a855189852fe8c7af968b4a2e09a88a6ff6de"
+    },
+    {
+      "path": ".deltafuse/lock.yaml",
+      "size_bytes": 163,
+      "sha256": "bcd2c7422b2cbb23e40fc163f6cf9dba8bbb58c5490abf7753115ceda4b4c2ec"
+    },
+    {
+      "path": ".agents/skills/specify-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "cba938639ad9b96ea9accbed0efcaf1430910349893ea0397b79486804244788"
+    },
+    {
+      "path": ".cursor/skills/specify-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "cba938639ad9b96ea9accbed0efcaf1430910349893ea0397b79486804244788"
+    },
+    {
+      "path": ".gemini/skills/specify-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "cba938639ad9b96ea9accbed0efcaf1430910349893ea0397b79486804244788"
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "size_bytes": 608,
+      "sha256": "d884a4e3b2de3ce4bfd75225e041a62e5ca6320ff40338668541f4c5282b4264"
+    },
+    {
+      "path": ".agents/skills/verify-change/SKILL.md",
+      "size_bytes": 2021,
+      "sha256": "e622c08808c19b964e54d800f2c35e9ab43cef99df80d009b03b089725f954fd"
+    },
+    {
+      "path": ".cursor/skills/verify-change/SKILL.md",
+      "size_bytes": 2021,
+      "sha256": "e622c08808c19b964e54d800f2c35e9ab43cef99df80d009b03b089725f954fd"
+    },
+    {
+      "path": ".gemini/skills/verify-change/SKILL.md",
+      "size_bytes": 2021,
+      "sha256": "e622c08808c19b964e54d800f2c35e9ab43cef99df80d009b03b089725f954fd"
+    },
+    {
+      "path": ".agents/skills/analyze-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "e687cd9b590280fe62c4e0b0fa316de79acd8e95bd2356c6b019155f6ed3600f"
+    },
+    {
+      "path": ".cursor/skills/analyze-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "e687cd9b590280fe62c4e0b0fa316de79acd8e95bd2356c6b019155f6ed3600f"
+    },
+    {
+      "path": ".gemini/skills/analyze-change/.deltafuse-generated.yaml",
+      "size_bytes": 165,
+      "sha256": "e687cd9b590280fe62c4e0b0fa316de79acd8e95bd2356c6b019155f6ed3600f"
+    },
+    {
+      "path": "docs/changes/README.md",
+      "size_bytes": 323,
+      "sha256": "fed17341ea102c124ae5f4ebc0b27e711dbfb944ff460fc6df2522d6a348c123"
+    },
+    {
+      "path": ".agents/skills/verify-change/.deltafuse-generated.yaml",
+      "size_bytes": 164,
+      "sha256": "ffe46bf867201fd4f100f4f0a1368b897cd19c23d88730a0167c087cc907906c"
+    },
+    {
+      "path": ".cursor/skills/verify-change/.deltafuse-generated.yaml",
+      "size_bytes": 164,
+      "sha256": "ffe46bf867201fd4f100f4f0a1368b897cd19c23d88730a0167c087cc907906c"
+    },
+    {
+      "path": ".gemini/skills/verify-change/.deltafuse-generated.yaml",
+      "size_bytes": 164,
+      "sha256": "ffe46bf867201fd4f100f4f0a1368b897cd19c23d88730a0167c087cc907906c"
+    }
+  ],
+  "lock": "schema_version: 2\nframework:\n  version: 2.0.0\n  source: deltafuse://v2.0.0\n  content_hash: sha256:f1c2298ce5dbabacdefa0e700ad84770a4d80ddc031e2dcb12d87fe2c3a55f56",
+  "config": "schema_version: 2\n\nframework:\n  source: deltafuse://v2.0.0\n  version: 2.0.0\n\npaths:\n  intake: docs/intake\n  changes: docs/changes\n  specification: docs/spec\n  decisions: docs/decisions\n  archive: docs/archive\n\ncontext:\n  max_tokens: 16000\n  max_files: 24\n\nproject:\n  baseline: draft\n  capability_catalog: docs/spec/_capabilities.yaml\n\nadapters:\n  roots:\n    - .agents/skills\n    - .cursor/skills\n    - .gemini/skills"
+}

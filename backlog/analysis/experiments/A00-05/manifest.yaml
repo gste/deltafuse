@@ -1,0 +1,71 @@
+task_id: A00-05
+criterion_id: BASE-005
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "d9ca00f40d42171120f3e6c0cbe27ef48ae5bb9a"
+method: "isolated Linux Bash smoke test execution via tests/smoke-test.sh in WSL2 Ubuntu 24.04 (source from git archive with core.autocrlf=false), granular step verification (init, validate-layout, init --force, validate-layout) in dedicated temporary product, direct Windows checkout CRLF failure reproduction, layout file and hash inventory, source integrity check"
+inputs:
+  - "tests/smoke-test.sh:1-26"
+  - "tests/validate-layout.sh:1-45"
+  - "scripts/init.sh:1-45"
+  - "backlog/analysis/experiments/A00-02/result.md"
+  - "backlog/analysis/experiments/A00-04/result.md"
+environment:
+  host_os: "Windows 11 build 10.0.26200 AMD64"
+  wsl_os: "Ubuntu 24.04.3 LTS (Noble Numbat) on Linux 6.6.87.2-microsoft-standard-WSL2 x86_64"
+  bash: "GNU bash 5.2.21(1)-release"
+  utilities: "awk, sed, sha256sum, find, tr, mktemp, tar"
+  isolation: "isolated temporary product and source directories in WSL /tmp; Windows git repo untouched"
+commands:
+  bash_info: "bash-info-1.txt"
+  smoke_crlf_fail: "bash tests/smoke-test.sh (direct on Windows checkout)"
+  smoke_crlf_fail_exit: 2
+  smoke: "bash -c cd '<isolated-source>' && bash tests/smoke-test.sh"
+  smoke_exit: 0
+  init_fresh: "bash -c bash '<isolated-source>/scripts/init.sh' '<isolated-product>'"
+  init_fresh_exit: 0
+  validate_fresh: "bash -c bash '<isolated-source>/tests/validate-layout.sh' '<isolated-product>'"
+  validate_fresh_exit: 0
+  init_force: "bash -c bash '<isolated-source>/scripts/init.sh' --force '<isolated-product>'"
+  init_force_exit: 0
+  validate_force: "bash -c bash '<isolated-source>/tests/validate-layout.sh' '<isolated-product>'"
+  validate_force_exit: 0
+  details: "state.json:commands"
+findings:
+  - id: F-001
+    title: "Shell-скрипты получают CRLF при checkout на Windows из-за отсутствия .gitattributes"
+    path: "backlog/findings/F-001.md"
+smoke_verification:
+  fresh_install: pass
+  validate_fresh: pass
+  force_upgrade: pass
+  validate_force: pass
+  installed_file_count: 56
+  framework_content_hash: "sha256:f1c2298ce5dbabacdefa0e700ad84770a4d80ddc031e2dcb12d87fe2c3a55f56"
+  framework_version: "2.0.0"
+source_integrity: "source-integrity.json: intact=true, changed=0, untracked=0"
+logs: "Portable command logs and hashes are listed in state.json; raw outputs recorded under temporary run directory."
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - run.ps1
+  - state.json
+  - git-snapshot.json
+  - bash-info-1.txt
+  - smoke-crlf-fail-1.txt
+  - smoke-1.txt
+  - init-fresh-1.txt
+  - validate-fresh-1.txt
+  - init-force-1.txt
+  - validate-force-1.txt
+  - layout-inventory.json
+  - source-integrity.json
+verdict: pass
+verdict_scope: "BASE-005: Linux Bash smoke and layout validation pass from canonical LF source; defect on direct Windows checkout documented in F-001"
