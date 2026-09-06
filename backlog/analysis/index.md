@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A08-11, переход к A08-12.
-- **Текущая задача:** [A08-12 — Подготовить S08c: Operational change](packets/A08-12.md).
-- **Следующая задача:** [A08-13 — Подготовить S09: Терминальные исходы](packets/A08-13.md).
-- **Счётчики:** всего 80; `planned` 31; `in-progress` 0; `done` 49; `blocked` 0.
+- **Статус:** `in-progress` — завершён A08-12, переход к A08-13.
+- **Текущая задача:** [A08-13 — Подготовить S09: Терминальные исходы](packets/A08-13.md).
+- **Следующая задача:** [A08-14 — Подготовить S10: Прерывание и повторная нарезка](packets/A08-14.md).
+- **Счётчики:** всего 80; `planned` 30; `in-progress` 0; `done` 50; `blocked` 0.
 
 
 
@@ -120,7 +120,7 @@
 | [A08-09 — Подготовить S07: Большой каталог и capability](packets/A08-09.md) | A08-02 | done | [SPEC-001, SPEC-004, PROC-004, CODE-001: pass; результат и handoff](experiments/A08-09/result.md) |
 | [A08-10 — Подготовить S08a: Refactoring](packets/A08-10.md) | A08-02 | done | [SPEC-001, CODE-001, CODE-005, TEST-001: pass; результат и handoff](experiments/A08-10/result.md) |
 | [A08-11 — Подготовить S08b: Docs-only](packets/A08-11.md) | A08-02 | done | [SPEC-001, SPEC-006, PROC-003: pass; результат и handoff](experiments/A08-11/result.md) |
-| [A08-12 — Подготовить S08c: Operational change](packets/A08-12.md) | A08-02 | planned | — |
+| [A08-12 — Подготовить S08c: Operational change](packets/A08-12.md) | A08-02 | done | [PROC-003, PROC-005: pass; результат и handoff](experiments/A08-12/result.md) |
 | [A08-13 — Подготовить S09: Терминальные исходы](packets/A08-13.md) | A08-02 | planned | — |
 | [A08-14 — Подготовить S10: Прерывание и повторная нарезка](packets/A08-14.md) | A08-02 | planned | — |
 | [A08-15 — Подготовить S11: Два Change и удаление функции](packets/A08-15.md) | A08-02 | planned | — |
