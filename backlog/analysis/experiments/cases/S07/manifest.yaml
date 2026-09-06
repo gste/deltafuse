@@ -1,0 +1,23 @@
+case_id: S07
+title: "Large catalog and one oversized capability testing routing and slicing"
+category: feature
+group: holdout
+target_capability: infra.distributed_ratelimit
+slices:
+  - SLICE-01
+  - SLICE-02
+  - SLICE-03
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  existing_capabilities_count: 15
+  catalog_size: large
+input_characteristics:
+  estimated_code_lines: 500
+  spec_files_count: 3
+  cross_capability_refs:
+    - security.ratelimit
+    - infra.config_reload
+    - monitoring.health_check

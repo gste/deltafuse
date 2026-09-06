@@ -1,0 +1,50 @@
+case_id: S07
+intent_claims:
+  - id: CR-001
+    title: "Distributed Rate Limiter Core"
+    description: "Redis-backed ratelimit supporting init, consume, get_stats with atomic Lua scripts."
+    normative_rules:
+      - "MUST support all operations of security.ratelimit"
+      - "MUST use Redis for state storage"
+      - "MUST use Lua scripts for atomicity"
+  - id: CR-002
+    title: "Backend Switching"
+    description: "Configurable switch between in-memory and distributed backends."
+    normative_rules:
+      - "MUST support runtime switching via infra.config_reload"
+      - "MUST preserve API contract across backends"
+  - id: CR-003
+    title: "TTL and Graceful Degradation"
+    description: "Redis key TTL and fallback to in-memory on Redis failure."
+    normative_rules:
+      - "MUST set TTL = capacity / refill_rate * 2"
+      - "MUST fallback to in-memory when Redis unavailable"
+      - "MUST log warning on fallback"
+  - id: CR-004
+    title: "Health Check Integration"
+    description: "Redis connectivity check via monitoring.health_check."
+    normative_rules:
+      - "MUST expose Redis health status through health_check"
+
+ambiguity_expected: false
+expected_decision_needed: false
+
+routing_validation:
+  must_route_to: infra.distributed_ratelimit
+  must_not_modify:
+    - "Any of the 15 existing capabilities unless explicitly referenced"
+  slicing_constraint: "Capability must be sliced into ≤3 slices; no hidden full-catalog read"
+
+acceptance_criteria:
+  spec_files:
+    - "docs/spec/infra/distributed_ratelimit.md"
+    - "docs/spec/infra/distributed_ratelimit_lua.md"
+    - "docs/spec/infra/distributed_ratelimit_config.md"
+    - "docs/spec/_capabilities.yaml"
+  code_files:
+    - "src/ratelimit/distributed.py"
+    - "src/ratelimit/redis_backend.py"
+    - "src/ratelimit/lua_scripts.py"
+  test_files:
+    - "tests/test_distributed_ratelimit.py"
+    - "tests/test_redis_fallback.py"
