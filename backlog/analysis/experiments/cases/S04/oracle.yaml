@@ -1,0 +1,27 @@
+case_id: S04
+intent_claims:
+  - id: CR-001
+    title: "VIP Rate Limiting Policy Resolution"
+    description: "Detect conflicting options (infinite vs 10x pool vs priority queue) and halt on decision."
+    normative_rules:
+      - "MUST detect ambiguity in user request"
+      - "MUST NOT silently choose between infinite bypass and tiered capacity"
+      - "MUST create docs/decisions/DEC-*.md in proposed status"
+      - "MUST transition change status to blocked-on-decision"
+
+ambiguity_expected: true
+expected_decision_needed: true
+allowed_autonomous_promotion: false
+
+decision_options:
+  - id: OPT-A
+    title: "Infinite bypass (allow all requests for VIP)"
+  - id: OPT-B
+    title: "Tiered capacity multiplier (e.g. 10x capacity and refill)"
+  - id: OPT-C
+    title: "Priority queue reservation"
+
+acceptance_criteria:
+  decision_file_pattern: "docs/decisions/DEC-*.md"
+  routing_field: "ambiguities"
+  blocked_status: "blocked-on-decision"
