@@ -1,0 +1,63 @@
+task_id: A00-04
+criterion_id: BASE-004
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "03c89109a9fc0305f38733138a60c194512397c4"
+method: "isolated PowerShell smoke test execution via tests/smoke-test.ps1, granular step verification (init, validate-layout, init -Force, validate-layout) in dedicated temporary product, layout file and hash inventory, source integrity check"
+inputs:
+  - "tests/smoke-test.ps1:1-26"
+  - "tests/validate-layout.ps1:1-45"
+  - "scripts/init.ps1:1-45"
+  - "backlog/analysis/experiments/A00-02/result.md"
+  - "backlog/analysis/experiments/A00-03/result.md"
+environment:
+  os: "Windows 11 build 10.0.26200 AMD64 (Win32NT)"
+  powershell: "PowerShell 7.6.5 (Core)"
+  runtime_host: "ConsoleHost 7.6.5"
+  isolation: "isolated temporary product directories in temporary workspace and system temp; working product untouched"
+commands:
+  powershell_info: "powershell-info-1.txt"
+  smoke: "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>/tests/smoke-test.ps1"
+  smoke_exit: 0
+  init_fresh: "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>/scripts/init.ps1 -TargetDir <isolated-product>"
+  init_fresh_exit: 0
+  validate_fresh: "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>/tests/validate-layout.ps1 -ProductDir <isolated-product>"
+  validate_fresh_exit: 0
+  init_force: "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>/scripts/init.ps1 -TargetDir <isolated-product> -Force"
+  init_force_exit: 0
+  validate_force: "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>/tests/validate-layout.ps1 -ProductDir <isolated-product>"
+  validate_force_exit: 0
+  details: "state.json:commands"
+smoke_verification:
+  fresh_install: pass
+  validate_fresh: pass
+  force_upgrade: pass
+  validate_force: pass
+  installed_file_count: 56
+  framework_content_hash: "sha256:64b3cdb786e23c4233cdc92a84ebbae4966fb72abe49c08b5675b7a76b85119f"
+  framework_version: "2.0.0"
+source_integrity: "source-integrity.json: intact=true, changed=0, untracked=0"
+logs: "Portable command logs and hashes are listed in state.json; raw outputs recorded under temporary run directory."
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - run.ps1
+  - state.json
+  - git-snapshot.json
+  - powershell-info-1.txt
+  - smoke-1.txt
+  - init-fresh-1.txt
+  - validate-fresh-1.txt
+  - init-force-1.txt
+  - validate-force-1.txt
+  - layout-inventory.json
+  - source-integrity.json
+verdict: pass
+verdict_scope: "BASE-004 and PowerShell smoke/layout validation on Windows only"

@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — A00-03 завершена.
+- **Статус:** `in-progress` — A00-04 завершена.
 - **Текущая задача:** нет.
-- **Следующая задача:** [A00-04 — Проверить PowerShell smoke и layout](packets/A00-04.md).
-- **Счётчики:** всего 80; `planned` 77; `in-progress` 0; `done` 3; `blocked` 0.
+- **Следующая задача:** [A00-05 — Проверить Bash smoke и layout](packets/A00-05.md).
+- **Счётчики:** всего 80; `planned` 76; `in-progress` 0; `done` 4; `blocked` 0.
 - **Локальная модель:** `ornith-1.5-35b-a3b`, LM Studio; доступность и аппаратный профиль ещё не проверены.
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
@@ -23,7 +23,7 @@
 | [A00-01 — Зафиксировать ревизию и границы аудита](packets/A00-01.md) | — | done | [BASE-001: pass; результат и handoff](experiments/A00-01/result.md) |
 | [A00-02 — Составить карту компонентов](packets/A00-02.md) | A00-01 | done | [BASE-002: pass; карта и handoff](experiments/A00-02/result.md) |
 | [A00-03 — Записать исходный результат pytest](packets/A00-03.md) | A00-02 | done | [BASE-003: pass; результат](experiments/A00-03/result.md) |
-| [A00-04 — Проверить PowerShell smoke и layout](packets/A00-04.md) | A00-02 | planned | — |
+| [A00-04 — Проверить PowerShell smoke и layout](packets/A00-04.md) | A00-02 | done | [BASE-004: pass; результат и handoff](experiments/A00-04/result.md) |
 | [A00-05 — Проверить Bash smoke и layout](packets/A00-05.md) | A00-02 | planned | — |
 
 ## A01

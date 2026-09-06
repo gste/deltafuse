@@ -1,0 +1,75 @@
+{
+  "task_id": "A00-04",
+  "criterion_id": "BASE-004",
+  "framework_revision": "60ea40438b0142797848356c660ab88286565e7d",
+  "working_head_at_start": "03c89109a9fc0305f38733138a60c194512397c4",
+  "work_dir": "tmp/a00-04-975f9326e1644265a76a58670ac36c60",
+  "created_at": "2026-09-06T06:10:57.2272331+03:00",
+  "commands": [
+    {
+      "name": "smoke",
+      "attempt": 1,
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>\\tests\\smoke-test.ps1",
+      "started_at": "2026-09-06T06:10:57.3692640+03:00",
+      "finished_at": "2026-09-06T06:11:02.9273878+03:00",
+      "duration_seconds": 5.558,
+      "exit_code": 0,
+      "output": "smoke-1.txt",
+      "raw_output": "tmp/a00-04-975f9326e1644265a76a58670ac36c60/smoke-1.raw.txt",
+      "raw_sha256": "4cc879417e7c2e02c293e3d8d0a436029878f26b9446be8c72ee48511429dd87",
+      "output_sha256": "50b020137f69eb04767a245d9a013e84a222322bb15365a5d28a271ab1047417"
+    },
+    {
+      "name": "init-fresh",
+      "attempt": 1,
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>\\scripts\\init.ps1 -TargetDir <isolated-product>",
+      "started_at": "2026-09-06T06:11:03.0355033+03:00",
+      "finished_at": "2026-09-06T06:11:08.1721235+03:00",
+      "duration_seconds": 5.137,
+      "exit_code": 0,
+      "output": "init-fresh-1.txt",
+      "raw_output": "tmp/a00-04-975f9326e1644265a76a58670ac36c60/init-fresh-1.raw.txt",
+      "raw_sha256": "b01b1ee9c739b4b2eeffc7ba8e650e198268354a43773ff27cd38f598e2ba3f9",
+      "output_sha256": "f1b29dec07ddb63f7eca6238c9490bd0533d4a8807fb063adeb4f6d73dbf0687"
+    },
+    {
+      "name": "validate-fresh",
+      "attempt": 1,
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>\\tests\\validate-layout.ps1 -ProductDir <isolated-product>",
+      "started_at": "2026-09-06T06:11:08.2084678+03:00",
+      "finished_at": "2026-09-06T06:11:12.9318547+03:00",
+      "duration_seconds": 4.723,
+      "exit_code": 0,
+      "output": "validate-fresh-1.txt",
+      "raw_output": "tmp/a00-04-975f9326e1644265a76a58670ac36c60/validate-fresh-1.raw.txt",
+      "raw_sha256": "6cc1a6f6bfb1840b7a19e5ad23d71c17e52c7d8463bd654eeacbca6e29db112f",
+      "output_sha256": "61750c670c8944c417a62c284eb5947819a28d10bd4014aff573d77c13752e73"
+    },
+    {
+      "name": "init-force",
+      "attempt": 1,
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>\\scripts\\init.ps1 -TargetDir <isolated-product> -Force",
+      "started_at": "2026-09-06T06:11:12.9853319+03:00",
+      "finished_at": "2026-09-06T06:11:18.2811630+03:00",
+      "duration_seconds": 5.296,
+      "exit_code": 0,
+      "output": "init-force-1.txt",
+      "raw_output": "tmp/a00-04-975f9326e1644265a76a58670ac36c60/init-force-1.raw.txt",
+      "raw_sha256": "a8e340595486967a461ec0ea3214f773a027692c6d31f39e6739cdcee35c812e",
+      "output_sha256": "0196b814a8e5aed2a2c640e9373a98c443448c7cc7170e2ec87ff2fb51bb87f0"
+    },
+    {
+      "name": "validate-force",
+      "attempt": 1,
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File <repo>\\tests\\validate-layout.ps1 -ProductDir <isolated-product>",
+      "started_at": "2026-09-06T06:11:18.3115626+03:00",
+      "finished_at": "2026-09-06T06:11:18.7411836+03:00",
+      "duration_seconds": 0.43,
+      "exit_code": 0,
+      "output": "validate-force-1.txt",
+      "raw_output": "tmp/a00-04-975f9326e1644265a76a58670ac36c60/validate-force-1.raw.txt",
+      "raw_sha256": "6cc1a6f6bfb1840b7a19e5ad23d71c17e52c7d8463bd654eeacbca6e29db112f",
+      "output_sha256": "61750c670c8944c417a62c284eb5947819a28d10bd4014aff573d77c13752e73"
+    }
+  ]
+}
