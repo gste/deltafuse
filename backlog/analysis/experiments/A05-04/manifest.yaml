@@ -1,0 +1,24 @@
+revision: "568b15d9b6ce8d21b76df472851ea7f73be141dc"
+task_id: "A05-04"
+packet: "backlog/analysis/packets/A05-04.md"
+criterion_ids:
+  - "SPEC-007"
+  - "TEST-005"
+  - "PROC-002"
+inputs:
+  - "docs/state-machine.md:L110-160"
+  - "docs/workflow.md:L111-131"
+  - "docs/workflow.md:L257-285"
+  - "src/deltafuse/core/fsm.py:L100-145"
+  - "src/deltafuse/core/fsm.py:L285-360"
+method: "Simulation of concurrent Change packages over common specification module: detection of stale baseline anchors, handling of stale test evidence after upstream spec changes, and contract distinction of accepted vs not-yet-implemented behavior."
+commands:
+  - "python test_concurrent_changes.py"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  finding: "backlog/findings/F-006.md"
+  result: "backlog/analysis/experiments/A05-04/result.md"
+verdict: "fail"
