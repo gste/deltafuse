@@ -1,0 +1,34 @@
+case_id: S09
+intent_claims:
+  - id: CR-001
+    title: "Duplicate Detection"
+    description: "Detect that request duplicates rejected CHG-042."
+    normative_rules:
+      - "MUST identify CHG-042 as prior rejected duplicate"
+      - "MUST reference rejection reason"
+  - id: CR-002
+    title: "Supersession Chain"
+    description: "Identify CHG-055 superseded by CHG-060."
+    normative_rules:
+      - "MUST trace supersession chain CHG-055 → CHG-060"
+  - id: CR-003
+    title: "Justified Closure"
+    description: "Close with provenance and not-reproduced status."
+    normative_rules:
+      - "MUST close change as rejected/duplicate with provenance"
+      - "MUST NOT proceed to implement without resolving INFRA-789"
+      - "MUST reference all prior change IDs"
+
+ambiguity_expected: false
+expected_decision_needed: false
+terminal_outcome: true
+
+acceptance_criteria:
+  change_status: "rejected"
+  provenance_refs:
+    - "CHG-042"
+    - "CHG-055"
+    - "CHG-060"
+    - "INFRA-789"
+  code_files_unchanged: true
+  spec_files_unchanged: true

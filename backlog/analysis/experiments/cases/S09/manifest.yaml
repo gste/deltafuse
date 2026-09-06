@@ -1,0 +1,20 @@
+case_id: S09
+title: "Terminal outcomes with duplicate rejected and superseded changes"
+category: terminal
+group: holdout
+target_capability: security.ip_filter
+slices: []
+target_gate: archived
+expected_outcome: rejected
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  prior_changes:
+    - id: CHG-042
+      status: rejected
+      reason: "Infrastructure not ready for IPv6"
+    - id: CHG-055
+      status: superseded
+      superseded_by: CHG-060
+    - id: INFRA-789
+      status: not-started
