@@ -1,0 +1,12 @@
+case_id: S01
+title: "Bootstrap empty product with new rate limiter capability"
+category: feature
+group: holdout
+target_capability: security.ratelimit
+slices:
+  - SLICE-01
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: true
+  existing_spec: false
