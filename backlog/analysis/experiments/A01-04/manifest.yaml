@@ -1,0 +1,53 @@
+task_id: A01-04
+criterion_ids:
+  - PROC-001
+  - PROC-002
+  - PROC-003
+  - PROC-004
+  - PROC-005
+  - PROC-006
+  - PROC-007
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "d0b55543c5b5258ffb4f9a37e1927702f23246a4"
+method: "formalization of independent, measurable process and resource criteria with explicit ID, oracle, measurement method, threshold, and rationale in backlog/criteria.md"
+inputs:
+  - "backlog/analysis-plan.md:91-96"
+  - "docs/roles.md:1-100"
+  - "docs/context-model.md:1-157"
+  - "backlog/analysis/experiments/A01-03/result.md"
+criteria_defined:
+  - id: PROC-001
+    name: "Полнота происхождения артефактов (Provenance & Traceability)"
+    threshold: "100% artifacts have valid provenance, 0 broken links in artifact graph"
+  - id: PROC-002
+    name: "Детерминизм и инварианты переходов FSM (FSM Determinism)"
+    threshold: "100% deterministic transitions, 0 invalid transitions, 100% rejection on gate violation"
+  - id: PROC-003
+    name: "Восстановление после сбоя и реентрантность (Crash Resilience & Re-entrance)"
+    threshold: "100% successful resumption without workspace corruption, 0 half-written artifacts"
+  - id: PROC-004
+    name: "Ограниченность контекста и ресурсов вызова (Bounded Execution & Context)"
+    threshold: "Input context <= max_tokens (16k) and <= max_files (24), 0 reads from forbidden_paths"
+  - id: PROC-005
+    name: "Ограничение циклов и повторов (Bounded Retries & Loop Halting)"
+    threshold: "Retries <= 3, guaranteed halting with diagnostic message upon retry exhaustion"
+  - id: PROC-006
+    name: "Строгость контрольных точек человека (Human Gate Integrity)"
+    threshold: "0 unauthorized bypasses of Human Gates by AI, 100% architectural forks require human decision"
+  - id: PROC-007
+    name: "Ресурсная эффективность и задержки исполнения (Resource Latency & RAM Budgets, предварительный)"
+    threshold: "CLI RAM <= 512 MB, CLI execution <= 5 s, LLM response <= 120 s, VRAM <= 8 GB (provisional)"
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - "backlog/criteria.md"
+verdict: pass
+verdict_scope: "A01-04 process and resource criteria tree completed; full criteria.md completed"
