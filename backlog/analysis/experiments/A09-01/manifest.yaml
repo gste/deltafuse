@@ -44,5 +44,6 @@ notes:
   - "S02 r5-frozen: TASK-001 Green, TASK-002 vacuous already-green; hidden suite 2 passed; routing schema_version stripped"
   - "A09-01a closed 2026-09-06: verdict partial; F-009 deferred to A12; next A09-01b S03"
   - "S03 r1-frozen: spec unchanged, authentic Red after oracle hint, Implement Green, hidden suite 2 passed"
+  - "S03 r2-frozen: spec unchanged, authentic Red first try, Implement Green, hidden suite 2 passed; decompose needed change.yaml in files[]"
   - "Do not reuse work/S02-r1 for frozen repeats"
   - "Oracle not in ornith prompt"

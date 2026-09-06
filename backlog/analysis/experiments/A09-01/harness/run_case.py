@@ -438,15 +438,18 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
     if phase == "decompose":
         if case_id == "S03":
             parts.append(
-                "Write 1 task as a files[] object (path + content): "
-                "docs/changes/<id>/tasks/TASK-001-<slug>.md. "
-                "Frontmatter MUST match task.schema.yaml: id TASK-001, slice SLICE-01, kind bug, "
+                "Write TWO files[] objects (separate objects, keys path and content): "
+                "(1) docs/changes/<id>/tasks/TASK-001-<slug>.md — frontmatter MUST match "
+                "task.schema.yaml: id TASK-001, slice SLICE-01, kind bugfix (not kind bug), "
                 "status pending, depends_on [], requirement_delta none, "
                 "spec_refs [docs/spec/security/ratelimit.md#REQ-RL-01], design_ref null, "
                 "allowed_paths [src/ratelimit/limiter.py, tests/test_limiter.py], "
                 "forbidden_paths [docs/spec/**]. No schema_version. Keep body short. "
+                "(2) docs/changes/<id>/change.yaml — keep existing fields, set status: decomposed, "
+                "and tasks: [docs/changes/<id>/tasks/TASK-001-<slug>.md]. "
+                "Writing only the task file leaves status normalized and fails the gate. "
                 "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
-                "Set change.yaml status to decomposed. Use status continue. Do not write code or spec."
+                "Use status continue. Do not write code or spec."
             )
         else:
             parts.append(

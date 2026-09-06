@@ -1,0 +1,10 @@
+outcome: pass
+independent_gate:
+  decomposed: []
+tasks:
+  - TASK-001-fix-fractional-refill.md
+kind: bugfix
+prior: decompose-status-mismatch (task only, change.yaml stayed normalized; harness said kind bug)
+retry_hint: write task + change.yaml status decomposed; kind bugfix
+elapsed_s: 65.6
+attempts: 1

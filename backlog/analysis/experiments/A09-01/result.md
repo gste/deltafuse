@@ -2,7 +2,7 @@
 
 - **ID карточки:** A09-01 (дети A09-01a/b/c)
 - **Ревизия старта:** `e57dc9d`; исполнение frozen r2: `55411ea`
-- **Статус исполнения:** **in-progress** (A09-01a done / `partial`; A09-01b S03 r1 Implement Green)
+- **Статус исполнения:** **in-progress** (A09-01a done / `partial`; A09-01b S03 r1+r2 Implement Green)
 - **Критерии:** `SPEC-001`, `SPEC-002`, `CODE-001`, `TEST-001`, `PROC-004`, `PROC-007`
 - **Вердикт A09-01a:** **partial** — r3/r4/r5 TASK-001 Green + hidden suite pass; 0 Verify; r2 = F-008; F-009 устойчив, отложен в A12. r6 не делали.
 
@@ -133,10 +133,29 @@ Implement TASK-002 не запускали. Hidden suite: **2 passed**.
 
 Логи: [runs/S03/r1-frozen/](runs/S03/r1-frozen/).
 
+## S03 r2-frozen (A09-01b, `work/S03-r2/`)
+
+Тот же frozen профиль. Oracle в prompt не входил. Live spec не меняли.
+
+| Фаза | Outcome | Попытки | TTFT / elapsed | Независимый gate |
+|---|---|---|---|---|
+| Intake | pass | 2 | 9.1 с / 35.2 с | leftover `CHG-001-ratelimit-fractional` |
+| Analyze routing | pass | 1 | 11.6 с / 32.1 с | схема ok |
+| Analyze slices | pass | 1 | 12.6 с / 28.2 с | `continue` |
+| Analyze coverage | pass | 1 | 14.4 с / 27.2 с | схема ok |
+| Specify | pass | 1 | 18.6 с / 27.8 с | spec-delta none; live spec не трогали |
+| Decompose | pass | 1 (+3 fail) | 20.2 с / 65.6 с | одна TASK-001 `bugfix`; fail: только task, `normalized` |
+| Target | pass | 1 | 20.0 с / 32.3 с | authentic Red: `int()` после ~2 с |
+| Implement | pass | 1 | 20.8 с / 32.8 с | pytest 3 passed; `int()` убран |
+
+Первый Decompose: три попытки без `change.yaml` (`decompose-status-mismatch`). Харнесс требовал `kind: bug` (нет в enum) и «Set status» без обязательного файла. Подсказка: два `files[]` — task + `change.yaml` `decomposed`. Повтор — pass с первой попытки. Hidden suite: **2 passed**. Verify не запускали.
+
+Логи: [runs/S03/r2-frozen/](runs/S03/r2-frozen/).
+
 ## Handoff
 
 - **Готово A09-01a:** `done` / `partial`. F-007 mitigated, F-008, F-009 → A12.
-- **A09-01b:** S03 r1 Red→Green, spec unchanged, hidden suite pass. Дальше r2 и r3. Не holdout. Skills не патчить.
+- **A09-01b:** S03 r1 и r2 Red→Green, spec unchanged, hidden suite pass. Дальше r3. Не holdout. Skills не патчить.
 - **Доработка не сейчас:** борозда/tokenizer/калибровка — [parking/design-questions.md](../../parking/design-questions.md), шаг [A12-04](../../packets/A12-04.md).
 - **Калибровка S03:** seed с `int()` в refill; specify не пишет `docs/spec/**`; Target сначала deplete bucket.
 - **Runtime:** [local-runtime](../local-runtime/README.md).
