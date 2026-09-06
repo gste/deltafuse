@@ -1,0 +1,1 @@
+TASK-001-fractional-refill-accumulation.md: [kind] 'bug' is not one of ['feature', 'bugfix', 'refactor', 'maintenance', 'documentation']

@@ -1,0 +1,11 @@
+.F                                                                       [100%]
+================================== FAILURES ===================================
+_____________________ test_fractional_refill_accumulates ______________________
+tests\test_limiter.py:15: in test_fractional_refill_accumulates
+    assert limiter.consume('u', 10) is False
+E   AssertionError: assert True is False
+E    +  where True = consume('u', 10)
+E    +    where consume = <ratelimit.limiter.TokenBucketLimiter object at 0x000001EB1A27A490>.consume
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_fractional_refill_accumulates - AssertionE...
+1 failed, 1 passed, 1 warning in 0.07s

@@ -2,7 +2,7 @@
 
 - **ID карточки:** A09-01 (дети A09-01a/b/c)
 - **Ревизия старта:** `e57dc9d`; исполнение frozen r2: `55411ea`
-- **Статус исполнения:** **in-progress** (A09-01a **done** / `partial`; исполняется A09-01b S03)
+- **Статус исполнения:** **in-progress** (A09-01a done / `partial`; A09-01b S03 r1 Implement Green)
 - **Критерии:** `SPEC-001`, `SPEC-002`, `CODE-001`, `TEST-001`, `PROC-004`, `PROC-007`
 - **Вердикт A09-01a:** **partial** — r3/r4/r5 TASK-001 Green + hidden suite pass; 0 Verify; r2 = F-008; F-009 устойчив, отложен в A12. r6 не делали.
 
@@ -114,10 +114,28 @@ Implement TASK-002 не запускали. Hidden suite: **2 passed**.
 
 Логи: [runs/S02/r5-frozen/](runs/S02/r5-frozen/).
 
+## S03 r1-frozen (A09-01b, `work/S03-r1/`)
+
+Баг при верной spec. Oracle в prompt не входил. Live spec не меняли.
+
+| Фаза | Outcome | Попытки | TTFT / elapsed | Независимый gate |
+|---|---|---|---|---|
+| Intake | pass | 2 | 8.5 с / 34.5 с | `intake=[]`; CR-001…006; попытка 1 без `title` |
+| Analyze routing | pass | 1 | 11.4 с / 30.5 с | схема ok |
+| Analyze slices | pass | 1 | 12.4 с / 41.7 с | `continue` |
+| Analyze coverage | pass | 1 | 15.0 с / 27.1 с | `analyzed=[]` |
+| Specify | pass | 1 | 21.0 с / 30.1 с | spec-delta ADDED/MODIFIED/REMOVED none; live spec не трогали |
+| Decompose | pass | 3 | 25.0 с / 53.9 с | одна TASK-001 `bugfix` (попытка 2: `kind: bug`) |
+| Target | pass | 1 (+1 wrong oracle) | 20.1 с / 29.4 с | authentic Red: после 2 с `int()` не даёт 1 токен |
+| Implement | pass | 1 | 22.6 с / 35.0 с | pytest 2 passed; `int()` убран; тесты и spec не трогали |
+
+Первый Target: `consume(10) is False` на полном бакете — не тот баг, Implement не запускали. Повтор с подсказкой REQ-RL-03 — честный Red. Hidden suite: **2 passed**. Verify не запускали. Остался мусорный пакет `CHG-001-ratelimit-fractional` от Intake attempt 1.
+
+Логи: [runs/S03/r1-frozen/](runs/S03/r1-frozen/).
+
 ## Handoff
 
-- **Готово A09-01a:** три frozen code-прогона (r3–r5). Карточка `done` с verdict `partial`. F-007 mitigated, F-008, F-009 → A12.
-- **Дальше:** [A09-01b](../../packets/A09-01b.md) S03 (баг, spec unchanged). Не патчить skills. Не holdout. Не r6 по S02.
-- **Калибровка, не фреймворк:** `CR-NNN`; strip `schema_version` на routing; specify без REQ-id в frontmatter; slices 4096; не выдумывать Decision; Target без `._`.
-- **Не менять** skills/`integrity.py` без A12.
+- **Готово A09-01a:** `done` / `partial`. F-007 mitigated, F-008, F-009 → A12.
+- **A09-01b:** S03 r1 Red→Green, spec unchanged, hidden suite pass. Дальше r2 и r3. Не holdout. Skills не патчить.
+- **Калибровка S03:** seed с `int()` в refill; specify не пишет `docs/spec/**`; Target сначала deplete bucket.
 - **Runtime:** [local-runtime](../local-runtime/README.md).

@@ -264,6 +264,51 @@ def seed_ratelimit_product(product: Path) -> None:
     )
 
 
+def seed_s03_product(product: Path) -> None:
+    """Correct spec, buggy limiter: int() truncates fractional refill."""
+    seed_ratelimit_product(product)
+    (product / "docs" / "spec" / "security" / "ratelimit.md").write_text(
+        "# security.ratelimit\n\n"
+        "## REQ-RL-01 Capacity and refill\n"
+        "TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0. "
+        "Tokens MUST be refilled proportionally to elapsed time, preserving fractional balances.\n\n"
+        "## REQ-RL-02 Consume\n"
+        "consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.\n\n"
+        "## REQ-RL-03 Unknown keys\n"
+        "An unknown key MUST start at full capacity.\n\n"
+        "## REQ-RL-04 is_blocked\n"
+        "is_blocked(key) MUST return False for the baseline limiter (no penalty lock).\n",
+        encoding="utf-8",
+    )
+    (product / "src" / "ratelimit" / "limiter.py").write_text(
+        "from __future__ import annotations\n"
+        "import time\n\n"
+        "class TokenBucketLimiter:\n"
+        "    def __init__(self, capacity: float, refill_rate: float) -> None:\n"
+        "        if capacity <= 0 or refill_rate < 0:\n"
+        "            raise ValueError('invalid limiter parameters')\n"
+        "        self.capacity = float(capacity)\n"
+        "        self.refill_rate = float(refill_rate)\n"
+        "        self._buckets: dict[str, tuple[float, float]] = {}\n\n"
+        "    def _refill(self, key: str) -> tuple[float, float]:\n"
+        "        now = time.monotonic()\n"
+        "        tokens, last = self._buckets.get(key, (self.capacity, now))\n"
+        "        gained = int((now - last) * self.refill_rate)\n"
+        "        tokens = min(self.capacity, tokens + gained)\n"
+        "        self._buckets[key] = (tokens, now)\n"
+        "        return self._buckets[key]\n\n"
+        "    def consume(self, key: str, tokens: float) -> bool:\n"
+        "        current, ts = self._refill(key)\n"
+        "        if current >= tokens:\n"
+        "            self._buckets[key] = (current - tokens, ts)\n"
+        "            return True\n"
+        "        return False\n\n"
+        "    def is_blocked(self, key: str) -> bool:\n"
+        "        return False\n",
+        encoding="utf-8",
+    )
+
+
 def setup_product(case_id: str, repeat: int) -> Path:
     product = EXPERIMENT / "work" / f"{case_id}-r{repeat}"
     if product.exists():
@@ -272,7 +317,10 @@ def setup_product(case_id: str, repeat: int) -> Path:
     from deltafuse.core.installer import install
 
     install(target_dir=product, framework_root=FRAMEWORK)
-    seed_ratelimit_product(product)
+    if case_id == "S03":
+        seed_s03_product(product)
+    else:
+        seed_ratelimit_product(product)
     intake_src = CASES / case_id / "input.md"
     dest = product / "docs" / "intake" / f"{case_id}.md"
     dest.write_text(intake_src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -368,29 +416,61 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
             "Map each CR-NNN id from request.md to slice SLICE-01."
         )
     if phase == "specify":
-        parts.append(
-            "Write two files[] objects (separate objects, keys path and content): "
-            "(1) docs/changes/<id>/spec-delta.md with YAML frontmatter matching spec-delta.schema.yaml "
-            "(no schema_version; status: proposed; slices: [SLICE-01]; do NOT put added/modified/removed "
-            "in frontmatter — those strings are treated as file paths and will fail the gate) "
-            "and ADDED/MODIFIED/REMOVED headings only in the markdown body; "
-            "(2) the updated live spec docs/spec/security/ratelimit.md with new REQ-RL-* for the cooldown. "
-            "Keep REQ-RL-01..04. Do not invent Decisions. Use status continue. Keep content short."
-        )
+        if case_id == "S03":
+            parts.append(
+                "This is a bug with a correct live spec. Do NOT edit docs/spec/**. "
+                "Write ONLY docs/changes/<id>/spec-delta.md with YAML frontmatter matching "
+                "spec-delta.schema.yaml (no schema_version; status: proposed; slices: [SLICE-01]; "
+                "do NOT put added/modified/removed in frontmatter). "
+                "Body: ADDED/MODIFIED/REMOVED none — specification unchanged. "
+                "Use status continue. Keep content short."
+            )
+        else:
+            parts.append(
+                "Write two files[] objects (separate objects, keys path and content): "
+                "(1) docs/changes/<id>/spec-delta.md with YAML frontmatter matching spec-delta.schema.yaml "
+                "(no schema_version; status: proposed; slices: [SLICE-01]; do NOT put added/modified/removed "
+                "in frontmatter — those strings are treated as file paths and will fail the gate) "
+                "and ADDED/MODIFIED/REMOVED headings only in the markdown body; "
+                "(2) the updated live spec docs/spec/security/ratelimit.md with new REQ-RL-* for the cooldown. "
+                "Keep REQ-RL-01..04. Do not invent Decisions. Use status continue. Keep content short."
+            )
     if phase == "decompose":
-        parts.append(
-            "Write 1 or 2 tasks as separate files[] objects (path + content): "
-            "docs/changes/<id>/tasks/TASK-001-<slug>.md (and optional TASK-002). "
-            "Frontmatter MUST match task.schema.yaml: id TASK-NNN, slice SLICE-01, kind feature, "
-            "status pending, depends_on [], requirement_delta added, spec_refs to existing "
-            "docs/spec/security/ratelimit.md#REQ-RL-05 (or 06/07), design_ref null, "
-            "allowed_paths [src/ratelimit/limiter.py, tests/test_limiter.py], "
-            "forbidden_paths [docs/spec/auth/**]. No schema_version. Keep body short. "
-            "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
-            "Set change.yaml status to decomposed. Use status continue. Do not write code."
-        )
+        if case_id == "S03":
+            parts.append(
+                "Write 1 task as a files[] object (path + content): "
+                "docs/changes/<id>/tasks/TASK-001-<slug>.md. "
+                "Frontmatter MUST match task.schema.yaml: id TASK-001, slice SLICE-01, kind bug, "
+                "status pending, depends_on [], requirement_delta none, "
+                "spec_refs [docs/spec/security/ratelimit.md#REQ-RL-01], design_ref null, "
+                "allowed_paths [src/ratelimit/limiter.py, tests/test_limiter.py], "
+                "forbidden_paths [docs/spec/**]. No schema_version. Keep body short. "
+                "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
+                "Set change.yaml status to decomposed. Use status continue. Do not write code or spec."
+            )
+        else:
+            parts.append(
+                "Write 1 or 2 tasks as separate files[] objects (path + content): "
+                "docs/changes/<id>/tasks/TASK-001-<slug>.md (and optional TASK-002). "
+                "Frontmatter MUST match task.schema.yaml: id TASK-NNN, slice SLICE-01, kind feature, "
+                "status pending, depends_on [], requirement_delta added, spec_refs to existing "
+                "docs/spec/security/ratelimit.md#REQ-RL-05 (or 06/07), design_ref null, "
+                "allowed_paths [src/ratelimit/limiter.py, tests/test_limiter.py], "
+                "forbidden_paths [docs/spec/auth/**]. No schema_version. Keep body short. "
+                "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
+                "Set change.yaml status to decomposed. Use status continue. Do not write code."
+            )
     if phase == "target":
-        if TASK == "TASK-002":
+        if case_id == "S03":
+            parts.append(
+                "Write ONLY tests/test_limiter.py. Keep the existing baseline test. "
+                "Add the smallest failing test that fractional refill accumulates. "
+                "Unknown keys start at full capacity: first consume(capacity) MUST be True. "
+                "Then, with refill_rate 0.5, after ~1s still cannot consume 1 more token; "
+                "after ~2s total can consume 1. Public API only; no private _fields. "
+                "Do not edit src/ or docs/spec/. Do not write evidence YAML. Use status continue."
+            )
+        elif TASK == "TASK-002":
             parts.append(
                 "Write ONLY tests/test_limiter.py. Keep existing tests. "
                 "Add the smallest test for TASK-002 using only the public API "
@@ -410,12 +490,19 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "Do not write evidence YAML (the harness will run pytest). Use status continue."
             )
     if phase == "implement":
-        parts.append(
-            "Write ONLY src/ratelimit/limiter.py. Do not edit tests. Do not write evidence YAML. "
-            "Add optional penalty_seconds=0.0; on failed consume when penalty_seconds > 0 lock the key "
-            "for that duration; is_blocked(key) True while locked; keep baseline when penalty_seconds is 0. "
-            "Use status continue."
-        )
+        if case_id == "S03":
+            parts.append(
+                "Write ONLY src/ratelimit/limiter.py. Do not edit tests or docs/spec/**. "
+                "Do not write evidence YAML. Fix refill so elapsed * refill_rate is not truncated to int; "
+                "keep fractional token balance. Use status continue."
+            )
+        else:
+            parts.append(
+                "Write ONLY src/ratelimit/limiter.py. Do not edit tests. Do not write evidence YAML. "
+                "Add optional penalty_seconds=0.0; on failed consume when penalty_seconds > 0 lock the key "
+                "for that duration; is_blocked(key) True while locked; keep baseline when penalty_seconds is 0. "
+                "Use status continue."
+            )
     for path in ctx_files:
         try:
             rel = path.relative_to(product).as_posix()
@@ -614,6 +701,14 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
                 status = payload.get("status") or "continue"
             except Exception as exc:
                 parse_error = str(exc)
+            if not parse_error and case_id == "S03" and phase in {"specify", "implement", "target", "decompose"}:
+                spec_writes = [
+                    p.replace("\\", "/")
+                    for p in written
+                    if p.replace("\\", "/").startswith("docs/spec/")
+                ]
+                if spec_writes:
+                    parse_error = "S03 spec unchanged: must not edit " + ",".join(spec_writes)
             if not parse_error and phase == "target":
                 prod_writes = [
                     p.replace("\\", "/")
