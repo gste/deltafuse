@@ -2,11 +2,11 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A03-02, переход к A03-04.
-- **Текущая задача:** [A03-04 — Проанализировать контракт DeltaFuse локальной LLM](packets/A03-04.md).
-- **Следующая задача:** [A03-05 — Описать bounded execution каждой фазы](packets/A03-05.md).
-- **Счётчики:** всего 80; `planned` 58; `in-progress` 0; `done` 22; `blocked` 0.
-- **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md)).
+- **Статус:** `in-progress` — завершён A03-04, переход к A03-05.
+- **Текущая задача:** [A03-05 — Описать bounded execution каждой фазы](packets/A03-05.md).
+- **Следующая задача:** [A04-01 — Проверить сохранение смысла raw claims](packets/A04-01.md).
+- **Счётчики:** всего 80; `planned` 57; `in-progress` 0; `done` 23; `blocked` 0.
+- **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md), проверена в [A03-04](experiments/A03-04/result.md)).
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
 
@@ -58,7 +58,7 @@
 | [A03-01 — Проверить фактический prompt и подсчёт токенов](packets/A03-01.md) | A02-01, A03-03 | done | [PROC-004, PROC-007: fail; F-003; результат](experiments/A03-01/result.md), [F-003](../findings/F-003.md) |
 | [A03-02 — Проверить отказы и границы чтения](packets/A03-02.md) | A03-01 | done | [PROC-004, CODE-006: fail; F-004; результат](experiments/A03-02/result.md), [F-004](../findings/F-004.md) |
 | [A03-03 — Зафиксировать профиль ornith в LM Studio](packets/A03-03.md) | A02-01 | done | [PROC-004, PROC-007: pass; profile.md, результат](experiments/A03-03/result.md) |
-| [A03-04 — Проанализировать контракт DeltaFuse локальной LLM](packets/A03-04.md) | A03-03, A03-01, A02-01 | planned | — |
+| [A03-04 — Проанализировать контракт DeltaFuse локальной LLM](packets/A03-04.md) | A03-03, A03-01, A02-01 | done | [PROC-004, SPEC-007: pass; model_output.md, результат](experiments/A03-04/result.md) |
 | [A03-05 — Описать bounded execution каждой фазы](packets/A03-05.md) | A03-02, A03-03 | planned | — |
 
 ## A04
