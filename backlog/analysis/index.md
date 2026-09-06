@@ -2,11 +2,11 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A02, переход к A03-03.
-- **Текущая задача:** [A03-03 — Зафиксировать профиль ornith в LM Studio](packets/A03-03.md).
-- **Следующая задача:** [A03-01 — Проверить фактический prompt и подсчёт токенов](packets/A03-01.md).
-- **Счётчики:** всего 80; `planned` 61; `in-progress` 0; `done` 19; `blocked` 0.
-- **Локальная модель:** `ornith-1.5-35b-a3b`, LM Studio; доступность и аппаратный профиль ещё не проверены.
+- **Статус:** `in-progress` — завершён A03-03, переход к A03-01.
+- **Текущая задача:** [A03-01 — Проверить фактический prompt и подсчёт токенов](packets/A03-01.md).
+- **Следующая задача:** [A03-02 — Проверить отказы и границы чтения](packets/A03-02.md).
+- **Счётчики:** всего 80; `planned` 60; `in-progress` 0; `done` 20; `blocked` 0.
+- **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md)).
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
 
@@ -57,7 +57,7 @@
 |---|---|---|---|
 | [A03-01 — Проверить фактический prompt и подсчёт токенов](packets/A03-01.md) | A02-01, A03-03 | planned | — |
 | [A03-02 — Проверить отказы и границы чтения](packets/A03-02.md) | A03-01 | planned | — |
-| [A03-03 — Зафиксировать профиль ornith в LM Studio](packets/A03-03.md) | A02-01 | planned | — |
+| [A03-03 — Зафиксировать профиль ornith в LM Studio](packets/A03-03.md) | A02-01 | done | [PROC-004, PROC-007: pass; profile.md, результат](experiments/A03-03/result.md) |
 | [A03-04 — Проанализировать контракт DeltaFuse локальной LLM](packets/A03-04.md) | A03-03, A03-01, A02-01 | planned | — |
 | [A03-05 — Описать bounded execution каждой фазы](packets/A03-05.md) | A03-02, A03-03 | planned | — |
 
