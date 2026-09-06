@@ -1,0 +1,24 @@
+revision: "9477f40"
+task_id: "A08-11"
+packet: "backlog/analysis/packets/A08-11.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-006"
+  - "PROC-003"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+method: "Independent design and generation of Scenario S08b (Docs-only change) in holdout split, with proportionate docs routing oracle, code immutability checks, and anti-Red/Green fault mutations."
+artifacts:
+  - "backlog/analysis/experiments/cases/S08b/input.md"
+  - "backlog/analysis/experiments/cases/S08b/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S08b/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S08b/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S08b/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-11/result.md"
+verdict: "pass"
