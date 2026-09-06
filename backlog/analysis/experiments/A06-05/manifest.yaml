@@ -1,0 +1,22 @@
+revision: "4b93374"
+task_id: "A06-05"
+packet: "backlog/analysis/packets/A06-05.md"
+criterion_ids:
+  - "PROC-006"
+  - "CODE-002"
+  - "PROC-003"
+inputs:
+  - "src/deltafuse/core/installer.py:L110-180"
+  - "src/deltafuse/core/layout.py:L23-140"
+  - "src/deltafuse/core/archiver.py:L29-98"
+  - "docs/roles.md:L1-110"
+method: "Analysis of filesystem edge cases (spaces, Unicode paths, symlinks, path traversal) and verification of AI authority boundaries (strict prohibition of git push, destructive git commands, human-only gates for decisions and specifications)."
+commands:
+  - "python -c \"from deltafuse.core.installer import install; ...\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A06-05/result.md"
+verdict: "pass"

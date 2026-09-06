@@ -2,10 +2,11 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — выполняется пакет A06, переход к A06-05.
-- **Текущая задача:** [A06-05 — Проверить filesystem и границы полномочий](packets/A06-05.md).
-- **Следующая задача:** [A07-01 — Проверить достоверность Red/Green evidence](packets/A07-01.md).
+- **Статус:** `in-progress` — завершён пакет A06, переход к A07-01.
+- **Текущая задача:** [A07-01 — Проверить достоверность Red/Green evidence](packets/A07-01.md).
+- **Следующая задача:** [A07-02 — Измерить полезность тестов фреймворка](packets/A07-02.md).
 - **Счётчики:** всего 80; `planned` 44; `in-progress` 0; `done` 36; `blocked` 0.
+
 
 
 
@@ -91,7 +92,7 @@
 | [A06-02 — Проверить установку, пакет и pin/lock/hash](packets/A06-02.md) | A06-01 | done | [SPEC-006, PROC-001, PROC-003: pass; результат и handoff](experiments/A06-02/result.md) |
 | [A06-03 — Проверить upgrade и восстановление записи](packets/A06-03.md) | A06-02 | done | [SPEC-006, PROC-001, PROC-003: pass; результат и handoff](experiments/A06-03/result.md) |
 | [A06-04 — Проверить archive после прерывания](packets/A06-04.md) | A06-01 | done | [PROC-002, PROC-003, PROC-001: pass; результат и handoff](experiments/A06-04/result.md) |
-| [A06-05 — Проверить filesystem и границы полномочий](packets/A06-05.md) | A06-02 | planned | — |
+| [A06-05 — Проверить filesystem и границы полномочий](packets/A06-05.md) | A06-02 | done | [PROC-006, CODE-002, PROC-003: pass; результат и handoff](experiments/A06-05/result.md) |
 
 ## A07
 
