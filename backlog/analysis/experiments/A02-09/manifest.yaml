@@ -1,0 +1,53 @@
+task_id: A02-09
+criterion_ids:
+  - PROC-001
+  - PROC-006
+  - SPEC-006
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "00b8714c286e5da527b8c38ef5d4f8af17a906b7"
+method: "verification and contract tracing of gate bypasses and terminal lifecycle paths (rejected, duplicate, not-reproduced, superseded) across documentation, skills, schemas, FSM gates, archiver engine, and unit/e2e tests"
+inputs:
+  - "docs/state-machine.md:38-59,71-75"
+  - "docs/roles.md:70-75"
+  - "process/schemas/decision.schema.yaml:1-33"
+  - "src/deltafuse/core/fsm.py:40-65,142-156,399-414"
+  - "src/deltafuse/core/archiver.py:58-65"
+  - "tests/e2e/test_terminal_workflows.py:1-50"
+  - "tests/unit/test_fsm_mutations.py:12-74,139-156"
+  - "backlog/analysis/experiments/A02-08/result.md"
+invariants_verified:
+  - id: BYP-01
+    name: "Ручная подмена статуса в change.yaml (T5)"
+    status: full-runtime-enforced
+  - id: BYP-02
+    name: "Обход Human Approval для Decisions и Spec (P3, RACI)"
+    status: full-runtime-enforced
+  - id: BYP-03
+    name: "Терминальный путь rejected (Отклонение изменения)"
+    status: full-runtime-enforced
+  - id: BYP-04
+    name: "Терминальный путь duplicate (Дубликат)"
+    status: full-runtime-enforced
+  - id: BYP-05
+    name: "Терминальный путь not-reproduced (Невоспроизводимый дефект)"
+    status: full-runtime-enforced
+  - id: BYP-06
+    name: "Терминальный путь superseded (Замещение)"
+    status: full-runtime-enforced
+  - id: BYP-07
+    name: "Инвалидация свидетельств при подмене фаз (T1 & T2)"
+    status: full-runtime-enforced
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - "backlog/matrices/contracts.md"
+verdict: pass
+verdict_scope: "Gate bypasses and terminal paths verified and mapped to invariants BYP-01..BYP-07 in contracts.md; T1, T2, T5 guards and terminal archival e2e confirmed"
