@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — готов к запуску A02-02.
-- **Текущая задача:** [A02-02 — Проверить контракт Intake](packets/A02-02.md).
-- **Следующая задача:** [A02-03 — Проверить контракт Route and Analyze](packets/A02-03.md).
-- **Счётчики:** всего 80; `planned` 70; `in-progress` 0; `done` 10; `blocked` 0.
+- **Статус:** `in-progress` — готов к запуску A02-03.
+- **Текущая задача:** [A02-03 — Проверить контракт Route and Analyze](packets/A02-03.md).
+- **Следующая задача:** [A02-04 — Проверить контракт Specify](packets/A02-04.md).
+- **Счётчики:** всего 80; `planned` 69; `in-progress` 0; `done` 11; `blocked` 0.
 - **Локальная модель:** `ornith-1.5-35b-a3b`, LM Studio; доступность и аппаратный профиль ещё не проверены.
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
@@ -40,7 +40,7 @@
 | Задача | Зависимости | Статус | Evidence / блокировка |
 |---|---|---|---|
 | [A02-01 — Сопоставить контракт ограничения контекста](packets/A02-01.md) | A01-01, A01-02, A01-03, A01-04 | done | [pass; contracts.md, F-002; результат](experiments/A02-01/result.md), [F-002](../findings/F-002.md) |
-| [A02-02 — Проверить контракт Intake](packets/A02-02.md) | A02-01 | planned | — |
+| [A02-02 — Проверить контракт Intake](packets/A02-02.md) | A02-01 | done | [INT-01..06: pass; contracts.md, результат](experiments/A02-02/result.md) |
 | [A02-03 — Проверить контракт Route and Analyze](packets/A02-03.md) | A02-01 | planned | — |
 | [A02-04 — Проверить контракт Specify](packets/A02-04.md) | A02-01 | planned | — |
 | [A02-05 — Проверить контракт Decompose](packets/A02-05.md) | A02-01 | planned | — |

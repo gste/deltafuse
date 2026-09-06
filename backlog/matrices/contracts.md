@@ -1,4 +1,4 @@
-# Матрица согласованности контрактов и контекстных ограничений DeltaFuse
+﻿# Матрица согласованности контрактов и контекстных ограничений DeltaFuse
 
 Этот документ фиксирует сопоставление проектных контрактов жизненного цикла DeltaFuse, разделяя уровни **декларации** (документация, спецификации, скиллы), **структурной проверки** (схемы JSON Schema, frontmatter шаблонов) и **runtime enforcement** (проверки FSM, гейты, CLI-валидаторы), согласно [плану анализа](../analysis-plan.md) (пакет A02).
 
@@ -57,3 +57,22 @@
 3. **Runtime уровень:** частичная валидация `spec_refs` слайсов через эвристику слов в `fsm.py` и команду `deltafuse lint-context`. Контроль чтений, бюджетов задач и границ diff на уровне Python-движка отсутствует.
 
 Данного анализа достаточно для перехода к экспериментальным измерениям токенизатора, фактического промпта и аппаратных профилей в пакете **A03**.
+
+---
+
+## 4. Детальная матрица инвариантов фазы Intake (A02-02)
+
+| Инвариант / Свойство | Документация (`docs/**`) | Навык агента (`process/skills/**`) | Схема / Шаблон (`process/**`) | FSM Runtime Gate (`core/fsm.py`) | Положительный тест (CI/Unit) | Отрицательный / Мутационный тест | Статус контроля |
+|---|---|---|---|---|---|---|---|
+| **INT-01: Изоляция чтения (Read Scope Isolation)** | `docs/workflow.md:32-35`, `docs/roles.md:53` (запрет чтения `docs/spec/**`, кода, задач). | `intake/SKILL.md:14-20` (Read only raw request, config, schemas; do not read spec/code/tests). | `templates/change/request.md:5` (Normalize without evaluating vs spec/code). | `PHASE_CONTRACTS["intake"]` объявлен в `context.py`, но в `fsm.py` **не проверяется**. | — (нет теста на запрет чтения) | **Отсутствует** (runtime enforcement чтений не реализован, [F-002](../findings/F-002.md)). | **Декларация** |
+| **INT-02: Извлечение и стабильность claims (`CR-*`)** | `docs/workflow.md:41,48` (нумерация `CR-001..`, минимум 1 claim в `request.md`). | `intake/SKILL.md:26,31` (стабильные ID, запрет тихого переписывания claims). | `templates/change/request.md:7-10`, `schemas/change.schema.yaml:32`. | `fsm.py:182` (`extract_claims_from_request` парсит `\bCR-[0-9]{3,}\b`). | `tests/unit/test_fsm.py:49` (`check_gate("intake") == []`). | `tests/e2e/test_failure_modes.py:32` (удаление `request.md` или порча claims ломает гейт). | **Семантический Runtime** |
+| **INT-03: Начальный статус FSM и целостность артефактов (T5)** | `docs/workflow.md:43`, `docs/state-machine.md:15,58` (`status: normalized`). | `intake/SKILL.md:25` (создание `change.yaml` со `status: normalized`). | `schemas/change.schema.yaml:16` (`enum: [normalized, ...]`). | `fsm.py:146-149` (T5: статус `normalized` запрещает наличие `tasks/` или `evidence/`). | `tests/unit/test_fsm.py:27-51` (успешный проход гейта с чистым пакетом). | `tests/unit/test_fsm_mutations.py:136` (`test_t5_status_artifacts_mismatch` — ошибка при наличии tasks в normalized). | **Полный Runtime Enforcement** |
+| **INT-04: Допустимые переходы из `normalized`** | `docs/state-machine.md:41,58` (допустимы: `analyzing`, `rejected`, `duplicate`). | `intake/SKILL.md:37` (рекомендация перехода к `/analyze-change`). | `schemas/change.schema.yaml:16`. | `fsm.py:41` (`ALLOWED_CHANGE_TRANSITIONS["normalized"] = {"analyzing", "rejected", "duplicate"}`). | `tests/unit/test_fsm.py:59` (`can_transition("normalized", "analyzing") is True`). | `tests/unit/test_fsm.py:81` (`can_transition("normalized", "converged") is False`). | **Полный Runtime Enforcement** |
+| **INT-05: Валидация схемы пакета Change** | `docs/workflow.md:47` (`change.yaml` passes `change.schema.yaml`). | `intake/SKILL.md:25` (запись `version`, `content_hash`, `source`). | `schemas/change.schema.yaml` (strict: `additionalProperties: false`, 10 обязательных полей). | `fsm.py:114` (`registry.validate("change", change_data)`). | `tests/unit/test_schemas.py` (self-validation шаблонов и схем). | `tests/unit/test_schemas.py` (подача лишних полей или битых типов вызывает `ValidationError`). | **Структурный Runtime** |
+| **INT-06: Архивация источника Intake (Provenance Archival)** | `docs/workflow.md:281-282` (перенос в `docs/archive/intake/`). | `intake/SKILL.md:29` (сохранение hash и перемещение в архив). | `schemas/change.schema.yaml:33` (`source.intake_refs`). | Ручной/skill шаг, в FSM гейте `intake` перенос не форсируется. | `tests/e2e/test_golden_workflow.py` (сквозной перенос в архив). | — | **Процедурный (Skill level)** |
+
+### Выводы по фазе Intake (A02-02)
+
+1. **Гарантии FSM работают надёжно:** структурная схема `change.schema.yaml`, семантическая мутация T5 (статус `normalized` не может содержать задачи или evidence) и таблица допустимых переходов (`can_transition`) полностью покрыты юнит- и мутационными тестами.
+2. **Семантика Red/Green:** на фазе Intake тесты не исполняются и код не пишется. Red и Green здесь не являются lifecycle-шагами (согласно мандату AGENTS.md), а возникают позже как доказательные состояния (`evidence states`) фаз Target и Implement.
+3. **Разрыв контроля чтения (INT-01):** запрет чтения документации спецификаций и кода (`docs/spec/**`, `src/**`) во время нормализации запроса остаётся исключительно инструкцией для LLM-агента (`SKILL.md`) и не контролируется FSM-валидатором на уровне файловой системы.
