@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A04-03, переход к A04-04.
-- **Текущая задача:** [A04-04 — Проверить bootstrap и baseline существующего кода](packets/A04-04.md).
-- **Следующая задача:** [A05-01 — Проверить атомарность tasks и Kahn DAG](packets/A05-01.md).
-- **Счётчики:** всего 80; `planned` 53; `in-progress` 0; `done` 27; `blocked` 0.
+- **Статус:** `in-progress` — завершён пакет A04, переход к A05-01.
+- **Текущая задача:** [A05-01 — Проверить атомарность task и достижимость Red](packets/A05-01.md).
+- **Следующая задача:** [A05-02 — Проверить DAG и межсрезовую совместимость](packets/A05-02.md).
+- **Счётчики:** всего 80; `planned` 52; `in-progress` 0; `done` 28; `blocked` 0.
 - **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md), проверена в [A03-04](experiments/A03-04/result.md)).
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
@@ -68,7 +68,7 @@
 | [A04-01 — Проследить claims до принятой spec](packets/A04-01.md) | A02-10, A03-04, A03-05 | done | [PROC-001, SPEC-001, SPEC-002: pass; результат](experiments/A04-01/result.md) |
 | [A04-02 — Проверить достаточность spec и перенос Decision](packets/A04-02.md) | A04-01 | done | [SPEC-003, SPEC-004, PROC-006: pass; результат](experiments/A04-02/result.md) |
 | [A04-03 — Проверить актуальность spec после серии изменений](packets/A04-03.md) | A04-02 | done | [SPEC-005, SPEC-007, PROC-001: pass; результат](experiments/A04-03/result.md) |
-| [A04-04 — Проверить bootstrap и baseline существующего кода](packets/A04-04.md) | A04-02 | planned | — |
+| [A04-04 — Проверить bootstrap и baseline существующего кода](packets/A04-04.md) | A04-02 | done | [SPEC-001, SPEC-004, PROC-001: pass; результат](experiments/A04-04/result.md) |
 
 ## A05
 
