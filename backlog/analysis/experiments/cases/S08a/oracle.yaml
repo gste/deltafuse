@@ -1,0 +1,39 @@
+case_id: S08a
+intent_claims:
+  - id: CR-001
+    title: "Extract Backend Interface"
+    description: "Create abstract RateLimiterBackend with init_key, consume, get_balance."
+    normative_rules:
+      - "MUST create abstract class RateLimiterBackend"
+      - "MUST NOT change external API surface"
+  - id: CR-002
+    title: "InMemoryBackend Extraction"
+    description: "Move current implementation to InMemoryBackend class."
+    normative_rules:
+      - "MUST preserve all existing behavior"
+      - "MUST pass all existing tests"
+  - id: CR-003
+    title: "Dependency Injection"
+    description: "RateLimiter accepts backend via constructor."
+    normative_rules:
+      - "MUST inject backend in constructor"
+      - "MUST centralize validation in RateLimiter, not backend"
+
+ambiguity_expected: false
+expected_decision_needed: false
+spec_change_expected: false
+
+routing_validation:
+  route_type: refactoring
+  must_not_create_red: "No behavioral Red test; structural verification only"
+  proportionate_route: "Must not trigger full feature workflow for structural refactor"
+
+acceptance_criteria:
+  spec_files_unchanged:
+    - "docs/spec/security/ratelimit.md"
+  code_files:
+    - "src/ratelimit/backends.py"
+    - "src/ratelimit/limiter.py"
+  test_files:
+    - "tests/test_limiter.py"
+  all_existing_tests_pass: true
