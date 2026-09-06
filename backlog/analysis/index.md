@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершена A02-05, переход к A02-06.
-- **Текущая задача:** [A02-06 — Проверить контракт Target](packets/A02-06.md).
-- **Следующая задача:** [A02-07 — Проверить контракт Implement](packets/A02-07.md).
-- **Счётчики:** всего 80; `planned` 65; `in-progress` 0; `done` 14; `blocked` 0.
+- **Статус:** `in-progress` — завершена A02-06, переход к A02-07.
+- **Текущая задача:** [A02-07 — Проверить контракт Implement](packets/A02-07.md).
+- **Следующая задача:** [A02-08 — Проверить контракт Verify, Converge and Archive](packets/A02-08.md).
+- **Счётчики:** всего 80; `planned` 64; `in-progress` 0; `done` 15; `blocked` 0.
 - **Локальная модель:** `ornith-1.5-35b-a3b`, LM Studio; доступность и аппаратный профиль ещё не проверены.
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
@@ -44,7 +44,7 @@
 | [A02-03 — Проверить контракт Route and Analyze](packets/A02-03.md) | A02-01 | done | [ANA-01..06: pass; contracts.md, результат](experiments/A02-03/result.md) |
 | [A02-04 — Проверить контракт Specify](packets/A02-04.md) | A02-01 | done | [SPC-01..06: pass; contracts.md, результат](experiments/A02-04/result.md) |
 | [A02-05 — Проверить контракт Decompose](packets/A02-05.md) | A02-01 | done | [DEC-01..06: pass; contracts.md, результат](experiments/A02-05/result.md) |
-| [A02-06 — Проверить контракт Target](packets/A02-06.md) | A02-01 | planned | — |
+| [A02-06 — Проверить контракт Target](packets/A02-06.md) | A02-01 | done | [TAR-01..06: pass; contracts.md, результат](experiments/A02-06/result.md) |
 | [A02-07 — Проверить контракт Implement](packets/A02-07.md) | A02-01 | planned | — |
 | [A02-08 — Проверить контракт Verify, Converge and Archive](packets/A02-08.md) | A02-01 | planned | — |
 | [A02-09 — Проверить обходы gate и terminal paths](packets/A02-09.md) | A02-02, A02-03, A02-04, A02-05, A02-06, A02-07, A02-08 | planned | — |
