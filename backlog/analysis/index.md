@@ -2,10 +2,11 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — выполняется пакет A07, переход к A07-03.
-- **Текущая задача:** [A07-03 — Определить oracle полезности тестов продукта](packets/A07-03.md).
-- **Следующая задача:** [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md).
-- **Счётчики:** всего 80; `planned` 42; `in-progress` 0; `done` 38; `blocked` 0.
+- **Статус:** `in-progress` — завершён пакет A07, переход к A08-01.
+- **Текущая задача:** [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md).
+- **Следующая задача:** [A08-02 — Зафиксировать calibration/holdout и протокол](packets/A08-02.md).
+- **Счётчики:** всего 80; `planned` 41; `in-progress` 0; `done` 39; `blocked` 0.
+
 
 
 
@@ -102,7 +103,7 @@
 |---|---|---|---|
 | [A07-01 — Проверить достоверность Red/Green evidence](packets/A07-01.md) | A01-01, A01-02, A01-03, A01-04, A02-10 | done | [TEST-001, TEST-004, PROC-002: pass; результат и handoff](experiments/A07-01/result.md) |
 | [A07-02 — Измерить полезность тестов фреймворка](packets/A07-02.md) | A07-01 | done | [TEST-001, TEST-002, TEST-003, TEST-005, TEST-006: pass; результат и handoff](experiments/A07-02/result.md) |
-| [A07-03 — Определить oracle полезности тестов продукта](packets/A07-03.md) | A07-01 | planned | — |
+| [A07-03 — Определить oracle полезности тестов продукта](packets/A07-03.md) | A07-01 | done | [TEST-001, TEST-002, TEST-003, TEST-004, TEST-006: pass; результат и handoff](experiments/A07-03/result.md) |
 
 ## A08
 
