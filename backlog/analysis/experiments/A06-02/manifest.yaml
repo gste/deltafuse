@@ -1,0 +1,25 @@
+revision: "6f4e08a"
+task_id: "A06-02"
+packet: "backlog/analysis/packets/A06-02.md"
+criterion_ids:
+  - "SPEC-006"
+  - "PROC-001"
+  - "PROC-003"
+inputs:
+  - "src/deltafuse/core/installer.py:L1-220"
+  - "src/deltafuse/core/hasher.py:L1-49"
+  - "pyproject.toml:L1-29"
+  - "scripts/init.ps1:L1-199"
+  - "scripts/init.sh:L1-212"
+method: "Analysis of isolated product installation, hash computation determinism across runtimes (Python, PowerShell, Bash), packaging inspection, lock pin integrity, and canonical docs non-copy invariant."
+commands:
+  - "powershell -ExecutionPolicy Bypass -File tests/smoke-test.ps1"
+  - "python -c \"from deltafuse.core.hasher import compute_framework_content_hash; print(compute_framework_content_hash())\""
+  - "powershell -NoProfile -Command \"& { param(`$td = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'df-hcheck')); & .\\scripts\\init.ps1 -TargetDir `$td; Get-Content (Join-Path `$td '.deltafuse\\lock.yaml') -Raw; Remove-Item `$td -Recurse -Force }\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A06-02/result.md"
+verdict: "pass"
