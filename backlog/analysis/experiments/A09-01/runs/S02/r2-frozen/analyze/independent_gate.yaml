@@ -1,0 +1,23 @@
+outcome: pass
+focus: routing
+change: CHG-001-ratelimit-cooldown
+note: >
+  routing.yaml schema-valid after retry stripped schema_version.
+  Full analyzed gate correctly deferred (slices/coverage not in this call).
+independent_gate:
+  routing_schema: []
+  validate_package: []
+  analyzed_deferred:
+    - "Gate analyzed: at least one slice file in slices/ is required"
+    - "Gate analyzed: coverage.yaml is missing"
+attempts_harness: 2
+attempt1_gate: "routing.yaml additional property schema_version"
+attempt2_gate: "routing-only: routing.yaml schema ok; analyzed gate deferred"
+primary_capability: security.ratelimit
+claim_ids_routed: [O1, O2, E1, E2, E3, E4, E5, C1, H1, U1, U2, U3]
+oracle_gt_map:
+  CR-001: [E1, C1]
+  CR-002: [E2, E3]
+  CR-003: [E4, E5]
+reasoning_chars: 0
+overflow: false

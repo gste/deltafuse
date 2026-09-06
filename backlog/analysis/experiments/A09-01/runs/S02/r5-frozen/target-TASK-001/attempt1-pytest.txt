@@ -1,0 +1,10 @@
+.F                                                                       [100%]
+================================== FAILURES ===================================
+__________________ test_penalty_blocks_after_failed_consume ___________________
+tests\test_limiter.py:12: in test_penalty_blocks_after_failed_consume
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=100.0, penalty_seconds=10.0)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: TokenBucketLimiter.__init__() got an unexpected keyword argument 'penalty_seconds'
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_penalty_blocks_after_failed_consume - Type...
+1 failed, 1 passed, 1 warning in 0.08s

@@ -1,0 +1,11 @@
+...F                                                                     [100%]
+================================== FAILURES ===================================
+____________________ test_penalty_lock_blocks_then_clears _____________________
+tests\test_limiter.py:30: in test_penalty_lock_blocks_then_clears
+    assert limiter.is_blocked('u') is False
+E   AssertionError: assert True is False
+E    +  where True = is_blocked('u')
+E    +    where is_blocked = <ratelimit.limiter.TokenBucketLimiter object at 0x000002728233A9E0>.is_blocked
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_penalty_lock_blocks_then_clears - Assertio...
+1 failed, 3 passed in 0.06s

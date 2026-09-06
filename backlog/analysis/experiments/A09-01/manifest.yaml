@@ -1,4 +1,4 @@
-revision: "e57dc9d"
+revision: "55411ea"
 task_id: "A09-01"
 packet: "backlog/analysis/packets/A09-01.md"
 children:
@@ -36,4 +36,12 @@ profile:
 outputs:
   harness: "backlog/analysis/experiments/A09-01/harness/run_case.py"
   runs: "backlog/analysis/experiments/A09-01/runs/"
+  frozen_s02_r2: "backlog/analysis/experiments/A09-01/runs/S02/r2-frozen/"
   result: "backlog/analysis/experiments/A09-01/result.md"
+notes:
+  - "S02 r3-frozen 2026-09-06: independent check_gate(analyzed)=[] after CR-* intake hint; r2 remains F-008"
+  - "S02 r4-frozen: TASK-001 Green, TASK-002 inauthentic Red (F-009); hidden suite 2 passed"
+  - "S02 r5-frozen: TASK-001 Green, TASK-002 vacuous already-green; hidden suite 2 passed; routing schema_version stripped"
+  - "A09-01a closed 2026-09-06: verdict partial; F-009 deferred to A12; next A09-01b S03"
+  - "Do not reuse work/S02-r1 for frozen repeats"
+  - "Oracle not in ornith prompt"

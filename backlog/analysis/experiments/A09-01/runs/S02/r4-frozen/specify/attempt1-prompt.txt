@@ -1,0 +1,449 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: specify-change
+description: Apply one analyzed DeltaFuse slice to the normative product specification, or prove the accepted specification is unchanged. Use after analysis and Decision convergence, before task decomposition.
+---
+
+# Specify Change
+
+Establish the normative state from which tasks may be derived.
+
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one analyzed slice, its typed delta, exact affected spec modules, accepted related Decisions/catalog delta, and only necessary neighboring requirements. Do not read the whole codebase or unrelated Changes.
+
+## Procedure
+
+1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md` using `ADDED`, `MODIFIED`, and `REMOVED` with stable requirement/scenario IDs.
+2. Edit only declared specification files and requirements. Keep the live spec imperative and free of change-log prose.
+3. Apply an accepted capability catalog delta when required.
+4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into `docs/spec/**`.
+5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
+6. Update coverage and slice/Change status. Present normative edits for the human specification gate.
+
+Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze-change`.
+
+## Gate
+
+The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
+
+Recommend `/decompose-change <change-id> [slice-id]`.
+
+
+----- USER -----
+
+Phase: specify
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'specify'
+Gate to satisfy after this call: specified
+Write two files[] objects (separate objects, keys path and content): (1) docs/changes/<id>/spec-delta.md with YAML frontmatter matching spec-delta.schema.yaml (no schema_version; status: proposed; slices: [SLICE-01]) and ADDED/MODIFIED/REMOVED in the body; (2) the updated live spec docs/spec/security/ratelimit.md with new REQ-RL-* for the cooldown. Keep REQ-RL-01..04. Do not invent Decisions. Use status continue. Keep content short.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-ratelimit-cooldown/change.yaml ===
+schema_version: 2
+id: CHG-001-ratelimit-cooldown
+title: Add optional cooldown penalty to TokenBucketLimiter
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: medium
+source:
+  request: docs/intake/S02.md
+  intake_refs:
+    - docs/intake/S02.md
+analysis:
+  routing: docs/changes/CHG-001-ratelimit-cooldown/routing.yaml
+  summary: null
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
+
+
+=== FILE docs/changes/CHG-001-ratelimit-cooldown/coverage.yaml ===
+change: CHG-001-ratelimit-cooldown
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-007:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+
+
+=== FILE docs/changes/CHG-001-ratelimit-cooldown/request.md ===
+# Request: Add optional cooldown penalty to TokenBucketLimiter
+
+## Summary
+
+The Rate Limiter service (`security.ratelimit`) needs an optional cooldown
+penalty. When `consume` fails due to insufficient tokens, the key may enter a
+blocked state for a configurable duration. While blocked, further `consume`
+calls must return `False` immediately even if tokens have accumulated. The
+block auto-clears after the penalty period on the next request, restoring normal
+spending logic. A new `is_blocked(key)` method reports the blocked state.
+
+## Claims
+
+### CR-001 (expectation)
+`TokenBucketLimiter` initialization accepts an optional parameter `penalty_seconds`
+with a default value of `0.0`.
+
+### CR-002 (expectation)
+When `penalty_seconds > 0`, a failed `consume` attempt (insufficient tokens)
+transitions the key into a blocked state lasting `penalty_seconds`.
+
+### CR-003 (constraint)
+While a key is blocked within the penalty window, any `consume` call for that
+key MUST return `False` immediately, even if tokens have accumulated during the
+block.
+
+### CR-004 (expectation)
+After `penalty_seconds` elapses, the block is automatically lifted on the next
+request and normal token-spending logic resumes.
+
+### CR-005 (constraint)
+The method `is_blocked(key)` MUST return `True` when the key is currently under
+penalty and `False` otherwise.
+
+### CR-006 (constraint)
+Backward compatibility must be preserved: existing code that does not pass
+`penalty_seconds` must continue to behave under the previous rules.
+
+### CR-007 (hypothesis)
+Unknowns: exact semantics of the penalty window boundary (inclusive vs exclusive),
+whether the block timer starts at the failed `consume` call, and how the block
+interacts with concurrent or interleaved `consume` calls. These require
+clarification during analysis.
+
+
+=== FILE docs/changes/CHG-001-ratelimit-cooldown/routing.yaml ===
+change: CHG-001-ratelimit-cooldown
+claims:
+  CR-001:
+    summary: >-
+      TokenBucketLimiter initialization accepts an optional penalty_seconds
+      parameter defaulting to 0.0.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: >-
+      When penalty_seconds > 0, a failed consume (insufficient tokens)
+      transitions the key into a blocked state lasting penalty_seconds.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: >-
+      While a key is blocked within the penalty window, any consume call for
+      that key MUST return False immediately even if tokens accumulated.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: >-
+      After penalty_seconds elapses, the block is lifted on the next request
+      and normal token-spending logic resumes.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: >-
+      is_blocked(key) MUST return True when the key is under penalty and
+      False otherwise.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: >-
+      Backward compatibility preserved: existing callers not passing
+      penalty_seconds continue under previous rules.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-007:
+    summary: >-
+      Unknowns: penalty window boundary semantics (inclusive vs exclusive),
+      block timer start point, and interaction with concurrent/interleaved
+      consume calls.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low
+
+
+=== FILE docs/changes/CHG-001-ratelimit-cooldown/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-ratelimit-cooldown
+title: Optional cooldown penalty on TokenBucketLimiter
+status: analyzing
+primary_capability: ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+  - CR-007
+---
+
+## Scope
+
+- **In scope:** Add optional `penalty_seconds` init param (default `0.0`); block a key on failed `consume`; force `consume` to return `False` while blocked; auto-lift block after the penalty window; add `is_blocked(key)`; preserve backward compatibility.
+- **Out of scope:** Changes to capacity/refill semantics, concurrency/locking internals, or any non-`security.ratelimit` consumer.
+
+## Slice analysis
+
+- **intent:** feature (optional, opt-in behavior).
+- **delta_kind:** requirement_delta + design_impact.
+- **requirement_delta:** Extend `TokenBucketLimiter` with a penalty lock; add REQ-RL-05 (block semantics) and REQ-RL-06 (`is_blocked` under penalty). REQ-RL-04 already covers the no-penalty baseline.
+- **design_impact:** Store per-key block expiry; gate `consume` on block state before token accounting; block timer starts at the failed `consume` call.
+- **risk:** low-medium. Main uncertainty is penalty-window boundary semantics (CR-007), which is a non-blocking clarification, not a blocking Decision.
+- **size:** small.
+
+## Deltas
+
+- **spec:** add REQ-RL-05, REQ-RL-06 (proposed, not accepted).
+- **catalog:** none.
+- **decisions:** none accepted; boundary semantics pending human clarification.
+- **tasks/tests/implementation/evidence:** to be derived after analysis converges.
+
+## Notes
+
+All claims routed to `ratelimit` (see `routing.yaml`). CR-007 unknowns are clarifications, not blocking Decisions; status stays `continue`.
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/spec-delta.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/spec-delta.schema.yaml
+title: DeltaFuse Specification Delta frontmatter
+type: object
+additionalProperties: false
+required: [change, status]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  status:
+    enum: [proposed, accepted, rejected, superseded]
+  slices:
+    type: array
+    items:
+      type: string
+      pattern: '^SLICE-[0-9]{2,}$'
+  added:
+    type: array
+    items:
+      type: string
+  modified:
+    type: array
+    items:
+      type: string
+  removed:
+    type: array
+    items:
+      type: string

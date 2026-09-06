@@ -1,0 +1,1 @@
+already-green: pytest passed for TASK-002; no authentic Red (production already implements this behavior)

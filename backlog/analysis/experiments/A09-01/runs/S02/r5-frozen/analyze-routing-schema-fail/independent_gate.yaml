@@ -1,0 +1,10 @@
+outcome: fail
+independent_gate:
+  routing_schema: schema_version forbidden
+attempts: 3
+attempt1: schema_version
+attempt2: JSON parse error
+attempt3: schema_version again
+note: archived; retry with harness strip+prompt
+elapsed_s: 49.6
+reasoning_chars: 0

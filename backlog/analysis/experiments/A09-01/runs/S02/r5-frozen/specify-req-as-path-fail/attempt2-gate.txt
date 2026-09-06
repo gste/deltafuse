@@ -1,0 +1,3 @@
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-05'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-06'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-04'

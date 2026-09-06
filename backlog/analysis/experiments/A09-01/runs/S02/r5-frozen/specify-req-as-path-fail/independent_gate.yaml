@@ -1,0 +1,7 @@
+outcome: fail
+independent_gate:
+  specified: spec-delta added/modified treated as file paths
+attempts: 3
+note: frontmatter added/modified [REQ-RL-05, REQ-RL-06, REQ-RL-04] fail validate_spec_ref. r4 omitted those keys. Retry with harness hint. Not an integrity patch (A12).
+elapsed_s: 33.7
+reasoning_chars: 0

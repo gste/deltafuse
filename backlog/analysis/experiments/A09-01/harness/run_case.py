@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,7 @@ MAX_RETRIES = int(os.environ.get("A09_MAX_RETRIES", "3"))
 MAX_TOKENS = int(os.environ.get("A09_MAX_TOKENS", "2048"))
 ENABLE_THINKING = os.environ.get("A09_ENABLE_THINKING", "0") == "1"
 ANALYZE_FOCUS = os.environ.get("A09_ANALYZE_FOCUS", "routing")
+TASK = os.environ.get("A09_TASK", "TASK-001")
 TEMPERATURE = 0.1
 TOP_P = 0.9
 PROTOCOL_TIMEOUT_S = 300
@@ -63,6 +65,7 @@ Do not write a chain-of-thought. Put the JSON in the assistant content immediate
 Return ONLY a JSON object. No markdown fences, no prose outside JSON.
 Shape:
 {"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
 status must be one of: continue, blocked-on-decision, halt.
 Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
 If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
@@ -297,11 +300,22 @@ def phase_context(product: Path, phase: str, case_id: str) -> list[Path]:
                 if spec.is_dir():
                     files.extend(sorted(p for p in spec.rglob("*") if p.is_file()))
         if phase == "analyze":
-            schema_names = ("routing.schema.yaml",)
-            if ANALYZE_FOCUS != "routing":
-                schema_names = ("routing.schema.yaml", "slice.schema.yaml", "coverage.schema.yaml", "change.schema.yaml")
+            schema_by_focus = {
+                "routing": ("routing.schema.yaml",),
+                "slices": ("slice.schema.yaml",),
+                "coverage": ("coverage.schema.yaml",),
+                "analysis": ("change.schema.yaml",),
+            }
+            schema_names = schema_by_focus.get(
+                ANALYZE_FOCUS,
+                ("routing.schema.yaml", "slice.schema.yaml", "coverage.schema.yaml", "change.schema.yaml"),
+            )
             for name in schema_names:
                 files.append(FRAMEWORK / "process" / "schemas" / name)
+        if phase == "specify":
+            files.append(FRAMEWORK / "process" / "schemas" / "spec-delta.schema.yaml")
+        if phase == "decompose":
+            files.append(FRAMEWORK / "process" / "schemas" / "task.schema.yaml")
         if phase in {"target", "implement", "verify"}:
             files.extend(sorted((product / "tests").rglob("*.py")))
         if phase in {"implement", "verify"}:
@@ -321,10 +335,86 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
     ]
     if extra_error:
         parts.append("Previous attempt failed validation:\n" + extra_error)
+    if phase == "intake":
+        parts.append(
+            "Claim ids in request.md MUST be CR-001, CR-002, … (pattern CR-NNN). "
+            "You may still label them observation/expectation/constraint/hypothesis in prose. "
+            "Do not use O1/E1/C1 as ids. "
+            "change.yaml must include empty lists: deltas, slices, decisions, tasks. "
+            "Use status continue."
+        )
     if phase == "analyze" and ANALYZE_FOCUS == "routing":
         parts.append(
             "This call writes ONLY docs/changes/<id>/routing.yaml (map every CR-* to a primary capability). "
+            "Do not add schema_version; routing.schema.yaml forbids extra keys. "
+            "Use status continue. Do not set blocked-on-decision and do not write Decision files. "
             "Do not write analysis.md, slices, or coverage.yaml."
+        )
+    if phase == "analyze" and ANALYZE_FOCUS == "slices":
+        parts.append(
+            "This call writes ONLY one file: docs/changes/<id>/slices/SLICE-01.md "
+            "(YAML frontmatter matching slice.schema.yaml, then markdown body). "
+            "Keep the body short. Frontmatter claims must list the CR-NNN ids from request.md. "
+            "Use status continue. Do not set blocked-on-decision: unknowns are not blocking Decisions "
+            "for a single unambiguous feature. "
+            "Do not write coverage.yaml, analysis.md, or extra slices."
+        )
+    if phase == "analyze" and ANALYZE_FOCUS == "coverage":
+        parts.append(
+            "This call writes ONLY docs/changes/<id>/coverage.yaml matching coverage.schema.yaml. "
+            "Do not add schema_version. Do not rewrite slices or analysis.md. "
+            "Use status continue. Do not set blocked-on-decision and do not write Decision files: "
+            "intake unknowns (U*) are not blocking Decisions for a single unambiguous feature. "
+            "Map each CR-NNN id from request.md to slice SLICE-01."
+        )
+    if phase == "specify":
+        parts.append(
+            "Write two files[] objects (separate objects, keys path and content): "
+            "(1) docs/changes/<id>/spec-delta.md with YAML frontmatter matching spec-delta.schema.yaml "
+            "(no schema_version; status: proposed; slices: [SLICE-01]; do NOT put added/modified/removed "
+            "in frontmatter — those strings are treated as file paths and will fail the gate) "
+            "and ADDED/MODIFIED/REMOVED headings only in the markdown body; "
+            "(2) the updated live spec docs/spec/security/ratelimit.md with new REQ-RL-* for the cooldown. "
+            "Keep REQ-RL-01..04. Do not invent Decisions. Use status continue. Keep content short."
+        )
+    if phase == "decompose":
+        parts.append(
+            "Write 1 or 2 tasks as separate files[] objects (path + content): "
+            "docs/changes/<id>/tasks/TASK-001-<slug>.md (and optional TASK-002). "
+            "Frontmatter MUST match task.schema.yaml: id TASK-NNN, slice SLICE-01, kind feature, "
+            "status pending, depends_on [], requirement_delta added, spec_refs to existing "
+            "docs/spec/security/ratelimit.md#REQ-RL-05 (or 06/07), design_ref null, "
+            "allowed_paths [src/ratelimit/limiter.py, tests/test_limiter.py], "
+            "forbidden_paths [docs/spec/auth/**]. No schema_version. Keep body short. "
+            "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
+            "Set change.yaml status to decomposed. Use status continue. Do not write code."
+        )
+    if phase == "target":
+        if TASK == "TASK-002":
+            parts.append(
+                "Write ONLY tests/test_limiter.py. Keep existing tests. "
+                "Add the smallest test for TASK-002 using only the public API "
+                "(consume, is_blocked, constructor). Do not read or assign private fields "
+                "(no limiter._blocked_until or other _names). "
+                "After the penalty window, consume may succeed only when tokens are available "
+                "(leave tokens or use refill_rate > 0); do not assert consume True on an empty bucket. "
+                "If production already lifts the block, a correct test will pass — that is already-green, "
+                "not a reason to manufacture Red. "
+                "Do not edit src/ratelimit/limiter.py. Do not write evidence YAML. Use status continue."
+            )
+        else:
+            parts.append(
+                "Write ONLY tests/test_limiter.py (path + content). Keep the existing baseline test. "
+                "Add the smallest failing test for TASK-001: penalty_seconds > 0, failed consume locks the key, "
+                "later consume returns False while blocked. Do not edit src/ratelimit/limiter.py. "
+                "Do not write evidence YAML (the harness will run pytest). Use status continue."
+            )
+    if phase == "implement":
+        parts.append(
+            "Write ONLY src/ratelimit/limiter.py. Do not edit tests. Do not write evidence YAML. "
+            "Add optional penalty_seconds=0.0; on failed consume when penalty_seconds > 0 lock the key "
+            "for that duration; is_blocked(key) True while locked; keep baseline when penalty_seconds is 0. "
+            "Use status continue."
         )
     for path in ctx_files:
         try:
@@ -347,11 +437,88 @@ def apply_files(product: Path, payload: dict[str, Any]) -> list[str]:
         rel = item["path"].replace("\\", "/").lstrip("/")
         if ".." in Path(rel).parts:
             raise ValueError(f"path traversal: {rel}")
+        text = item.get("content")
+        if text is None and item.get("frontmatter") is not None:
+            fm = str(item.get("frontmatter") or "").strip()
+            body = str(item.get("body") or "")
+            if fm.startswith("---"):
+                text = fm if not body else fm.rstrip() + "\n" + body
+            else:
+                text = "---\n" + fm + "\n---\n" + body
+        if text is None:
+            raise ValueError(
+                "files[] item needs key 'content' (full file text). "
+                f"Got keys: {sorted(item.keys())}."
+            )
         dest = product / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(item["content"], encoding="utf-8")
+        dest.write_text(text, encoding="utf-8")
         written.append(rel)
     return written
+
+
+def run_pytest(product: Path) -> tuple[int, str]:
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/test_limiter.py", "-q", "--tb=short"],
+        cwd=product,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    return proc.returncode, ((proc.stdout or "") + (proc.stderr or "")).strip()
+
+
+def write_red_evidence(change_dir: Path, task_id: str, command: str, exit_code: int, log: str) -> str:
+    category = "behavioral-mismatch"
+    low = log.lower()
+    if "importerror" in low or "modulenotfound" in low or "syntaxerror" in low:
+        category = "import-error"
+    payload = {
+        "schema_version": 2,
+        "change": change_dir.name,
+        "task": task_id,
+        "phase": "red",
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "command": command,
+        "exit_code": int(exit_code),
+        "result": "expected-failure",
+        "failure_category": category,
+        "summary": (log[-800:] if log else "pytest failed"),
+        "changed_paths": ["tests/test_limiter.py"],
+        "spec_status": "unchanged",
+    }
+    dest = change_dir / "evidence" / "red" / f"{task_id}.yaml"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return dest.relative_to(change_dir.parent.parent.parent).as_posix()
+
+
+def write_pass_evidence(
+    change_dir: Path,
+    task_id: str,
+    phase: str,
+    command: str,
+    log: str,
+    changed_paths: list[str],
+) -> str:
+    payload = {
+        "schema_version": 2,
+        "change": change_dir.name,
+        "task": task_id,
+        "phase": phase,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "command": command,
+        "exit_code": 0,
+        "result": "passed",
+        "failure_category": None,
+        "summary": (log[-800:] if log else "pytest passed"),
+        "changed_paths": changed_paths,
+        "spec_status": "unchanged",
+    }
+    dest = change_dir / "evidence" / phase / f"{task_id}.yaml"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return dest.relative_to(change_dir.parent.parent.parent).as_posix()
 
 
 def find_change_dir(product: Path, written: list[str] | None = None) -> Path | None:
@@ -388,10 +555,28 @@ def run_gate(product: Path, phase: str, written: list[str] | None = None) -> tup
     return (1 if errors else 0), text
 
 
+def analyze_step_name(phase: str) -> str:
+    if phase == "analyze" and ANALYZE_FOCUS:
+        return f"analyze-{ANALYZE_FOCUS}"
+    if phase in {"target", "implement"}:
+        return f"{phase}-{TASK}"
+    return phase
+
+
+def slice_schema_errors(change_dir: Path) -> list[str]:
+    from deltafuse.core.fsm import validate_change_package
+
+    return [
+        e
+        for e in validate_change_package(change_dir)
+        if ".md:" in e and e.split(":", 1)[0].startswith("SLICE-")
+    ]
+
+
 def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str, Any]:
     product = setup_product(case_id, repeat)
     run_name = f"r{repeat}-{tag}" if tag else f"r{repeat}"
-    run_dir = EXPERIMENT / "runs" / case_id / run_name / phase
+    run_dir = EXPERIMENT / "runs" / case_id / run_name / analyze_step_name(phase)
     run_dir.mkdir(parents=True, exist_ok=True)
     last_error = None
     metrics: dict[str, Any] = {
@@ -407,6 +592,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
         "timeout_s_used": TIMEOUT_S,
         "timeout_s_protocol": PROTOCOL_TIMEOUT_S,
         "analyze_focus": ANALYZE_FOCUS if phase == "analyze" else None,
+        "task": TASK if phase in {"target", "implement"} else None,
         "attempts": [],
     }
     for attempt in range(1, MAX_RETRIES + 1):
@@ -428,20 +614,183 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
                 status = payload.get("status") or "continue"
             except Exception as exc:
                 parse_error = str(exc)
+            if not parse_error and phase == "target":
+                prod_writes = [
+                    p.replace("\\", "/")
+                    for p in written
+                    if p.replace("\\", "/").startswith("src/")
+                ]
+                if prod_writes:
+                    parse_error = "target must not change production code: " + ",".join(prod_writes)
+                else:
+                    test_src = (product / "tests" / "test_limiter.py").read_text(encoding="utf-8")
+                    private_hits = re.findall(r"\._[A-Za-z_]\w*", test_src)
+                    if private_hits:
+                        parse_error = (
+                            "target must not touch private fields "
+                            + ",".join(sorted(set(private_hits)))
+                            + "; use public consume/is_blocked only"
+                        )
+                    else:
+                        change_dir = find_change_dir(product, written=written)
+                        pytest_code, pytest_log = run_pytest(product)
+                        (run_dir / f"attempt{attempt}-pytest.txt").write_text(
+                            pytest_log, encoding="utf-8"
+                        )
+                        if pytest_code == 0:
+                            parse_error = None
+                            gate_code, gate_out = 0, (
+                                f"already-green: pytest passed for {TASK}; no authentic Red "
+                                "(production already implements this behavior)"
+                            )
+                            (run_dir / f"attempt{attempt}-gate.txt").write_text(
+                                gate_out, encoding="utf-8"
+                            )
+                            metrics["attempts"].append(
+                                {
+                                    "attempt": attempt,
+                                    "prompt_chars": prompt_chars,
+                                    "ttft_s": result.get("ttft_s"),
+                                    "elapsed_s": result.get("elapsed_s"),
+                                    "written": written,
+                                    "model_status": status,
+                                    "gate_exit": 0,
+                                    "pytest_exit": 0,
+                                    "already_green": True,
+                                    "gpu_before": gpu_before,
+                                    "gpu_after": nvidia_smi(),
+                                    "content_empty": not bool(result.get("content")),
+                                    "reasoning_chars": len(result.get("reasoning_content") or ""),
+                                }
+                            )
+                            metrics["outcome"] = "already-green"
+                            (run_dir / "metrics.yaml").write_text(
+                                yaml.safe_dump(metrics, sort_keys=False), encoding="utf-8"
+                            )
+                            return metrics
+                        elif change_dir is None:
+                            parse_error = "no change directory for red evidence"
+                        else:
+                            ev_rel = write_red_evidence(
+                                change_dir,
+                                TASK,
+                                "python -m pytest tests/test_limiter.py -q --tb=short",
+                                pytest_code,
+                                pytest_log,
+                            )
+                            written.append(ev_rel)
+            if not parse_error and phase == "implement":
+                test_writes = [
+                    p.replace("\\", "/")
+                    for p in written
+                    if p.replace("\\", "/").startswith("tests/")
+                ]
+                src_writes = [
+                    p.replace("\\", "/")
+                    for p in written
+                    if p.replace("\\", "/").startswith("src/")
+                ]
+                if test_writes:
+                    parse_error = "implement must not edit tests: " + ",".join(test_writes)
+                elif not src_writes:
+                    parse_error = "implement must write src/ratelimit/limiter.py"
+                else:
+                    change_dir = find_change_dir(product, written=written)
+                    pytest_code, pytest_log = run_pytest(product)
+                    (run_dir / f"attempt{attempt}-pytest.txt").write_text(pytest_log, encoding="utf-8")
+                    cmd = "python -m pytest tests/test_limiter.py -q --tb=short"
+                    if pytest_code != 0:
+                        parse_error = "Green required: pytest failed\n" + pytest_log[-1500:]
+                    elif change_dir is None:
+                        parse_error = "no change directory for green evidence"
+                    else:
+                        written.append(
+                            write_pass_evidence(change_dir, TASK, "green", cmd, pytest_log, src_writes)
+                        )
+                        written.append(
+                            write_pass_evidence(
+                                change_dir, TASK, "regression", cmd, pytest_log, src_writes
+                            )
+                        )
             gate_code, gate_out = (1, "skipped") if parse_error else run_gate(product, phase, written=written)
-            if (
-                not parse_error
-                and phase == "analyze"
-                and ANALYZE_FOCUS == "routing"
-            ):
+            if not parse_error and phase == "analyze" and ANALYZE_FOCUS == "routing":
                 routing_written = any(
                     Path(p).name == "routing.yaml" or p.replace("\\", "/").endswith("/routing.yaml")
                     for p in written
                 )
-                if routing_written:
-                    gate_code, gate_out = 0, "routing-only: routing.yaml written; analyzed gate deferred"
-                else:
+                if not routing_written:
                     gate_code, gate_out = 1, "routing-only: missing routing.yaml"
+                else:
+                    change_dir = find_change_dir(product, written=written)
+                    pkg_errors = []
+                    if change_dir is not None:
+                        from deltafuse.core.fsm import validate_change_package
+
+                        pkg_errors = [
+                            e
+                            for e in validate_change_package(change_dir)
+                            if e.startswith("routing.yaml:")
+                        ]
+                    if pkg_errors:
+                        only_sv = all("schema_version" in e for e in pkg_errors)
+                        routing_path = change_dir / "routing.yaml" if change_dir is not None else None
+                        if only_sv and routing_path is not None and routing_path.is_file():
+                            data = yaml.safe_load(routing_path.read_text(encoding="utf-8")) or {}
+                            if isinstance(data, dict) and "schema_version" in data:
+                                data.pop("schema_version")
+                                routing_path.write_text(
+                                    yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+                                )
+                                pkg_errors = [
+                                    e
+                                    for e in validate_change_package(change_dir)
+                                    if e.startswith("routing.yaml:")
+                                ]
+                        if pkg_errors:
+                            gate_code, gate_out = 1, "\n".join(pkg_errors)
+                        else:
+                            gate_code, gate_out = (
+                                0,
+                                "routing-only: stripped schema_version; schema ok; analyzed gate deferred",
+                            )
+                    else:
+                        gate_code, gate_out = 0, "routing-only: routing.yaml schema ok; analyzed gate deferred"
+            elif not parse_error and phase == "analyze" and ANALYZE_FOCUS == "slices":
+                slice_written = any(
+                    "/slices/" in p.replace("\\", "/") and p.endswith(".md") for p in written
+                )
+                if not slice_written:
+                    gate_code, gate_out = 1, "slices-only: missing slices/SLICE-*.md"
+                else:
+                    change_dir = find_change_dir(product, written=written)
+                    pkg_errors = slice_schema_errors(change_dir) if change_dir is not None else ["no change directory"]
+                    if pkg_errors:
+                        gate_code, gate_out = 1, "\n".join(pkg_errors)
+                    else:
+                        gate_code, gate_out = 0, "slices-only: slice schema ok; analyzed gate deferred"
+            elif not parse_error and phase == "analyze" and ANALYZE_FOCUS == "coverage":
+                cov_written = any(
+                    Path(p).name == "coverage.yaml" or p.replace("\\", "/").endswith("/coverage.yaml")
+                    for p in written
+                )
+                if not cov_written:
+                    gate_code, gate_out = 1, "coverage-only: missing coverage.yaml"
+                else:
+                    change_dir = find_change_dir(product, written=written)
+                    pkg_errors = ["no change directory"]
+                    if change_dir is not None:
+                        from deltafuse.core.schemas import SchemaRegistry
+
+                        cov_path = change_dir / "coverage.yaml"
+                        cov_data = yaml.safe_load(cov_path.read_text(encoding="utf-8"))
+                        pkg_errors = [
+                            f"coverage.yaml: {e}"
+                            for e in SchemaRegistry().validate("coverage", cov_data)
+                        ]
+                    if pkg_errors:
+                        gate_code, gate_out = 1, "\n".join(pkg_errors)
+                    else:
+                        gate_code, gate_out = 0, "coverage-only: coverage schema ok; completeness deferred to analyzed gate"
             (run_dir / f"attempt{attempt}-gate.txt").write_text(gate_out, encoding="utf-8")
             attempt_row = {
                 "attempt": attempt,
@@ -464,11 +813,27 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
             if parse_error:
                 last_error = parse_error
                 continue
-            if gate_code == 0 or status == "blocked-on-decision":
+            wrote_decision = any(
+                p.replace("\\", "/").startswith("docs/decisions/")
+                and Path(p).name.startswith("DEC-")
+                and "template" not in Path(p).name.lower()
+                for p in written
+            )
+            if status == "blocked-on-decision" and not wrote_decision:
+                last_error = (
+                    "status blocked-on-decision requires writing docs/decisions/DEC-*.md; "
+                    "this request is a single unambiguous feature — use status continue"
+                )
+                gate_code = 1
+                attempt_row["gate_exit"] = 1
+                metrics["attempts"][-1] = attempt_row
+                (run_dir / f"attempt{attempt}-gate.txt").write_text(last_error, encoding="utf-8")
+                continue
+            if gate_code == 0 or (status == "blocked-on-decision" and wrote_decision):
                 metrics["outcome"] = "blocked-on-decision" if status == "blocked-on-decision" else "pass"
                 break
             last_error = gate_out
-        except urllib.error.URLError as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, OSError) as exc:
             metrics["attempts"].append({"attempt": attempt, "error": str(exc), "gpu_before": gpu_before})
             last_error = str(exc)
             if "timed out" in str(exc).lower():
@@ -500,14 +865,33 @@ def main() -> int:
             break
         print(f"=== {args.case} r{args.repeat} {phase} tag={args.tag or '-'} ===", flush=True)
         row = run_phase(args.case, args.repeat, phase, tag=args.tag)
-        summary.append({"phase": phase, "outcome": row.get("outcome"), "attempts": len(row.get("attempts", []))})
+        summary.append(
+            {
+                "phase": analyze_step_name(phase),
+                "outcome": row.get("outcome"),
+                "attempts": len(row.get("attempts", [])),
+            }
+        )
         print(json.dumps(summary[-1]), flush=True)
         if row.get("outcome") in {"fail", "timeout", "blocked-on-decision"}:
             break
     run_name = f"r{args.repeat}-{args.tag}" if args.tag else f"r{args.repeat}"
     out = EXPERIMENT / "runs" / args.case / run_name / "summary.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(yaml.safe_dump({"case": args.case, "repeat": args.repeat, "phases": summary}, sort_keys=False), encoding="utf-8")
+    merged = list(summary)
+    if out.exists():
+        prev = yaml.safe_load(out.read_text(encoding="utf-8")) or {}
+        prev_phases = list(prev.get("phases") or [])
+        by_name = {row.get("phase"): row for row in prev_phases if row.get("phase")}
+        for row in summary:
+            by_name[row.get("phase")] = row
+        order = [p for p in PHASE_ORDER if p in by_name]
+        extra = [p for p in by_name if p not in PHASE_ORDER]
+        merged = [by_name[p] for p in order + extra]
+    out.write_text(
+        yaml.safe_dump({"case": args.case, "repeat": args.repeat, "tag": args.tag or None, "phases": merged}, sort_keys=False),
+        encoding="utf-8",
+    )
     return 0
 
 

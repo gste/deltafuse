@@ -1,0 +1,39 @@
+case: S02
+repeat: 4
+tag: frozen
+phase: implement
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: TASK-001
+attempts:
+- attempt: 1
+  prompt_chars: 19192
+  ttft_s: 35.980939399974886
+  elapsed_s: 58.52403489995049
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - src/ratelimit/limiter.py
+  - docs/changes/CHG-001-ratelimit-cooldown/evidence/green/TASK-001.yaml
+  - docs/changes/CHG-001-ratelimit-cooldown/evidence/regression/TASK-001.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5472
+    vram_total_mib: 8188
+    gpu_util_pct: 12
+  gpu_after:
+    vram_used_mib: 5472
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

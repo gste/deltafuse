@@ -1,0 +1,74 @@
+change: CHG-001-ratelimit-cooldown
+claims:
+  O1:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  O2:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  E1:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  E2:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  E3:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  E4:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  E5:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  C1:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  H1:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  U1:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  U2:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  U3:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed

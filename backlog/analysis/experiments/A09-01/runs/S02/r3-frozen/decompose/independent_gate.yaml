@@ -1,0 +1,14 @@
+outcome: pass
+independent_gate:
+  validate: []
+  decomposed: []
+  specified_still: []
+tasks:
+  - TASK-001-add-penalty-consume.md
+  - TASK-002-block-lift-and-report.md
+elapsed_s: 98.1
+reasoning_chars: 0
+attempts: 1
+prior_fail: decompose-fail-coverage-ids (coverage.tasks used file paths; change.yaml status normalized)
+coverage_tasks_ok: TASK-001 / TASK-002 ids
+unmapped_claims: [CR-001, CR-002, CR-007, CR-008, CR-009]

@@ -1,0 +1,39 @@
+case: S02
+repeat: 3
+tag: frozen
+phase: decompose
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+attempts:
+- attempt: 1
+  prompt_chars: 22024
+  ttft_s: 27.468690800014883
+  elapsed_s: 98.06387750001159
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-cooldown/change.yaml
+  - docs/changes/CHG-001-ratelimit-cooldown/coverage.yaml
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-001-add-penalty-consume.md
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-002-block-lift-and-report.md
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5389
+    vram_total_mib: 8188
+    gpu_util_pct: 7
+  gpu_after:
+    vram_used_mib: 5386
+    vram_total_mib: 8188
+    gpu_util_pct: 2
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

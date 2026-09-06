@@ -1,0 +1,11 @@
+change.yaml: [root] Additional properties are not allowed ('claims', 'classification', 'notes' were unexpected)
+change.yaml: [root] 'schema_version' is a required property
+change.yaml: [root] 'title' is a required property
+change.yaml: [root] 'deltas' is a required property
+change.yaml: [root] 'slices' is a required property
+change.yaml: [root] 'decisions' is a required property
+change.yaml: [root] 'tasks' is a required property
+change.yaml: [framework] Additional properties are not allowed ('schema_version', 'source' were unexpected)
+change.yaml: [framework] 'version' is a required property
+change.yaml: [framework] 'content_hash' is a required property
+change.yaml: [source] 'request' is a required property

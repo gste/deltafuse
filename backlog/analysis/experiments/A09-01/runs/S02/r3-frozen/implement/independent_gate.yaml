@@ -1,0 +1,12 @@
+outcome: pass
+independent_gate:
+  validate: []
+  implemented: []
+  targeting_still: []
+pytest: 2 passed
+tests_unchanged: true
+limiter: penalty_seconds default 0.0, lock on failed consume, is_blocked while locked
+task_002: still pending; implemented gate does not require every task Green
+elapsed_s: 45.4
+reasoning_chars: 0
+attempts: 1

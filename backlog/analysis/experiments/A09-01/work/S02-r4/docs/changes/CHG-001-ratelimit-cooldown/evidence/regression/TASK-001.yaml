@@ -1,0 +1,15 @@
+schema_version: 2
+change: CHG-001-ratelimit-cooldown
+task: TASK-001
+phase: regression
+timestamp: '2026-09-06T14:22:08Z'
+command: python -m pytest tests/test_limiter.py -q --tb=short
+exit_code: 0
+result: passed
+failure_category: null
+summary: '...                                                                      [100%]
+
+  3 passed in 0.03s'
+changed_paths:
+- src/ratelimit/limiter.py
+spec_status: unchanged
