@@ -5,7 +5,7 @@
 - **Статус:** `in-progress` — A09-01b: S03 r1 Green. Без LLM: [A11-01](packets/A11-01.md).
 - **Текущая задача аудита:** [A09-01b — Калибровка ornith на S03](packets/A09-01b.md). Holdout не стартовать.
 - **Следующая задача:** [A09-01c](packets/A09-01c.md) после A09-01b.
-- **Счётчики:** всего 83; `planned` 24; `in-progress` 2; `done` 57; `blocked` 0.
+- **Счётчики:** всего 84; `planned` 25; `in-progress` 2; `done` 57; `blocked` 0.
 
 
 
@@ -171,4 +171,5 @@
 |---|---|---|---|
 | [A12-01 — Сверить покрытие и доказательность выводов](packets/A12-01.md) | A09-13, A10-02, A11-06 | planned | — |
 | [A12-02 — Ответить на четыре исходных вопроса](packets/A12-02.md) | A12-01 | planned | — |
-| [A12-03 — Сформировать roadmap проверяемых изменений](packets/A12-03.md) | A12-02 | planned | — |
+| [A12-04 — Разобрать отложенные вопросы доработки](packets/A12-04.md) | A12-02 | planned | список: [parking/design-questions.md](parking/design-questions.md); не исполнять до A12 |
+| [A12-03 — Сформировать roadmap проверяемых изменений](packets/A12-03.md) | A12-02, A12-04 | planned | — |

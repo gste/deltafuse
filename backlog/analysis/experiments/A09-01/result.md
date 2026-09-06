@@ -137,5 +137,6 @@ Implement TASK-002 не запускали. Hidden suite: **2 passed**.
 
 - **Готово A09-01a:** `done` / `partial`. F-007 mitigated, F-008, F-009 → A12.
 - **A09-01b:** S03 r1 Red→Green, spec unchanged, hidden suite pass. Дальше r2 и r3. Не holdout. Skills не патчить.
+- **Доработка не сейчас:** борозда/tokenizer/калибровка — [parking/design-questions.md](../../parking/design-questions.md), шаг [A12-04](../../packets/A12-04.md).
 - **Калибровка S03:** seed с `int()` в refill; specify не пишет `docs/spec/**`; Target сначала deplete bucket.
 - **Runtime:** [local-runtime](../local-runtime/README.md).
