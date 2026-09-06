@@ -1,0 +1,29 @@
+revision: "6e72519"
+task_id: "A08-04"
+packet: "backlog/analysis/packets/A08-04.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-006"
+  - "CODE-002"
+  - "CODE-003"
+  - "TEST-001"
+  - "TEST-003"
+  - "PROC-004"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+  - "tests/fixtures/change_builder.py:L1-60"
+method: "Independent design and generation of Scenario S02 (Small capability extension with penalty lock in rate limiter) belonging to calibration split, with boundary isolation rules, hidden acceptance tests and fault mutations."
+artifacts:
+  - "backlog/analysis/experiments/cases/S02/input.md"
+  - "backlog/analysis/experiments/cases/S02/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S02/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S02/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S02/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-04/result.md"
+verdict: "pass"

@@ -1,0 +1,13 @@
+mutations:
+  - id: M1_NO_LOCK_ON_FAILURE
+    description: "Consume returns False on deficit but fails to set penalty timestamp"
+    expected_caught_by: test_penalty_lockout_and_expiration
+  - id: M2_IGNORE_PENALTY_ON_REFILL
+    description: "Allows consume during penalty if tokens accumulated"
+    expected_caught_by: test_penalty_lockout_and_expiration
+  - id: M3_NEVER_EXPIRE_PENALTY
+    description: "Key remains permanently blocked once penalty is activated"
+    expected_caught_by: test_penalty_lockout_and_expiration
+  - id: M4_BREAK_BACKWARD_COMPAT
+    description: "Requires penalty_seconds as mandatory positional argument"
+    expected_caught_by: test_backward_compatibility

@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A08-03, переход к A08-04.
-- **Текущая задача:** [A08-04 — Подготовить S02: Малое изменение capability](packets/A08-04.md).
-- **Следующая задача:** [A08-05 — Подготовить S03: Баг при корректной spec](packets/A08-05.md).
-- **Счётчики:** всего 80; `planned` 39; `in-progress` 0; `done` 41; `blocked` 0.
+- **Статус:** `in-progress` — завершён A08-04, переход к A08-05.
+- **Текущая задача:** [A08-05 — Подготовить S03: Баг при корректной spec](packets/A08-05.md).
+- **Следующая задача:** [A08-06 — Подготовить S04: Неоднозначный запрос и Decision](packets/A08-06.md).
+- **Счётчики:** всего 80; `planned` 38; `in-progress` 0; `done` 42; `blocked` 0.
 
 
 
@@ -112,7 +112,7 @@
 | [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md) | A03-04, A03-05, A04-03, A04-04, A05-03, A05-04, A06-03, A06-04, A06-05, A07-02, A07-03 | done | [PROC-004, PROC-007, TEST-001: pass; результат и handoff](experiments/A08-01/result.md) |
 | [A08-02 — Зафиксировать calibration/holdout и протокол](packets/A08-02.md) | A08-01 | done | [SPEC-001, SPEC-002, CODE-001, TEST-001, PROC-004: pass; результат и handoff](experiments/A08-02/result.md) |
 | [A08-03 — Подготовить S01: Пустой продукт и новая capability](packets/A08-03.md) | A08-02 | done | [SPEC-001, SPEC-004, CODE-001, TEST-001: pass; результат и handoff](experiments/A08-03/result.md) |
-| [A08-04 — Подготовить S02: Малое изменение capability](packets/A08-04.md) | A08-02 | planned | — |
+| [A08-04 — Подготовить S02: Малое изменение capability](packets/A08-04.md) | A08-02 | done | [SPEC-001, SPEC-006, CODE-002, CODE-003, TEST-001: pass; результат и handoff](experiments/A08-04/result.md) |
 | [A08-05 — Подготовить S03: Баг при корректной spec](packets/A08-05.md) | A08-02 | planned | — |
 | [A08-06 — Подготовить S04: Неоднозначный запрос и Decision](packets/A08-06.md) | A08-02 | planned | — |
 | [A08-07 — Подготовить S05: Несколько capabilities и policy](packets/A08-07.md) | A08-02 | planned | — |
