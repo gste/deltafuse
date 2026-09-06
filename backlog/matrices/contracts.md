@@ -1,4 +1,4 @@
-﻿# Матрица согласованности контрактов и контекстных ограничений DeltaFuse
+# Матрица согласованности контрактов и контекстных ограничений DeltaFuse
 
 Этот документ фиксирует сопоставление проектных контрактов жизненного цикла DeltaFuse, разделяя уровни **декларации** (документация, спецификации, скиллы), **структурной проверки** (схемы JSON Schema, frontmatter шаблонов) и **runtime enforcement** (проверки FSM, гейты, CLI-валидаторы), согласно [плану анализа](../analysis-plan.md) (пакет A02).
 
@@ -116,3 +116,22 @@
 1. **Строгий контроль ссылочной целостности (SPC-01, SPC-04):** FSM на 100% блокирует любые битые якоря `#REQ-*` в дельтах (мутационный тест T7) и отсутствие корня спецификаций (инвариант N10).
 2. **Семантика Red/Green:** На фазе Specify утверждается нормативное требование. Статусы Red и Green здесь не используются: написание падающего Red-теста начнётся строго после декомпозиции на этапе Target.
 3. **Обнаруженный разрыв (SPC-06):** В гейте `check_gate(..., "specified")` в `fsm.py` проверяется только наличие файла `spec-delta.md`, но не валидируется значение поля `status` во frontmatter (например, что оно переведено человеком из `proposed` в `accepted`). Это позволяет обойти Human Gate простой подменой статуса Change.
+
+---
+
+## 7. Детальная матрица инвариантов фазы Decompose (A02-05)
+
+| Инвариант / Свойство | Документация (`docs/**`) | Навык агента (`process/skills/**`) | Схема / Шаблон (`process/**`) | FSM Runtime Gate (`core/fsm.py`) | Положительный тест (CI/Unit) | Отрицательный / Мутационный тест | Статус контроля |
+|---|---|---|---|---|---|---|---|
+| **DEC-01: Ацикличность графа задач (Task DAG Acyclicity)** | `docs/workflow.md:189` (Task dependencies form an acyclic directed graph DAG). | `decompose-change/SKILL.md:23` (упорядочивание зависимостей задач). | `task.schema.yaml:13-15` (`depends_on: array of TASK-*`). | `fsm.py:258-262` + `graph.py:13` (`topological_sort` находит циклы и выбрасывает `DependencyCycleError`). | `tests/unit/test_graph.py:12` (`test_topological_sort_success`). | `tests/unit/test_graph.py:28` (`test_topological_sort_cycle_error`), `tests/e2e/test_failure_modes.py:55` (цикл блокирует гейт). | **Полный Runtime Enforcement** |
+| **DEC-02: Атомарный контракт задачи и оракул (Task Contract & Oracle)** | `docs/workflow.md:143-185`, `docs/roles.md:56` (10 обязательных полей, оракул, `allowed_paths`, `forbidden_paths`). | `decompose-change/SKILL.md:21-22` (один исход на задачу, оракул, границы путей). | `task.schema.yaml` (strict: `additionalProperties: false`), `templates/change/tasks/TASK-001-template.md`. | `fsm.py:230` (`registry.validate("task", meta)`). | `tests/unit/test_schemas.py` (self-validation схемы `task`). | `tests/unit/test_schemas.py` (отсутствие `allowed_paths` или недопустимый статус вызывает ошибку). | **Структурный Runtime** |
+| **DEC-03: Валидность ссылок на спецификации и решения (T7 & P3)** | `docs/workflow.md:153-155` (`spec_refs` обязательны, `design_ref` только `accepted`). | `decompose-change/SKILL.md:22` (точные requirement refs и accepted Decisions). | `task.schema.yaml:17-22`. | `fsm.py:245-254` (`validate_spec_ref`, `validate_decision_ref` — проверка статуса `accepted`). | `tests/unit/test_integrity.py:70` (`test_validate_decision_ref`). | `tests/unit/test_fsm_mutations.py:162` (битый `#REQ-*` бракуется), `tests/unit/test_integrity.py` (решение `proposed` бракуется). | **Полный Runtime Enforcement** |
+| **DEC-04: Согласованность статуса FSM и наличия задач (T5)** | `docs/state-machine.md:25-26`, `docs/workflow.md:191` (`status: decomposed` требует файлов в `tasks/`). | `decompose-change/SKILL.md:20` (создание файлов `TASK-NNN.md`). | `change.schema.yaml:56-58` (`tasks: array`). | `fsm.py:150-153` (T5: статус `decomposed` без файлов в `tasks/` бракуется), `fsm.py:417` (гейт `decomposed`). | `tests/unit/test_fsm.py:66` (переход в `decomposed`). | `tests/unit/test_fsm_mutations.py:145` (мутация T5: статус decomposed без задач ломает гейт). | **Полный Runtime Enforcement** |
+| **DEC-05: Допустимый переход FSM из `decomposed`** | `docs/state-machine.md:47,68` (разрешён только переход в `targeting`). | `decompose-change/SKILL.md:32` (рекомендация перехода к `/target-task`). | `change.schema.yaml:16`. | `fsm.py:47` (`ALLOWED_CHANGE_TRANSITIONS["decomposed"] = {"targeting"}`). | `tests/unit/test_fsm.py:67` (`can_transition("decomposed", "targeting") is True`). | `tests/unit/test_fsm.py:82` (`can_transition("decomposed", "converged") is False`). | **Полный Runtime Enforcement** |
+| **DEC-06: Контроль контекстного бюджета задачи** | `docs/context-model.md:19,149` (каждая задача ограничена `max_tokens: 16000`, `max_files: 24`). | `decompose-change/SKILL.md:14,21` (one verifiable outcome that fits one implementation context). | **Отсутствует:** в `task.schema.yaml` поля `context_budget` нет. | **Отсутствует:** в `fsm.py` проверка `validate_context_budget` вызывается только для `slices/`, но не для `tasks/`. | — | — (отрицательный тест отсутствует, [F-002](../findings/F-002.md)). | **Декларация (Разрыв контроля)** |
+
+### Выводы по фазе Decompose (A02-05)
+
+1. **Топологический контроль графа (DEC-01):** Ядро `deltafuse.core.graph.topological_sort` математически строго предотвращает циклические взаимозависимости задач (алгоритм Кана).
+2. **Семантика Red/Green:** На фазе Decompose формируются оракулы (GIVEN/WHEN/THEN) и команды запуска тестов (`targeted command`, `regression command`). Red-состояние ещё не зафиксировано: оно наступит на следующем шаге (Target), когда оракул задачи превратится в исполняемый падающий тест.
+3. **Обнаруженный разрыв (DEC-06):** Контроль контекстного бюджета задачи отсутствует в схеме `task.schema.yaml` и в гейте FSM (зафиксировано в [F-002](../../findings/F-002.md)).
