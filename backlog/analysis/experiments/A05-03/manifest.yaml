@@ -1,0 +1,22 @@
+revision: "f7f8ff5ba67a840e6918a28e53fe1eebfc085a11"
+task_id: "A05-03"
+packet: "backlog/analysis/packets/A05-03.md"
+criterion_ids:
+  - "PROC-003"
+  - "PROC-005"
+  - "PROC-007"
+inputs:
+  - "src/deltafuse/core/graph.py:L13-41"
+  - "docs/context-model.md:L120-138"
+  - "docs/workflow.md:L257-285"
+  - "src/deltafuse/core/fsm.py:L190-265"
+method: "Algorithmic and context scaling benchmark on growing dependency DAGs (10 to 1,000 tasks); evaluation of incremental re-analysis scope, freshness summaries, halting on loops without new facts, and crash-resilience re-entrance."
+commands:
+  - "python test_recon_perf.py"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A05-03/result.md"
+verdict: "pass"
