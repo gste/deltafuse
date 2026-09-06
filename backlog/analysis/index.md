@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — пакет A08 закрыт (A08-16), переход к A09-01.
-- **Текущая задача:** [A09-01 — Откалибровать локальную модель на S02/S03/S04](packets/A09-01.md).
-- **Следующая задача:** [A09-02 — Измерить локальное исполнение S01: Пустой продукт и новая capability](packets/A09-02.md). Независимая готовая: [A11-01](packets/A11-01.md).
-- **Счётчики:** всего 80; `planned` 24; `in-progress` 0; `done` 56; `blocked` 0.
+- **Статус:** `in-progress` — A09-01a разблокирован: frozen local-runtime зафиксирован; дальше калибровка S02 (routing-first Analyze). Без LLM: [A11-01](packets/A11-01.md).
+- **Текущая задача аудита:** [A09-01a — Калибровка ornith на S02](packets/A09-01a.md) (Intake-smoke + Analyze `routing.yaml` на `:1240`). Holdout не стартовать.
+- **Следующая задача:** остаток фаз S02 r1, затем три повтора; затем [A09-01b](packets/A09-01b.md).
+- **Счётчики:** всего 83; `planned` 25; `in-progress` 2; `done` 56; `blocked` 0.
 
 
 
@@ -14,7 +14,7 @@
 
 
 
-- **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md), проверена в [A03-04](experiments/A03-04/result.md)).
+- **Локальная модель:** `ornith-1.5-35b-a3b` Q4_K_M, голый llama-server `:1240`, `--reasoning off`, `--cpu-moe` — [local-runtime](experiments/local-runtime/README.md). Исторический Studio-снимок: [A03-03](experiments/A03-03/profile.md).
 
 [План](../analysis-plan.md) · [Правила исполнения](README.md) · [Проверка плана](plan-review.md)
 
@@ -130,7 +130,10 @@
 
 | Задача | Зависимости | Статус | Evidence / блокировка |
 |---|---|---|---|
-| [A09-01 — Откалибровать локальную модель на S02/S03/S04](packets/A09-01.md) | A03-03, A03-04, A08-03, A08-04, A08-05, A08-06, A08-07, A08-08, A08-09, A08-10, A08-11, A08-12, A08-13, A08-14, A08-15, A08-16 | planned | — |
+| [A09-01 — Откалибровать локальную модель на S02/S03/S04](packets/A09-01.md) | A03-03, A03-04, A08-03..A08-16 | in-progress | split → [A09-01a](packets/A09-01a.md)/[A09-01b](packets/A09-01b.md)/[A09-01c](packets/A09-01c.md); [manifest](experiments/A09-01/manifest.yaml) |
+| [A09-01a — Калибровка ornith на S02](packets/A09-01a.md) | A09-01 | in-progress | [S02 r1; F-007 mitigated](experiments/A09-01/result.md); SUT [local-runtime](experiments/local-runtime/README.md); Analyze routing-first |
+| [A09-01b — Калибровка ornith на S03](packets/A09-01b.md) | A09-01a | planned | — |
+| [A09-01c — Калибровка ornith на S04](packets/A09-01c.md) | A09-01b | planned | — |
 | [A09-02 — Измерить локальное исполнение S01: Пустой продукт и новая capability](packets/A09-02.md) | A09-01 | planned | — |
 | [A09-03 — Измерить локальное исполнение S05: Несколько capabilities и policy](packets/A09-03.md) | A09-01 | planned | — |
 | [A09-04 — Измерить локальное исполнение S06: Длинный raw input](packets/A09-04.md) | A09-01 | planned | — |

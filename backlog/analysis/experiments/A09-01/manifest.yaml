@@ -1,0 +1,39 @@
+revision: "e57dc9d"
+task_id: "A09-01"
+packet: "backlog/analysis/packets/A09-01.md"
+children:
+  - "A09-01a"
+  - "A09-01b"
+  - "A09-01c"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-002"
+  - "CODE-001"
+  - "TEST-001"
+  - "PROC-004"
+  - "PROC-007"
+status: "in-progress"
+split_reason: "Three cases x three repeats x seven phases exceed one analysis call; repeats must be separate invocations."
+inputs:
+  - "backlog/analysis-plan.md:A09"
+  - "backlog/analysis/experiments/protocol.md:L1-110"
+  - "backlog/analysis/experiments/local-runtime/README.md"
+  - "backlog/analysis/experiments/A03-03/profile.md"
+  - "backlog/analysis/experiments/cases/S02/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S03/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S04/manifest.yaml"
+method: "Real ornith-1.5-35b-a3b calls via frozen llama-server :1240 (thinking off, cpu-moe); isolated product per case/repeat; oracle hidden from the executing model. Analyze default A09_ANALYZE_FOCUS=routing."
+profile:
+  model: "ornith-1.5-35b-a3b"
+  endpoint: "http://127.0.0.1:1240/v1/chat/completions"
+  temperature: 0.1
+  top_p: 0.9
+  max_output_tokens: 2048
+  timeout_s_protocol: 300
+  timeout_s_heavy: 600
+  timeout_s_reason: "W-queue: routing/intake ~7-18s; naive dump ~47s; 16k prefill TTFT ~41s; thinking-off"
+  runtime_doc: "backlog/analysis/experiments/local-runtime/README.md"
+outputs:
+  harness: "backlog/analysis/experiments/A09-01/harness/run_case.py"
+  runs: "backlog/analysis/experiments/A09-01/runs/"
+  result: "backlog/analysis/experiments/A09-01/result.md"

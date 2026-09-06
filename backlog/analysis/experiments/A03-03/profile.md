@@ -1,5 +1,7 @@
 # Аппаратный и рантайм-профиль локальной модели (A03-03)
 
+Исторический снимок Studio `:1234` / thinking on. **Текущий SUT A09:** [local-runtime](../local-runtime/README.md) (`:1240`, `--reasoning off`, `--cpu-moe`). Не запускать новые калибровки по этому файлу.
+
 - **ID модели в LM Studio:** \ornith-1.5-35b-a3b\
 - **Файл весов:** \D:\AI\models\lmstudio\ornith-ai\Ornith-1.5-35B-A3B-GGUF\Ornith-1.5-35B-Q4_K_M.gguf\
 - **Размер файла:** 21,713,462,848 байт (~20.22 GiB)
