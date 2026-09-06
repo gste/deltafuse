@@ -2,9 +2,9 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён пакет A07, переход к A08-01.
-- **Текущая задача:** [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md).
-- **Следующая задача:** [A08-02 — Зафиксировать calibration/holdout и протокол](packets/A08-02.md).
+- **Статус:** `in-progress` — завершён A08-01, переход к A08-02.
+- **Текущая задача:** [A08-02 — Зафиксировать calibration/holdout и протокол](packets/A08-02.md).
+- **Следующая задача:** [A08-03 — Подготовить S01: Пустой продукт и новая capability](packets/A08-03.md).
 - **Счётчики:** всего 80; `planned` 41; `in-progress` 0; `done` 39; `blocked` 0.
 
 
@@ -109,7 +109,7 @@
 
 | Задача | Зависимости | Статус | Evidence / блокировка |
 |---|---|---|---|
-| [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md) | A03-04, A03-05, A04-03, A04-04, A05-03, A05-04, A06-03, A06-04, A06-05, A07-02, A07-03 | planned | — |
+| [A08-01 — Проверить eval harness и локальный provider](packets/A08-01.md) | A03-04, A03-05, A04-03, A04-04, A05-03, A05-04, A06-03, A06-04, A06-05, A07-02, A07-03 | done | [PROC-004, PROC-007, TEST-001: pass; результат и handoff](experiments/A08-01/result.md) |
 | [A08-02 — Зафиксировать calibration/holdout и протокол](packets/A08-02.md) | A08-01 | planned | — |
 | [A08-03 — Подготовить S01: Пустой продукт и новая capability](packets/A08-03.md) | A08-02 | planned | — |
 | [A08-04 — Подготовить S02: Малое изменение capability](packets/A08-04.md) | A08-02 | planned | — |

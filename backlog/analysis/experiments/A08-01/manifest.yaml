@@ -1,0 +1,22 @@
+revision: "4bf7fc3"
+task_id: "A08-01"
+packet: "backlog/analysis/packets/A08-01.md"
+criterion_ids:
+  - "PROC-004"
+  - "PROC-007"
+  - "TEST-001"
+inputs:
+  - "src/deltafuse/evals/providers.py:L1-348"
+  - "src/deltafuse/evals/runner.py:L1-183"
+  - "src/deltafuse/evals/metrics.py:L1-149"
+  - "tests/evals/test_mock_provider.py:L1-80"
+method: "Inspection of eval harness architecture, provider abstraction (MockLLMProvider, RealLLMProvider, CallableLLMProvider), and protocol for local LM Studio integration without altering DeltaFuse runtime."
+commands:
+  - "python -c \"from deltafuse.evals.dataset import EvalDataset; from deltafuse.evals.providers import MockLLMProvider; from deltafuse.evals.runner import run_eval; ds = EvalDataset.get_default_dataset(); rep = run_eval(ds, MockLLMProvider('golden')); print(rep.to_summary_text())\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-01/result.md"
+verdict: "pass"
