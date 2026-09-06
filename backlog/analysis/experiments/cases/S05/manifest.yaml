@@ -1,0 +1,15 @@
+case_id: S05
+title: "Multiple capabilities and policy with cross-boundary integration"
+category: feature
+group: holdout
+target_capability: monitoring.usage_stats, security.rate_policy
+slices:
+  - SLICE-01
+  - SLICE-02
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  existing_capabilities:
+    - security.ratelimit

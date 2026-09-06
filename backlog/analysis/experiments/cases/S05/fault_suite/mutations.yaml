@@ -1,0 +1,10 @@
+mutations:
+  - id: M1_SINGLE_SLICE
+    description: "Agent merges both capabilities into one slice, losing boundary isolation"
+    expected_caught_by: test_multi_capability_slicing
+  - id: M2_MISSING_INTEGRATION_TESTS
+    description: "Agent creates unit tests for each capability but omits integration tests"
+    expected_caught_by: test_integration_tests_present
+  - id: M3_STATS_IGNORE_POLICY
+    description: "Stats module does not count policy-block rejections in rejected_calls"
+    expected_caught_by: test_stats_reflect_policy_blocks
