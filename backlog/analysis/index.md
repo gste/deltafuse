@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — A09-01b: S03 r1+r2 Green. Без LLM: [A11-01](packets/A11-01.md).
-- **Текущая задача аудита:** [A09-01b — Калибровка ornith на S03](packets/A09-01b.md). Holdout не стартовать.
-- **Следующая задача:** [A09-01c](packets/A09-01c.md) после A09-01b.
-- **Счётчики:** всего 84; `planned` 25; `in-progress` 2; `done` 57; `blocked` 0.
+- **Статус:** `in-progress` — A09-01b closed. Дальше A09-01c S04. Без LLM: [A11-01](packets/A11-01.md).
+- **Текущая задача аудита:** [A09-01c — Калибровка ornith на S04](packets/A09-01c.md). Holdout не стартовать.
+- **Следующая задача:** [A09-02](packets/A09-02.md) после A09-01.
+- **Счётчики:** всего 84; `planned` 24; `in-progress` 2; `done` 58; `blocked` 0.
 
 
 
@@ -132,8 +132,8 @@
 |---|---|---|---|
 | [A09-01 — Откалибровать локальную модель на S02/S03/S04](packets/A09-01.md) | A03-03, A03-04, A08-03..A08-16 | in-progress | split → [A09-01a](packets/A09-01a.md)/[A09-01b](packets/A09-01b.md)/[A09-01c](packets/A09-01c.md); [manifest](experiments/A09-01/manifest.yaml) |
 | [A09-01a — Калибровка ornith на S02](packets/A09-01a.md) | A09-01 | done | [partial; r3–r5 TASK-001 Green; F-008; F-009 → A12](experiments/A09-01/result.md) |
-| [A09-01b — Калибровка ornith на S03](packets/A09-01b.md) | A09-01a | in-progress | [S03 r1+r2 Green](experiments/A09-01/result.md) |
-| [A09-01c — Калибровка ornith на S04](packets/A09-01c.md) | A09-01b | planned | — |
+| [A09-01b — Калибровка ornith на S03](packets/A09-01b.md) | A09-01a | done | [pass; r1–r3 Red→Green, spec unchanged](experiments/A09-01/result.md) |
+| [A09-01c — Калибровка ornith на S04](packets/A09-01c.md) | A09-01b | in-progress | — |
 | [A09-02 — Измерить локальное исполнение S01: Пустой продукт и новая capability](packets/A09-02.md) | A09-01 | planned | — |
 | [A09-03 — Измерить локальное исполнение S05: Несколько capabilities и policy](packets/A09-03.md) | A09-01 | planned | — |
 | [A09-04 — Измерить локальное исполнение S06: Длинный raw input](packets/A09-04.md) | A09-01 | planned | — |

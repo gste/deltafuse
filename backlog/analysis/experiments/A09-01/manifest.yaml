@@ -45,5 +45,6 @@ notes:
   - "A09-01a closed 2026-09-06: verdict partial; F-009 deferred to A12; next A09-01b S03"
   - "S03 r1-frozen: spec unchanged, authentic Red after oracle hint, Implement Green, hidden suite 2 passed"
   - "S03 r2-frozen: spec unchanged, authentic Red first try, Implement Green, hidden suite 2 passed; decompose needed change.yaml in files[]"
+  - "A09-01b closed 2026-09-06: verdict pass; S03 r1–r3; next A09-01c S04"
   - "Do not reuse work/S02-r1 for frozen repeats"
   - "Oracle not in ornith prompt"

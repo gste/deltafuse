@@ -1,0 +1,453 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: target-task
+description: Create or modify the executable test target for one DeltaFuse task and prove it fails for the expected reason before production code changes. Use for the TDD Red evidence step only.
+---
+
+# Target Task
+
+Freeze and demonstrate the executable behavioral target.
+
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one task, exact spec references, reproduction and unchanged behavior, relevant test conventions/fixtures/helpers, and only public product interfaces needed to express the oracle.
+
+Do not read implementation internals unless the target cannot otherwise be expressed. Do not change production code, specification, Decisions, or the task's expected behavior.
+
+## Procedure
+
+1. Confirm task dependencies and normative references are ready.
+2. Freeze the oracle from the task and specification.
+3. Add or modify the smallest automated test that demonstrates the missing behavior or defect.
+4. Run the narrow target against unchanged production code.
+5. Require a failure caused by the expected behavior, not compilation, fixture, environment, or unrelated failures.
+6. Record sanitized command, exit status, failure category, and concise result under the Change's `evidence/red/`.
+7. Set task/Change state to `target-confirmed` only after valid Red.
+
+If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Do not weaken assertions to manufacture Red.
+
+Recommend `/implement-task <task-path>` only for confirmed Red.
+
+
+----- USER -----
+
+Phase: target
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'target'
+Gate to satisfy after this call: targeting
+Write ONLY tests/test_limiter.py. Keep the existing baseline test. Add the smallest failing test that fractional refill accumulates. Unknown keys start at full capacity: first consume(capacity) MUST be True. Then, with refill_rate 0.5, after ~1s still cannot consume 1 more token; after ~2s total can consume 1. Public API only; no private _fields. Do not edit src/ or docs/spec/. Do not write evidence YAML. Use status continue.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/change.yaml ===
+schema_version: 2
+id: CHG-001-fractional-token-refill
+title: Fix fractional token refill accounting in TokenBucketLimiter
+status: decomposed
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: bugfix
+risk: medium
+source:
+  request: docs/intake/S03.md
+  intake_refs:
+    - docs/intake/S03.md
+deltas: []
+slices: []
+decisions: []
+tasks:
+  - docs/changes/CHG-001-fractional-token-refill/tasks/TASK-001-fix-fractional-refill.md
+
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/coverage.yaml ===
+change: CHG-001-fractional-token-refill
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzing
+
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/request.md ===
+# Change Request: Fractional Token Refill in TokenBucketLimiter
+
+## Summary
+`TokenBucketLimiter` uses integer division `int(elapsed * refill_rate)` when refilling, which drops fractional token accrual between calls. With `capacity=10, refill_rate=0.5`, after 3 seconds only 1 token is restored instead of 1.5. Refill must accumulate as float so fractional parts persist across successive calls; `consume` must debit integer or fractional token counts correctly. The existing spec `docs/spec/security/ratelimit.md` already requires proportional refill and must remain unchanged.
+
+## Claims
+
+- CR-001 [observation]: With `TokenBucketLimiter(capacity=10, refill_rate=0.5)`, after waiting 3 seconds only 1 token is restored instead of the expected 1.5 tokens.
+- CR-002 [hypothesis]: The defect is caused by integer division `int(elapsed * refill_rate)` in the refill formula, which discards fractional token accrual between calls.
+- CR-003 [expectation]: Refill must accumulate tokens as float so fractional parts are not lost between successive calls.
+- CR-004 [expectation]: The `consume` method must correctly debit an integer or fractional number of tokens.
+- CR-005 [constraint]: `docs/spec/security/ratelimit.md` already requires proportional refill and must NOT be changed (spec unchanged).
+- CR-006 [expectation]: At the Target phase, a failing (Red) test reproducing fractional token accrual at small time intervals must be created.
+
+## Unknowns
+- Exact current refill/consume implementation details not inspected (product code unread during intake).
+- Whether fractional tokens are exposed to callers or only tracked internally.
+
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/routing.yaml ===
+change: CHG-001-fractional-token-refill
+claims:
+  CR-001:
+    summary: >-
+      Observed defect: only 1 token restored after 3s instead of expected 1.5
+      with capacity=10, refill_rate=0.5.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: >-
+      Hypothesized root cause is integer division int(elapsed * refill_rate)
+      discarding fractional accrual between calls.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-003:
+    summary: >-
+      Refill must accumulate tokens as float so fractional parts persist across
+      successive calls.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: >-
+      consume must correctly debit an integer or fractional number of tokens.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: >-
+      docs/spec/security/ratelimit.md already requires proportional refill and
+      must NOT be changed.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: >-
+      At Target phase a failing (Red) test reproducing fractional token accrual
+      at small time intervals must be created.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-fractional-token-refill
+title: Fractional token refill accumulation and consume debit
+status: analyzing
+primary_capability: ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+depends_on: []
+---
+
+## Slice analysis
+
+- **intent**: Fix fractional token accrual loss in `TokenBucketLimiter` refill and ensure `consume` debits integer/fractional tokens correctly.
+- **delta_kind**: implementation
+- **requirement_delta**: none. `docs/spec/security/ratelimit.md` (REQ-RL-01 proportional refill preserving fractional balances; REQ-RL-02 consume debit) already governs behavior and is unchanged.
+- **design_impact**: `refill` must accumulate accrued tokens as float across calls instead of `int(elapsed * refill_rate)`; `consume` must debit fractional counts and return True/False per REQ-RL-02.
+- **risk**: low-medium. Pure bugfix within existing ratelimit capability; no new API or spec change.
+- **size**: small.
+
+### In scope
+- Inspect `src/ratelimit` `TokenBucketLimiter.refill`/`consume`.
+- Convert refill accrual to float accumulation; fix consume debit.
+- Add failing (Red) test at Target reproducing fractional accrual at small intervals (CR-006).
+
+### Out of scope
+- Any edit to `docs/spec/security/ratelimit.md` (CR-005).
+- Exposing fractional tokens to callers (open unknown; internal tracking only).
+
+### Dependencies
+- None. Single capability slice.
+
+### Context budget
+- max_tokens: 4000, max_files: 8.
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/spec-delta.md ===
+---
+change: CHG-001-fractional-token-refill
+status: proposed
+slices:
+  - SLICE-01
+---
+
+## ADDED
+
+none
+
+## MODIFIED
+
+none
+
+## REMOVED
+
+none
+
+## Rationale
+
+`docs/spec/security/ratelimit.md` (REQ-RL-01 proportional refill preserving fractional balances; REQ-RL-02 consume debit) already governs the required behavior and is unchanged. The defect is an implementation deviation within `TokenBucketLimiter`; no normative spec change is required.
+
+=== FILE docs/changes/CHG-001-fractional-token-refill/tasks/TASK-001-fix-fractional-refill.md ===
+---
+id: TASK-001
+change: CHG-001-fractional-token-refill
+slice: SLICE-01
+kind: bugfix
+status: pending
+depends_on: []
+requirement_delta: none
+spec_refs:
+  - docs/spec/security/ratelimit.md#REQ-RL-01
+  - docs/spec/security/ratelimit.md#REQ-RL-02
+design_ref: null
+allowed_paths:
+  - src/ratelimit/limiter.py
+  - tests/test_limiter.py
+forbidden_paths:
+  - docs/spec/**
+---
+
+# TASK-001 Fix fractional token refill accumulation and consume debit
+
+## Outcome
+`TokenBucketLimiter.refill` accrues tokens as a float so fractional balances persist across calls, and `consume` debits integer or fractional token counts correctly. Verified by a passing test asserting 1.5 tokens restored after 3s with `capacity=10, refill_rate=0.5`.
+
+## References
+- Change: CHG-001-fractional-token-refill
+- Slice: SLICE-01
+- `docs/spec/security/ratelimit.md#REQ-RL-01` (proportional refill preserving fractional balances)
+- `docs/spec/security/ratelimit.md#REQ-RL-02` (consume debit returns True/False)
+
+## Steps
+1. Inspect `src/ratelimit/limiter.py` `refill`/`consume`.
+2. Replace `int(elapsed * refill_rate)` with float accumulation of accrued tokens.
+3. Ensure `consume` debits fractional counts and returns True/False per REQ-RL-02.
+4. Add a test asserting 1.5 tokens restored after 3s (capacity=10, refill_rate=0.5).
+
+## Test oracle
+`TokenBucketLimiter(capacity=10, refill_rate=0.5)` after 3s restores 1.5 tokens; `consume` returns True and deducts when tokens remain, False without deduction.
+
+## Unchanged behavior
+`docs/spec/security/ratelimit.md` must NOT change (CR-005). Unknown-key and is_blocked behavior unchanged.
+
+## Verification
+```
+python -m pytest tests/test_limiter.py
+```
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0. Tokens MUST be refilled proportionally to elapsed time, preserving fractional balances.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE tests/test_limiter.py ===
+from ratelimit.limiter import TokenBucketLimiter
+
+def test_consume_and_reject():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is False
