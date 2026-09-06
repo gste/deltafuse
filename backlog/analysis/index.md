@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — завершён A08-13, переход к A08-14.
-- **Текущая задача:** [A08-14 — Подготовить S10: Прерывание и повторная нарезка](packets/A08-14.md).
-- **Следующая задача:** [A08-15 — Подготовить S11: Два Change и удаление функции](packets/A08-15.md).
-- **Счётчики:** всего 80; `planned` 29; `in-progress` 0; `done` 51; `blocked` 0.
+- **Статус:** `in-progress` — пакет A08 закрыт (A08-16), переход к A09-01.
+- **Текущая задача:** [A09-01 — Откалибровать локальную модель на S02/S03/S04](packets/A09-01.md).
+- **Следующая задача:** [A09-02 — Измерить локальное исполнение S01: Пустой продукт и новая capability](packets/A09-02.md). Независимая готовая: [A11-01](packets/A11-01.md).
+- **Счётчики:** всего 80; `planned` 24; `in-progress` 0; `done` 56; `blocked` 0.
 
 
 
@@ -122,9 +122,9 @@
 | [A08-11 — Подготовить S08b: Docs-only](packets/A08-11.md) | A08-02 | done | [SPEC-001, SPEC-006, PROC-003: pass; результат и handoff](experiments/A08-11/result.md) |
 | [A08-12 — Подготовить S08c: Operational change](packets/A08-12.md) | A08-02 | done | [PROC-003, PROC-005: pass; результат и handoff](experiments/A08-12/result.md) |
 | [A08-13 — Подготовить S09: Терминальные исходы](packets/A08-13.md) | A08-02 | done | [PROC-001, PROC-002, PROC-006: pass; результат и handoff](experiments/A08-13/result.md) |
-| [A08-14 — Подготовить S10: Прерывание и повторная нарезка](packets/A08-14.md) | A08-02 | planned | — |
-| [A08-15 — Подготовить S11: Два Change и удаление функции](packets/A08-15.md) | A08-02 | planned | — |
-| [A08-16 — Подготовить S12: Неверное evidence и недоверенный вход](packets/A08-16.md) | A08-02 | planned | — |
+| [A08-14 — Подготовить S10: Прерывание и повторная нарезка](packets/A08-14.md) | A08-02 | done | [PROC-002, PROC-003, PROC-005: pass; результат и handoff](experiments/A08-14/result.md) |
+| [A08-15 — Подготовить S11: Два Change и удаление функции](packets/A08-15.md) | A08-02 | done | [SPEC-005, SPEC-007, TEST-005, PROC-002: pass; результат и handoff](experiments/A08-15/result.md) |
+| [A08-16 — Подготовить S12: Неверное evidence и недоверенный вход](packets/A08-16.md) | A08-02 | done | [PROC-006, CODE-002, TEST-004, SPEC-001: pass; результат и handoff](experiments/A08-16/result.md) |
 
 ## A09
 

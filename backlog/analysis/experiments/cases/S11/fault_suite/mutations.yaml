@@ -1,0 +1,16 @@
+mutations:
+  - id: M1_STALE_GREEN_SILENT_PASS
+    description: "CHG-B converges on pre-merge Green evidence after CHG-A lands (F-006)"
+    expected_caught_by: test_stale_evidence_rejected_after_merge
+  - id: M2_NO_INVALIDATION
+    description: "Merge updates spec/code but leaves evidence files marked passed"
+    expected_caught_by: test_evidence_rerun_or_invalidated
+  - id: M3_LOST_PEER_CLAIM
+    description: "Merged spec drops burst_allowance or window stats"
+    expected_caught_by: test_merged_spec_has_both_live_claims
+  - id: M4_DELETION_LEAVES_BURST
+    description: "CHG-C removes code but leaves burst_allowance in spec, tests, or catalog"
+    expected_caught_by: test_deletion_removes_burst
+  - id: M5_DANGLING_REFS
+    description: "Deletion leaves broken anchors or capability catalog entries"
+    expected_caught_by: test_no_dangling_spec_refs
