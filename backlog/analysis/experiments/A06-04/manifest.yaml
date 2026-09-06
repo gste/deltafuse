@@ -1,0 +1,21 @@
+revision: "f39173a"
+task_id: "A06-04"
+packet: "backlog/analysis/packets/A06-04.md"
+criterion_ids:
+  - "PROC-002"
+  - "PROC-003"
+  - "PROC-001"
+inputs:
+  - "src/deltafuse/core/archiver.py:L1-99"
+  - "docs/workflow.md:L257-285"
+  - "tests/e2e/test_golden_workflow.py:L120-150"
+method: "Simulation of interrupted and boundary archival operations: evaluation of gate checking preconditions, immutability of historical archives, atomic directory move semantics, and zero data loss on failure."
+commands:
+  - "python -c \"from deltafuse.core.archiver import archive_change; ...\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A06-04/result.md"
+verdict: "pass"
