@@ -2,10 +2,11 @@
 
 Дата обновления: 2026-09-06.
 
-- **Статус:** `in-progress` — выполняется пакет A06, переход к A06-03.
-- **Текущая задача:** [A06-03 — Проверить upgrade и восстановление записи](packets/A06-03.md).
-- **Следующая задача:** [A06-04 — Проверить archive после прерывания](packets/A06-04.md).
-- **Счётчики:** всего 80; `planned` 46; `in-progress` 0; `done` 34; `blocked` 0.
+- **Статус:** `in-progress` — выполняется пакет A06, переход к A06-04.
+- **Текущая задача:** [A06-04 — Проверить archive после прерывания](packets/A06-04.md).
+- **Следующая задача:** [A06-05 — Проверить filesystem и границы полномочий](packets/A06-05.md).
+- **Счётчики:** всего 80; `planned` 45; `in-progress` 0; `done` 35; `blocked` 0.
+
 
 
 - **Локальная модель:** `ornith-1.5-35b-a3b` в LM Studio (Q4_K_M, ctx 33024, hybrid GPU/CPU offload — подтверждена в [A03-03](experiments/A03-03/profile.md), проверена в [A03-04](experiments/A03-04/result.md)).
@@ -87,7 +88,7 @@
 |---|---|---|---|
 | [A06-01 — Проверить границы модулей и источники правил](packets/A06-01.md) | A02-10 | done | [CODE-005, CODE-006, PROC-002: pass; результат и handoff](experiments/A06-01/result.md) |
 | [A06-02 — Проверить установку, пакет и pin/lock/hash](packets/A06-02.md) | A06-01 | done | [SPEC-006, PROC-001, PROC-003: pass; результат и handoff](experiments/A06-02/result.md) |
-| [A06-03 — Проверить upgrade и восстановление записи](packets/A06-03.md) | A06-02 | planned | — |
+| [A06-03 — Проверить upgrade и восстановление записи](packets/A06-03.md) | A06-02 | done | [SPEC-006, PROC-001, PROC-003: pass; результат и handoff](experiments/A06-03/result.md) |
 | [A06-04 — Проверить archive после прерывания](packets/A06-04.md) | A06-01 | planned | — |
 | [A06-05 — Проверить filesystem и границы полномочий](packets/A06-05.md) | A06-02 | planned | — |
 
