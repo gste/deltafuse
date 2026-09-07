@@ -393,7 +393,7 @@ def setup_product(case_id: str, repeat: int) -> Path:
     elif case_id == "S07":
         seed_s07_product(product)
     else:
-        # S02/S04 calibration and S05/S06 holdout: live security.ratelimit + code.
+        # S02/S04 calibration and S05/S06/S08a holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
     intake_src = CASES / case_id / "input.md"
     dest = product / "docs" / "intake" / f"{case_id}.md"
@@ -1131,7 +1131,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")

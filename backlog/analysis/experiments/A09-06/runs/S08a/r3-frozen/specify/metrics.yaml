@@ -1,0 +1,79 @@
+case: S08a
+repeat: 3
+tag: frozen
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 14783
+  ttft_s: 19.967664299998432
+  elapsed_s: 48.78616099996725
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: 'Expecting '','' delimiter: line 1 column 2678 (char 2677)'
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4892
+    vram_total_mib: 8188
+    gpu_util_pct: 1
+  gpu_after:
+    vram_used_mib: 4892
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 14875
+  ttft_s: 16.410243000020273
+  elapsed_s: 45.19725590001326
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: 'Expecting '','' delimiter: line 1 column 2674 (char 2673)'
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4892
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  gpu_after:
+    vram_used_mib: 4892
+    vram_total_mib: 8188
+    gpu_util_pct: 39
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 14875
+  ttft_s: 16.453724600025453
+  elapsed_s: 47.29240740003297
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-refactor/coverage.yaml
+  model_status: blocked-on-decision
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4892
+    vram_total_mib: 8188
+    gpu_util_pct: 39
+  gpu_after:
+    vram_used_mib: 4894
+    vram_total_mib: 8188
+    gpu_util_pct: 38
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

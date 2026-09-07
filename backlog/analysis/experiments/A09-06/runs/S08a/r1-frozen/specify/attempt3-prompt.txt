@@ -1,0 +1,497 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: specify-change
+description: Apply one analyzed DeltaFuse slice to the normative product specification, or prove the accepted specification is unchanged. Use after analysis and Decision convergence, before task decomposition.
+---
+
+# Specify Change
+
+Establish the normative state from which tasks may be derived.
+
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one analyzed slice, its typed delta, exact affected spec modules, accepted related Decisions/catalog delta, and only necessary neighboring requirements. Do not read the whole codebase or unrelated Changes.
+
+## Procedure
+
+1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md` using `ADDED`, `MODIFIED`, and `REMOVED` with stable requirement/scenario IDs.
+2. Edit only declared specification files and requirements. Keep the live spec imperative and free of change-log prose.
+3. Apply an accepted capability catalog delta when required.
+4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into `docs/spec/**`.
+5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
+6. Update coverage and slice/Change status. Present normative edits for the human specification gate.
+
+Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze-change`.
+
+## Gate
+
+The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
+
+Recommend `/decompose-change <change-id> [slice-id]`.
+
+
+----- USER -----
+
+Phase: specify
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'specify'
+Gate to satisfy after this call: specified
+Previous attempt failed validation:
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/change.yaml ===
+schema_version: 2
+id: CHG-001-ratelimit-refactor
+title: Refactor security.ratelimit module with backend abstraction and dependency injection
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: refactor
+risk: medium
+source:
+  request: docs/intake/S08a.md
+  intake_refs:
+    - docs/intake/S08a.md
+deltas: []
+slices: []
+decisions: []
+tasks: []
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/coverage.yaml ===
+change: CHG-001-ratelimit-refactor
+claims:
+  CR-001:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-002:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-003:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-004:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-005:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-006:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-007:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-008:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-009:
+    slice: SLICE-01
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/request.md ===
+# Change Request: Refactor security.ratelimit module
+
+## Summary
+
+Refactor the existing `security.ratelimit` module to introduce a backend
+abstraction and dependency injection, without changing external behavior. No
+new features are to be added. The product specification
+`docs/spec/security/ratelimit.md` is not to be modified because the external
+contract is preserved.
+
+## Claims
+
+### CR-001 — observation
+The module currently exposes a `RateLimiter` class backed by an in-memory
+implementation. This is a description of the current state as reported by the
+requester; the source code was not read during intake.
+
+### CR-002 — expectation
+A common interface `RateLimiterBackend` (abstract class) should be extracted
+with methods `init_key`, `consume`, and `get_balance`.
+
+### CR-003 — expectation
+The current in-memory implementation should be moved into a class
+`InMemoryBackend` that implements `RateLimiterBackend`.
+
+### CR-004 — expectation
+The main `RateLimiter` class should accept a backend via dependency injection
+in its constructor.
+
+### CR-005 — expectation
+Argument validation currently performed in the backend should be moved into
+`RateLimiter` to provide a single validation point.
+
+### CR-006 — constraint
+All existing tests must pass unchanged, except for import paths if they change.
+
+### CR-007 — constraint
+No new functionality is to be added.
+
+### CR-008 — constraint
+The specification `docs/spec/security/ratelimit.md` must not be modified.
+
+### CR-009 — hypothesis
+The refactor is expected to be behavior-preserving; conformance with the
+external contract should be verified by the existing test suite passing.
+
+## Unknowns
+
+- Exact current location and import paths of `security.ratelimit` are not
+  confirmed (source not read during intake).
+- The precise shape of the existing in-memory backend and its validation logic
+  is not yet known.
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/routing.yaml ===
+change: CHG-001-ratelimit-refactor
+claims:
+  CR-001:
+    summary: Current RateLimiter backed by in-memory implementation
+    primary_capability: ratelimit
+    confidence: low
+  CR-002:
+    summary: Extract RateLimiterBackend abstract interface
+    primary_capability: ratelimit
+    confidence: medium
+  CR-003:
+    summary: Move in-memory impl into InMemoryBackend
+    primary_capability: ratelimit
+    confidence: medium
+  CR-004:
+    summary: RateLimiter accepts backend via dependency injection
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    confidence: medium
+  CR-005:
+    summary: Move argument validation into RateLimiter
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    confidence: medium
+  CR-006:
+    summary: Existing tests must pass unchanged except import paths
+    primary_capability: ratelimit
+    related_capabilities:
+      - testing
+    policies:
+      - test-integrity
+    confidence: medium
+  CR-007:
+    summary: No new functionality added
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    policies:
+      - scope-discipline
+    confidence: medium
+  CR-008:
+    summary: Specification docs/spec/security/ratelimit.md must not be modified
+    primary_capability: ratelimit
+    related_capabilities:
+      - specification
+    policies:
+      - spec-immutability
+    confidence: high
+  CR-009:
+    summary: Refactor expected to be behavior-preserving
+    primary_capability: ratelimit
+    related_capabilities:
+      - testing
+    confidence: medium
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-ratelimit-refactor
+title: Extract backend abstraction and inject into RateLimiter
+status: analyzing
+primary_capability: ratelimit
+related_capabilities:
+  - architecture
+  - testing
+policies:
+  - test-integrity
+  - scope-discipline
+  - spec-immutability
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+  - CR-007
+  - CR-008
+  - CR-009
+---
+
+## Scope
+
+In scope: refactor `security.ratelimit` (code root `src/ratelimit`) into a
+`RateLimiterBackend` abstract interface with `init_key`, `consume`,
+`get_balance`; move the in-memory implementation into `InMemoryBackend`;
+inject the backend into `RateLimiter`'s constructor; move argument validation
+into `RateLimiter`; keep all existing tests passing (import paths may change).
+
+Out of scope: any new feature, behavior change, or edit to
+`docs/spec/security/ratelimit.md`.
+
+## Delta projection
+
+- specification: none (REQ-RL-01..04 unchanged; external contract preserved).
+- catalog: none.
+- Decisions: none material beyond mechanical extraction.
+- tasks: extraction, injection, validation move, test-path updates.
+- tests: none authored; existing suite must pass unchanged except imports.
+- implementation: refactor only; behavior-preserving.
+- evidence: existing test suite green after refactor.
+
+## Risks
+
+- Import-path drift breaking tests if module layout changes; mitigate by
+  updating imports per CR-006.
+- Validation move must not alter observable behavior (CR-005, CR-009).
+
+## Context budget
+
+max_tokens: 4000, max_files: 12.
+
+
+=== FILE docs/changes/CHG-001-ratelimit-refactor/spec-delta.md ===
+# Specification Delta — CHG-001-ratelimit-refactor
+
+status: accepted
+change: CHG-001-ratelimit-refactor
+slices:
+  - SLICE-01
+
+## Summary
+
+`requirement_delta: none`. The refactor is behavior-preserving; the external
+token-bucket contract is unchanged. No normative spec text is added, modified,
+or removed.
+
+## Evidence of sufficiency
+
+The existing accepted specification fully covers the observable contract the
+refactor must preserve:
+
+- `docs/spec/security/ratelimit.md` REQ-RL-01 (capacity/refill), REQ-RL-02
+  (consume), REQ-RL-03 (unknown keys), REQ-RL-04 (is_blocked) remain the
+  normative external contract. Internal module layout (`RateLimiter`,
+  `RateLimiterBackend`, `InMemoryBackend`, validation location) is not part of
+  the external contract and is therefore out of scope for the spec.
+
+No behavioral, contract, policy, or invariant change is introduced by
+SLICE-01; the spec requires no edit.
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/spec-delta.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/spec-delta.schema.yaml
+title: DeltaFuse Specification Delta frontmatter
+type: object
+additionalProperties: false
+required: [change, status]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  status:
+    enum: [proposed, accepted, rejected, superseded]
+  slices:
+    type: array
+    items:
+      type: string
+      pattern: '^SLICE-[0-9]{2,}$'
+  added:
+    type: array
+    items:
+      type: string
+  modified:
+    type: array
+    items:
+      type: string
+  removed:
+    type: array
+    items:
+      type: string

@@ -1,0 +1,112 @@
+change: CHG-001-ratelimit-refactor
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-007:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-008:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-009:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-010:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
