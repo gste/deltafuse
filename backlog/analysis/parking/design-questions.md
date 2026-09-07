@@ -82,6 +82,21 @@
 
 **Не делать до A12-04.** Не ослаблять Implement в A09 holdout и не добавлять S08 extras в frozen prompts.
 
+## Q-006 — Operational files вне Specify/Implement
+
+- **Дата:** 2026-09-07
+- **Источник:** [A09-08](../packets/A09-08.md) holdout S08c
+- **Критерии:** `PROC-003`, `SPEC-006`, `CODE-002`
+- **Статус:** `parked`
+
+**Вопрос.** Где в lifecycle писать `deploy/`, `monitoring/`, `docs/ops/` при `spec_change_expected: false` и `code_change_expected: false`, если Specify закрывает только `spec-delta`/`docs/spec/**`, а frozen Implement требует `src/ratelimit/limiter.py`?
+
+**Наблюдение.** S08c 0/3 не обновили hostname/port/log/health/runbook. r3 Specify FSM pass с `requirement_delta: none` ([F-010](../../findings/F-010.md)), Decompose на schema `TASK-NNN`. Spec и код не тронуты. Routing без `type: operational`.
+
+**Черновик направления.** Маршрут ops: артефакты вне spec/src как allowed_paths задачи без Red/Green кода; или отдельный skill/verify для ops-файлов. Связано с Q-005.
+
+**Не делать до A12-04.** Не учить Specify писать deploy YAML в A09.
+
 ## Уже закрыто findings, не дублировать здесь
 
 Исправления контракта после доказательств: [F-002](../../findings/F-002.md) PHASE_CONTRACTS, [F-003](../../findings/F-003.md) эвристика, [F-008](../../findings/F-008.md) extractor `CR-*`, [F-009](../../findings/F-009.md) фальшивый Red. Их приоритет — A12-03 по типу finding, не этот список.

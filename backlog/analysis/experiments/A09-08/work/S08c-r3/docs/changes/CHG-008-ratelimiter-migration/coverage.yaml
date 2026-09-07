@@ -1,0 +1,43 @@
+change: CHG-008-ratelimiter-migration
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-001.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-002:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-002.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-003:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-002.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-004:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-003.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-005:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-004.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed

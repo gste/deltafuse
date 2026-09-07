@@ -1,0 +1,6 @@
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-002-update-deployment-config.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-002-update-deployment-config.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-005 -> tasks -> 0] 'docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-004-update-runbook.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-001 -> tasks -> 0] 'docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-001-locate-deployment-config.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'docs/changes/CHG-008-ratelimiter-migration/tasks/TASK-003-update-health-check-url.md' does not match '^TASK-[0-9]{3,}$'

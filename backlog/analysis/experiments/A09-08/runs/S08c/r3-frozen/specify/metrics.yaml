@@ -1,0 +1,82 @@
+case: S08c
+repeat: 3
+tag: frozen
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 12931
+  ttft_s: 17.613739599997643
+  elapsed_s: 19.796495800022967
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written: []
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5466
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  gpu_after:
+    vram_used_mib: 5461
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 13008
+  ttft_s: 14.267620200000238
+  elapsed_s: 38.859081299975514
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-008-ratelimiter-migration/spec-delta.md
+  - docs/changes/CHG-008-ratelimiter-migration/coverage.yaml
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5461
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  gpu_after:
+    vram_used_mib: 5495
+    vram_total_mib: 8188
+    gpu_util_pct: 36
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 14039
+  ttft_s: 17.95014919998357
+  elapsed_s: 40.23501840000972
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-008-ratelimiter-migration/spec-delta.md
+  - docs/changes/CHG-008-ratelimiter-migration/coverage.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5495
+    vram_total_mib: 8188
+    gpu_util_pct: 36
+  gpu_after:
+    vram_used_mib: 5542
+    vram_total_mib: 8188
+    gpu_util_pct: 40
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

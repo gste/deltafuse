@@ -1,0 +1,9 @@
+outcome: fail
+independent_gate:
+  specified: spec-delta missing/invalid frontmatter; coverage extra key spec_delta
+  ops_updated: false
+  spec_unchanged: true
+  src_unchanged: true
+  tests_unchanged: true
+hidden_suite: not-run
+attempts: 3

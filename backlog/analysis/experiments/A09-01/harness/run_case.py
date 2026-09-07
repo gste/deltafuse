@@ -289,6 +289,29 @@ def seed_s08b_product(product: Path) -> None:
     )
 
 
+def seed_s08c_product(product: Path) -> None:
+    """Ops holdout: live limiter plus current deploy/monitor/runbook named in intake."""
+    seed_ratelimit_product(product)
+    (product / "deploy").mkdir(parents=True, exist_ok=True)
+    (product / "monitoring").mkdir(parents=True, exist_ok=True)
+    (product / "docs" / "ops").mkdir(parents=True, exist_ok=True)
+    (product / "deploy" / "config.yaml").write_text(
+        "hostname: limiter-prod-01\nport: 8080\nlog_path: /var/log/ratelimiter/\n",
+        encoding="utf-8",
+    )
+    (product / "monitoring" / "health_checks.yaml").write_text(
+        "url: http://limiter-prod-01:8080/health\n",
+        encoding="utf-8",
+    )
+    (product / "docs" / "ops" / "runbook.md").write_text(
+        "# Rate Limiter runbook\n\n"
+        "Service: limiter-prod-01:8080\n"
+        "Logs: /var/log/ratelimiter/\n"
+        "Health: http://limiter-prod-01:8080/health\n",
+        encoding="utf-8",
+    )
+
+
 def seed_s03_product(product: Path) -> None:
     """Correct spec, buggy limiter: int() truncates fractional refill."""
     seed_ratelimit_product(product)
@@ -407,6 +430,8 @@ def setup_product(case_id: str, repeat: int) -> Path:
         seed_s07_product(product)
     elif case_id == "S08b":
         seed_s08b_product(product)
+    elif case_id == "S08c":
+        seed_s08c_product(product)
     else:
         # S02/S04 calibration and S05/S06/S08a holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
@@ -1146,7 +1171,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a", "S08b"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a", "S08b", "S08c"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")
