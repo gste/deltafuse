@@ -1,0 +1,6 @@
+outcome: pass
+independent_gate:
+  coverage_schema: ok
+  claims_mapped: CR-001..CR-006 to SLICE-01
+hidden_suite: not-run
+attempts: 1

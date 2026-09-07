@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-07.
 
-- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-10](packets/A09-10.md) или без LLM [A11-01](packets/A11-01.md).
-- **Текущая задача аудита:** [A09-10 — S10 holdout](packets/A09-10.md). Prompts A09-01 заморожены; A09-02..A09-09 не тюнить.
-- **Следующая задача:** [A09-10](packets/A09-10.md); параллельно [A11-01](packets/A11-01.md).
-- **Счётчики:** всего 84; `planned` 16; `in-progress` 0; `done` 68; `blocked` 0.
+- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-11](packets/A09-11.md) или без LLM [A11-01](packets/A11-01.md).
+- **Текущая задача аудита:** [A09-11 — S11 holdout](packets/A09-11.md). Prompts A09-01 заморожены; A09-02..A09-10 не тюнить.
+- **Следующая задача:** [A09-11](packets/A09-11.md); параллельно [A11-01](packets/A11-01.md).
+- **Счётчики:** всего 84; `planned` 15; `in-progress` 0; `done` 69; `blocked` 0.
 
 
 
@@ -142,7 +142,7 @@
 | [A09-07 — Измерить локальное исполнение S08b: Docs-only](packets/A09-07.md) | A09-01 | done | [fail; Specify docs extras; Decompose/Implement](experiments/A09-07/result.md) |
 | [A09-08 — Измерить локальное исполнение S08c: Operational change](packets/A09-08.md) | A09-01 | done | [fail; ops unchanged; Specify/Decompose](experiments/A09-08/result.md) |
 | [A09-09 — Измерить локальное исполнение S09: Терминальные исходы](packets/A09-09.md) | A09-01 | done | [fail; r1 duplicate; r2/r3 no terminal](experiments/A09-09/result.md) |
-| [A09-10 — Измерить локальное исполнение S10: Прерывание и повторная нарезка](packets/A09-10.md) | A09-01 | planned | — |
+| [A09-10 — Измерить локальное исполнение S10: Прерывание и повторная нарезка](packets/A09-10.md) | A09-01 | done | [fail; Specify 3/3; interrupt not-run](experiments/A09-10/result.md) |
 | [A09-11 — Измерить локальное исполнение S11: Два Change и удаление функции](packets/A09-11.md) | A09-01 | planned | — |
 | [A09-12 — Измерить локальное исполнение S12: Неверное evidence и недоверенный вход](packets/A09-12.md) | A09-01 | planned | — |
 | [A09-13 — Свести измерения локального профиля](packets/A09-13.md) | A09-01, A09-02, A09-03, A09-04, A09-05, A09-06, A09-07, A09-08, A09-09, A09-10, A09-11, A09-12 | planned | — |

@@ -1,0 +1,8 @@
+outcome: pass
+independent_gate:
+  change_id: CHG-001-ratelimit-consume-history
+  claims: CR-001..CR-008 (model CR-003 is get_history)
+  json_status: continue
+hidden_suite: not-run
+interrupt_reached: false
+attempts: 1

@@ -1,0 +1,87 @@
+case: S10
+repeat: 2
+tag: frozen
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 13159
+  ttft_s: 19.181780000042636
+  elapsed_s: 84.97254220000468
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-consume-history/change.yaml
+  - docs/changes/CHG-001-ratelimit-consume-history/coverage.yaml
+  - docs/changes/CHG-001-ratelimit-consume-history/slices/SLICE-01.md
+  - docs/spec/security/ratelimit.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5517
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  gpu_after:
+    vram_used_mib: 5459
+    vram_total_mib: 8188
+    gpu_util_pct: 38
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 14158
+  ttft_s: 16.97880250000162
+  elapsed_s: 62.13622080005007
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-consume-history/change.yaml
+  - docs/changes/CHG-001-ratelimit-consume-history/spec-delta.md
+  - docs/changes/CHG-001-ratelimit-consume-history/coverage.yaml
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5459
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  gpu_after:
+    vram_used_mib: 5466
+    vram_total_mib: 8188
+    gpu_util_pct: 33
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 15839
+  ttft_s: 18.950149999989662
+  elapsed_s: 46.7932390999631
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-consume-history/change.yaml
+  - docs/changes/CHG-001-ratelimit-consume-history/coverage.yaml
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5466
+    vram_total_mib: 8188
+    gpu_util_pct: 33
+  gpu_after:
+    vram_used_mib: 5473
+    vram_total_mib: 8188
+    gpu_util_pct: 40
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

@@ -1,0 +1,7 @@
+outcome: pass
+independent_gate:
+  slice_files: 1
+  slice_id: SLICE-01
+  claims: CR-002..CR-006
+hidden_suite: not-run
+attempts: 1
