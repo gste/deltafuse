@@ -21,7 +21,8 @@ from typing import Any
 import yaml
 
 FRAMEWORK = Path(__file__).resolve().parents[5]
-EXPERIMENT = Path(__file__).resolve().parents[1]
+_EXPERIMENT_DIR = os.environ.get("A09_EXPERIMENT_DIR")
+EXPERIMENT = Path(_EXPERIMENT_DIR) if _EXPERIMENT_DIR else Path(__file__).resolve().parents[1]
 CASES = FRAMEWORK / "backlog" / "analysis" / "experiments" / "cases"
 SKILLS = {
     "intake": FRAMEWORK / "process" / "skills" / "intake" / "SKILL.md",
@@ -264,6 +265,17 @@ def seed_ratelimit_product(product: Path) -> None:
     )
 
 
+def seed_s01_product(product: Path) -> None:
+    """Empty holdout product: installer catalog only, no limiter spec/code."""
+    (product / "src").mkdir(parents=True, exist_ok=True)
+    (product / "tests").mkdir(parents=True, exist_ok=True)
+    (product / "pyproject.toml").write_text(
+        "[project]\nname='empty-product'\nversion='0.0.1'\n"
+        "[tool.pytest.ini_options]\npythonpath=['src']\n",
+        encoding="utf-8",
+    )
+
+
 def seed_s03_product(product: Path) -> None:
     """Correct spec, buggy limiter: int() truncates fractional refill."""
     seed_ratelimit_product(product)
@@ -317,7 +329,9 @@ def setup_product(case_id: str, repeat: int) -> Path:
     from deltafuse.core.installer import install
 
     install(target_dir=product, framework_root=FRAMEWORK)
-    if case_id == "S03":
+    if case_id == "S01":
+        seed_s01_product(product)
+    elif case_id == "S03":
         seed_s03_product(product)
     else:
         seed_ratelimit_product(product)
@@ -463,7 +477,7 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "Body: ADDED/MODIFIED/REMOVED none — specification unchanged. "
                 "Use status continue. Keep content short."
             )
-        else:
+        elif case_id == "S02":
             parts.append(
                 "Write two files[] objects (separate objects, keys path and content): "
                 "(1) docs/changes/<id>/spec-delta.md with YAML frontmatter matching spec-delta.schema.yaml "
@@ -489,7 +503,7 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "Optionally update coverage.yaml: claims.*.tasks must be ids like TASK-001, not file paths. "
                 "Use status continue. Do not write code or spec."
             )
-        else:
+        elif case_id == "S02":
             parts.append(
                 "Write 1 or 2 tasks as separate files[] objects (path + content): "
                 "docs/changes/<id>/tasks/TASK-001-<slug>.md (and optional TASK-002). "
@@ -511,7 +525,7 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "after ~2s total can consume 1. Public API only; no private _fields. "
                 "Do not edit src/ or docs/spec/. Do not write evidence YAML. Use status continue."
             )
-        elif TASK == "TASK-002":
+        elif case_id == "S02" and TASK == "TASK-002":
             parts.append(
                 "Write ONLY tests/test_limiter.py. Keep existing tests. "
                 "Add the smallest test for TASK-002 using only the public API "
@@ -523,7 +537,7 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "not a reason to manufacture Red. "
                 "Do not edit src/ratelimit/limiter.py. Do not write evidence YAML. Use status continue."
             )
-        else:
+        elif case_id == "S02":
             parts.append(
                 "Write ONLY tests/test_limiter.py (path + content). Keep the existing baseline test. "
                 "Add the smallest failing test for TASK-001: penalty_seconds > 0, failed consume locks the key, "
@@ -537,7 +551,7 @@ def build_messages(phase: str, product: Path, case_id: str, extra_error: str | N
                 "Do not write evidence YAML. Fix refill so elapsed * refill_rate is not truncated to int; "
                 "keep fractional token balance. Use status continue."
             )
-        else:
+        elif case_id == "S02":
             parts.append(
                 "Write ONLY src/ratelimit/limiter.py. Do not edit tests. Do not write evidence YAML. "
                 "Add optional penalty_seconds=0.0; on failed consume when penalty_seconds > 0 lock the key "
@@ -1057,7 +1071,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S02", "S03", "S04"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")

@@ -1,0 +1,7 @@
+outcome: fail
+independent_gate:
+  specified: change.yaml deltas/slices schema
+live_spec_ratelimit: false
+oracle_spec_files: fail
+hidden_suite: not-run
+attempts: 3

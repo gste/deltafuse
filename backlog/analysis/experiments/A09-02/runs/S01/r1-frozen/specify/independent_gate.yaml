@@ -1,0 +1,8 @@
+outcome: fail
+independent_gate:
+  specified: missing spec-delta / invalid change.yaml slices
+live_spec_ratelimit: false
+catalog_valid: false
+oracle_spec_files: fail
+hidden_suite: not-run
+attempts: 3

@@ -1,0 +1,27 @@
+schema_version: 2
+id: CHG-001-token-bucket-limiter
+title: Token Bucket Rate Limiter service
+status: decomposed
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S01.md
+  intake_refs:
+    - docs/intake/S01.md
+deltas: []
+slices:
+  - SLICE-01
+decisions: []
+tasks:
+  - id: TASK-001-token-bucket-core
+    slice: SLICE-01
+    depends_on: []
+    requirement_delta: none
+  - id: TASK-002-coverage-and-metadata
+    slice: SLICE-01
+    depends_on:
+      - TASK-001-token-bucket-core
+    requirement_delta: none

@@ -1,0 +1,32 @@
+revision: "9b8371a"
+task_id: "A09-02"
+packet: "backlog/analysis/packets/A09-02.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-004"
+  - "CODE-001"
+  - "TEST-001"
+  - "TEST-004"
+  - "PROC-004"
+status: "done"
+notes:
+  - "Do not retune prompts from S01 outcomes"
+  - "Oracle not in ornith prompt"
+  - "A09-02 closed 2026-09-07: verdict fail; 0/3 reached Implement; F-010 vacuous specified gate"
+inputs:
+  - "backlog/analysis/packets/A09-02.md"
+  - "backlog/analysis/experiments/protocol.md:holdout"
+  - "backlog/analysis/experiments/cases/S01/manifest.yaml"
+  - "backlog/analysis/experiments/A08-03/result.md"
+  - "backlog/analysis/experiments/local-runtime/README.md"
+method: "Holdout S01 on frozen A09-01 harness (WRAPPER, routing-first Analyze, CR-NNN). No S02/S03/S04 case extras. Oracle/hidden_suite not in ornith prompt. Empty product seed (installer catalog only)."
+profile:
+  model: "ornith-1.5-35b-a3b"
+  endpoint: "http://127.0.0.1:1240/v1/chat/completions"
+  temperature: 0.1
+  top_p: 0.9
+  max_output_tokens: 2048
+  runtime_doc: "backlog/analysis/experiments/local-runtime/README.md"
+outputs:
+  runs: "backlog/analysis/experiments/A09-02/runs/"
+  result: "backlog/analysis/experiments/A09-02/result.md"
