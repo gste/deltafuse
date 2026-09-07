@@ -1,0 +1,5 @@
+change.yaml: [status] 'analyze' is not one of ['normalized', 'analyzing', 'blocked-on-decision', 'analyzed', 'specification-proposed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verifying', 'converged', 'archived', 'rejected', 'duplicate', 'not-reproduced', 'superseded']
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+change.yaml: invalid status 'analyze'
+Gate specified: spec-delta.md is missing
+Gate specified: Change 'CHG-001-audit-log-alerts' is blocked-on-decision: Decision 'DEC-20260905-001.md' for Change 'CHG-001-audit-log-alerts' is in 'proposed' status

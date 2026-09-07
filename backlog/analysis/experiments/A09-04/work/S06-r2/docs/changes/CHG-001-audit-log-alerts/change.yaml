@@ -1,0 +1,18 @@
+schema_version: 2
+id: CHG-001-audit-log-alerts
+title: Audit log and alerting on rejection thresholds
+status: analyze
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: medium
+source:
+  request: docs/intake/S06.md
+  intake_refs:
+    - docs/intake/S06.md
+deltas: []
+slices:
+  - SLICE-01
+decisions: []
+tasks: []

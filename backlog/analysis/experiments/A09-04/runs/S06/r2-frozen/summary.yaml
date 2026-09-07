@@ -1,0 +1,19 @@
+case: S06
+repeat: 2
+tag: frozen
+phases:
+- phase: intake
+  outcome: pass
+  attempts: 1
+- phase: analyze-routing
+  outcome: pass
+  attempts: 1
+- phase: analyze-slices
+  outcome: pass
+  attempts: 1
+- phase: analyze-coverage
+  outcome: pass
+  attempts: 1
+- phase: specify
+  outcome: blocked-on-decision
+  attempts: 2
