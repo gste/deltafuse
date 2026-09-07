@@ -1,11 +1,11 @@
 # Очередь анализа DeltaFuse
 
-Дата обновления: 2026-09-06.
+Дата обновления: 2026-09-07.
 
-- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-03](packets/A09-03.md) или без LLM [A11-01](packets/A11-01.md).
-- **Текущая задача аудита:** [A09-03 — S05 holdout](packets/A09-03.md). Prompts A09-01 заморожены; A09-02 не тюнить.
-- **Следующая задача:** [A09-04](packets/A09-04.md) после A09-03; параллельно [A11-01](packets/A11-01.md).
-- **Счётчики:** всего 84; `planned` 23; `in-progress` 0; `done` 61; `blocked` 0.
+- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-04](packets/A09-04.md) или без LLM [A11-01](packets/A11-01.md).
+- **Текущая задача аудита:** [A09-04 — S06 holdout](packets/A09-04.md). Prompts A09-01 заморожены; A09-02/A09-03 не тюнить.
+- **Следующая задача:** [A09-05](packets/A09-05.md) после A09-04; параллельно [A11-01](packets/A11-01.md).
+- **Счётчики:** всего 84; `planned` 22; `in-progress` 0; `done` 62; `blocked` 0.
 
 
 
@@ -135,7 +135,7 @@
 | [A09-01b — Калибровка ornith на S03](packets/A09-01b.md) | A09-01a | done | [pass; r1–r3 Red→Green, spec unchanged](experiments/A09-01/result.md) |
 | [A09-01c — Калибровка ornith на S04](packets/A09-01c.md) | A09-01b | done | [pass; r1–r3 blocked-on-decision, no Specify](experiments/A09-01/result.md) |
 | [A09-02 — Измерить локальное исполнение S01: Пустой продукт и новая capability](packets/A09-02.md) | A09-01 | done | [fail; Specify/Decompose; F-010](experiments/A09-02/result.md) |
-| [A09-03 — Измерить локальное исполнение S05: Несколько capabilities и policy](packets/A09-03.md) | A09-01 | planned | — |
+| [A09-03 — Измерить локальное исполнение S05: Несколько capabilities и policy](packets/A09-03.md) | A09-01 | done | [fail; Specify/Decompose; F-010](experiments/A09-03/result.md) |
 | [A09-04 — Измерить локальное исполнение S06: Длинный raw input](packets/A09-04.md) | A09-01 | planned | — |
 | [A09-05 — Измерить локальное исполнение S07: Большой каталог и capability](packets/A09-05.md) | A09-01 | planned | — |
 | [A09-06 — Измерить локальное исполнение S08a: Refactoring](packets/A09-06.md) | A09-01 | planned | — |

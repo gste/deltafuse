@@ -1,0 +1,12 @@
+outcome: fail
+independent_gate:
+  specified: change.yaml slices as strings; spec-delta.md missing YAML --- frontmatter
+live_spec_usage_stats: true
+live_spec_rate_policy: false
+catalog_has_usage_stats: true
+catalog_has_rate_policy: false
+oracle_spec_files: fail
+slice_files: 1
+hidden_suite: not-run
+note: Frozen Analyze extra writes only SLICE-01; oracle wants >=2 slices.
+attempts: 3

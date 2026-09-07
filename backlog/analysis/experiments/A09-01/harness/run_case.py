@@ -334,6 +334,7 @@ def setup_product(case_id: str, repeat: int) -> Path:
     elif case_id == "S03":
         seed_s03_product(product)
     else:
+        # S02/S04 calibration and S05 holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
     intake_src = CASES / case_id / "input.md"
     dest = product / "docs" / "intake" / f"{case_id}.md"
@@ -1071,7 +1072,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")
@@ -1109,8 +1110,18 @@ def main() -> int:
         by_name = {row.get("phase"): row for row in prev_phases if row.get("phase")}
         for row in summary:
             by_name[row.get("phase")] = row
-        order = [p for p in PHASE_ORDER if p in by_name]
-        extra = [p for p in by_name if p not in PHASE_ORDER]
+        order: list[str] = []
+        for p in PHASE_ORDER:
+            if p == "analyze":
+                for focus in ("routing", "slices", "coverage", "analysis"):
+                    name = f"analyze-{focus}"
+                    if name in by_name:
+                        order.append(name)
+            elif p in {"target", "implement"}:
+                order.extend(sorted(n for n in by_name if n == p or n.startswith(p + "-")))
+            elif p in by_name:
+                order.append(p)
+        extra = [p for p in by_name if p not in order]
         merged = [by_name[p] for p in order + extra]
     out.write_text(
         yaml.safe_dump({"case": args.case, "repeat": args.repeat, "tag": args.tag or None, "phases": merged}, sort_keys=False),

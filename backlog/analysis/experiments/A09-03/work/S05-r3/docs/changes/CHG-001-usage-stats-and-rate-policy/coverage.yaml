@@ -1,0 +1,80 @@
+change: CHG-001-usage-stats-and-rate-policy
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-004:
+    slice: SLICE-02
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: blocked-on-decision
+  CR-005:
+    slice: SLICE-02
+    tasks: []
+    spec_refs: []
+    status: blocked-on-decision
+  CR-006:
+    slice: SLICE-02
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: blocked-on-decision
+  CR-007:
+    slice: SLICE-02
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: blocked-on-decision
+  CR-008:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-009:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-010:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-011:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-012:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+    status: specified
+  CR-013:
+    slice: SLICE-02
+    tasks: []
+    spec_refs: []
+    status: blocked-on-decision

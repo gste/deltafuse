@@ -1,0 +1,48 @@
+schema_version: 2
+id: CHG-001-usage-stats-and-rate-policy
+title: Add usage stats capability and rate policy auto-block to Rate Limiter
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S05.md
+  intake_refs:
+    - docs/intake/S05.md
+analysis:
+  routing: null
+  summary: null
+deltas: []
+slices:
+  - id: SLICE-01
+    title: Usage stats capability (monitoring.usage_stats)
+    status: specified
+    primary_capability: monitoring.usage_stats
+    spec_refs:
+      - docs/spec/monitoring/usage_stats.md
+      - docs/spec/security/ratelimit.md
+    claims:
+      - CR-001
+      - CR-002
+      - CR-003
+      - CR-008
+      - CR-009
+      - CR-010
+      - CR-011
+      - CR-012
+  - id: SLICE-02
+    title: Rate policy auto-block (security.rate_policy)
+    status: blocked-on-decision
+    primary_capability: security.rate_policy
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    claims:
+      - CR-004
+      - CR-005
+      - CR-006
+      - CR-007
+decisions: []
+tasks: []
+verification: null

@@ -1,0 +1,28 @@
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+  monitoring:
+    summary: Usage and performance monitoring
+    capabilities:
+      usage_stats:
+        summary: Per-key usage statistics for the Rate Limiter
+        spec:
+        - docs/spec/monitoring/usage_stats.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting

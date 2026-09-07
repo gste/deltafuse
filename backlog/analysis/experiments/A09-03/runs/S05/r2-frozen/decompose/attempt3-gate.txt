@@ -1,0 +1,4 @@
+coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'docs/changes/CHG-001-usage-stats-and-rate-policy/tasks/TASK-003.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-001 -> tasks -> 0] 'docs/changes/CHG-001-usage-stats-and-rate-policy/tasks/TASK-001.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-001-usage-stats-and-rate-policy/tasks/TASK-003.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'docs/changes/CHG-001-usage-stats-and-rate-policy/tasks/TASK-002.md' does not match '^TASK-[0-9]{3,}$'
