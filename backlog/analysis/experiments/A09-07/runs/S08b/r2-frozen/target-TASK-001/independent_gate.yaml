@@ -1,0 +1,7 @@
+outcome: already-green
+independent_gate:
+  pytest: pass on seeded limiter (docs-only; no authentic Red expected)
+  red_evidence_written: docs/changes/.../evidence/red/
+  task_allowed_paths: docs/spec only; forbidden src/tests
+hidden_suite: not-run
+attempts: 1

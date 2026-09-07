@@ -276,6 +276,19 @@ def seed_s01_product(product: Path) -> None:
     )
 
 
+def seed_s08b_product(product: Path) -> None:
+    """Docs-only holdout: live limiter plus the refill_rate typo named in intake."""
+    seed_ratelimit_product(product)
+    spec = product / "docs" / "spec" / "security" / "ratelimit.md"
+    spec.write_text(
+        spec.read_text(encoding="utf-8").replace(
+            "refill_rate >= 0.",
+            "refill_rate >= 0 (скокрость пополнения).",
+        ),
+        encoding="utf-8",
+    )
+
+
 def seed_s03_product(product: Path) -> None:
     """Correct spec, buggy limiter: int() truncates fractional refill."""
     seed_ratelimit_product(product)
@@ -392,6 +405,8 @@ def setup_product(case_id: str, repeat: int) -> Path:
         seed_s03_product(product)
     elif case_id == "S07":
         seed_s07_product(product)
+    elif case_id == "S08b":
+        seed_s08b_product(product)
     else:
         # S02/S04 calibration and S05/S06/S08a holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
@@ -1131,7 +1146,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a", "S08b"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")

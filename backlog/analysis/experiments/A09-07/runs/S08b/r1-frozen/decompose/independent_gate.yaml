@@ -1,0 +1,7 @@
+outcome: fail
+independent_gate:
+  decomposed: coverage.claims.*.tasks are file paths not TASK-NNN; change.yaml slices is string not object
+task_count: 4
+src_unchanged: true
+hidden_suite: not-run
+attempts: 3

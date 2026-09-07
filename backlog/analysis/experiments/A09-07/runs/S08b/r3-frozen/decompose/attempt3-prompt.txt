@@ -1,0 +1,701 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: decompose-change
+description: Decompose one specified DeltaFuse slice into dependency-ordered atomic task files inside its Change package. Use after the specification gate; do not use to discover requirements.
+---
+
+# Decompose Change
+
+Create executable work without creating new product law.
+
+Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one specified slice and typed delta, exact accepted spec references, optional `design.md`, capability dependencies, compact code/test index or narrowly selected files, and existing task IDs/dependencies.
+
+Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks.
+
+## Procedure
+
+1. Create `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md` files.
+2. Give each task one verifiable outcome that fits one implementation context.
+3. Include Change/slice IDs, exact requirement/scenario refs, dependencies, test oracle, unchanged behavior, allowed/forbidden paths or symbols, and verification commands.
+4. Order dependencies and update `coverage.yaml` plus task metadata in `change.yaml`.
+5. For an implementation bug, derive tasks from observation, reproduction, exact existing spec refs, oracle, unchanged behavior, and scope with `requirement_delta: none`.
+
+Do not copy normative spec text, hide a design choice inside a task, estimate primarily by lines of code, or modify production code.
+
+## Gate
+
+Every slice requirement is covered by a resolvable task, every task has a test oracle, spec and blocking Decisions are accepted, and scope has not expanded.
+
+Recommend `/target-task <task-path>` for the first ready task.
+
+
+----- USER -----
+
+Phase: decompose
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'decompose'
+Gate to satisfy after this call: decomposed
+Previous attempt failed validation:
+change.yaml: [root] 'decisions' is a required property
+change.yaml: [slices -> 0] 'file' is a required property
+coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-002-usage-examples.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-001-fix-typo.md' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-003-architectural-decisions.md' does not match '^TASK-[0-9]{3,}$'
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/change.yaml ===
+schema_version: 2
+id: CHG-001-doc-s08b
+title: Update Rate Limiter (S08b) documentation
+status: decomposed
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: documentation
+risk: low
+source:
+  request: docs/intake/S08b.md
+  intake_refs:
+    - docs/intake/S08b.md
+analysis:
+  routing: null
+  summary: Update documentation for the security.ratelimit module (docs/spec/security/ratelimit.md) with usage examples, architectural decisions, a typo fix in the refill_rate parameter description, and a CHANGELOG entry. Code and tests are not modified; system behavior is unchanged.
+deltas: []
+slices:
+  - id: SLICE-01
+    title: Update security.ratelimit documentation
+    status: specified
+    claims:
+      - CR-001
+      - CR-002
+      - CR-003
+      - CR-004
+    depends_on: []
+tasks:
+  - docs/changes/CHG-001-doc-s08b/tasks/TASK-001-fix-typo.md
+  - docs/changes/CHG-001-doc-s08b/tasks/TASK-002-usage-examples.md
+  - docs/changes/CHG-001-doc-s08b/tasks/TASK-003-architectural-decisions.md
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/coverage.yaml ===
+change: CHG-001-doc-s08b
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-002:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-doc-s08b/tasks/TASK-002-usage-examples.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-003:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-doc-s08b/tasks/TASK-003-architectural-decisions.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-004:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-doc-s08b/tasks/TASK-001-fix-typo.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: analyzed
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: decomposed
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/request.md ===
+# Request: Update Rate Limiter (S08b) documentation
+
+## Summary
+
+Update the documentation for the `security.ratelimit` module. The change is
+documentation-only: code and tests are not modified and system behavior is
+unchanged.
+
+## Claims
+
+### CR-001 — observation
+The module `security.ratelimit` is documented in `docs/spec/security/ratelimit.md`.
+
+### CR-002 — expectation
+Add a «Usage Examples» section to `docs/spec/security/ratelimit.md` with three
+typical scenarios: initialization, `consume` with validation, and handling of
+`ValueError`.
+
+### CR-003 — expectation
+Add an «Architectural Decisions» section describing the choice of the Token
+Bucket algorithm with justification (reference to RFC 2697 and a comparison with
+Leaky Bucket).
+
+### CR-004 — expectation
+Fix a typo in the description of the `refill_rate` parameter: «скокрость» →
+«скорость».
+
+### CR-005 — expectation
+Update `CHANGELOG.md` with an entry documenting the documentation change.
+
+### CR-006 — constraint
+Code and tests are not modified. System behavior is not changed.
+
+## Unknowns
+
+- Exact location of `CHANGELOG.md` (repository root vs. package directory) is
+  not confirmed.
+- Whether the «Architectural Decisions» section belongs in `docs/spec/
+  security/ratelimit.md` or a separate decisions file is not confirmed.
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/routing.yaml ===
+change: CHG-001-doc-s08b
+claims:
+  CR-001:
+    summary: |-
+      Observation that security.ratelimit is documented in docs/spec/security/ratelimit.md.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: |-
+      Add a Usage Examples section with initialization, consume-with-validation, and ValueError-handling scenarios.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: |-
+      Add an Architectural Decisions section describing the Token Bucket choice with RFC 2697 reference and Leaky Bucket comparison.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: |-
+      Fix the typo скокрость -> скорость in the refill_rate parameter description.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: |-
+      Update CHANGELOG.md with an entry documenting the documentation change.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-006:
+    summary: |-
+      Code and tests are not modified; system behavior is unchanged.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-doc-s08b
+title: Update security.ratelimit documentation
+status: specified
+primary_capability: ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+depends_on: []
+context_budget:
+  max_tokens: 4000
+  max_files: 6
+---
+
+## Scope
+
+In scope: edit `docs/spec/security/ratelimit.md` only — add «Usage Examples»
+(initialization, `consume` with validation, `ValueError` handling), add
+«Architectural Decisions» (Token Bucket with RFC 2697 reference and Leaky
+Bucket comparison), fix the `refill_rate` typo «скокрость» → «скорость».
+
+Out of scope: code, tests, and system behavior (CR-006). CHANGELOG placement
+(CR-005) is deferred to a follow-up slice pending the unknowns in request.md.
+
+## Delta projection
+
+- specification: `docs/spec/security/ratelimit.md` gains two sections and one
+  typo fix; no normative behavior changes.
+- catalog: none.
+- Decisions: none (Architectural Decisions is documentation content, not a
+  product choice awaiting acceptance).
+- tasks: none.
+- tests: none.
+- implementation: none.
+- evidence: none.
+
+## Risks
+
+- CHANGELOG.md location unconfirmed; resolved by deferring CR-005.
+- «Architectural Decisions» placement unconfirmed; resolved by placing it in
+  `ratelimit.md` per CR-003 wording.
+
+## Notes
+
+Single unambiguous documentation slice; unknowns are non-blocking.
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/spec-delta.md ===
+---
+change: CHG-001-doc-s08b
+status: proposed
+slices:
+  - SLICE-01
+---
+
+# Spec Delta — CHG-001-doc-s08b
+
+## MODIFIED
+
+- `docs/spec/security/ratelimit.md` — add «Usage Examples» and «Architectural Decisions» sections; fix `refill_rate` typo «скокрость» → «скорость».
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/tasks/TASK-001-fix-typo.md ===
+---
+id: TASK-001
+change: CHG-001-doc-s08b
+slice: SLICE-01
+kind: documentation
+status: targeting
+depends_on: []
+requirement_delta: none
+spec_refs:
+  - docs/spec/security/ratelimit.md
+allowed_paths:
+  - docs/spec/security/ratelimit.md
+forbidden_paths:
+  - src/
+  - tests/
+---
+
+# TASK-001 — Fix refill_rate typo
+
+## Outcome
+
+The `refill_rate` parameter description in `docs/spec/security/ratelimit.md`
+no longer contains the typo «скокрость»; it reads «скорость».
+
+## Traceability
+
+- Change/slice: CHG-001-doc-s08b / SLICE-01
+- Requirement refs: CR-004 (fix typo «скокрость» → «скорость»)
+- Spec ref: `docs/spec/security/ratelimit.md` (REQ-RL-01 line)
+
+## Steps
+
+1. Open `docs/spec/security/ratelimit.md`.
+2. Locate the phrase «скорость пополнения» currently misspelled as «скокрость».
+3. Replace «скокрость» with «скорость».
+4. Confirm no other occurrences of the misspelling remain.
+
+## Test oracle
+
+```
+grep -n «скокрость» docs/spec/security/ratelimit.md   # expect no match
+grep -n «скорость» docs/spec/security/ratelimit.md    # expect one match
+```
+
+## Unchanged behavior
+
+- No other text in the file is altered.
+- No code, tests, or system behavior change (CR-006).
+
+## Verification
+
+```
+grep -n «скорость» docs/spec/security/ratelimit.md
+```
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/tasks/TASK-002-usage-examples.md ===
+---
+id: TASK-002
+change: CHG-001-doc-s08b
+slice: SLICE-01
+kind: documentation
+status: targeting
+depends_on: []
+requirement_delta: none
+spec_refs:
+  - docs/spec/security/ratelimit.md
+allowed_paths:
+  - docs/spec/security/ratelimit.md
+forbidden_paths:
+  - src/
+  - tests/
+---
+
+# TASK-002 — Add Usage Examples section
+
+## Outcome
+
+`docs/spec/security/ratelimit.md` contains a «Usage Examples» section with the
+three required scenarios (initialization, consume-with-validation, and
+ValueError handling) that match the existing in-file examples.
+
+## Traceability
+
+- Change/slice: CHG-001-doc-s08b / SLICE-01
+- Requirement refs: CR-002 (add «Usage Examples» with initialization,
+  consume-with-validation, and ValueError-handling scenarios)
+- Spec ref: `docs/spec/security/ratelimit.md`
+
+## Steps
+
+1. Open `docs/spec/security/ratelimit.md`.
+2. Verify a «Usage Examples» section already exists with the three scenarios
+   (Initialization, Consume with validation, Handling of ValueError).
+3. Confirm each scenario documents the corresponding behavior:
+   - Initialization rejects `capacity <= 0`.
+   - `consume` returns True and deducts when tokens suffice, False otherwise.
+   - `consume` rejects negative token counts with `ValueError`.
+   - `ValueError` does not modify the token balance.
+4. If any scenario is missing or incomplete, add it consistent with the
+   existing structure and wording.
+
+## Test oracle
+
+```
+grep -n «Usage Examples» docs/spec/security/ratelimit.md   # expect present
+grep -n «Initialization» docs/spec/security/ratelimit.md   # expect present
+grep -n «Consume with validation» docs/spec/security/ratelimit.md  # expect present
+grep -n «Handling of ValueError» docs/spec/security/ratelimit.md  # expect present
+```
+
+## Unchanged behavior
+
+- No normative behavior is introduced; the section documents existing
+  REQ-RL-01/02/03 behavior.
+- No code, tests, or system behavior change (CR-006).
+
+## Verification
+
+```
+grep -n «Usage Examples» docs/spec/security/ratelimit.md
+```
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/tasks/TASK-003-architectural-decisions.md ===
+---
+id: TASK-003
+change: CHG-001-doc-s08b
+slice: SLICE-01
+kind: documentation
+status: targeting
+depends_on: []
+requirement_delta: none
+spec_refs:
+  - docs/spec/security/ratelimit.md
+allowed_paths:
+  - docs/spec/security/ratelimit.md
+forbidden_paths:
+  - src/
+  - tests/
+---
+
+# TASK-003 — Add Architectural Decisions section
+
+## Outcome
+
+`docs/spec/security/ratelimit.md` contains an «Architectural Decisions» section
+describing the Token Bucket choice with an RFC 2697 reference and a comparison
+with Leaky Bucket.
+
+## Traceability
+
+- Change/slice: CHG-001-doc-s08b / SLICE-01
+- Requirement refs: CR-003 (add «Architectural Decisions» with Token Bucket
+  choice, RFC 2697 reference, Leaky Bucket comparison)
+- Spec ref: `docs/spec/security/ratelimit.md`
+
+## Steps
+
+1. Open `docs/spec/security/ratelimit.md`.
+2. Verify an «Architectural Decisions» section already exists.
+3. Confirm it:
+   - States the Token Bucket algorithm is used.
+   - References RFC 2697.
+   - Compares against Leaky Bucket (constant output rate, burst dropping).
+   - Justifies Token Bucket for burst tolerance on a client-facing API.
+4. If any required element is missing, add it consistent with the existing
+   structure and wording.
+
+## Test oracle
+
+```
+grep -n «Architectural Decisions» docs/spec/security/ratelimit.md  # expect present
+grep -n «RFC 2697» docs/spec/security/ratelimit.md                # expect present
+grep -n «Leaky Bucket» docs/spec/security/ratelimit.md            # expect present
+```
+
+## Unchanged behavior
+
+- No product choice is being made; this documents an existing design.
+- No code, tests, or system behavior change (CR-006).
+
+## Verification
+
+```
+grep -n «Architectural Decisions» docs/spec/security/ratelimit.md
+```
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0 (скорость пополнения).
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+## Usage Examples
+
+### Initialization
+
+```python
+limiter = TokenBucketLimiter(capacity=10, refill_rate=1)
+```
+
+The limiter MUST reject `capacity <= 0` at construction.
+
+### Consume with validation
+
+```python
+assert limiter.consume("user:42", 3) is True   # enough tokens → deducted
+assert limiter.consume("user:42", 100) is False  # insufficient → no deduction
+```
+
+`consume` MUST reject negative token counts with `ValueError`.
+
+### Handling of ValueError
+
+```python
+try:
+    limiter.consume("user:42", -1)
+except ValueError as exc:
+    log.warning("invalid consume", exc=exc)
+```
+
+A `ValueError` MUST NOT modify the token balance for the key.
+
+## Architectural Decisions
+
+### Token Bucket algorithm
+
+The rate limiter uses the Token Bucket algorithm (RFC 2697) because it
+natively supports short bursts up to `capacity` while enforcing the long-term
+average `refill_rate`, which matches the product's need to absorb client
+retries without permanently blocking them.
+
+#### Comparison with Leaky Bucket
+
+Leaky Bucket enforces a strictly constant output rate and queues overflow,
+which drops bursts that Token Bucket permits. For a client-facing API that
+must tolerate retries and transient spikes, Token Bucket provides the
+required burst tolerance; Leaky Bucket would over-restrict legitimate traffic.
+
+
+=== FILE process/schemas/task.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/task.schema.yaml
+title: DeltaFuse Task frontmatter
+type: object
+additionalProperties: false
+required: [id, change, slice, kind, status, depends_on, requirement_delta, spec_refs, allowed_paths, forbidden_paths]
+properties:
+  id: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
+  slice: {type: string, pattern: '^SLICE-[0-9]{2,}$'}
+  kind: {enum: [feature, bugfix, refactor, maintenance, documentation]}
+  status: {enum: [pending, targeting, target-confirmed, implementing, implemented, verified, blocked, cancelled, superseded]}
+  depends_on:
+    type: array
+    items: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  requirement_delta: {enum: [none, added, modified, removed, mixed]}
+  spec_refs:
+    type: array
+    minItems: 1
+    items: {type: string}
+  design_ref:
+    type: [string, 'null']
+  allowed_paths:
+    type: array
+    items: {type: string}
+  forbidden_paths:
+    type: array
+    items: {type: string}

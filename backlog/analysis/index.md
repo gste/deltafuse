@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-07.
 
-- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-07](packets/A09-07.md) или без LLM [A11-01](packets/A11-01.md).
-- **Текущая задача аудита:** [A09-07 — S08b holdout](packets/A09-07.md). Prompts A09-01 заморожены; A09-02..A09-06 не тюнить.
-- **Следующая задача:** [A09-08](packets/A09-08.md) после A09-07; параллельно [A11-01](packets/A11-01.md).
-- **Счётчики:** всего 84; `planned` 19; `in-progress` 0; `done` 65; `blocked` 0.
+- **Статус:** `in-progress` — очередь жива, активной карточки нет. Дальше holdout [A09-08](packets/A09-08.md) или без LLM [A11-01](packets/A11-01.md).
+- **Текущая задача аудита:** [A09-08 — S08c holdout](packets/A09-08.md). Prompts A09-01 заморожены; A09-02..A09-07 не тюнить.
+- **Следующая задача:** [A09-08](packets/A09-08.md); параллельно [A11-01](packets/A11-01.md).
+- **Счётчики:** всего 84; `planned` 18; `in-progress` 0; `done` 66; `blocked` 0.
 
 
 
@@ -139,7 +139,7 @@
 | [A09-04 — Измерить локальное исполнение S06: Длинный raw input](packets/A09-04.md) | A09-01 | done | [fail; false DEC / F-010](experiments/A09-04/result.md) |
 | [A09-05 — Измерить локальное исполнение S07: Большой каталог и capability](packets/A09-05.md) | A09-01 | done | [fail; stop at Analyze](experiments/A09-05/result.md) |
 | [A09-06 — Измерить локальное исполнение S08a: Refactoring](packets/A09-06.md) | A09-01 | done | [fail; spec unchanged; Decompose/Specify](experiments/A09-06/result.md) |
-| [A09-07 — Измерить локальное исполнение S08b: Docs-only](packets/A09-07.md) | A09-01 | planned | — |
+| [A09-07 — Измерить локальное исполнение S08b: Docs-only](packets/A09-07.md) | A09-01 | done | [fail; Specify docs extras; Decompose/Implement](experiments/A09-07/result.md) |
 | [A09-08 — Измерить локальное исполнение S08c: Operational change](packets/A09-08.md) | A09-01 | planned | — |
 | [A09-09 — Измерить локальное исполнение S09: Терминальные исходы](packets/A09-09.md) | A09-01 | planned | — |
 | [A09-10 — Измерить локальное исполнение S10: Прерывание и повторная нарезка](packets/A09-10.md) | A09-01 | planned | — |

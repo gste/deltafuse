@@ -1,0 +1,8 @@
+outcome: fail
+independent_gate:
+  attempt1: model wrote spec+CHANGELOG; frozen harness parse_error implement must write src/ratelimit/limiter.py
+  attempt2_3: wrote limiter.py; is_blocked broke test_consume_and_reject
+  src_unchanged: false
+  tests_unchanged: true
+hidden_suite: fail (code modified)
+attempts: 3

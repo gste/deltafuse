@@ -1,0 +1,6 @@
+outcome: pass
+independent_gate:
+  routing_schema: ok
+  primary_capability: ratelimit (not security.ratelimit)
+  route_type_field: missing (oracle wants docs)
+attempts: 1

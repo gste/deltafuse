@@ -67,6 +67,21 @@
 
 Зафиксировать в A12-04 как явный `reject`, чтобы не возвращаться.
 
+## Q-005 — Docs-only без обязательного Red/Green по коду
+
+- **Дата:** 2026-09-07
+- **Источник:** [A09-07](../packets/A09-07.md) holdout S08b
+- **Критерии:** `PROC-003`, `SPEC-006`, `CODE-002`
+- **Статус:** `parked`
+
+**Вопрос.** Должен ли lifecycle пропускать Target/Implement (или требовать только docs-артефакты), когда `code_change_expected: false` / docs-only, вместо обязательного Red pytest и Green по `src/`?
+
+**Наблюдение.** S08b Specify на 3/3 записал примеры, RFC 2697, Leaky Bucket и правку опечатки. Frozen harness на Implement всё равно требует `src/ratelimit/limiter.py`. r2: TASK-001 `allowed_paths` только spec, Target `already-green`, затем модель сначала снова писала docs, потом сломала `is_blocked`. Схема `routing.yaml` не имеет поля `type: docs`.
+
+**Черновик направления.** Маршрут docs/no-code: закрывать Change на Specify/Decompose/Verify трассировки без Red/Green кода; либо Target пишет не-pytest evidence. Не смешивать с багом (S03) и фичей (S02).
+
+**Не делать до A12-04.** Не ослаблять Implement в A09 holdout и не добавлять S08 extras в frozen prompts.
+
 ## Уже закрыто findings, не дублировать здесь
 
 Исправления контракта после доказательств: [F-002](../../findings/F-002.md) PHASE_CONTRACTS, [F-003](../../findings/F-003.md) эвристика, [F-008](../../findings/F-008.md) extractor `CR-*`, [F-009](../../findings/F-009.md) фальшивый Red. Их приоритет — A12-03 по типу finding, не этот список.

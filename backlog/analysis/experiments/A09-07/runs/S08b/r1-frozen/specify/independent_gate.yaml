@@ -1,0 +1,9 @@
+outcome: pass
+independent_gate:
+  specified: live ratelimit.md has examples (init/consume/ValueError), RFC 2697, Leaky Bucket, typo скорость
+  changelog: Documented entry for docs change
+  src_unchanged: true
+  tests_unchanged: true
+  original_req_rl_01_04: kept
+hidden_suite: not-run
+attempts: 3

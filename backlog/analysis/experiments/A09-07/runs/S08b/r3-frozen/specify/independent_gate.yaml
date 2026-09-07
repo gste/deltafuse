@@ -1,0 +1,9 @@
+outcome: pass
+independent_gate:
+  specified: live ratelimit.md has Usage Examples, RFC 2697, Leaky Bucket, typo скорость
+  changelog: Unreleased Added/Changed/Fixed headings empty — no docs entry
+  src_unchanged: true
+  tests_unchanged: true
+  original_req_rl_01_04: kept
+hidden_suite: not-run
+attempts: 2
