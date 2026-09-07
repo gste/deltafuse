@@ -1,0 +1,52 @@
+change: CHG-061-ipv6-ip-filter
+claims:
+  CR-001:
+    summary: >
+      Observation that a user requested IPv6 support in security.ip_filter
+      (source docs/intake/S09.md). This is a duplicate of a rejected task and
+      cannot be reproduced; it requires no product capability work.
+    primary_capability: change-management
+    related_capabilities:
+      - security.ip_filter
+    confidence: high
+  CR-002:
+    summary: >
+      Observation that the request duplicates CHG-042, rejected by the
+      architectural committee because the network stack does not yet support
+      IPv6 (INFRA-789, not-started). No capability change is implied.
+    primary_capability: change-management
+    related_capabilities:
+      - security.ip_filter
+    confidence: high
+  CR-003:
+    summary: >
+      Observation that analogous functionality was superseded by CHG-060, a
+      full rewrite of ip_filter with CIDR notation. Purely provenance; no
+      capability work is required by this Change.
+    primary_capability: change-management
+    related_capabilities:
+      - security.ip_filter
+    confidence: high
+  CR-004:
+    summary: >
+      Observation that the request cannot be reproduced because the IPv6 test
+      stand is disabled. No capability change; informational for closure.
+    primary_capability: change-management
+    related_capabilities:
+      - security.ip_filter
+    confidence: high
+  CR-005:
+    summary: >
+      Expectation that the request be closed with justification and
+      provenance (CHG-042, CHG-055, CHG-060, INFRA-789). Closure is a
+      change-management action, not a capability delta.
+    primary_capability: change-management
+    related_capabilities: []
+    confidence: high
+  CR-006:
+    summary: >
+      Explicit hypothesis that spec, Decisions, and product code were not yet
+      read; classification and technical details intentionally not derived.
+    primary_capability: change-management
+    related_capabilities: []
+    confidence: high

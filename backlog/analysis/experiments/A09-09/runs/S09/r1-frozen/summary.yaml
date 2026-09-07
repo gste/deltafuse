@@ -1,0 +1,7 @@
+case: S09
+repeat: 1
+tag: frozen
+phases:
+- phase: intake
+  outcome: pass
+  attempts: 1

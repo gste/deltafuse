@@ -1,0 +1,3 @@
+coverage.yaml: [root] Additional properties are not allowed ('specification' was unexpected)
+coverage.yaml: Claim 'CR-006' in coverage.yaml is an orphan (not found in request.md)
+spec-delta.md: [status] 'unchanged' is not one of ['proposed', 'accepted', 'rejected', 'superseded']

@@ -1,0 +1,18 @@
+schema_version: 2
+id: CHG-055
+title: IPv6 filter alternative
+status: superseded
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: high
+source:
+  request: docs/archive/changes/CHG-055-ipv6-alt/request.md
+analysis:
+  routing: null
+  summary: Superseded by CHG-060 (CIDR rewrite of ip_filter).
+deltas: []
+slices: []
+decisions: []
+tasks: []

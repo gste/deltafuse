@@ -312,6 +312,92 @@ def seed_s08c_product(product: Path) -> None:
     )
 
 
+def seed_s09_product(product: Path) -> None:
+    """Terminal-outcome holdout: ip_filter spec plus archived CHG-042/055/060 and INFRA-789."""
+    seed_ratelimit_product(product)
+    spec = product / "docs" / "spec" / "security" / "ip_filter.md"
+    spec.write_text(
+        "# security.ip_filter\n\n"
+        "## REQ-IP-01 IPv4 addresses\n"
+        "IpFilter MUST accept IPv4 addresses. IPv6 is out of scope until the network stack is upgraded.\n",
+        encoding="utf-8",
+    )
+    catalog_path = product / "docs" / "spec" / "_capabilities.yaml"
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}
+    catalog["domains"]["security"]["capabilities"]["ip_filter"] = {
+        "summary": "IP allow/deny filter",
+        "spec": ["docs/spec/security/ip_filter.md"],
+        "code_roots": [],
+        "test_roots": [],
+        "status": "active",
+        "type": "supporting",
+    }
+    catalog_path.write_text(yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8")
+    lock = yaml.safe_load((product / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8")) or {}
+    fw = (lock.get("framework") or {})
+    framework = {
+        "version": fw.get("version") or "2.0.0",
+        "content_hash": fw.get("content_hash") or "sha256:" + ("0" * 64),
+    }
+
+    def write_archived(change_id: str, slug: str, title: str, status: str, request: str) -> None:
+        dest = product / "docs" / "archive" / "changes" / f"{change_id}-{slug}"
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "change.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "id": change_id,
+                    "title": title,
+                    "status": status,
+                    "framework": framework,
+                    "intent": "feature",
+                    "risk": "high",
+                    "source": {"request": f"docs/archive/changes/{change_id}-{slug}/request.md"},
+                    "analysis": {
+                        "routing": None,
+                        "summary": request.split("\n", 1)[0][:200],
+                    },
+                    "deltas": [],
+                    "slices": [],
+                    "decisions": [],
+                    "tasks": [],
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        (dest / "request.md").write_text(request, encoding="utf-8")
+
+    write_archived(
+        "CHG-042",
+        "ipv6-ip-filter",
+        "Add IPv6 support to IP Filter",
+        "rejected",
+        "Rejected: infrastructure does not support IPv6. Network stack upgrade is INFRA-789 (not-started).\n",
+    )
+    write_archived(
+        "CHG-055",
+        "ipv6-alt",
+        "IPv6 filter alternative",
+        "superseded",
+        "Superseded by CHG-060 (CIDR rewrite of ip_filter).\n",
+    )
+    write_archived(
+        "CHG-060",
+        "ip-filter-cidr",
+        "Rewrite ip_filter with CIDR notation",
+        "archived",
+        "Broader rewrite including CIDR notation; supersedes CHG-055.\n",
+    )
+    infra = product / "docs" / "archive" / "intake"
+    infra.mkdir(parents=True, exist_ok=True)
+    (infra / "INFRA-789.md").write_text(
+        "# INFRA-789 Network stack IPv6 upgrade\n\nstatus: not-started\n",
+        encoding="utf-8",
+    )
+
+
 def seed_s03_product(product: Path) -> None:
     """Correct spec, buggy limiter: int() truncates fractional refill."""
     seed_ratelimit_product(product)
@@ -432,6 +518,8 @@ def setup_product(case_id: str, repeat: int) -> Path:
         seed_s08b_product(product)
     elif case_id == "S08c":
         seed_s08c_product(product)
+    elif case_id == "S09":
+        seed_s09_product(product)
     else:
         # S02/S04 calibration and S05/S06/S08a holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
@@ -1171,7 +1259,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a", "S08b", "S08c"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08a", "S08b", "S08c", "S09"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")
