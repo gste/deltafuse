@@ -321,6 +321,63 @@ def seed_s03_product(product: Path) -> None:
     )
 
 
+def seed_s07_product(product: Path) -> None:
+    """Large-catalog holdout: 15 catalog entries + live security.ratelimit code."""
+    seed_ratelimit_product(product)
+    stubs = [
+        ("security", "auth_tokens", "Auth token validation"),
+        ("security", "ip_filter", "IP allow/deny filter"),
+        ("monitoring", "usage_stats", "Per-key usage statistics"),
+        ("monitoring", "audit_log", "Consume audit log"),
+        ("monitoring", "health_check", "Process health checks"),
+        ("billing", "metering", "Usage metering"),
+        ("billing", "invoices", "Invoice records"),
+        ("billing", "payment_gateway", "Payment gateway adapter"),
+        ("api", "versioning", "API version negotiation"),
+        ("api", "rate_headers", "Rate-limit response headers"),
+        ("api", "pagination", "List pagination"),
+        ("infra", "config_reload", "Runtime config reload"),
+        ("infra", "feature_flags", "Feature flags"),
+        ("infra", "circuit_breaker", "Outbound circuit breaker"),
+    ]
+    domains: dict[str, Any] = {
+        "security": {
+            "summary": "Security controls",
+            "capabilities": {
+                "ratelimit": {
+                    "summary": "Token-bucket rate limiter",
+                    "spec": ["docs/spec/security/ratelimit.md"],
+                    "code_roots": ["src/ratelimit"],
+                    "test_roots": ["tests"],
+                    "status": "active",
+                    "type": "supporting",
+                }
+            },
+        }
+    }
+    for domain, name, summary in stubs:
+        spec_rel = f"docs/spec/{domain}/{name}.md"
+        spec_path = product / spec_rel
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path.write_text(
+            f"# {domain}.{name}\n\nSeed stub for S07 catalog pressure. No extra product requirements.\n",
+            encoding="utf-8",
+        )
+        domains.setdefault(domain, {"summary": domain, "capabilities": {}})
+        domains[domain]["capabilities"][name] = {
+            "summary": summary,
+            "spec": [spec_rel],
+            "code_roots": [],
+            "test_roots": [],
+            "status": "active",
+            "type": "supporting",
+        }
+    (product / "docs" / "spec" / "_capabilities.yaml").write_text(
+        yaml.safe_dump({"schema_version": 2, "domains": domains}, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
 def setup_product(case_id: str, repeat: int) -> Path:
     product = EXPERIMENT / "work" / f"{case_id}-r{repeat}"
     if product.exists():
@@ -333,6 +390,8 @@ def setup_product(case_id: str, repeat: int) -> Path:
         seed_s01_product(product)
     elif case_id == "S03":
         seed_s03_product(product)
+    elif case_id == "S07":
+        seed_s07_product(product)
     else:
         # S02/S04 calibration and S05/S06 holdout: live security.ratelimit + code.
         seed_ratelimit_product(product)
@@ -1072,7 +1131,7 @@ def run_phase(case_id: str, repeat: int, phase: str, tag: str = "") -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06"])
+    parser.add_argument("--case", required=True, choices=["S01", "S02", "S03", "S04", "S05", "S06", "S07"])
     parser.add_argument("--repeat", type=int, required=True)
     parser.add_argument("--phase", required=True, choices=PHASE_ORDER + ["all"])
     parser.add_argument("--tag", default="", help="optional run tag, e.g. nothink")

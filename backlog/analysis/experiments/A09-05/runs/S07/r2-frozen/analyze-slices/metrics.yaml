@@ -1,0 +1,79 @@
+case: S07
+repeat: 2
+tag: frozen
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: slices
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 21342
+  ttft_s: 21.028733899991494
+  elapsed_s: 40.03080210002372
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: no JSON object in model content
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 1
+  gpu_after:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 37
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 21410
+  ttft_s: 21.07882160000736
+  elapsed_s: 48.208151400031056
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: no JSON object in model content
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 37
+  gpu_after:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 40
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 21410
+  ttft_s: 0.1874027000158094
+  elapsed_s: 31.898686000029556
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-007-distributed-ratelimit/slices/SLICE-01.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 39
+  gpu_after:
+    vram_used_mib: 4886
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

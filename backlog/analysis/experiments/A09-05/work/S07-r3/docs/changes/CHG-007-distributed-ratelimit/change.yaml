@@ -1,0 +1,21 @@
+schema_version: 2
+id: CHG-007-distributed-ratelimit
+title: Add distributed Rate Limiter with Redis backend (infra.distributed_ratelimit)
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S07.md
+  intake_refs:
+    - docs/intake/S07.md
+    - docs/spec/_capabilities.yaml
+analysis:
+  routing: null
+  summary: New capability infra.distributed_ratelimit — a distributed rate limiter with a Redis backend, atomically backed by Lua scripts, with configurable switching between in-memory and distributed backends, TTL derived from capacity/refill_rate, graceful degradation to in-memory on Redis unavailability, and a health check endpoint for Redis connectivity.
+deltas: []
+slices: []
+decisions: []
+tasks: []

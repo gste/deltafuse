@@ -1,0 +1,6 @@
+outcome: fail
+independent_gate:
+  coverage: extra keys routing/slices/schema_version; invalid claim status
+oracle_spec_files: not-run
+hidden_suite: not-run
+attempts: 3

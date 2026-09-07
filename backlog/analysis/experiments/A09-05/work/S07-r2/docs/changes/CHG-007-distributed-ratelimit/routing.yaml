@@ -1,0 +1,81 @@
+change: CHG-007-distributed-ratelimit
+claims:
+  CR-001:
+    summary: >-
+      Confirms the product already declares 15 capabilities including
+      security.ratelimit, infra.config_reload, and monitoring.health_check.
+    primary_capability: infra.config_reload
+    related_capabilities:
+      - security.ratelimit
+      - monitoring.health_check
+    confidence: high
+  CR-002:
+    summary: >-
+      A new capability infra.distributed_ratelimit must be added to the
+      capability catalog.
+    primary_capability: infra.distributed_ratelimit
+    confidence: high
+  CR-003:
+    summary: >-
+      The new capability must support all operations of security.ratelimit
+      (init, consume, get_stats) with state stored in Redis.
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities:
+      - security.ratelimit
+    confidence: high
+  CR-004:
+    summary: >-
+      Redis operations must be atomic via Lua scripts for consistency under
+      concurrent access from multiple instances.
+    primary_capability: infra.distributed_ratelimit
+    confidence: high
+  CR-005:
+    summary: >-
+      Switching between in-memory and distributed backends must be
+      configurable through infra.config_reload.
+    primary_capability: infra.config_reload
+    related_capabilities:
+      - infra.distributed_ratelimit
+    confidence: high
+  CR-006:
+    summary: >-
+      Redis key TTLs must equal capacity / refill_rate * 2 seconds.
+    primary_capability: infra.distributed_ratelimit
+    confidence: medium
+  CR-007:
+    summary: >-
+      On Redis unavailability the limiter must gracefully degrade to
+      in-memory operation and log a warning.
+    primary_capability: infra.distributed_ratelimit
+    confidence: high
+  CR-008:
+    summary: >-
+      A Redis-connectivity health check must be exposed via
+      monitoring.health_check.
+    primary_capability: monitoring.health_check
+    related_capabilities:
+      - infra.distributed_ratelimit
+    confidence: high
+  CR-009:
+    summary: >-
+      Hypothesis that the change is substantially larger than other
+      capabilities (~500 LOC, 3 spec files, dedicated integration tests).
+    primary_capability: infra.distributed_ratelimit
+    confidence: low
+  CR-010:
+    summary: >-
+      The existing 15 capabilities must remain intact; no behavior changes
+      beyond the documented backend switch.
+    primary_capability: infra.config_reload
+    related_capabilities:
+      - security.ratelimit
+      - infra.distributed_ratelimit
+    confidence: high
+  CR-011:
+    summary: >-
+      capacity and refill_rate defaults or source are unknown; the TTL
+      formula references them but their origin is unspecified.
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities:
+      - infra.config_reload
+    confidence: low
