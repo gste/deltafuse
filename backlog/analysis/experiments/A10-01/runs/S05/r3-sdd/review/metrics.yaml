@@ -1,0 +1,65 @@
+outcome: fail
+attempts:
+- attempt: 1
+  prompt_chars: 17719
+  ttft_s: 23.122256400005426
+  elapsed_s: 172.8860274000035
+  finish_reason: stop
+  parse_error: null
+  written:
+  - src/ratelimit/stats.py
+  - src/ratelimit/policy.py
+  - src/ratelimit/limiter.py
+  - src/ratelimit/__init__.py
+  - tests/test_stats.py
+  - tests/test_policy.py
+  - tests/test_integration_stats_policy.py
+  - tests/test_limiter.py
+  - TASK.md
+  ok: false
+  note: "F.F.F....F.....                                                         \
+    \ [100%]\n================================== FAILURES ===================================\n\
+    ________________ test_stats_reflect_token_and_block_rejections ________________\n\
+    tests\\test_integration_stats_policy.py:16: in test_stats_reflect_token_and_block_rejections\n\
+    \    assert stats['total'] == 3\nE   assert 6 == 3\n_________________ test_block_expiry_allows_consumption_again\
+    \ __________________\ntests\\test_integration_stats_policy.py:"
+- attempt: 2
+  prompt_chars: 21103
+  ttft_s: 26.931545400002506
+  elapsed_s: 99.59926600000472
+  finish_reason: stop
+  parse_error: null
+  written:
+  - src/ratelimit/limiter.py
+  - src/ratelimit/__init__.py
+  - docs/spec/monitoring/usage_stats.md
+  - docs/spec/security/rate_policy.md
+  - TASK.md
+  ok: false
+  note: "..F......F.....                                                         \
+    \ [100%]\n================================== FAILURES ===================================\n\
+    _________________ test_block_expiry_allows_consumption_again __________________\n\
+    tests\\test_integration_stats_policy.py:49: in test_block_expiry_allows_consumption_again\n\
+    \    assert limiter.consume('u', 1) is True\nE   AssertionError: assert False\
+    \ is True\nE    +  where False = consume('u', 1)\nE    +    where consume = <ratelimit.limiter.Toke"
+- attempt: 3
+  prompt_chars: 22694
+  ttft_s: 26.59642069999245
+  elapsed_s: 131.8052910999977
+  finish_reason: stop
+  parse_error: null
+  written:
+  - src/ratelimit/limiter.py
+  - src/ratelimit/stats.py
+  - src/ratelimit/policy.py
+  - src/ratelimit/__init__.py
+  - docs/spec/monitoring/usage_stats.md
+  - docs/spec/security/rate_policy.md
+  - TASK.md
+  ok: false
+  note: "..F......F.....                                                         \
+    \ [100%]\n================================== FAILURES ===================================\n\
+    _________________ test_block_expiry_allows_consumption_again __________________\n\
+    tests\\test_integration_stats_policy.py:49: in test_block_expiry_allows_consumption_again\n\
+    \    assert limiter.consume('u', 1) is True\nE   AssertionError: assert False\
+    \ is True\nE    +  where False = consume('u', 1)\nE    +    where consume = <ratelimit.limiter.Toke"

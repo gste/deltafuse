@@ -1,0 +1,12 @@
+outcome: pass
+attempts:
+- attempt: 1
+  prompt_chars: 5386
+  ttft_s: 4.932040400002734
+  elapsed_s: 13.909560699990834
+  finish_reason: stop
+  parse_error: null
+  written:
+  - TASK.md
+  ok: true
+  note: TASK.md present

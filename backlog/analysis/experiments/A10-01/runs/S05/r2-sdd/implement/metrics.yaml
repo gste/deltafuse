@@ -1,0 +1,19 @@
+outcome: pass
+attempts:
+- attempt: 1
+  prompt_chars: 8730
+  ttft_s: 11.326270500008832
+  elapsed_s: 128.5264010999963
+  finish_reason: stop
+  parse_error: null
+  written:
+  - src/ratelimit/limiter.py
+  - src/ratelimit/stats.py
+  - src/ratelimit/policy.py
+  - src/ratelimit/__init__.py
+  - tests/test_limiter.py
+  - tests/test_stats.py
+  - tests/test_policy.py
+  - tests/test_integration_stats_policy.py
+  ok: true
+  note: stats/policy artifacts present

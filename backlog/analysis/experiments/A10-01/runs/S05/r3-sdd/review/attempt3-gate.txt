@@ -1,0 +1,18 @@
+..F......F.....                                                          [100%]
+================================== FAILURES ===================================
+_________________ test_block_expiry_allows_consumption_again __________________
+tests\test_integration_stats_policy.py:49: in test_block_expiry_allows_consumption_again
+    assert limiter.consume('u', 1) is True
+E   AssertionError: assert False is True
+E    +  where False = consume('u', 1)
+E    +    where consume = <ratelimit.limiter.TokenBucketLimiter object at 0x0000028EBBDAE210>.consume
+__________________________ test_policy_block_expiry ___________________________
+tests\test_policy.py:19: in test_policy_block_expiry
+    assert policy.is_blocked('u') is True
+E   AssertionError: assert False is True
+E    +  where False = is_blocked('u')
+E    +    where is_blocked = <ratelimit.policy.RatePolicy object at 0x0000028EBBDAEC10>.is_blocked
+=========================== short test summary info ===========================
+FAILED tests/test_integration_stats_policy.py::test_block_expiry_allows_consumption_again
+FAILED tests/test_policy.py::test_policy_block_expiry - AssertionError: asser...
+2 failed, 13 passed in 0.10s
