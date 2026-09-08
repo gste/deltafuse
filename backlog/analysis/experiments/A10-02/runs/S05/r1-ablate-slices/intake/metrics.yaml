@@ -1,0 +1,84 @@
+case: S05
+repeat: 1
+tag: ablate-slices
+phase: intake
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 2048
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 7736
+  ttft_s: 12.246669500003918
+  elapsed_s: 59.66414619999705
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/change.yaml
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/request.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5288
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  gpu_after:
+    vram_used_mib: 5343
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 8002
+  ttft_s: 7.4839987000013934
+  elapsed_s: 48.58565349999117
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-rate-limiter-usage-policy/change.yaml
+  - docs/changes/CHG-001-rate-limiter-usage-policy/request.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5343
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  gpu_after:
+    vram_used_mib: 5243
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 8002
+  ttft_s: 7.409985599995707
+  elapsed_s: 43.0732083000039
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-rate-limiter-usage-policy/change.yaml
+  - docs/changes/CHG-001-rate-limiter-usage-policy/request.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5243
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  gpu_after:
+    vram_used_mib: 5276
+    vram_total_mib: 8188
+    gpu_util_pct: 40
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail
