@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-08.
 
-- **Статус:** `planned` — очередь жива; следующая [A12-02](packets/A12-02.md) (четыре исходных вопроса).
-- **Текущая задача аудита:** [A12-02](packets/A12-02.md). Prompts A09 заморожены; skills не патчить.
-- **Следующая задача:** [A12-02](packets/A12-02.md).
-- **Счётчики:** всего 84; `planned` 3; `in-progress` 0; `done` 81; `blocked` 0.
+- **Статус:** `planned` — очередь жива; следующая [A12-04](packets/A12-04.md) (parking Q-*).
+- **Текущая задача аудита:** [A12-04](packets/A12-04.md). Prompts A09 заморожены; skills не патчить.
+- **Следующая задача:** [A12-04](packets/A12-04.md).
+- **Счётчики:** всего 84; `planned` 2; `in-progress` 0; `done` 82; `blocked` 0.
 
 
 
@@ -170,6 +170,6 @@
 | Задача | Зависимости | Статус | Evidence / блокировка |
 |---|---|---|---|
 | [A12-01 — Сверить покрытие и доказательность выводов](packets/A12-01.md) | A09-13, A10-02, A11-06 | done | [pass; coverage.md; A01-pass ≠ product; SUT gaps not-tested](experiments/A12-01/result.md) |
-| [A12-02 — Ответить на четыре исходных вопроса](packets/A12-02.md) | A12-01 | planned | — |
+| [A12-02 — Ответить на четыре исходных вопроса](packets/A12-02.md) | A12-01 | done | [pass; four answers + core vs optional; summary.md](experiments/A12-02/result.md) |
 | [A12-04 — Разобрать отложенные вопросы доработки](packets/A12-04.md) | A12-02 | planned | список: [parking/design-questions.md](parking/design-questions.md); не исполнять до A12 |
 | [A12-03 — Сформировать roadmap проверяемых изменений](packets/A12-03.md) | A12-02, A12-04 | planned | — |
