@@ -1,0 +1,59 @@
+case: S11
+repeat: 1
+tag: frozen-chga
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: slices
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 11534
+  ttft_s: 12.818396999995457
+  elapsed_s: 37.578143899998395
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-011-burst-allowance/slices/SLICE-01.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4736
+    vram_total_mib: 8188
+    gpu_util_pct: 6
+  gpu_after:
+    vram_used_mib: 4782
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 13524
+  ttft_s: 16.073460200001136
+  elapsed_s: 39.73797780000314
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-011-burst-allowance/slices/SLICE-01.md
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 4782
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  gpu_after:
+    vram_used_mib: 4782
+    vram_total_mib: 8188
+    gpu_util_pct: 44
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

@@ -1,0 +1,40 @@
+change: CHG-011-remove-burst
+claims:
+  CR-001:
+    summary: The Rate Limiter currently exposes a burst_allowance concept.
+    primary_capability: ratelimit
+    confidence: high
+  CR-002:
+    summary: burst_allowance must be removed from the Rate Limiter.
+    primary_capability: ratelimit
+    confidence: high
+  CR-003:
+    summary: The public constructor must not mention burst.
+    primary_capability: ratelimit
+    related_capabilities:
+      - documentation
+    confidence: high
+  CR-004:
+    summary: The specification must not mention burst.
+    primary_capability: ratelimit
+    related_capabilities:
+      - documentation
+    confidence: high
+  CR-005:
+    summary: Tests must not mention burst.
+    primary_capability: ratelimit
+    related_capabilities:
+      - testing
+    confidence: high
+  CR-006:
+    summary: Documentation and the capabilities catalog must stay consistent, with no broken anchors.
+    primary_capability: documentation
+    related_capabilities:
+      - ratelimit
+    confidence: high
+  CR-007:
+    summary: Removing burst_allowance is a refactor that should not change observable rate-limiting behavior beyond the removed burst feature.
+    primary_capability: ratelimit
+    related_capabilities:
+      - testing
+    confidence: medium

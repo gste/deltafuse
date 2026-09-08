@@ -1,0 +1,27 @@
+schema_version: 2
+id: CHG-011-window-stats
+title: Burst-window statistics for Rate Limiter (security.ratelimit)
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S11.md
+  intake_refs:
+    - docs/intake/S11.md
+analysis:
+  routing: null
+  summary: Add get_window_stats(key) to security.ratelimit returning accepted/rejected/remaining_tokens without consuming tokens or changing limits.
+deltas: []
+slices:
+  - id: SLICE-01
+    status: specified
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+  - id: SLICE-02
+    status: specified
+decisions: []
+tasks: []
+verification: null

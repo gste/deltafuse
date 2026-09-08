@@ -1,0 +1,30 @@
+change: CHG-011-window-stats
+claims:
+  CR-001:
+    summary: The Rate Limiter service is located at security.ratelimit.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-002:
+    summary: get_window_stats(key) must return accepted/rejected/remaining_tokens for the key.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-003:
+    summary: Window counters reset together with the existing limiter's token-replenishment logic.
+    primary_capability: security.ratelimit
+    confidence: medium
+  CR-004:
+    summary: Calling the statistics method must not consume tokens or change limits.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-005:
+    summary: For an unknown key, return zero counters and the current remainder per key-initialization rules.
+    primary_capability: security.ratelimit
+    confidence: medium
+  CR-006:
+    summary: The existing limiter already tracks per-key accepted/rejected counters and a current remainder.
+    primary_capability: security.ratelimit
+    confidence: medium
+  CR-007:
+    summary: Exact semantics of key-initialization rules for remaining_tokens on an unknown key must be resolved from the existing limiter implementation.
+    primary_capability: security.ratelimit
+    confidence: low

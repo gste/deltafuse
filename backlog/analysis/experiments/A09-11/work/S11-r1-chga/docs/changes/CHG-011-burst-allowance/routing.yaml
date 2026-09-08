@@ -1,0 +1,41 @@
+change: CHG-011-burst-allowance
+claims:
+  CR-001:
+    summary: >-
+      Requests a new optional burst_allowance init parameter on
+      TokenBucketLimiter; absence is inferred, not observed.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-002:
+    summary: >-
+      A rejected consume grants extra tokens once and retries within the same
+      call while unused burst_allowance tokens remain.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-003:
+    summary: >-
+      burst_allowance defaults to 0, preserving existing behavior when unset.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-004:
+    summary: >-
+      Retry grants extra exactly once per rejected call; partial amounts and
+      whether the grant consumes burst_allowance are unspecified.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low
+  CR-005:
+    summary: >-
+      Target language, module, and existing TokenBucketLimiter API are
+      unspecified and must be confirmed during analysis.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low

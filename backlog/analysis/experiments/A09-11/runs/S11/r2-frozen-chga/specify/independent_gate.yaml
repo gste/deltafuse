@@ -1,0 +1,6 @@
+outcome: fail
+independent_gate:
+  specified: fail
+  change.yaml_deltas_invalid: true
+hidden_suite: not-run
+attempts: 3

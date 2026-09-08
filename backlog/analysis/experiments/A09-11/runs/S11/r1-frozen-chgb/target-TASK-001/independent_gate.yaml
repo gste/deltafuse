@@ -1,0 +1,6 @@
+outcome: already-green
+independent_gate:
+  red: none
+  note: harness pytest only tests/test_limiter.py; model wrote tests/test_window_stats_red.py
+hidden_suite: not-run
+attempts: 1

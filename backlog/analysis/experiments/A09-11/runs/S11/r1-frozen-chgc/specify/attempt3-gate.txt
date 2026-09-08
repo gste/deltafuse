@@ -1,0 +1,1 @@
+change.yaml: [slices -> 0] 'file' is a required property

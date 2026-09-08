@@ -1,0 +1,37 @@
+case: S11
+repeat: 1
+tag: frozen-chgb
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 2048
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: coverage
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 13857
+  ttft_s: 14.534444800003257
+  elapsed_s: 27.505220000006375
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-window-stats/coverage.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 4650
+    vram_total_mib: 8188
+    gpu_util_pct: 19
+  gpu_after:
+    vram_used_mib: 4646
+    vram_total_mib: 8188
+    gpu_util_pct: 32
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

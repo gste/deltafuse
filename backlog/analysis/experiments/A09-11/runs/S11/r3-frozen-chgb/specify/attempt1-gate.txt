@@ -1,0 +1,3 @@
+change.yaml: [deltas -> 0] 'docs/changes/CHG-001-ratelimit-window-stats/spec-delta.md' is not of type 'object'
+change.yaml: [slices -> 0] 'docs/changes/CHG-001-ratelimit-window-stats/slices/SLICE-01.md' is not of type 'object'
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

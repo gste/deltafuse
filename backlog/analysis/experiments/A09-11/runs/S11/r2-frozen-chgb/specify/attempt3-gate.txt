@@ -1,0 +1,3 @@
+change.yaml: [slices -> 0] 'file' is a required property
+change.yaml: [slices -> 1] 'file' is a required property
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

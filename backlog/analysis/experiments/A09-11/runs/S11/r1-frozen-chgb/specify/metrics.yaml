@@ -1,0 +1,89 @@
+case: S11
+repeat: 1
+tag: frozen-chgb
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 13102
+  ttft_s: 17.622063399998297
+  elapsed_s: 73.41263600000093
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-window-stats/change.yaml
+  - docs/changes/CHG-001-ratelimit-window-stats/coverage.yaml
+  - docs/changes/CHG-001-ratelimit-window-stats/slices/SLICE-01.md
+  - docs/spec/security/ratelimit.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4646
+    vram_total_mib: 8188
+    gpu_util_pct: 6
+  gpu_after:
+    vram_used_mib: 4650
+    vram_total_mib: 8188
+    gpu_util_pct: 35
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 13769
+  ttft_s: 14.262611400001333
+  elapsed_s: 63.86667640000087
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-window-stats/change.yaml
+  - docs/changes/CHG-001-ratelimit-window-stats/coverage.yaml
+  - docs/changes/CHG-001-ratelimit-window-stats/slices/SLICE-01.md
+  - docs/changes/CHG-001-ratelimit-window-stats/spec-delta.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4650
+    vram_total_mib: 8188
+    gpu_util_pct: 35
+  gpu_after:
+    vram_used_mib: 4652
+    vram_total_mib: 8188
+    gpu_util_pct: 35
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 14440
+  ttft_s: 16.180816299995058
+  elapsed_s: 47.165664399995876
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-window-stats/spec-delta.md
+  - docs/changes/CHG-001-ratelimit-window-stats/coverage.yaml
+  - docs/changes/CHG-001-ratelimit-window-stats/change.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 4652
+    vram_total_mib: 8188
+    gpu_util_pct: 35
+  gpu_after:
+    vram_used_mib: 4652
+    vram_total_mib: 8188
+    gpu_util_pct: 14
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

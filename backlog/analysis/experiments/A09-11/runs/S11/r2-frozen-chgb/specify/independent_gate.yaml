@@ -1,0 +1,8 @@
+outcome: fail
+independent_gate:
+  specified: fail
+  slices_without_file: true
+  spec-delta_no_frontmatter: true
+hidden_suite: not-run
+interrupt_or_merge: skipped
+attempts: 3

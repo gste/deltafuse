@@ -1,0 +1,36 @@
+revision: "2203b55"
+task_id: "A09-11"
+packet: "backlog/analysis/packets/A09-11.md"
+criterion_ids:
+  - "SPEC-005"
+  - "SPEC-007"
+  - "TEST-005"
+  - "PROC-002"
+status: "done"
+notes:
+  - "Do not retune prompts from S11 outcomes"
+  - "Oracle/hidden_suite/fault_suite not in ornith prompt"
+  - "CHG-B sees only cases/S11/input.md; CHG-A and CHG-C texts are evaluator intake overrides"
+  - "No S02/S03/S04 case extras"
+  - "F-006 remains a known stale-evidence gap; do not weaken the S11 oracle"
+  - "Size ladder 2→4→8 only if base size 2 closes; stop at first boundary"
+  - "A09-11 closed 2026-09-08: verdict fail; r1 CHG-B Verify fail; r2/r3 Specify fail; F-006 silent-pass not observed"
+inputs:
+  - "backlog/analysis/packets/A09-11.md"
+  - "backlog/analysis/experiments/protocol.md:holdout"
+  - "backlog/analysis/experiments/cases/S11/manifest.yaml"
+  - "backlog/analysis/experiments/A08-15/result.md"
+  - "backlog/analysis/experiments/A09-10/result.md"
+  - "backlog/analysis/experiments/local-runtime/README.md"
+  - "backlog/findings/F-006.md"
+method: "Holdout S11 on frozen A09-01 harness (WRAPPER, routing-first Analyze, CR-NNN). No S02/S03/S04 extras. Oracle/hidden_suite not in ornith prompt. Seed: live ratelimit. Sequencer runs CHG-B (window stats, input.md) and CHG-A (burst_allowance, evaluator intake) from the same seed in separate workdirs. Merge A's spec/code into B only after Green; then CHG-C deletion. Expected: stale Green must not converge (F-006); after deletion no burst_allowance leftovers."
+profile:
+  model: "ornith-1.5-35b-a3b"
+  endpoint: "http://127.0.0.1:1240/v1/chat/completions"
+  temperature: 0.1
+  top_p: 0.9
+  max_output_tokens: 2048
+  runtime_doc: "backlog/analysis/experiments/local-runtime/README.md"
+outputs:
+  runs: "backlog/analysis/experiments/A09-11/runs/"
+  result: "backlog/analysis/experiments/A09-11/result.md"
