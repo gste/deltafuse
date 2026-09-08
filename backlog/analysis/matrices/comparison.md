@@ -115,4 +115,38 @@ Kiro — закрытый продукт AWS; SPDX не опубликован. 
 
 `.kiro/specs/` как SSOT; Quick Spec; Design-First Specify; parallel task execution на локальном SUT; закрытый PBT-генератор.
 
+---
+
+## Primary practices (A11-05)
+
+Не пятый фреймворк. Привязка: находки A02–A07 + протокол A07-03. Источники: [experiments/A11-05/sources.md](../experiments/A11-05/sources.md). Аналоги A11-01…04 не переранжировать. F-006…F-010 вне скоупа этой секции.
+
+| ID | Проблема DF | Практика | Evidence | Эквивалент DF | Выгода | Цена (контекст / ops) | Риск | Решение |
+|---|---|---|---|---|---|---|---|---|
+| PP-01 | DEC уже есть; путать ADR-superseded с task-cancelled | Nygard ADR: status proposed/accepted/deprecated/**superseded** | PP-S1 | `DEC-*` + human gate (AB-06, DEC-02/03) | Явный audit trail решений | Ещё один шаблон поверх schema | Авто-accept DEC | **сохранить** `DEC-*`. Шаблоны блога **не нужны**. Отказ: если практика снимает human gate или подменяет `decision.schema.yaml` |
+| PP-02 | Oracle задачи без наблюдаемого поведения | North BDD: Given / When / Then | PP-S2 | TASK oracle уже GWT | Общий язык приёмки | Cucumber/JBehave слой | Подмена hidden suite / Red evidence | **сохранить** GWT в TASK. Cucumber **не переносить**. Отказ: если Gherkin заменяет pytest Red или Verify |
+| PP-03 | SPEC-003 расплывчатый язык | RFC 2119 MUST/SHALL | PP-S3 | SPEC-003 в `docs/spec/**` / spec-delta | Нормативные глаголы уже критерий | Нет | Ослабить до SHOULD-everywhere | **сохранить** RFC 2119. Отказ: замена нормативности «EARS-only» без MUST/SHALL |
+| PP-04 | SPEC-003/004: слабая форма входа/выхода | EARS WHEN … THE SYSTEM SHALL (IEEE RE 2009) | PP-S4; KI-02 | RFC 2119 + TASK GWT | Короткая проверяемая форма | Стиль, не гейт; PDF paywalled | SHALL без live spec (F-010) | **исследовать** EARS как *стиль* `docs/spec/**`. Файлы `.kiro` **не переносить**. Отказ: новый формат файлов или ослабление F-010 |
+| PP-05 | Vacuous product tests (A07-03 FDR) | Mutation testing (PIT mutators / A07-03 M1–M4) | PP-S5; A07-03 | Hidden suite + FDR protocol | Ловит фиктивный Green | PIT = JVM bytecode; ops | Мутировать *тесты* под Green; mutation как Specify gate | **сохранить** протокол A07-03 как oracle. PIT **не** вендорить в ядро. Отказ: mutation score вместо spec / Red evidence |
+| PP-06 | TEST-001 example-only | Property-based testing (Hypothesis / QuickCheck) | PP-S6; KI-07 | Hidden/pytest examples; TASK oracle | Много входов из инварианта | Нет локального раннера на `:1240` | Подмена hidden suite; слабые properties | **исследовать** optional Target (KI-07). Генератор Kiro **не переносить**. Отказ: PBT вместо example hidden suite без локального runner |
+| PP-07 | F-001 CRLF / lock hash | Reproducible artifacts + `gitattributes` `eol=lf` | PP-S7, PP-S8; F-001 | нет `.gitattributes`; `framework_hash` считает байты | LF в индексе → стабильный SHA lock | Один файл атрибутов | Заявить DF как reproducible *binary* build | **адаптировать** `.gitattributes` / LF для lock hash (уже фикс F-001). Отказ: SOURCE_DATE_EPOCH / bit-identical markdown как цель фреймворка |
+| PP-08 | F-005 `cancelled`/`superseded` не терминальны на `converged` | NIST SP 800-128: авторизованное изменение, baseline, audit; Nygard superseded как *класс* статуса | PP-S9, PP-S1; F-005 | schema task enum vs `fsm.py` `converged` | Можно закрыть пакет после отмены/замены задачи | Правка FSM + тесты T-гейт | ITIL/CMDB церемония; снятие Verify | **адаптировать** `converged`: `cancelled`/`superseded` терминальны. Отказ: ITIL-процесс или drop Verify |
+| PP-09 | F-004 path traversal / silent skip | OWASP Path Traversal: каноникализация, путь внутри корня | PP-S10; F-004 | `validate_spec_ref` без `is_relative_to` | Закрывает выход за repo root | Несколько строк + тесты | «полный AppSec» как ядро DF | **адаптировать** `is_relative_to` / отказ на `../`. Один доп. источник плана («пробел»). Отказ: отдельная AppSec-программа вместо точечного фикса |
+| PP-10 | Нет finding про consumer/provider API между сервисами | Pact consumer-driven contracts | PP-S11 | TEST-002 публичный интерфейс модуля | — | Broker, версии контрактов | Overkill для фреймворка без service mesh | **не переносить**. Отказ от внедрения: нет A02–A07 дефекта, который Pact закрывает лучше TEST-002 |
+
+### Исключено из именованного набора (причина)
+
+| ID | Находка | Почему ADR/BDD/EARS/RFC/PBT/mutation/repro/CM/Pact не ответ |
+|---|---|---|
+| PP-X1 | F-002: `PHASE_CONTRACTS` мёртв; у TASK нет `context_budget` | Ни одна из практик не sandbox'ит FS и не валидирует бюджет фазы. Это enforcement контракта чтения (CODE-002 / PROC-004), не ADR и не mutation. Чинить кодом FSM, не практикой из списка |
+| PP-X2 | F-003: `words * 1.3` | Tokenizer SUT (Q-002). BDD/PBT/NIST не считают BPE |
+
+### Лицензия (строки PP-*)
+
+См. [sources.md](../experiments/A11-05/sources.md). Копировать IEEE PDF, эссе North, шаблоны Pact/Cucumber, раннер PIT **нельзя**. Методы (GWT, MUST/SHALL, mutators как *идея*, EOL в git) — да, с условием отказа в строке.
+
+### Отказ от заимствования (намеренно)
+
+Cucumber/JBehave; вендор PIT в `src/deltafuse`; Pact broker; Kiro PBT generator; `.kiro` файлы; ITIL/CMDB; reproducible-builds как обещание бинарной сборки DF; constitution/slash-SDD заново (уже A11-01…04).
+
 
