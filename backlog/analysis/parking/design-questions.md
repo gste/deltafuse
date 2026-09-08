@@ -97,6 +97,21 @@
 
 **Не делать до A12-04.** Не учить Specify писать deploy YAML в A09.
 
+## Q-007 — Constitution как профиль lock, не девять статей Spec Kit
+
+- **Дата:** 2026-09-08
+- **Источник:** [A11-01](../packets/A11-01.md) Spec Kit v1.0.4 (`/speckit.constitution`, `memory/constitution.md`)
+- **Критерии:** `PROC-001`, `SPEC-002`
+- **Статус:** `parked`
+
+**Вопрос.** Нужен ли DeltaFuse отдельный машиночитаемый набор non-negotiables проекта (как constitution), отдельно от `docs/spec/context.md` и skills, чтобы plan/specify сверялись с профилем lock?
+
+**Наблюдение.** Spec Kit задаёт principles один раз на проект и гоняет их через plan/analyze. Статьи I–III методологии (library-first, CLI-everywhere, TDD before code) не совпадают с Change FSM. A03-04: бюджет DF считает файлы, не полный prompt — длинная constitution в каждом вызове дорогая. Human gate DF уже есть (AB-06); constitution не заменяет `DEC-*`.
+
+**Черновик направления.** Короткий lock-профиль принципов (ширина борозды Q-001 + запреты вроде «не auto-accept DEC») без копирования nine articles. Сверка — FSM/schema, не LLM-чеклист.
+
+**Не делать до A12-04.** Не копировать Spec Kit templates/constitution. Не патчить skills.
+
 ## Уже закрыто findings, не дублировать здесь
 
 Исправления контракта после доказательств: [F-002](../../findings/F-002.md) PHASE_CONTRACTS, [F-003](../../findings/F-003.md) эвристика, [F-008](../../findings/F-008.md) extractor `CR-*`, [F-009](../../findings/F-009.md) фальшивый Red. Их приоритет — A12-03 по типу finding, не этот список.
