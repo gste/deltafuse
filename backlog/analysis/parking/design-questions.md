@@ -112,6 +112,21 @@
 
 **Не делать до A12-04.** Не копировать Spec Kit templates/constitution. Не патчить skills.
 
+## Q-008 — Сверка spec-delta с live spec после Verify, не перенос SSOT на archive
+
+- **Дата:** 2026-09-08
+- **Источник:** [A11-02](../packets/A11-02.md) OpenSpec v1.12.0 (`/opsx:archive` merge ADDED/MODIFIED/REMOVED)
+- **Критерии:** `SPEC-007`, `SPEC-001`
+- **Статус:** `parked`
+
+**Вопрос.** Нужна ли после Verify (до `deltafuse archive`) независимая сверка, что операции spec-delta попали в существующие файлы `docs/spec/**`, отдельно от гейта `specified`?
+
+**Наблюдение.** OpenSpec держит истину в change-delta и вливает её в `openspec/specs/` только на archive — после `/opsx:apply`. DeltaFuse пишет нормативную spec на Specify (закон до кода). F-010: `specified` зелёный без live paths. SPEC-007 требует явных modify/remove, не «только дописать».
+
+**Черновик направления.** Усилить `specified` (live paths, F-010) **и** опциональный check на `converged`: ADDED/MODIFIED/REMOVED из spec-delta согласованы с диском. Не переносить OpenSpec «главная spec обновляется после кода».
+
+**Не делать до A12-04.** Не двигать SSOT на archive. Не патчить skills в A09–A11.
+
 ## Уже закрыто findings, не дублировать здесь
 
 Исправления контракта после доказательств: [F-002](../../findings/F-002.md) PHASE_CONTRACTS, [F-003](../../findings/F-003.md) эвристика, [F-008](../../findings/F-008.md) extractor `CR-*`, [F-009](../../findings/F-009.md) фальшивый Red. Их приоритет — A12-03 по типу finding, не этот список.

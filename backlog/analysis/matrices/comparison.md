@@ -34,3 +34,29 @@ MIT (GitHub, Inc.), [LICENSE v1.0.4](https://raw.githubusercontent.com/github/sp
 ### Отказ от заимствования (намеренно)
 
 Целиком Spec-Driven Development slash-workflow, constitution articles I–III как закон DF, converge без независимого oracle, замена Change YAML на `specs/<branch>/`.
+
+---
+
+## OpenSpec (A11-02)
+
+Один механизм: **brownfield change-артефакты** (`openspec/changes/<id>/` = proposal + delta specs + design + tasks) и **слияние delta в основную spec при archive**. Не второй эксперимент: explore/verify/stores.
+
+Pin: release **v1.12.0** (2026-09-03), commit `e062b9572be933564ba3899d059377dfa1393e32`. Источники: [experiments/A11-02/sources.md](../experiments/A11-02/sources.md). Лицензия: **MIT** (OpenSpec Contributors). Не копировать.
+
+| ID | Проблема DF | Механизм OpenSpec | Evidence | Эквивалент DF | Выгода | Цена (контекст / ops) | Риск | Решение |
+|---|---|---|---|---|---|---|---|---|
+| OS-01 | Change FSM дорогой; A10-01 SDD не замена | `/opsx:propose` → `apply` → `archive`; expanded `verify` | OS-R1, OS-G2 | Intake→…→Verify/Archive ([A02-10](../experiments/A02-10/result.md)) | Меньше YAML; один folder на change | Нет `context_budget` слайса ([A03-05](../experiments/A03-05/result.md)); рекомендует Opus/Codex | «No rigid phase gates» = обход ANA-02/AB-06 | **не переносить** как замену ядра |
+| OS-02 | F-010 / bootstrap: полный catalog до кода; S01 пустой spec | Delta-first: specs почти пустые, растут одним change; не документировать весь brownfield | OS-E1, OS-G1 | `spec-delta` + `docs/spec/**` + `_capabilities.yaml` (SPC-01/04) | Не варить океан spec | Main `openspec/specs/` неполный до многих archive | Агент пишет код без нормативного SSOT | **сохранить** spec-delta. Bootstrap «только затронутый slice» **исследовать** в A12 (F-010), не отключая гейт |
+| OS-03 | SPEC-007: устаревшие требования; F-010 «specified» без live path | Archive: ADDED append, MODIFIED replace, REMOVED delete в `openspec/specs/`; optional `/opsx:sync` | OS-G1, OS-O1 | Specify пишет `docs/spec/**` **до** кода; `deltafuse archive` двигает пакет, не мержит spec | Явный merge modify/remove | SSOT обновляется **после** apply — spec не закон реализации | Код и главная spec расходятся до archive; ложный apply | **сохранить** Specify-time SSOT. Merge-только-на-archive **не переносить**. Пост-Verify сверка дельты ↔ live spec — [Q-008](../parking/design-questions.md) |
+| OS-04 | Provenance архива (VER-05/06) | Папка в `openspec/changes/archive/<date>-<id>/` | OS-G1, OS-R1 | `docs/archive/changes/` + T8 no-overwrite, archive только после `converged` | Дата в имени | Нет доказательства `check_gate(converged)` в docs | Archive без Verify (F-009 класс) | **сохранить** DF archiver. Дату в пути **адаптировать** только если не ломает T8 |
+| OS-05 | Human gate / FSM (AB-06) | «Enablers, not gates»: править proposal/design/tasks во время apply | OS-O1, OS-R2 | `blocked-on-decision`; allowed transitions | Итерация без стопа | Агент сам «согласовывает» | Скрытые DEC (SPEC-002) | **не переносить**. Fluid edits внутри фазы — не снятие гейта |
+| OS-06 | SPC-05: Specify не читает `src/**` ([F-002](../../findings/F-002.md)) | `/opsx:explore` и v1.12.0 code-grounded propose читают код/тесты до артефактов | OS-E1, OS-A2 | Specify forbidden codebase; Analyze/Target читают по контракту фазы | Предложение садится на реальный стек | Код в контексте Specify (A03-04 budget) | Spec = слепок кода, не закон | **сохранить** изоляцию Specify. Code-read в Explore/Analyze **исследовать** после routing, не в Specify |
+| OS-07 | A11-06: тот же SUT | 30+ IDE/CLI; Cursor; `.agents`; нет llama-server | OS-T1, OS-R2 | SUT `:1240` ornith | Теоретически skills в `.agents` | Свой харнесс; модель не Opus | Несопоставимый прогон | Для A11-06: OpenSpec **not-tested** на ornith. Контракты достаточны. CLI не ставили |
+
+### Лицензия (все строки OS-*)
+
+MIT (OpenSpec Contributors), [LICENSE v1.12.0](https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/LICENSE). Копирование шаблонов — только с notice. Сейчас **не копировать**. Stars не взвешивают строки.
+
+### Отказ от заимствования (намеренно)
+
+Замена FSM на fluid propose/apply/archive; обновление нормативной spec только после кода; чтение `src/**` на Specify; markdown ADDED/MODIFIED вместо schema spec-delta.

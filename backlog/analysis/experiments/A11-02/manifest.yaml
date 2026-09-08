@@ -1,0 +1,48 @@
+revision: "647df37"
+task_id: "A11-02"
+packet: "backlog/analysis/packets/A11-02.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-007"
+  - "PROC-001"
+  - "PROC-006"
+status: "done"
+notes:
+  - "Packet path analysis/matrices/contracts.md missing; used backlog/matrices/contracts.md SPC-01/04/05 VER-05/06"
+  - "One mechanism: brownfield change folder + delta merge into main spec on archive"
+  - "No LLM; did not install @fission-ai/openspec"
+  - "gh CLI not on PATH; GitHub REST + raw files via HTTP"
+  - "concepts.md v1.12.0 fetch timed out; used getting-started + overview"
+  - "A11-02 closed 2026-09-08: verdict pass (contract comparison)"
+inputs:
+  - "backlog/analysis/packets/A11-02.md"
+  - "backlog/analysis-plan.md:224-243"
+  - "backlog/matrices/contracts.md:107-118,181-193"
+  - "backlog/analysis/experiments/A02-10/result.md:1-38"
+  - "backlog/analysis/experiments/A03-04/result.md:1-40"
+  - "backlog/analysis/experiments/A03-05/result.md:1-40"
+  - "backlog/findings/F-010.md"
+  - "backlog/analysis/matrices/comparison.md"
+  - "backlog/analysis/matrices/ablation.md:AB-06"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/README.md"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/docs/getting-started.md"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/docs/overview.md"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/docs/existing-projects.md"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/docs/supported-tools.md"
+  - "https://raw.githubusercontent.com/Fission-AI/OpenSpec/v1.12.0/LICENSE"
+  - "https://api.github.com/repos/Fission-AI/OpenSpec"
+  - "https://api.github.com/repos/Fission-AI/OpenSpec/releases/latest"
+method: "Primary-source contract comparison. Pin OpenSpec v1.12.0 (commit e062b957). Map change-delta-archive onto DF spec-delta + archive. Decisions from F-010/SPEC-007/SPC-05, not star count."
+profile:
+  model: null
+  endpoint: null
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+  llm_calls: 0
+outputs:
+  sources: "backlog/analysis/experiments/A11-02/sources.md"
+  matrix: "backlog/analysis/matrices/comparison.md"
+  result: "backlog/analysis/experiments/A11-02/result.md"
+verdict: "pass"
