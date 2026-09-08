@@ -8,7 +8,7 @@
 
 Три слоя: нормативная модель (docs/skills/схемы) ≠ CLI/FSM ≠ качество на ornith. `A01 pass` = критерий определён.
 
-Roadmap с acceptance — [A12-03](packets/A12-03.md) после parking [A12-04](packets/A12-04.md). Здесь — ответы и ядро, не внедрение.
+Roadmap с acceptance — [roadmap.md](roadmap.md) (A12-03). Parking разобран: [A12-04](experiments/A12-04/result.md). Здесь — ответы и ядро, не внедрение.
 
 ---
 
@@ -111,9 +111,9 @@ Slash-SDD и converge-без-oracle; fluid «no gates»; SSOT только по�
 
 **Вопрос владельца.** Приоритизированный backlog с эффектом и ценой.
 
-**Вердикт.** Сначала **исправления ошибок** (F-*), не гипотезы Q-* и не analog-шаблоны. P0 не усреднять с P3. Полный roadmap с acceptance/regression — A12-03 после A12-04.
+**Вердикт.** Сначала **исправления ошибок** (F-*), не гипотезы Q-* и не analog-шаблоны. P0 не усреднять с P3. Пункты с acceptance — [roadmap.md](roadmap.md).
 
-**Уверенность.** Высокая для P0/P1 findings. Низкая для Q-001…Q-008, пока A12-04 не вынес `accept`/`reject`.
+**Уверенность.** Высокая для P0/P1 findings. Q-* разобраны в A12-04; пункты — в [roadmap.md](roadmap.md).
 
 ### Исправления (не гипотезы)
 
@@ -128,9 +128,9 @@ Slash-SDD и converge-без-oracle; fluid «no gates»; SSOT только по�
 | P1 | F-005 terminals на `converged` | отмена задач не клинит пакет | `fsm.py` |
 | P1 | F-008 claims не только CR-* | Analyze видит O1/E1 | гейт analyzed |
 
-### Недоказанные гипотезы (не внедрять в A12-02)
+### Недоказанные гипотезы (после A12-04)
 
-Q-001 борозда; Q-002 tokenizer (частично уже F-003); Q-003 embeddings — **не** фикс F-003; Q-004 вложенный «посчитай токены» — кандидат **reject**; Q-005 docs-only; Q-006 ops files; Q-007 constitution-lock; Q-008 post-Verify merge check.
+Q-003 embeddings — **defer**. Q-004 вложенный счёт токенов — **reject**. Q-007 constitution.md — **defer**. Остальные accept влиты в RM-*.
 
 ### Улучшения процесса (P2–P3, после P0)
 
@@ -152,4 +152,4 @@ Q-001 борозда; Q-002 tokenizer (частично уже F-003); Q-003 emb
 
 Verify/Archive на ornith; interrupt S10; F-006 на SUT; analog live на `:1240`; tokenizer `usage`; GPU-only 8 GB; другие модели; mutation score продукта; лестницы S06/S11.
 
-Parking Q-* не разобран — A12-04.
+Parking: [A12-04](experiments/A12-04/result.md) (`accept`/`defer`/`reject`). Очередность фикса: [roadmap.md](roadmap.md).
