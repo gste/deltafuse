@@ -15,7 +15,7 @@
 
 **Вопрос.** Должен ли DeltaFuse явно регулировать, сколько артефактов пишет один LLM-вызов (узкая / средняя / широкая борозда), отдельно от бюджета чтения `context.max_tokens` / `max_files`?
 
-**Наблюдение.** В docs борозда заявлена (`context_budget` слайса, 16000/24). В runtime не крутится: skill Analyze всё равно требует `routing.yaml` + slices + `coverage.yaml` + `analysis.md` одним ходом. У задачи нет `context_budget` ([F-002](../../findings/F-002.md)). Спас A09 харнесс `A09_ANALYZE_FOCUS=routing|slices|coverage`, не контракт фреймворка. Для ornith/14B узкая борозда нужна; для 27B+ три RTT слегка избыточны, не вредны.
+**Наблюдение.** В docs борозда заявлена (`context_budget` слайса, 16000/24). В runtime не крутится: skill Analyze всё равно требует `routing.yaml` + slices + `coverage.yaml` + `analysis.md` одним ходом. У задачи нет `context_budget` ([F-002](../../findings/F-002.md)). Спас A09 харнесс `A09_ANALYZE_FOCUS=routing|slices|coverage`, не контракт фреймворка. Для ornith/14B узкая борозда нужна; для 27B+ три RTT слегка избыточны, не вредны. A11-03: BMAD выбирает ceremony **после** расследования (`bmad-build` light vs full plan) — полезно как идея профиля, не как снятие FSM-гейтов.
 
 **Черновик направления.** Профиль ширины *вызова* в конфиге продукта/lock (`narrow` / `medium` / `wide`): один артефакт; фаза целиком; фронтир пакует Analyze сам. FSM уже пофазовый; нужны **подшаги внутри фазы** и правило «не закрывай `analyzed`, пока нет routing+slices+coverage», без требования одного ответа. Не копировать skills под каждую модель.
 
