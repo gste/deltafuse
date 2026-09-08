@@ -87,3 +87,32 @@ MIT на **код** (BMad Code, LLC), [LICENSE v6.12.0](https://raw.githubuserco
 
 Пропуск Specify для «trivial»; light path spec+code в одном чате; `bmad-build-auto` / Loop как замена FSM; self-review вместо hidden suite; брендинг BMad.
 
+---
+
+## Kiro Specs (A11-04)
+
+Один механизм: связка **requirements → design → tasks** и качество **проверяемых требований** (EARS, Analyze Requirements, optional PBT). Не второй эксперимент: steering, vibe mode, MCP import.
+
+Pin: публичные docs https://kiro.dev/docs/specs/ (updated 2026-08-27); git/release **нет**. Источники: [experiments/A11-04/sources.md](../experiments/A11-04/sources.md). Продукт proprietary — **не копировать** `.kiro/` шаблоны. EARS и PBT как методы — не эксклюзив Kiro.
+
+| ID | Проблема DF | Механизм Kiro | Evidence | Эквивалент DF | Выгода | Цена (контекст / ops) | Риск | Решение |
+|---|---|---|---|---|---|---|---|---|
+| KI-01 | Три слоя intent (spec / design / tasks) легко разъезжаются; F-010 specified без live spec | Три файла в `.kiro/specs/<feature>/`: requirements, design, tasks | KI-S1 | `docs/spec/**` + `DEC-*` + `TASK-*` (SPC-01, DEC-02/03) | Явная тройка артефактов | Три markdown без schema; `#spec` кладёт все в чат (A03-04) | SSOT в `.kiro` vs `docs/spec` | **сохранить** DF пакет. Три файла Kiro **не переносить** |
+| KI-02 | SPEC-003/004: расплывчатый язык, слабый oracle | EARS: WHEN condition THE SYSTEM SHALL behavior | KI-S2 | RFC 2119 MUST/SHALL в spec; TASK oracle GIVEN/WHEN/THEN | Короткая проверяемая форма | Стиль не гейт | SHALL без входа/выхода (F-010 класс) | **исследовать** EARS как стиль `docs/spec/**` (SPEC-003), не новый формат файлов |
+| KI-03 | SPEC-002 / Analyze gaps | Analyze Requirements: cross-set inconsistencies, ambiguities, edges | KI-S3 | `routing.yaml` Ambiguous + DEC proposed (ANA-02) | Ловит противоречия между req | Минуты LLM; можно skip | Self-review, не `check_gate` | **сохранить** DEC gate. Analyze как prompt extra **исследовать**; не замена F-010 |
+| KI-04 | Design vs spec (SPC-05) | Design-First: design.md затем требования из архитектуры | KI-S2 | Spec закон до кода; DEC после вилки | Удобно для NFR/feasibility | Spec = слепок дизайна | Обход «spec primary» (`docs/roles.md`) | **не переносить** как Specify. Design-First только как вход в DEC, не в `docs/spec` |
+| KI-05 | AB-06 Human Gate | Quick Spec: три артефакта без approval между фазами | KI-S4, KI-S5 | specification-proposed → specified | Скорость на знакомом | Нет стопа человека | Скрытые допущения | **не переносить** |
+| KI-06 | S03 баги / F-009 / regression | Bugfix: current / expected / **unchanged**; PBT на три свойства | KI-S6 | Red evidence + regression evidence (TAR/IMP) | Явный «не ломай» | PBT только IDE; optional | Слабое property = ложный pass (docs сами) | **сохранить** Red+regression. Unchanged-behavior в spec-delta **исследовать**. Генератор Kiro PBT **не переносить** |
+| KI-07 | TEST-001: example-only тесты | PBT из EARS; shrinking; не formal verification | KI-S7 | Hidden/pytest examples; TASK oracle | Много входов из одного инварианта | IDE-only; слабые properties | Подмена hidden suite | **исследовать** Hypothesis-класс в A12 как optional Target. Не ранжировать vs ornith |
+| KI-08 | DEC-01 DAG; ornith serial | Parallel waves по зависимостям tasks.md | KI-S1 | topo-sort; фазы по одной задаче | Скорость на облаке | 8 GB / одна модель | Гонки, раздутый контекст | **не переносить** на SUT A09 |
+| KI-09 | A11-06 тот же SUT | Kiro IDE/CLI/Web; PBT только IDE; модель продукта | KI-S1, KI-S7 | `:1240` ornith | — | Vendor lock | Несопоставимо | **not-applicable** для ornith прогона. Контракты достаточны |
+
+### Лицензия (все строки KI-*)
+
+Kiro — закрытый продукт AWS; SPDX не опубликован. Docs copyright. **Не копировать** шаблоны и длинные фрагменты. EARS (публичная нотация) и PBT как идея тестирования лицензией Kiro не запрещены как *методы*, но реализация Kiro — да.
+
+### Отказ от заимствования (намеренно)
+
+`.kiro/specs/` как SSOT; Quick Spec; Design-First Specify; parallel task execution на локальном SUT; закрытый PBT-генератор.
+
+

@@ -1,0 +1,44 @@
+revision: "8c71633"
+task_id: "A11-04"
+packet: "backlog/analysis/packets/A11-04.md"
+criterion_ids:
+  - "SPEC-003"
+  - "SPEC-004"
+  - "DEC-02"
+  - "TEST-001"
+status: "done"
+notes:
+  - "Packet path analysis/matrices/contracts.md missing; used backlog/matrices/contracts.md SPC/DEC"
+  - "One mechanism: requirements/design/tasks linkage + testable EARS-style requirements"
+  - "Managed product: public docs only; no git pin; PBT/wave scheduler internals not-tested"
+  - "No LLM; did not install Kiro"
+  - "A11-04 closed 2026-09-08: verdict pass (contract comparison)"
+inputs:
+  - "backlog/analysis/packets/A11-04.md"
+  - "backlog/analysis-plan.md:224-243"
+  - "backlog/criteria.md:SPEC-003,SPEC-004"
+  - "backlog/matrices/contracts.md:107-131"
+  - "docs/roles.md:1-38"
+  - "backlog/findings/F-010.md"
+  - "backlog/analysis/matrices/comparison.md"
+  - "https://kiro.dev/docs/specs/"
+  - "https://kiro.dev/docs/specs/feature-specs/"
+  - "https://kiro.dev/docs/specs/analyze-requirements/"
+  - "https://kiro.dev/docs/specs/quick-spec/"
+  - "https://kiro.dev/docs/specs/best-practices/"
+  - "https://kiro.dev/docs/specs/bugfix-specs/"
+  - "https://kiro.dev/docs/specs/correctness/"
+method: "Primary-source contract comparison of public Kiro Specs docs. Map req/design/tasks + EARS onto DF spec-delta, DEC, TASK oracle. Separate published workflow from inaccessible IDE internals. License: proprietary; do not copy templates."
+profile:
+  model: null
+  endpoint: null
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+  llm_calls: 0
+outputs:
+  sources: "backlog/analysis/experiments/A11-04/sources.md"
+  matrix: "backlog/analysis/matrices/comparison.md"
+  result: "backlog/analysis/experiments/A11-04/result.md"
+verdict: "pass"

@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-08.
 
-- **Статус:** очередь жива. [A11-03](packets/A11-03.md) закрыт.
+- **Статус:** очередь жива. [A11-04](packets/A11-04.md) закрыт.
 - **Текущая задача аудита:** нет. Prompts A09 заморожены; skills не патчить до A12.
-- **Следующая задача:** [A11-04](packets/A11-04.md) (Kiro Specs).
-- **Счётчики:** всего 84; `planned` 7; `in-progress` 0; `done` 77; `blocked` 0.
+- **Следующая задача:** [A11-05](packets/A11-05.md) (первичные практики по находкам).
+- **Счётчики:** всего 84; `planned` 6; `in-progress` 0; `done` 78; `blocked` 0.
 
 
 
@@ -161,7 +161,7 @@
 | [A11-01 — Сопоставить механизмы Spec Kit](packets/A11-01.md) | A02-10, A03-04, A03-05 | done | [pass; v1.0.4 chain not a DF replacement; comparison.md](experiments/A11-01/result.md) |
 | [A11-02 — Сопоставить механизмы OpenSpec](packets/A11-02.md) | A02-10, A03-04, A03-05 | done | [pass; v1.12.0 delta-archive not a DF replacement; comparison.md](experiments/A11-02/result.md) |
 | [A11-03 — Сопоставить механизмы BMAD Method](packets/A11-03.md) | A02-10, A03-04, A03-05 | done | [pass; v6.12.0 right-size not a gate skip; comparison.md](experiments/A11-03/result.md) |
-| [A11-04 — Сопоставить механизмы Kiro Specs](packets/A11-04.md) | A02-10, A03-04, A03-05 | planned | — |
+| [A11-04 — Сопоставить механизмы Kiro Specs](packets/A11-04.md) | A02-10, A03-04, A03-05 | done | [pass; public docs EARS/req-design-tasks; Kiro not a DF replacement; comparison.md](experiments/A11-04/result.md) |
 | [A11-05 — Проверить первичные практики по находкам](packets/A11-05.md) | A11-01, A11-02, A11-03, A11-04, A07-03 | planned | — |
 | [A11-06 — Сравнить два аналога на S02/S04/S05](packets/A11-06.md) | A08-03, A08-04, A08-05, A08-06, A08-07, A08-08, A08-09, A08-10, A08-11, A08-12, A08-13, A08-14, A08-15, A08-16, A09-13, A11-05 | planned | — |
 
