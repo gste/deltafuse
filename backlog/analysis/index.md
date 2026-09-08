@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-08.
 
-- **Статус:** `planned` — очередь жива, следующая [A09-13](packets/A09-13.md) (сводка локального профиля).
-- **Текущая задача аудита:** [A09-13 — свести измерения](packets/A09-13.md). Prompts A09-01 заморожены; A09 не тюнить.
-- **Следующая задача:** [A09-13](packets/A09-13.md); параллельно [A11-01](packets/A11-01.md).
-- **Счётчики:** всего 84; `planned` 13; `in-progress` 0; `done` 71; `blocked` 0.
+- **Статус:** `planned` — очередь жива, следующая [A10-01](packets/A10-01.md) (сравнение с минимальным SDD).
+- **Текущая задача аудита:** [A10-01](packets/A10-01.md). Prompts A09 заморожены; skills не патчить до A12. Параллельно [A11-01](packets/A11-01.md) (без LLM).
+- **Следующая задача:** [A10-01](packets/A10-01.md); параллельно [A11-01](packets/A11-01.md).
+- **Счётчики:** всего 84; `planned` 12; `in-progress` 0; `done` 72; `blocked` 0.
 
 
 
@@ -145,7 +145,7 @@
 | [A09-10 — Измерить локальное исполнение S10: Прерывание и повторная нарезка](packets/A09-10.md) | A09-01 | done | [fail; Specify 3/3; interrupt not-run](experiments/A09-10/result.md) |
 | [A09-11 — Измерить локальное исполнение S11: Два Change и удаление функции](packets/A09-11.md) | A09-01 | done | [fail; r1 Verify; r2/r3 Specify; F-006 not-run](experiments/A09-11/result.md) |
 | [A09-12 — Измерить локальное исполнение S12: Неверное evidence и недоверенный вход](packets/A09-12.md) | A09-01 | done | [fail; Specify 3/3; authority intake pass; forged Green not-run](experiments/A09-12/result.md) |
-| [A09-13 — Свести измерения локального профиля](packets/A09-13.md) | A09-01, A09-02, A09-03, A09-04, A09-05, A09-06, A09-07, A09-08, A09-09, A09-10, A09-11, A09-12 | planned | — |
+| [A09-13 — Свести измерения локального профиля](packets/A09-13.md) | A09-01, A09-02, A09-03, A09-04, A09-05, A09-06, A09-07, A09-08, A09-09, A09-10, A09-11, A09-12 | done | [pass; holdout profile fail; local-results.md](experiments/A09-13/result.md) |
 
 ## A10
 
