@@ -1,0 +1,5 @@
+outcome: pass
+independent_gate:
+  slices: SLICE-01
+hidden_suite: not-run
+attempts: 1

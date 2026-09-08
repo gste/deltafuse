@@ -1,0 +1,36 @@
+change: CHG-001-get-balance
+claims:
+  CR-001:
+    summary: The security.ratelimit service currently has no method to read the current
+      token balance without consuming tokens.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: get_balance(key) must return a non-negative integer token count available
+      for the next consume call.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Calling get_balance(key) must not modify the balance and must not create
+      any side-effecting deductions.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: For an unknown key, the balance equals the initial limit after normal
+      key initialization.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-005:
+    summary: The returned value must be non-negative.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high

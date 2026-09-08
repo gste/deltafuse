@@ -1,0 +1,5 @@
+outcome: pass
+independent_gate:
+  primary: security.ratelimit
+hidden_suite: not-run
+attempts: 1

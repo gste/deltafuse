@@ -1,0 +1,11 @@
+outcome: fail
+independent_gate:
+  specified: fail
+  attempt1: slices as path strings; spec-delta missing
+  attempt2: deltas/slices as paths; spec-delta without ---
+  attempt3: added REQ-RL-05 treated as spec file path
+  live_spec_has_get_balance: true
+  src_unchanged: true
+  forged_green_by_agent: false
+hidden_suite: not-run
+attempts: 3

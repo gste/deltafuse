@@ -1,0 +1,13 @@
+change.yaml: [deltas -> 0] Additional properties are not allowed ('change', 'requirement_delta', 'spec_refs' were unexpected)
+change.yaml: [deltas -> 0] 'id' is a required property
+change.yaml: [deltas -> 0] 'kind' is a required property
+change.yaml: [deltas -> 0] 'summary' is a required property
+change.yaml: [deltas -> 0] 'specification' is a required property
+change.yaml: [deltas -> 0] 'catalog' is a required property
+change.yaml: [deltas -> 0] 'decisions' is a required property
+change.yaml: [deltas -> 0] 'tasks' is a required property
+change.yaml: [deltas -> 0] 'tests' is a required property
+change.yaml: [deltas -> 0] 'implementation' is a required property
+change.yaml: [deltas -> 0] 'evidence' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

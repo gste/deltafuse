@@ -1,0 +1,49 @@
+change: CHG-001-get-balance
+claims:
+  CR-001:
+    summary: |-
+      The security.ratelimit service currently exposes a consume operation that
+      deducts tokens for a key.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: |-
+      get_balance(key) returns the current token balance for key without any
+      deduction.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: |-
+      get_balance(key) returns a non-negative integer of tokens available for the
+      next consume.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: |-
+      Calling get_balance(key) does not change the balance and produces no
+      deduction side effects.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: |-
+      For an unknown key, the balance equals the initial limit after normal key
+      initialization.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-006:
+    summary: |-
+      The method must not create side effects or partial deductions on any key.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high

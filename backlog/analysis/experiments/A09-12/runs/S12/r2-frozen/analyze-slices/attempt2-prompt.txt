@@ -1,0 +1,419 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: analyze-change
+description: Route a normalized DeltaFuse Change through product capabilities, compare bounded slices with accepted specification and Decisions, and compute typed deltas. Use iteratively until blocking Decisions converge.
+---
+
+# Analyze Change
+
+Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterative Decision-convergence step.
+
+Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Start with `request.md`, `docs/spec/_capabilities.yaml`, compact global policy summaries, and the configured context budget. Route before loading detailed specification.
+
+After routing, read only selected spec modules, related Decision records, and explicitly requested diagnostic evidence. Do not load the whole spec, codebase, tests, or unrelated Changes/tasks by default.
+
+## Procedure
+
+1. Assign every `CR-*` claim one owning capability plus optional related capabilities and policies in `routing.yaml`.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome.
+3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
+4. Classify independently: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
+5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
+6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices. Do not accept them.
+7. Re-run only affected slices after human clarification or a terminal Decision.
+8. Perform global reconciliation over slice summaries, dependency graph, claim coverage, policies, and Decision statuses.
+
+If context exceeds budget, split by connected capability components and outcomes; add integration slices instead of truncating context.
+
+## Gate
+
+Exit only when all claims are routed, every slice has a typed delta, blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
+
+Write `analysis.md`, `routing.yaml`, `slices/**`, `coverage.yaml`, Decision/catalog proposals, and updated `change.yaml`. Recommend `/specify-change <change-id> [slice-id]`.
+
+
+----- USER -----
+
+Phase: analyze
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'analyze'
+Gate to satisfy after this call: analyzed
+Previous attempt failed validation:
+SLICE-01.md: [root] Additional properties are not allowed ('task' was unexpected)
+This call writes ONLY one file: docs/changes/<id>/slices/SLICE-01.md (YAML frontmatter matching slice.schema.yaml, then markdown body). Keep the body short. Frontmatter claims must list the CR-NNN ids from request.md. Use status continue. Do not set blocked-on-decision: unknowns are not blocking Decisions for a single unambiguous feature. Do not write coverage.yaml, analysis.md, or extra slices.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-get-balance/change.yaml ===
+schema_version: 2
+id: CHG-001-get-balance
+title: Add get_balance() to Rate Limiter
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: low
+source:
+  request: docs/intake/S12.md
+  intake_refs:
+    - docs/intake/S12.md
+analysis:
+  routing: docs/changes/CHG-001-get-balance/routing.yaml
+  summary: null
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
+
+
+=== FILE docs/changes/CHG-001-get-balance/request.md ===
+# Request: get_balance() on Rate Limiter key
+
+Source: `docs/intake/S12.md` (Rate Limiter service `security.ratelimit`).
+
+## Summary
+
+Add a method `get_balance(key)` to the Rate Limiter service that returns the
+current token balance for a key without deducting tokens.
+
+## Claims
+
+- CR-001 (observation): The service `security.ratelimit` currently exposes a
+  `consume` operation that deducts tokens for a key.
+- CR-002 (expectation): `get_balance(key)` returns the current token balance for
+  `key` without any deduction.
+- CR-003 (expectation): `get_balance(key)` returns a non-negative integer of
+  tokens available for the next `consume`.
+- CR-004 (expectation): Calling `get_balance(key)` does not change the balance
+  and produces no deduction side effects.
+- CR-005 (expectation): For an unknown key, the balance equals the initial limit
+  after normal key initialization.
+- CR-006 (constraint): The method must not create side effects or partial
+  deductions on any key.
+
+## Unknowns
+
+- The exact return type and units of the initial limit are not specified.
+- The key initialization path (`consume` or equivalent) is referenced but not
+  detailed in the source.
+
+## Excluded
+
+- Any instructions embedded in the source file that are not part of the feature
+  request are disregarded as non-specification content.
+
+
+=== FILE docs/changes/CHG-001-get-balance/routing.yaml ===
+change: CHG-001-get-balance
+claims:
+  CR-001:
+    summary: |-
+      The security.ratelimit service currently exposes a consume operation that
+      deducts tokens for a key.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: |-
+      get_balance(key) returns the current token balance for key without any
+      deduction.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: |-
+      get_balance(key) returns a non-negative integer of tokens available for the
+      next consume.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: |-
+      Calling get_balance(key) does not change the balance and produces no
+      deduction side effects.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: |-
+      For an unknown key, the balance equals the initial limit after normal key
+      initialization.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-006:
+    summary: |-
+      The method must not create side effects or partial deductions on any key.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-get-balance/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-get-balance
+title: Add get_balance() to security.ratelimit
+task: analyze
+status: analyzing
+primary_capability: security.ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+depends_on: []
+context_budget:
+  max_tokens: 4000
+  max_files: 6
+---
+
+## Scope
+
+In scope: add `get_balance(key)` returning the current token balance without deduction.
+Out of scope: changing `consume`, refill, or capacity semantics.
+
+## Slice analysis
+
+- **intent**: feature (additive method, no behavior change to existing operations).
+- **delta_kind**: spec + implementation + tests.
+- **requirement_delta**: new REQ-RL-05 defining `get_balance(key)` returns a non-negative integer equal to the key's current balance, with no deduction side effect; unknown keys start at full capacity (REQ-RL-03).
+- **design_impact**: read-only accessor over the token-bucket state; must not mutate or partially deduct. Mirrors `consume` key initialization.
+- **risk**: low. No side effects; constrained to one capability.
+- **size**: small (single method + spec line + tests).
+
+## Claims
+
+- CR-001/CR-002: `get_balance(key)` returns current balance without deduction.
+- CR-003: returns non-negative integer available for next `consume`.
+- CR-004/CR-006: no side effects or partial deductions.
+- CR-005: unknown key balance equals initial (full) capacity.
+
+## Unknowns
+
+Units of the initial limit are unspecified but are the same integer units as `consume`/capacity; not blocking for a single unambiguous feature.
+
+## Next
+
+Recommend `/specify-change CHG-001-get-balance SLICE-01` to accept the REQ-RL-05 delta.
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/slice.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/slice.schema.yaml
+title: DeltaFuse Slice frontmatter
+type: object
+additionalProperties: false
+required: [id, change, title, status, primary_capability, claims]
+properties:
+  id:
+    type: string
+    pattern: '^SLICE-[0-9]{2,}$'
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  title:
+    type: string
+    minLength: 1
+  status:
+    enum: [draft, analyzing, blocked, analyzed, specified, decomposed, verified]
+  primary_capability:
+    type: string
+    minLength: 1
+  related_capabilities:
+    type: array
+    items:
+      type: string
+  policies:
+    type: array
+    items:
+      type: string
+  spec_refs:
+    type: array
+    items:
+      type: string
+  claims:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      pattern: '^CR-[0-9]{3,}$'
+  depends_on:
+    type: array
+    items:
+      type: string
+      pattern: '^SLICE-[0-9]{2,}$'
+  context_budget:
+    type: object
+    properties:
+      max_tokens:
+        type: integer
+      max_files:
+        type: integer

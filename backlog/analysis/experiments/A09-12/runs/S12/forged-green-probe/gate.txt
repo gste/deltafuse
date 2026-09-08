@@ -1,0 +1,42 @@
+implemented:
+change.yaml: [deltas -> 0] Additional properties are not allowed ('requirement_delta', 'spec_refs' were unexpected)
+change.yaml: [deltas -> 0] 'id' is a required property
+change.yaml: [deltas -> 0] 'kind' is a required property
+change.yaml: [deltas -> 0] 'summary' is a required property
+change.yaml: [deltas -> 0] 'specification' is a required property
+change.yaml: [deltas -> 0] 'catalog' is a required property
+change.yaml: [deltas -> 0] 'decisions' is a required property
+change.yaml: [deltas -> 0] 'tasks' is a required property
+change.yaml: [deltas -> 0] 'tests' is a required property
+change.yaml: [deltas -> 0] 'implementation' is a required property
+change.yaml: [deltas -> 0] 'evidence' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+SLICE-01.md: Specification root directory 'docs/spec' not found
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+evidence\green\TASK-001.yaml: references nonexistent task 'TASK-001'
+evidence\regression\TASK-001.yaml: references nonexistent task 'TASK-001'
+
+converged:
+change.yaml: [deltas -> 0] Additional properties are not allowed ('requirement_delta', 'spec_refs' were unexpected)
+change.yaml: [deltas -> 0] 'id' is a required property
+change.yaml: [deltas -> 0] 'kind' is a required property
+change.yaml: [deltas -> 0] 'summary' is a required property
+change.yaml: [deltas -> 0] 'specification' is a required property
+change.yaml: [deltas -> 0] 'catalog' is a required property
+change.yaml: [deltas -> 0] 'decisions' is a required property
+change.yaml: [deltas -> 0] 'tasks' is a required property
+change.yaml: [deltas -> 0] 'tests' is a required property
+change.yaml: [deltas -> 0] 'implementation' is a required property
+change.yaml: [deltas -> 0] 'evidence' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+SLICE-01.md: Specification root directory 'docs/spec' not found
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+evidence\green\TASK-001.yaml: references nonexistent task 'TASK-001'
+evidence\regression\TASK-001.yaml: references nonexistent task 'TASK-001'
+Gate converged: verification.md is missing
+Gate converged: evidence/verification/run.yaml is missing
+Gate converged: claim 'CR-001' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-002' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-003' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-004' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-005' in coverage.yaml is missing green or regression evidence mapping

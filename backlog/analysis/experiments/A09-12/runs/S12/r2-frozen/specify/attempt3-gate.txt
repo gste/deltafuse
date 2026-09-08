@@ -1,0 +1,3 @@
+change.yaml: [deltas -> 0] 'docs/changes/CHG-001-get-balance/spec-delta.md' is not of type 'object'
+change.yaml: [slices -> 0] 'docs/changes/CHG-001-get-balance/slices/SLICE-01.md' is not of type 'object'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-05'
