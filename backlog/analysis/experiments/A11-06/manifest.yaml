@@ -1,0 +1,45 @@
+revision: "439c54e"
+task_id: "A11-06"
+packet: "backlog/analysis/packets/A11-06.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-002"
+  - "PROC-004"
+  - "PROC-007"
+  - "TEST-001"
+status: "done"
+notes:
+  - "protocol.md has no heading сопоставимость; used §1 split and §4 SUT/budgets"
+  - "Packet path analysis/criteria.md missing; used backlog/criteria.md"
+  - "Two candidates: OpenSpec v1.12.0 and Spec Kit v1.0.4; BMAD not selected; Kiro not-applicable"
+  - "SUT :1240 reachable (ornith-1.5-35b-a3b); analog first-class integration absent"
+  - "Did not install analog CLIs; did not rank quality; did not re-rank A11-01..05"
+  - "A11-06 closed 2026-09-08: verdict pass (contract fallback); live analog runs not-tested"
+inputs:
+  - "backlog/analysis/packets/A11-06.md"
+  - "backlog/analysis-plan.md:224-243"
+  - "backlog/analysis/experiments/protocol.md:7-99"
+  - "backlog/analysis/matrices/comparison.md:SK-08,OS-07,BM-07,KI-09"
+  - "backlog/analysis/experiments/A11-01/result.md"
+  - "backlog/analysis/experiments/A11-02/result.md"
+  - "backlog/analysis/experiments/A11-03/result.md"
+  - "backlog/analysis/experiments/A11-04/result.md"
+  - "backlog/analysis/experiments/A11-05/result.md"
+  - "backlog/analysis/experiments/A09-13/result.md"
+  - "backlog/analysis/experiments/A10-01/result.md"
+  - "GET http://127.0.0.1:1240/v1/models"
+method: "Select two most relevant analogs by published integration hooks vs DF Change shape. Confirm SUT reachable. Do not install CLIs or wrap slash commands (that would be a new harness, not the analog). Map S02/S04/S05 onto existing contract rows. Record live comparison as not-tested; do not rank quality."
+profile:
+  model: "ornith-1.5-35b-a3b"
+  endpoint: "http://127.0.0.1:1240/v1"
+  llm_used_for_analog_runs: false
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+  llm_calls: 0
+outputs:
+  sources: "backlog/analysis/experiments/A11-06/sources.md"
+  matrix: "backlog/analysis/matrices/comparison.md"
+  result: "backlog/analysis/experiments/A11-06/result.md"
+verdict: "pass"

@@ -6,7 +6,7 @@
 
 Пакетный путь `analysis/matrices/contracts.md` нет; строки DF — [backlog/matrices/contracts.md](../matrices/contracts.md) (ANA-01/02, SPC-01/06).
 
-Живой LLM-ранг vs ornith: **not-tested** до A11-06. A10-01 уже показал, что минимальный SDD не замена ядра.
+Живой LLM-ранг аналогов vs ornith: **not-tested** ([A11-06](../experiments/A11-06/result.md) — нет first-class интеграции с `:1240`). A10-01 уже показал, что минимальный SDD на том же SUT не замена ядра. Качество Copilot/Claude/Opus/Kiro **не** ранжировать против ornith.
 
 ---
 
@@ -25,7 +25,7 @@ Pin: release **v1.0.4** (2026-09-02), commit `cb610277fdea781fcfa83d20522c2db37c
 | SK-05 | S04: вилка должна стоить Human Gate (ANA-02, AB-06) | `/speckit.clarify` *рекомендован* до plan, не FSM-блок | SK-R2 | `DEC-* proposed` → `blocked-on-decision` | Clarify дешевле, чем полный DEC | Агент может пропустить clarify | Скрытые допущения (SPEC-002) | **сохранить своё** human gate. Clarify как extra **исследовать** только если не снимает блок |
 | SK-06 | F-010 / SPC-06: `specified` = файл spec-delta, не live spec | Шаблоны spec/plan с чеклистами; `/speckit.analyze` после tasks; `/speckit.checklist` | SK-D2, SK-R2 | SPC-01 якоря; ANA-01 coverage; слабый SPC-06/F-010 | Чеклист «дыр в тексте» | LLM self-review, не `check_gate` | Чеклист зелёный при пустых путях (как F-010) | **сохранить своё** FSM. Усилить `specified` в A12 (**исследовать**). Чеклисты в prompt — не замена гейта |
 | SK-07 | Процесс один на все модели (Q-001) | Extensions / presets / bundles; bug и assess opt-in | SK-R3 | Один lifecycle + skills; нет catalog 157 расширений | Opt-in глубина под размер работы (план A11) | Каталог и CLI Specify — ops-поверхность | Разъезд контрактов DF vs чужие команды | **не переносить** каталог. Профили lock **исследовать** (Q-001), не Specify CLI |
-| SK-08 | A11-06: два аналога на S02/S04/S05 | Интеграции Copilot/Claude/Cursor/… + `generic --commands-dir` | SK-I1 | SUT A09: llama-server `:1240`, не IDE-agent | `generic` теоретически кладёт команды в каталог | Нужен свой харнесс; не first-class ornith | Несопоставимый прогон ≠ качество | Для A11-06: Spec Kit **not-tested** на ornith, пока нет того же SUT. Контракты достаточны. `generic` не проверяли установкой |
+| SK-08 | A11-06: два аналога на S02/S04/S05 | Интеграции Copilot/Claude/Cursor/… + `generic --commands-dir` | SK-I1 | SUT A09: llama-server `:1240`, не IDE-agent | `generic` теоретически кладёт команды в каталог | Нужен свой харнесс; не first-class ornith | Несопоставимый прогон ≠ качество | **A11-06:** кандидат №2. Живой прогон **not-tested**. Обёртка CLI ≠ интеграция. Контракты достаточны |
 
 ### Лицензия (все строки SK-*)
 
@@ -51,7 +51,7 @@ Pin: release **v1.12.0** (2026-09-03), commit `e062b9572be933564ba3899d059377dfa
 | OS-04 | Provenance архива (VER-05/06) | Папка в `openspec/changes/archive/<date>-<id>/` | OS-G1, OS-R1 | `docs/archive/changes/` + T8 no-overwrite, archive только после `converged` | Дата в имени | Нет доказательства `check_gate(converged)` в docs | Archive без Verify (F-009 класс) | **сохранить** DF archiver. Дату в пути **адаптировать** только если не ломает T8 |
 | OS-05 | Human gate / FSM (AB-06) | «Enablers, not gates»: править proposal/design/tasks во время apply | OS-O1, OS-R2 | `blocked-on-decision`; allowed transitions | Итерация без стопа | Агент сам «согласовывает» | Скрытые DEC (SPEC-002) | **не переносить**. Fluid edits внутри фазы — не снятие гейта |
 | OS-06 | SPC-05: Specify не читает `src/**` ([F-002](../../findings/F-002.md)) | `/opsx:explore` и v1.12.0 code-grounded propose читают код/тесты до артефактов | OS-E1, OS-A2 | Specify forbidden codebase; Analyze/Target читают по контракту фазы | Предложение садится на реальный стек | Код в контексте Specify (A03-04 budget) | Spec = слепок кода, не закон | **сохранить** изоляцию Specify. Code-read в Explore/Analyze **исследовать** после routing, не в Specify |
-| OS-07 | A11-06: тот же SUT | 30+ IDE/CLI; Cursor; `.agents`; нет llama-server | OS-T1, OS-R2 | SUT `:1240` ornith | Теоретически skills в `.agents` | Свой харнесс; модель не Opus | Несопоставимый прогон | Для A11-06: OpenSpec **not-tested** на ornith. Контракты достаточны. CLI не ставили |
+| OS-07 | A11-06: тот же SUT | 30+ IDE/CLI; Cursor; `.agents`; нет llama-server | OS-T1, OS-R2 | SUT `:1240` ornith | Теоретически skills в `.agents` | Свой харнесс; модель не Opus | Несопоставимый прогон | **A11-06:** кандидат №1. Живой прогон **not-tested**. README Codex/Opus ≠ ornith. CLI не ставили |
 
 ### Лицензия (все строки OS-*)
 
@@ -77,7 +77,7 @@ Pin: release **v6.12.0** (2026-09-04), commit `05bfbd46d00766ec88eb9b42e76be2c57
 | BM-04 | SPC-05 / F-002: Specify без `src/**` | `bmad-build` сначала читает codebase, потом light spec+code в одной сессии | BM-D2 | Specify forbidden src; Implement после specified | Меньше RTT на tiny | Spec = слепок кода | Закон после diff | **сохранить** изоляцию Specify. Investigate на Analyze/Target — по контракту фазы |
 | BM-05 | F-009 / A10-01: ложный Green своих тестов | `bmad-build` self-review + triage; optional skip review | BM-D2, BM-A2 | Hidden suite + Verify evidence (VER-*) | Дешевле человека на шуме | Review той же/соседней модели, нужны subagents | Самооценка ≠ oracle | **сохранить** независимый oracle. Self-review **не переносить** как Verify |
 | BM-06 | AB-06 Human Gate | `bmad-build-auto` без ожидания человека; Loop orchestrates units | BM-D1, BM-D2 | `blocked-on-decision`; запрет auto-accept | Скорость после стабильных паттернов | Обход DEC/spec | SPEC-002 | **не переносить** unattended как default |
-| BM-07 | A11-06: тот же SUT | Installer: Claude Code, Cursor; v6.12.0 + Grok/ZCode/Polytoken; нет llama-server | BM-D5, BM-D6, BM-A2 | SUT `:1240` ornith | Skills в IDE | Node/Python/uv; не first-class ornith | Несопоставимый прогон | Для A11-06: BMAD **not-tested** на ornith. `--list-tools` не запускали |
+| BM-07 | A11-06: тот же SUT | Installer: Claude Code, Cursor; v6.12.0 + Grok/ZCode/Polytoken; нет llama-server | BM-D5, BM-D6, BM-A2 | SUT `:1240` ornith | Skills в IDE | Node/Python/uv; не first-class ornith | Несопоставимый прогон | **A11-06:** не в паре (нет generic-хука). Живой прогон **not-tested**. `--list-tools` не запускали |
 
 ### Лицензия (все строки BM-*)
 
@@ -105,7 +105,7 @@ Pin: публичные docs https://kiro.dev/docs/specs/ (updated 2026-08-27); 
 | KI-06 | S03 баги / F-009 / regression | Bugfix: current / expected / **unchanged**; PBT на три свойства | KI-S6 | Red evidence + regression evidence (TAR/IMP) | Явный «не ломай» | PBT только IDE; optional | Слабое property = ложный pass (docs сами) | **сохранить** Red+regression. Unchanged-behavior в spec-delta **исследовать**. Генератор Kiro PBT **не переносить** |
 | KI-07 | TEST-001: example-only тесты | PBT из EARS; shrinking; не formal verification | KI-S7 | Hidden/pytest examples; TASK oracle | Много входов из одного инварианта | IDE-only; слабые properties | Подмена hidden suite | **исследовать** Hypothesis-класс в A12 как optional Target. Не ранжировать vs ornith |
 | KI-08 | DEC-01 DAG; ornith serial | Parallel waves по зависимостям tasks.md | KI-S1 | topo-sort; фазы по одной задаче | Скорость на облаке | 8 GB / одна модель | Гонки, раздутый контекст | **не переносить** на SUT A09 |
-| KI-09 | A11-06 тот же SUT | Kiro IDE/CLI/Web; PBT только IDE; модель продукта | KI-S1, KI-S7 | `:1240` ornith | — | Vendor lock | Несопоставимо | **not-applicable** для ornith прогона. Контракты достаточны |
+| KI-09 | A11-06 тот же SUT | Kiro IDE/CLI/Web; PBT только IDE; модель продукта | KI-S1, KI-S7 | `:1240` ornith | — | Vendor lock | Несопоставимо | **A11-06:** **not-applicable**. Не кандидат пары. Контракты достаточны |
 
 ### Лицензия (все строки KI-*)
 
@@ -148,5 +148,27 @@ Kiro — закрытый продукт AWS; SPDX не опубликован. 
 ### Отказ от заимствования (намеренно)
 
 Cucumber/JBehave; вендор PIT в `src/deltafuse`; Pact broker; Kiro PBT generator; `.kiro` файлы; ITIL/CMDB; reproducible-builds как обещание бинарной сборки DF; constitution/slash-SDD заново (уже A11-01…04).
+
+---
+
+## A11-06 — два аналога на S02 / S04 / S05
+
+Не живой ранг. Источники: [experiments/A11-06/sources.md](../experiments/A11-06/sources.md). Пара: **OpenSpec** (кандидат №1) и **Spec Kit** (кандидат №2). BMAD не в паре. Kiro **not-applicable**. Решения A11-01…05 не переписывать. Качество **не** ранжировать.
+
+Сопоставимость (план A11 + protocol §1/§4): та же модель `ornith-1.5-35b-a3b` на `:1240`, те же raw input/oracles/бюджеты, один case за запуск, S05 = holdout (не тюнить промпт). First-class интеграция аналогов с llama-server **отсутствует** (SK-I1, OS-T1). SUT 2026-09-08 **reachable**. Установка CLI и обёртка slash-команд была бы новым харнессом (класс A10-01), не продуктом аналога.
+
+| ID | Case | Измерено DF | Контракт Spec Kit | Контракт OpenSpec | Живой ранг |
+|---|---|---|---|---|---|
+| CMP-01 | S02 tiny (calibration) | A09 `partial`: TASK Green, 0 Verify, F-009 | specify→plan→tasks→implement; нет typed TASK (SK-03) | change folder propose/apply; нет гейта (OS-01) | **not-tested** |
+| CMP-02 | S04 Decision (calibration) | A09 `pass`: `blocked-on-decision` + DEC | clarify рекомендован, не FSM-блок (SK-05) | «no rigid phase gates» (OS-05) | **not-tested** |
+| CMP-03 | S05 multi-cap (holdout) | A09 `fail` Specify/F-010; A10-01 SDD файлы ≠ hidden-green | converge = self-review (SK-04); holdout нельзя калибровать | несколько delta spec, merge на archive (OS-03) | **not-tested** |
+
+### Решение
+
+Контракты достаточны для A12: **не** объявлять analog лучше/хуже DF на этих case. Заимствования только из строк SK/OS/BM/KI/PP с уже записанным условием отказа. Повторный живой ранг — только при first-class адаптере того же `:1240`.
+
+### Отказ от заимствования (намеренно)
+
+Ранг качества Copilot/Claude/Opus/Kiro vs ornith; установка analog CLI «чтобы закрыть карточку»; повтор homemade SDD A10-01 как будто это Spec Kit/OpenSpec.
 
 

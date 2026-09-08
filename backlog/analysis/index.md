@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-08.
 
-- **Статус:** `planned` — очередь жива; следующая [A11-06](packets/A11-06.md) (два аналога на S02/S04/S05; без той же интеграции — только контракты).
-- **Текущая задача аудита:** [A11-06](packets/A11-06.md). Prompts A09 заморожены; skills не патчить до A12.
-- **Следующая задача:** [A11-06](packets/A11-06.md).
-- **Счётчики:** всего 84; `planned` 5; `in-progress` 0; `done` 79; `blocked` 0.
+- **Статус:** `planned` — очередь жива; следующая [A12-01](packets/A12-01.md) (покрытие и доказательность выводов).
+- **Текущая задача аудита:** [A12-01](packets/A12-01.md). Prompts A09 заморожены; skills не патчить до A12.
+- **Следующая задача:** [A12-01](packets/A12-01.md).
+- **Счётчики:** всего 84; `planned` 4; `in-progress` 0; `done` 80; `blocked` 0.
 
 
 
@@ -163,7 +163,7 @@
 | [A11-03 — Сопоставить механизмы BMAD Method](packets/A11-03.md) | A02-10, A03-04, A03-05 | done | [pass; v6.12.0 right-size not a gate skip; comparison.md](experiments/A11-03/result.md) |
 | [A11-04 — Сопоставить механизмы Kiro Specs](packets/A11-04.md) | A02-10, A03-04, A03-05 | done | [pass; public docs EARS/req-design-tasks; Kiro not a DF replacement; comparison.md](experiments/A11-04/result.md) |
 | [A11-05 — Проверить первичные практики по находкам](packets/A11-05.md) | A11-01, A11-02, A11-03, A11-04, A07-03 | done | [pass; ADR/BDD/EARS/mutation/repro/CM vs F-001..F-005; comparison.md](experiments/A11-05/result.md) |
-| [A11-06 — Сравнить два аналога на S02/S04/S05](packets/A11-06.md) | A08-03, A08-04, A08-05, A08-06, A08-07, A08-08, A08-09, A08-10, A08-11, A08-12, A08-13, A08-14, A08-15, A08-16, A09-13, A11-05 | planned | — |
+| [A11-06 — Сравнить два аналога на S02/S04/S05](packets/A11-06.md) | A08-03, A08-04, A08-05, A08-06, A08-07, A08-08, A08-09, A08-10, A08-11, A08-12, A08-13, A08-14, A08-15, A08-16, A09-13, A11-05 | done | [pass; OpenSpec+Spec Kit contracts; live analog runs not-tested; comparison.md](experiments/A11-06/result.md) |
 
 ## A12
 
