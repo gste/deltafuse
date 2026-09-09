@@ -161,6 +161,7 @@ RM-030 / RM-031                    (P3)
 | Regression | T8 archive. Specify-time SSOT сохраняется |
 | Стоимость | S–M |
 | Зависимости | **RM-010** |
+| Статус | **done** 2026-09-09 — `converged` сверяет spec-delta added/modified/removed с `docs/spec/**`; S04 без spec-delta проходит; архив не merge |
 
 ### RM-018 — analyzed видит не только `CR-*` (F-008)
 

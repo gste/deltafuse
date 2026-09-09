@@ -459,3 +459,113 @@ def test_implemented_rejects_stale_green_after_spec_change(tmp_path: Path, repo_
         data["base_revision"] = fresh
         ev_file.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     assert check_gate(builder.change_dir, "implemented") == []
+
+
+def _restamp_evidence(change_dir: Path, repo_root: Path) -> None:
+    from deltafuse.core.hasher import compute_product_baseline_revision
+
+    fresh = compute_product_baseline_revision(repo_root)
+    evidence_dir = change_dir / "evidence"
+    if not evidence_dir.is_dir():
+        return
+    for ev_file in evidence_dir.rglob("*.yaml"):
+        data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("phase") in {"green", "regression", "verification"}:
+            data["base_revision"] = fresh
+            ev_file.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _write_ops_spec_delta(
+    change_dir: Path,
+    change_id: str,
+    *,
+    added: list[str] | None = None,
+    modified: list[str] | None = None,
+    removed: list[str] | None = None,
+) -> None:
+    spec_delta = (
+        "---\n"
+        f"change: {change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01]\n"
+        f"added: {added or []}\n"
+        f"modified: {modified or []}\n"
+        f"removed: {removed or []}\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+
+
+def test_converged_rejects_wiped_added_spec_after_specify(tmp_path: Path, repo_root: Path):
+    """Q-008 / RM-008: deleting live spec after Specify must fail converged, not archive-merge."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-019", title="Wiped spec")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    _write_ratelimit_spec(tmp_path)
+    _write_ops_spec_delta(
+        builder.change_dir,
+        builder.change_id,
+        added=["docs/spec/security/ratelimit.md#REQ-RL-01"],
+    )
+    _restamp_evidence(builder.change_dir, tmp_path)
+    assert check_gate(builder.change_dir, "converged") == []
+
+    (tmp_path / "docs" / "spec" / "security" / "ratelimit.md").unlink()
+    _restamp_evidence(builder.change_dir, tmp_path)
+    errs = check_gate(builder.change_dir, "converged")
+    assert any(
+        "Gate converged" in e and "added" in e and "ratelimit.md" in e for e in errs
+    )
+
+
+def test_converged_rejects_removed_spec_still_on_disk(tmp_path: Path, repo_root: Path):
+    """RM-008: spec-delta removed must actually be gone from docs/spec."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-020", title="Removed still live")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    legacy = tmp_path / "docs" / "spec" / "legacy.md"
+    legacy.write_text("# Legacy\n## REQ-OLD\nRetired requirement.\n", encoding="utf-8")
+    _write_ops_spec_delta(
+        builder.change_dir,
+        builder.change_id,
+        removed=["docs/spec/legacy.md#REQ-OLD"],
+    )
+    _restamp_evidence(builder.change_dir, tmp_path)
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("removed" in e and "still present" in e for e in errs)
+
+    legacy.unlink()
+    _restamp_evidence(builder.change_dir, tmp_path)
+    assert check_gate(builder.change_dir, "converged") == []
+
+
+def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root: Path):
+    """S04: bugfix path may skip Specify; converged does not require spec-delta."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-021", title="Bugfix no specify")
+        .step_intake()
+        .step_analyze()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    assert not (builder.change_dir / "spec-delta.md").is_file()
+    assert check_gate(builder.change_dir, "converged") == []

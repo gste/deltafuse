@@ -281,7 +281,7 @@ The Verifier checks that:
    - Evidence audit;
    - Delta verification;
    - Residual risks and verification sign-off.
-4. Transition `change.yaml` status to `converged`.
+4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
 1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.

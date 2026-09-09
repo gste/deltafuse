@@ -496,6 +496,64 @@ def _validate_specified_live_spec(
     return errors
 
 
+def _spec_delta_ops(spec_delta_file: Path) -> tuple[dict[str, list[str]], list[str]]:
+    ops: dict[str, list[str]] = {"added": [], "modified": [], "removed": []}
+    errors: list[str] = []
+    if not spec_delta_file.is_file():
+        return ops, errors
+    try:
+        meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return ops, [f"spec-delta.md frontmatter error: {ex}"]
+    if not isinstance(meta, dict):
+        return ops, errors
+    for key in ops:
+        raw = meta.get(key) or []
+        if not isinstance(raw, list):
+            errors.append(f"spec-delta.md: {key} must be a list")
+            continue
+        for item in raw:
+            if isinstance(item, str):
+                ops[key].append(item)
+            else:
+                errors.append(f"spec-delta.md: {key} entries must be strings")
+    return ops, errors
+
+
+def _validate_spec_delta_matches_disk(
+    repo_root: Path,
+    ops: dict[str, list[str]],
+    *,
+    gate: str,
+) -> list[str]:
+    """RM-008: added/modified must exist; removed must be gone. Not a spec merge on archive."""
+    errors: list[str] = []
+    for kind in ("added", "modified"):
+        for sref in ops.get(kind) or []:
+            if not spec_ref_is_under_docs_spec(sref, repo_root):
+                errors.append(
+                    f"Gate {gate}: spec-delta {kind} '{sref}' must resolve under docs/spec/"
+                )
+                continue
+            s_err = validate_spec_ref(sref, repo_root)
+            if s_err:
+                errors.append(f"Gate {gate}: spec-delta {kind} is not on disk: {s_err}")
+    for sref in ops.get("removed") or []:
+        if not spec_ref_is_under_docs_spec(sref, repo_root):
+            errors.append(
+                f"Gate {gate}: spec-delta removed '{sref}' must resolve under docs/spec/"
+            )
+            continue
+        s_err = validate_spec_ref(sref, repo_root)
+        if s_err is None:
+            errors.append(
+                f"Gate {gate}: spec-delta removed '{sref}' is still present in docs/spec/"
+            )
+        elif "Path traversal" in s_err:
+            errors.append(f"Gate {gate}: {s_err}")
+    return errors
+
+
 def check_gate(
     change_dir: Path | str,
     gate: str,
@@ -619,5 +677,12 @@ def check_gate(
                             )
             except Exception:
                 pass
+
+        if spec_delta_file.is_file():
+            ops, parse_errs = _spec_delta_ops(spec_delta_file)
+            errors.extend(f"Gate converged: {e}" for e in parse_errs)
+            errors.extend(
+                _validate_spec_delta_matches_disk(repo_root, ops, gate="converged")
+            )
 
     return errors
