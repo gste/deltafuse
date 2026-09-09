@@ -254,6 +254,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Не `.kiro` файлы; не ослаблять F-010; не Cucumber |
 | Стоимость | S (EARS) / M (PBT) |
 | Зависимости | RM-010 для смысла SHALL |
+| Статус | **done** 2026-09-09 — EARS WHEN/SHALL рядом с RFC 2119 в docs/spec template и Specify; PBT optional Target, skip без runner; не `.kiro`, не Cucumber, не замена hidden |
 
 ---
 

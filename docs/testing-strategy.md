@@ -139,6 +139,8 @@ delta-fuse/
   - **T8**: Повторная архивация при наличии существующего архива запрещена (неизменяемость архива, отказ от `rmtree`).
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
   - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
+  - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
+  - **PP-06 / KI-07 / targeting**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
   - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; split записи opt-in; routing первым шагом. Specify для feature не снимается.
   - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.

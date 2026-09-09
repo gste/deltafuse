@@ -20,4 +20,4 @@
 
 ## Global invariants
 
-- Add stable requirement IDs for cross-cutting behavior.
+- Add stable requirement IDs for cross-cutting behavior. Prefer RFC 2119 / EARS phrasing (see [README.md](./README.md)).

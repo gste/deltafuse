@@ -30,3 +30,5 @@ If already Green, invalid, environment-blocked, or not reproduced, stop and retu
 Recommend `/implement-task <task-path>` only for confirmed Red.
 
 For `route: docs` or `ops`, record a file or schema oracle in `evidence/red/` instead of product pytest; do not list `src/**` or `tests/**`. Hidden code-suite checks do not apply.
+
+Optional: add Hypothesis-class property tests as extra oracles for an invariant. Skip if no local runner. PBT does not replace the GWT example Red test or the independent hidden suite. Do not add `.kiro` or Cucumber as Target.

@@ -125,7 +125,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
-2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language.
+2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
 3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
@@ -137,6 +137,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 - Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
 - `change.yaml` status is `specified` or `specification-proposed`.
 - Product source code is not required at this gate.
+- EARS phrasing does not replace live `docs/spec/**` (F-010).
 
 ---
 
@@ -235,6 +236,7 @@ Create or update an executable test target for a single atomic task and verify t
    spec_status: unchanged
    ```
 5. Transition task status to `target-confirmed`.
+6. Optional: add Hypothesis-class property tests as extra oracles. Skip if no local runner. PBT does not replace the GWT example Red test or the independent hidden suite. Do not add `.kiro` or Cucumber.
 
 ### Gate
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
@@ -242,6 +244,7 @@ Create or update an executable test target for a single atomic task and verify t
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `target-confirmed`.
 - Hidden / independent suites are not replaced by the agent's tests.
+- Property-based tests are optional Target extras; missing a local runner is skip, not a gate fail.
 
 ---
 

@@ -56,6 +56,16 @@ def test_decision_template_valid(templates_dir: Path, registry: SchemaRegistry):
     registry.validate_or_raise("decision", metadata)
     assert len(body.strip()) > 0
 
+def test_spec_readme_ears_alongside_rfc2119(templates_dir: Path):
+    """RM-031 / PP-04: product spec guide uses EARS with RFC 2119, not .kiro files."""
+    text = (templates_dir / "docs" / "spec" / "README.md").read_text(encoding="utf-8")
+    assert "RFC 2119" in text
+    assert "WHEN [trigger] THE SYSTEM SHALL [behavior]" in text
+    assert "EARS is phrasing" in text
+    assert "Do not add `.kiro/`" in text
+    assert "Cucumber" in text
+
+
 def test_capabilities_template_valid(templates_dir: Path, registry: SchemaRegistry):
     cap_file = templates_dir / "docs" / "spec" / "_capabilities.yaml"
     assert cap_file.exists()
