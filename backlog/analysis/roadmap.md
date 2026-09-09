@@ -224,6 +224,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Routing.yaml обязателен. Не считать 2 slices достаточным для live spec (нужен RM-010) |
 | Стоимость | S–M |
 | Зависимости | нет для (2); (1) не путать с патчем A09 prompts |
+| Статус | **done** 2026-09-09 — skill: один slice на primary capability; routing top-level `additionalProperties: true` (лишний `schema_version` не валит analyzed); 2 slices ≠ live spec |
 
 ---
 

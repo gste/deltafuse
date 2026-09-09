@@ -128,10 +128,10 @@ Each capability must strictly specify:
 2. **Pass B: Slice Analysis**
    - Inputs: claims belonging to **one** capability slice, targeted specification modules, accepted decisions.
    - Action: compute typed deltas, detect contradictions, formulate questions.
-   - Output: `slices/SLICE-NN.md` and typed deltas.
+   - Output: `slices/SLICE-NN.md` and typed deltas. Two primary capabilities produce `SLICE-01` and `SLICE-02`, not a single `SLICE-01`.
 
 ### Slicing Invariants
-1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts.
+1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts. A two-capability Change writes `SLICE-01` and `SLICE-02`; do not collapse them into one file.
 2. **Independent Verifiability**: each slice can be specified, implemented, and tested independently of other non-dependent slices.
 3. **Claim Exhaustiveness**: every normalized claim `CR-*` must belong to exactly one primary slice.
 

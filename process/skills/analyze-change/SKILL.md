@@ -18,7 +18,7 @@ After routing, read only selected spec modules, related Decision records, and ex
 ## Procedure
 
 1. Assign every `CR-*` claim one owning capability plus optional related capabilities and policies in `routing.yaml`.
-2. Split the Change into analytical slices with one primary capability and independently verifiable outcome.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`.
 3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
 4. Classify independently: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
 5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
@@ -37,3 +37,5 @@ Write `analysis.md`, `routing.yaml`, `slices/**`, `coverage.yaml`, Decision/cata
 Read `.deltafuse/lock.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). Always write `routing.yaml` first. `narrow` writes one of routing, slices, or coverage per invocation; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Leave status `analyzing` until routing, slices, and coverage are on disk — call width does not close the gate. Do not skip Specify. Do not auto-accept Decisions.
 
 Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. `docs`/`ops` do not skip Specify.
+
+Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. `routing.yaml` itself remains required. Two slice files do not satisfy Specify without live `docs/spec/**`.

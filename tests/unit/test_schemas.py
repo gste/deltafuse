@@ -243,6 +243,30 @@ def test_routing_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("routing", valid_routing) == []
 
+    # AB-05 / RM-022: extra top-level keys (models copy schema_version) are ignored
+    with_schema_version = dict(valid_routing, schema_version=2)
+    assert registry.validate("routing", with_schema_version) == []
+    with_unknown = dict(valid_routing, unexpected_key="ok")
+    assert registry.validate("routing", with_unknown) == []
+
+    missing_change = dict(valid_routing)
+    del missing_change["change"]
+    assert len(registry.validate("routing", missing_change)) > 0
+
+    extra_claim_field = {
+        "change": "CHG-001",
+        "claims": {
+            "CR-001": {
+                "primary_capability": "identity.auth",
+                "not_a_field": True,
+            }
+        },
+    }
+    assert any(
+        "not_a_field" in e or "Additional properties" in e
+        for e in registry.validate("routing", extra_claim_field)
+    )
+
 def test_spec_delta_schema_validation(registry: SchemaRegistry):
     valid_spec_delta = {
         "change": "CHG-001",

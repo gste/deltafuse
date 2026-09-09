@@ -221,8 +221,13 @@ def _write_ratelimit_spec(root: Path) -> None:
     spec.write_text("# Rate limit\n## REQ-RL-01\nLimiter MUST initialize a token bucket.\n", encoding="utf-8")
 
 
-def _set_slice_capability(change_dir: Path, capability: str, spec_refs: list[str] | None = None) -> None:
-    slice_file = change_dir / "slices" / "SLICE-01.md"
+def _set_slice_capability(
+    change_dir: Path,
+    capability: str,
+    spec_refs: list[str] | None = None,
+    slice_id: str = "SLICE-01",
+) -> None:
+    slice_file = change_dir / "slices" / f"{slice_id}.md"
     meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
     meta["primary_capability"] = capability
     if spec_refs is not None:
@@ -895,3 +900,90 @@ def test_route_mismatch_is_error(tmp_path: Path, repo_root: Path):
     routing_file.write_text(yaml.safe_dump(routing, sort_keys=False), encoding="utf-8")
     errs = validate_change_package(builder.change_dir)
     assert any("route mismatch" in e for e in errs)
+
+
+def test_analyzed_ignores_routing_top_level_unknown_keys(tmp_path: Path, repo_root: Path):
+    """RM-022 / AB-05: extra schema_version on routing.yaml does not fail analyzed."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-039", title="Routing extra keys")
+        .step_intake()
+        .step_analyze()
+    )
+    routing_file = builder.change_dir / "routing.yaml"
+    routing = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
+    routing["schema_version"] = 2
+    routing["unexpected_key"] = "ok"
+    routing_file.write_text(yaml.safe_dump(routing, sort_keys=False), encoding="utf-8")
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_analyzed_accepts_two_slice_files(tmp_path: Path, repo_root: Path):
+    """RM-022 / AB-02: a two-capability Change writes SLICE-01 and SLICE-02."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-040", title="Multi-cap slices")
+        .step_intake()
+        .step_analyze(slices=["SLICE-01", "SLICE-02"])
+    )
+    assert (builder.change_dir / "slices" / "SLICE-01.md").is_file()
+    assert (builder.change_dir / "slices" / "SLICE-02.md").is_file()
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_two_slices_do_not_satisfy_specified_without_live_spec(tmp_path: Path, repo_root: Path):
+    """RM-022 regression: two slice files do not replace F-010 live spec."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-041", title="Two slices still need live spec")
+        .step_intake()
+        .step_analyze(slices=["SLICE-01", "SLICE-02"])
+        .step_specify()
+    )
+    catalog = {
+        "schema_version": 2,
+        "domains": {
+            "monitoring": {
+                "summary": "Usage monitoring",
+                "capabilities": {
+                    "usage_stats": {
+                        "summary": "Per-key usage statistics",
+                        "spec": ["docs/spec/monitoring/usage_stats.md"],
+                    }
+                },
+            }
+        },
+    }
+    (tmp_path / "docs" / "spec" / "_capabilities.yaml").write_text(
+        yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
+    )
+    for slice_id in ("SLICE-01", "SLICE-02"):
+        _set_slice_capability(
+            builder.change_dir,
+            "monitoring.usage_stats",
+            spec_refs=["docs/spec/monitoring/usage_stats.md#REQ-US-01"],
+            slice_id=slice_id,
+        )
+    spec_delta = (
+        "---\n"
+        f"change: {builder.change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01, SLICE-02]\n"
+        "added: [docs/spec/monitoring/usage_stats.md#REQ-US-01]\n"
+        "modified: []\n"
+        "removed: []\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("usage_stats.md" in e and "does not exist" in e for e in errs)
+
+
+def test_analyze_skill_does_not_freeze_single_slice(repo_root: Path):
+    """RM-022 / AB-02: canonical skill must not freeze Analyze to one SLICE-01 file."""
+    skill = (repo_root / "process" / "skills" / "analyze-change" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Do not collapse a multi-capability Change into a single" in skill
+    assert "пиши только SLICE-01" not in skill
+    assert "ONLY one file" not in skill

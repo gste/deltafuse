@@ -68,7 +68,7 @@ Routing is always the first Analyze write. `.deltafuse/config.yaml` `workflow.ca
 ### Pass B: Slice Analysis
 For each capability slice:
 1. Load only the specification modules referenced by the capability.
-2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies.
+2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies. Write one slice file per primary capability; a two-capability Change produces `SLICE-01` and `SLICE-02`. Do not emit only `SLICE-01`.
 3. Compute an explicit typed delta (`DELTA-NN`) across the 7 normative projections defined in `change.schema.yaml`:
    - `specification`: `none | add | modify | remove | mixed` (with `refs` to affected spec files/sections);
    - `catalog`: `none | add | modify | remove` (with `refs` to capability IDs in `_capabilities.yaml`);
@@ -108,9 +108,8 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
 - The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
-- Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code`. `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
-
-Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
+- Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
+- Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 
 ---
 
