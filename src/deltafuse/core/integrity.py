@@ -20,6 +20,13 @@ def extract_claims_from_request(request_md_content: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def path_is_inside_repo(path: Path, repo_root: Path) -> bool:
+    """True if resolved *path* is the repository root or a descendant of it."""
+    repo = repo_root.resolve()
+    resolved = path.resolve()
+    return resolved == repo or resolved.is_relative_to(repo)
+
+
 def find_spec_anchors(spec_file_path: Path) -> set[str]:
     """Extracts anchor tags and headers from a specification markdown file."""
     if not spec_file_path.is_file():
@@ -43,6 +50,8 @@ def validate_spec_ref(spec_ref: str, repo_root: Path) -> str | None:
         file_part, anchor = spec_ref, None
 
     file_path = (repo_root / file_part).resolve()
+    if not path_is_inside_repo(file_path, repo_root):
+        return f"Path traversal forbidden: '{file_part}' is outside repository root"
     if not file_path.is_file():
         return f"Referenced specification file does not exist: '{file_part}'"
 
@@ -61,6 +70,8 @@ def validate_decision_ref(design_ref: str | None, repo_root: Path) -> list[str]:
 
     errors: list[str] = []
     dec_path = (repo_root / design_ref).resolve()
+    if not path_is_inside_repo(dec_path, repo_root):
+        return [f"Path traversal forbidden: '{design_ref}' is outside repository root"]
     if not dec_path.is_file():
         return [f"Referenced decision record does not exist: '{design_ref}'"]
 

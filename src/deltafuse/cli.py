@@ -139,10 +139,10 @@ def main(argv: list[str] | None = None) -> int:
                         ref_files: list[Path] = []
                         for sref in meta.get("spec_refs", []):
                             sp_rel = sref.split("#")[0]
-                            sp_path = (repo_root / sp_rel).resolve()
-                            if sp_path.is_file():
-                                ref_files.append(sp_path)
-                        b_errs = validate_context_budget(budget, ref_files)
+                            ref_files.append(repo_root / sp_rel)
+                        b_errs = validate_context_budget(
+                            budget, ref_files, repo_root=repo_root
+                        )
                         errors.extend(f"{sf.name}: {e}" for e in b_errs)
                 except Exception as ex:
                     errors.append(f"{sf.name}: {ex}")

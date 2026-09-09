@@ -180,6 +180,30 @@ def test_mutation_t7_broken_spec_anchor_rejected(tmp_path: Path):
     assert any("Anchor '#REQ-GHOST-999' not found in specification file" in e for e in errs)
 
 
+def test_mutation_f004_path_traversal_rejected(tmp_path: Path):
+    """F-004 / RM-004: spec_refs that resolve outside repo_root must fail the package gate."""
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside_spec.md"
+    outside.write_text("# leaked\n## REQ-LEAK\n", encoding="utf-8")
+    spec_dir = repo / "docs" / "spec"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "core.md").write_text("# Spec\n## REQ-01\nValid requirement\n", encoding="utf-8")
+
+    builder = (
+        MockChangeBuilder(repo, change_id="CHG-204", title="F-004 Traversal")
+        .step_intake()
+        .step_analyze()
+    )
+    from deltafuse.core.frontmatter import parse_frontmatter
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+    meta["spec_refs"] = ["../outside_spec.md"]
+    slice_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+    errs = validate_change_package(builder.change_dir)
+    assert any("Path traversal forbidden" in e for e in errs)
+
+
 def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):
     """T8: Re-archiving a Change when target archive directory exists must fail with ArchivalError (no rmtree)."""
     builder = (

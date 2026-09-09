@@ -42,6 +42,7 @@ RM-030 / RM-031                    (P3)
 | Стоимость | S (часы) |
 | Зависимости | нет |
 | Не делать | AppSec-программа; ослабить F-010 |
+| Статус | **done** 2026-09-08 — `path_is_inside_repo` после `resolve()` в `validate_spec_ref` / `validate_decision_ref` / `validate_context_budget`; missing paths — ошибка; токены дедуплицируются |
 
 ### RM-010 — гейт `specified` требует live spec (F-010)
 
@@ -103,6 +104,7 @@ RM-030 / RM-031                    (P3)
 | Regression | PS smoke; бинарные файлы не портятся |
 | Стоимость | S; **можно сразу**, параллельно P0 |
 | Зависимости | нет |
+| Статус | **done** 2026-09-08 — корневой `.gitattributes` (`* text=auto eol=lf`, `*.sh text eol=lf`, `*.ps1 text eol=crlf`) |
 
 ### RM-002 — enforcement `PHASE_CONTRACTS` и task budget (F-002)
 

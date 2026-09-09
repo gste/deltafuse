@@ -34,6 +34,44 @@ def test_validate_context_budget(tmp_path: Path):
     assert any("tokens loaded, maximum allowed is 200" in e for e in errs2)
 
 
+def test_validate_context_budget_missing_file_is_error(tmp_path: Path):
+    missing = tmp_path / "nope.md"
+    errs = validate_context_budget({"max_tokens": 1000, "max_files": 5}, [missing])
+    assert any("does not exist" in e for e in errs)
+
+
+def test_validate_context_budget_rejects_path_traversal(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("word " * 50, encoding="utf-8")
+    errs = validate_context_budget(
+        {"max_tokens": 1000, "max_files": 5},
+        [outside],
+        repo_root=repo,
+    )
+    assert any("Path traversal forbidden" in e for e in errs)
+
+
+def test_validate_context_budget_deduplicates_for_limits(tmp_path: Path):
+    f1 = tmp_path / "a.py"
+    f1.write_text("word " * 100, encoding="utf-8")
+    errs = validate_context_budget(
+        {"max_tokens": 1000, "max_files": 1},
+        [f1, f1],
+    )
+    assert errs == []
+
+
+def test_estimate_files_tokens_deduplicates(tmp_path: Path):
+    f1 = tmp_path / "a.py"
+    f1.write_text("word " * 100, encoding="utf-8")
+    once = estimate_files_tokens([f1])
+    twice = estimate_files_tokens([f1, f1])
+    assert once == twice
+    assert once > 0
+
+
 def test_phase_contracts_completeness():
     phases = ["intake", "analyze", "specify", "decompose", "target", "implement", "verify"]
     for p in phases:

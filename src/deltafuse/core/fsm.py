@@ -211,10 +211,10 @@ def validate_change_package(
                         ref_files = []
                         for sref in srefs:
                             sp_rel = sref.split("#")[0]
-                            sp_path = (repo_root / sp_rel).resolve()
-                            if sp_path.is_file():
-                                ref_files.append(sp_path)
-                        b_errs = validate_context_budget(context_budget, ref_files)
+                            ref_files.append(repo_root / sp_rel)
+                        b_errs = validate_context_budget(
+                            context_budget, ref_files, repo_root=repo_root
+                        )
                         errors.extend(f"{slice_file.name}: {be}" for be in b_errs)
             except Exception as ex:
                 errors.append(f"{slice_file.name} frontmatter error: {ex}")

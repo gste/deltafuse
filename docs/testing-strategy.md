@@ -112,6 +112,7 @@ delta-fuse/
 * **2.2. Спецификационные якоря (`spec_refs`)**:
   - Парсинг заголовков спецификаций (`# REQ-...`, `# SC-...`).
   - Проверка существования целевых якорей.
+  - Path containment: `spec_refs` / `design_ref` after `resolve()` must stay inside the product repository root (`../` is rejected).
   - Spec-root guard (N10): если `docs/spec` отсутствует при наличии `spec_refs`, генерируется ошибка валидации, а не тихий пропуск.
 * **2.3. Decision Anchors**:
   - Ссылка `design_ref: docs/decisions/DEC-...` требует статус решения `accepted`. Статусы `proposed` и `rejected` блокируют прохождение гейта `analyzed`/`specified`.
@@ -154,6 +155,7 @@ delta-fuse/
 ### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context.py`)
 * **5.1. Token Estimator**:
   - Эвристика `1 word ≈ 1.3 tokens`, проверка лимитов `max_tokens` и `max_files`.
+  - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
   - Команда `deltafuse lint-context <change_dir>`.
