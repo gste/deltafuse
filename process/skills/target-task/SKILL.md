@@ -25,6 +25,6 @@ Do not read implementation internals unless the target cannot otherwise be expre
 6. Record sanitized command, exit status, failure category, and concise result under the Change's `evidence/red/`.
 7. Set task/Change state to `target-confirmed` only after valid Red.
 
-If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Do not weaken assertions to manufacture Red.
+If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.
 
 Recommend `/implement-task <task-path>` only for confirmed Red.

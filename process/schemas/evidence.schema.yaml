@@ -12,7 +12,7 @@ properties:
   timestamp: {type: string, format: date-time}
   command: {type: string}
   exit_code: {type: integer}
-  result: {enum: [expected-failure, passed, failed, blocked, not-reproduced]}
+  result: {enum: [expected-failure, passed, failed, blocked, not-reproduced, already-green]}
   failure_category: {type: [string, 'null']}
   summary: {type: string}
   changed_paths:

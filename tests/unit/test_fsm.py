@@ -375,3 +375,58 @@ def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
     )
     assert not (builder.change_dir / "spec-delta.md").is_file()
     assert check_gate(builder.change_dir, "targeting") == []
+
+
+def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
+    """F-009: public oracle already passing is already-green, not manufactured Red."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-016", title="Already green lift")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_task-001.py").write_text(
+        "def test_penalty_lifts_after_window():\n    assert True\n",
+        encoding="utf-8",
+    )
+    red = yaml.safe_load((builder.change_dir / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8"))
+    red["exit_code"] = 0
+    red["result"] = "already-green"
+    red["summary"] = "Public oracle already passes; lift is present from TASK-001"
+    red["changed_paths"] = ["tests/test_task-001.py"]
+    (builder.change_dir / "evidence" / "red" / "TASK-001.yaml").write_text(
+        yaml.safe_dump(red, sort_keys=False), encoding="utf-8"
+    )
+    assert check_gate(builder.change_dir, "targeting") == []
+
+
+def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
+    """F-009: Red tests must not poke _-prefixed product internals."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-017", title="Private red")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_task-001.py").write_text(
+        "def test_penalty_lifts_after_window(limiter):\n"
+        "    limiter._blocked_until['u'] = 0.0\n"
+        "    assert limiter.consume('u', 1) is True\n",
+        encoding="utf-8",
+    )
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["changed_paths"] = ["tests/test_task-001.py"]
+    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("private symbols" in e for e in errs)

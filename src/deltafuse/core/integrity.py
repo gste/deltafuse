@@ -13,6 +13,64 @@ class IntegrityViolation(Exception):
     pass
 
 
+_PRIVATE_ATTR = re.compile(r"\._[A-Za-z_]")
+
+
+def test_source_uses_private_symbols(source: str) -> bool:
+    """True if test source pokes product internals (._attr or _-prefixed imports)."""
+    if _PRIVATE_ATTR.search(source):
+        return True
+    for raw in source.splitlines():
+        line = raw.strip()
+        if line.startswith("from ") and " import " in line:
+            imported = line.split(" import ", 1)[1].strip("() ")
+            names = imported.split(",")
+        elif line.startswith("import "):
+            names = line[len("import "):].split(",")
+        else:
+            continue
+        for part in names:
+            name = part.strip().split(" as ")[0].strip()
+            last = name.split(".")[-1]
+            if last.startswith("_") and not last.startswith("__"):
+                return True
+    return False
+
+
+def scan_changed_paths_for_private_test_access(
+    repo_root: Path,
+    changed_paths: list[str],
+) -> list[str]:
+    """Return errors for test files in *changed_paths* that access private symbols."""
+    errors: list[str] = []
+    for rel in changed_paths:
+        if not isinstance(rel, str):
+            continue
+        normalized = rel.replace("\\", "/")
+        name = Path(normalized).name
+        if not (
+            normalized.startswith("tests/")
+            or name.startswith("test_")
+            or name.endswith("_test.py")
+        ):
+            continue
+        if not name.endswith(".py"):
+            continue
+        path = (repo_root / rel).resolve()
+        if not path_is_inside_repo(path, repo_root) or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if test_source_uses_private_symbols(text):
+            errors.append(
+                f"Red test '{rel}' accesses private symbols; "
+                "use the public oracle or record already-green"
+            )
+    return errors
+
+
 def extract_claims_from_request(request_md_content: str) -> list[str]:
     """Extracts claim IDs defined in request.md."""
     pattern = re.compile(r"\b(CR-[0-9]{3,})\b")

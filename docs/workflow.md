@@ -227,9 +227,11 @@ Create or update an executable test target for a single atomic task and verify t
 5. Transition task status to `target-confirmed`.
 
 ### Gate
-- Executable test fails with the expected failure signature.
+- Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
+- Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `target-confirmed`.
+- Hidden / independent suites are not replaced by the agent's tests.
 
 ---
 

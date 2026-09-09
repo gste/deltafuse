@@ -48,6 +48,14 @@ def test_validate_coverage_completeness_missing_and_orphan():
     assert any("CR-999" in e and "orphan" in e for e in errors)
 
 
+def test_source_uses_private_symbols_detects_attr_and_import():
+    from deltafuse.core.integrity import test_source_uses_private_symbols
+    assert test_source_uses_private_symbols("limiter._blocked_until['u'] = 0.0\n")
+    assert test_source_uses_private_symbols("from limiter import _blocked_until\n")
+    assert not test_source_uses_private_symbols("from __future__ import annotations\n")
+    assert not test_source_uses_private_symbols("assert limiter.is_blocked('u') is False\n")
+
+
 def test_validate_spec_ref_success(tmp_path: Path):
     spec = tmp_path / "docs" / "spec" / "core.md"
     spec.parent.mkdir(parents=True)

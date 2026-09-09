@@ -140,6 +140,12 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("evidence", valid_evidence) == []
 
+    already_green = dict(valid_evidence)
+    already_green["exit_code"] = 0
+    already_green["result"] = "already-green"
+    already_green["summary"] = "Public oracle already passes"
+    assert registry.validate("evidence", already_green) == []
+
     # Regression phase requires task
     valid_regression = {
         "schema_version": 2,

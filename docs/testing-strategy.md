@@ -129,7 +129,8 @@ delta-fuse/
   - Терминальные ветви: `rejected`, `duplicate`, `superseded`, `not-reproduced`.
 * **3.2. Семантические мутационные инварианты (T1–T8, N10)**:
   - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
-  - **T2**: Red evidence с `result: passed` или `exit_code: 0` отвергается.
+  - **T2**: Red evidence с `result: passed` или `exit_code: 0` (кроме `not-reproduced` и `already-green`) отвергается.
+  - **F-009 / targeting**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
   - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `targeting` и т.д.).
   - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
   - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.

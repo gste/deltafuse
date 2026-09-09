@@ -16,6 +16,7 @@ from deltafuse.core.integrity import (
     load_capability_catalog,
     spec_ref_is_under_docs_spec,
     validate_catalog_capability_specs,
+    scan_changed_paths_for_private_test_access,
 )
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
@@ -339,14 +340,31 @@ def validate_change_package(
 
                 # Phase-specific result & exit_code rules (T2)
                 if phase == "red":
-                    if result not in {"expected-failure", "not-reproduced"}:
+                    if result not in {"expected-failure", "not-reproduced", "already-green"}:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have result 'expected-failure' or 'not-reproduced' (got '{result}')"
+                            f"{ev_file.relative_to(change_path)}: red evidence must have result "
+                            f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
                         )
-                    if exit_code == 0 and result != "not-reproduced":
+                    if result == "already-green":
+                        if exit_code != 0:
+                            errors.append(
+                                f"{ev_file.relative_to(change_path)}: already-green evidence "
+                                f"must have exit_code 0 (got {exit_code})"
+                            )
+                    elif exit_code == 0 and result != "not-reproduced":
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have non-zero exit_code (got 0)"
+                            f"{ev_file.relative_to(change_path)}: red evidence must have "
+                            f"non-zero exit_code (got 0)"
                         )
+                    if result == "expected-failure":
+                        changed = ev_data.get("changed_paths") or []
+                        if isinstance(changed, list):
+                            errors.extend(
+                                f"{ev_file.relative_to(change_path)}: {pe}"
+                                for pe in scan_changed_paths_for_private_test_access(
+                                    repo_root, changed
+                                )
+                            )
                 elif phase in {"green", "regression"}:
                     if result != "passed":
                         errors.append(
