@@ -1,22 +1,54 @@
 """Unit tests for DeltaFuse context contract and budget linter."""
 
 from pathlib import Path
+import pytest
 from deltafuse.core.context import (
     estimate_tokens,
     estimate_files_tokens,
     validate_context_budget,
     validate_task_context_budget,
     matches_contract_globs,
+    try_endpoint_token_count,
     PHASE_CONTRACTS,
     task_write_globs,
 )
 
 
+@pytest.fixture(autouse=True)
+def _clear_tokenize_url(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+
+
 def test_estimate_tokens_heuristic():
     text = "Hello world from DeltaFuse framework"
-    # 5 words * 1.3 = 6.5 -> ceil(6.5) = 7
+    # 5 English words * 1.3 = 6.5 -> ceil = 7
     tokens = estimate_tokens(text)
     assert tokens == 7
+
+
+def test_estimate_tokens_a03_01_upper_bounds(tmp_path: Path):
+    """A03-01: coefficient fallback is an upper bound vs recorded ornith/Qwen counts."""
+    en = " ".join(["word"] * 20)
+    assert estimate_tokens(en) >= 26
+    assert estimate_tokens(en) <= 32  # 1.3x EN must not inflate absurdly
+
+    ru = " ".join(["проверка"] * 17)
+    assert estimate_tokens(ru) >= 37
+
+    py = tmp_path / "sample.py"
+    py.write_text(" ".join(["token"] * 30), encoding="utf-8")
+    assert estimate_files_tokens([py]) >= 81
+
+    yaml_file = tmp_path / "manifest.yaml"
+    yaml_file.write_text(" ".join(["key:"] * 22), encoding="utf-8")
+    yaml_est = estimate_files_tokens([yaml_file])
+    assert yaml_est >= 98
+    naive = 29  # historical words*1.3 on 22 words
+    assert yaml_est > naive * 2  # no 70% YAML undercount
+
+    log_file = tmp_path / "trace.log"
+    log_file.write_text(" ".join(["ts"] * 35), encoding="utf-8")
+    assert estimate_files_tokens([log_file]) >= 168
 
 
 def test_validate_context_budget(tmp_path: Path):
@@ -122,3 +154,33 @@ def test_validate_task_context_budget_counts_declared_files(tmp_path: Path):
         tmp_path,
     )
     assert any("files loaded, maximum allowed is 24" in e for e in errs)
+
+
+def test_try_endpoint_token_count_skips_without_url(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    assert try_endpoint_token_count("hello") is None
+
+
+def test_try_endpoint_token_count_posts_tokenize_not_chat(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _Resp:
+        def read(self) -> bytes:
+            return b'{"tokens": [1, 2, 3, 4]}'
+
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def fake_urlopen(req: object, timeout: float = 2) -> _Resp:
+        captured["url"] = getattr(req, "full_url", "")
+        captured["timeout"] = timeout
+        return _Resp()
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    assert try_endpoint_token_count("hi") == 4
+    assert captured["url"] == "http://127.0.0.1:1240/tokenize"
+    assert "/v1/chat/completions" not in str(captured["url"])

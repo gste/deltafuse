@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 import fnmatch
+import json
 import math
+import os
+import re
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 from deltafuse.core.integrity import path_is_inside_repo
@@ -105,10 +110,86 @@ PHASE_CONTRACTS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def estimate_tokens(text: str) -> int:
-    """Estimates token count using the standard word heuristic (1 word ≈ 1.3 tokens)."""
-    words = text.split()
-    return math.ceil(len(words) * 1.3)
+# A03-01 / F-003: words-per-token upper bounds vs ornith/Qwen BPE (not chat completions).
+WORD_FACTOR_EN = 1.3
+WORD_FACTOR_CYRILLIC = 2.2
+WORD_FACTOR_CODE = 2.7
+WORD_FACTOR_YAML = 4.5  # 98/22 from A03-01; roadmap yaml×4 still undercounted
+WORD_FACTOR_LOG = 4.8
+_CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
+_CODE_SUFFIXES = {
+    ".py",
+    ".pyi",
+    ".ps1",
+    ".sh",
+    ".bash",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".rs",
+    ".go",
+    ".java",
+    ".c",
+    ".h",
+    ".cpp",
+    ".cs",
+}
+_YAML_SUFFIXES = {".yaml", ".yml", ".json"}
+_LOG_SUFFIXES = {".log"}
+
+
+def token_factor(text: str, path: Path | None = None) -> float:
+    """Conservative tokens-per-word factor. Take the max of suffix and script factors."""
+    factor = WORD_FACTOR_EN
+    if path is not None:
+        suffix = path.suffix.lower()
+        if suffix in _YAML_SUFFIXES:
+            factor = max(factor, WORD_FACTOR_YAML)
+        elif suffix in _LOG_SUFFIXES:
+            factor = max(factor, WORD_FACTOR_LOG)
+        elif suffix in _CODE_SUFFIXES:
+            factor = max(factor, WORD_FACTOR_CODE)
+    if _CYRILLIC_RE.search(text):
+        factor = max(factor, WORD_FACTOR_CYRILLIC)
+    return factor
+
+
+def try_endpoint_token_count(text: str) -> int | None:
+    """Optional llama-server POST /tokenize. Never uses chat completions (Q-004)."""
+    url = os.environ.get("DELTAFUSE_TOKENIZE_URL", "").strip()
+    if not url:
+        return None
+    payload = json.dumps({"content": text}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+        return None
+    tokens = body.get("tokens") if isinstance(body, dict) else None
+    if isinstance(tokens, list):
+        return len(tokens)
+    count = body.get("count") if isinstance(body, dict) else None
+    if isinstance(count, int) and count >= 0:
+        return count
+    return None
+
+
+def estimate_tokens(text: str, path: Path | None = None) -> int:
+    """Upper-bound token estimate: optional /tokenize, else A03-01 coefficients."""
+    counted = try_endpoint_token_count(text)
+    if counted is not None:
+        return counted
+    words = len(text.split())
+    if words == 0:
+        return 0
+    return math.ceil(words * token_factor(text, path))
 
 
 def estimate_files_tokens(files: list[Path]) -> int:
@@ -125,7 +206,7 @@ def estimate_files_tokens(files: list[Path]) -> int:
         seen.add(resolved)
         try:
             content = resolved.read_text(encoding="utf-8", errors="ignore")
-            total += estimate_tokens(content)
+            total += estimate_tokens(content, resolved)
         except OSError:
             continue
     return total

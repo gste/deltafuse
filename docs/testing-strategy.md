@@ -35,7 +35,7 @@ delta-fuse/
 │   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
-│   │   ├── context.py                # Оценка токенов (~1.3x) и линтер контекстных бюджетов/контрактов
+│   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
 │   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
 │   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
@@ -158,7 +158,7 @@ delta-fuse/
 
 ### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context.py`)
 * **5.1. Token Estimator**:
-  - Эвристика `1 word ≈ 1.3 tokens`, проверка лимитов `max_tokens` и `max_files`.
+  - Upper-bound estimator: EN prose `words * 1.3`; code ×2.7; YAML/JSON ×4.5; logs ×4.8; Cyrillic ×2.2. Optional `DELTAFUSE_TOKENIZE_URL` (`POST /tokenize`); never chat completions (Q-004).
   - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.

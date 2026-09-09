@@ -152,7 +152,7 @@ Each lifecycle step operates under a strict Context Contract defining what an ag
 | **Verify** | `change.yaml`, `request.md`, `routing.yaml`, `slices/**`, `tasks/**`, `coverage.yaml`, test suite results. | Arbitrary refactoring of code. | `verification.md`, `evidence/verification/run.yaml`, archive move |
 
 ### Strict Enforcement
-- Each TASK declares `context_budget` (`max_tokens` / `max_files`, typically 16000/24). The `decomposed` gate fails when the budget is missing or when unique `spec_refs` plus `allowed_paths` exceed it. Token counts use the current estimator (conservative fallback until RM-003).
+- Each TASK declares `context_budget` (`max_tokens` / `max_files`, typically 16000/24). The `decomposed` gate fails when the budget is missing or when unique `spec_refs` plus `allowed_paths` exceed it. Token counts are an upper bound: A03-01 coefficients (code ×2.7, YAML ×4.5, logs ×4.8, Cyrillic ×2.2, EN prose ×1.3) or `POST /tokenize` when `DELTAFUSE_TOKENIZE_URL` is set. Chat completions are not used to count tokens.
 - `PHASE_CONTRACTS` in `src/deltafuse/core/context.py` is enforced structurally: task `allowed_paths` must match Target/Implement write globs; Red `changed_paths` must match Target write; Green/regression `changed_paths` must match Implement write. Runtime tool sandboxing of agent reads remains the host IDE/CLI; the FSM does not intercept live file opens.
 - Exceeding the context budget is treated as a design defect requiring finer decomposition.
 - Violating the context contract (e.g., an Implementer modifying specification, or Red evidence listing `src/**`) renders the resulting artifacts invalid and halts the lifecycle gate.

@@ -136,6 +136,7 @@ RM-030 / RM-031                    (P3)
 | Стоимость | M |
 | Зависимости | нет |
 | Не делать | эмбеддинги (Q-003 defer) |
+| Статус | **done** 2026-09-09 — upper bound A03-01 (yaml×4.5, code×2.7, RU×2.2, log×4.8); optional `DELTAFUSE_TOKENIZE_URL`; без chat completions |
 
 ### RM-005 — терминалы `cancelled`/`superseded` на `converged` (F-005)
 
