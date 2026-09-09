@@ -41,7 +41,7 @@ delta-fuse/
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
 │   │   ├── hasher.py                 # Вычисление sha256 framework content hash (исключение .git, __pycache__)
 │   │   ├── installer.py              # Кроссплатформенная установка, генерация адаптеров (.agents, .cursor, .gemini)
-│   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, требования CR-*
+│   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, claims CR-* / O1/E1
 │   │   ├── layout.py                 # Валидатор эталонной раскладки продукта, lock-файлов и маркеров DO-NOT-EDIT
 │   │   └── schemas.py                # Загрузчик и валидатор 9 схем JSON Schema Draft 2020-12
 │   └── evals/                        # Подсистема бенчмаркинга и оценки LLM (Stage 5)
@@ -138,6 +138,7 @@ delta-fuse/
   - **T8**: Повторная архивация при наличии существующего архива запрещена (неизменяемость архива, отказ от `rmtree`).
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
   - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
+  - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
   - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.

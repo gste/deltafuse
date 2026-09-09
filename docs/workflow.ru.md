@@ -264,7 +264,7 @@ context_budget:
 Проверяется непрерывная цепочка артефактов:
 ```text
 Raw intent (docs/intake/...)
-  -> Claim (CR-* в request.md)
+  -> Claim (CR-* or stable O1/E1 IDs in request.md)
   -> Owning Capability (routing.yaml)
   -> Slice Delta (slices/SLICE-NN.md, change.yaml)
   -> Specification Requirement (docs/spec/... REQ-*)

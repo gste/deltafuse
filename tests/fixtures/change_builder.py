@@ -66,7 +66,8 @@ class MockChangeBuilder:
     def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
         if claims is None:
             claims = ["CR-001"]
-        claims_text = "\n".join(f"- {c}: Description for {c}" for c in claims)
+        self.claims = list(claims)
+        claims_text = "\n".join(f"- {c}: Description for {c}" for c in self.claims)
         (self.change_dir / "request.md").write_text(f"# Request\n{claims_text}\n", encoding="utf-8")
         lock_file = self.root_dir / ".deltafuse" / "lock.yaml"
         fw_hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -101,23 +102,27 @@ class MockChangeBuilder:
     def step_analyze(self, slices: list[str] | None = None) -> MockChangeBuilder:
         if slices is None:
             slices = ["SLICE-01"]
+        claims = list(getattr(self, "claims", ["CR-001"]))
+        routing_claims = {
+            cid: {
+                "summary": f"Claim {cid}",
+                "primary_capability": "system.core",
+                "related_capabilities": [],
+                "policies": [],
+                "confidence": "high",
+            }
+            for cid in claims
+        }
         routing = {
             "change": self.change_id,
-            "claims": {
-                "CR-001": {
-                    "summary": "Claim 1",
-                    "primary_capability": "system.core",
-                    "related_capabilities": [],
-                    "policies": [],
-                    "confidence": "high",
-                }
-            },
+            "claims": routing_claims,
         }
         (self.change_dir / "routing.yaml").write_text(yaml.safe_dump(routing), encoding="utf-8")
         (self.change_dir / "analysis.md").write_text("# Analysis\nAnalysis summary.", encoding="utf-8")
         slices_dir = self.change_dir / "slices"
         slices_dir.mkdir(parents=True, exist_ok=True)
         slice_objs = []
+        claims_yaml = "[" + ", ".join(claims) + "]"
         for sl in slices:
             slice_objs.append({
                 "id": sl,
@@ -134,23 +139,25 @@ class MockChangeBuilder:
                 f"related_capabilities: []\n"
                 f"policies: []\n"
                 f"spec_refs: [docs/spec/core.md#REQ-01]\n"
-                f"claims: [CR-001]\n"
+                f"claims: {claims_yaml}\n"
                 f"depends_on: []\n"
                 f"context_budget: {{max_tokens: 16000, max_files: 20}}\n"
                 f"---\n\n# {sl}\nDetails\n"
             )
             (slices_dir / f"{sl}.md").write_text(slice_md, encoding="utf-8")
+        cov_claims = {
+            cid: {
+                "slice": "SLICE-01",
+                "tasks": [],
+                "spec_refs": ["docs/spec/core.md#REQ-01"],
+                "evidence": {},
+                "status": "pending",
+            }
+            for cid in claims
+        }
         cov = {
             "change": self.change_id,
-            "claims": {
-                "CR-001": {
-                    "slice": "SLICE-01",
-                    "tasks": [],
-                    "spec_refs": ["docs/spec/core.md#REQ-01"],
-                    "evidence": {},
-                    "status": "pending",
-                }
-            },
+            "claims": cov_claims,
         }
         (self.change_dir / "coverage.yaml").write_text(yaml.safe_dump(cov), encoding="utf-8")
         self._update_change_yaml({

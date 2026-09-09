@@ -104,7 +104,9 @@ def test_slice_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("slice", valid_slice) == []
 
-    # Claim pattern requires CR-001 (3+ digits)
+    assert registry.validate("slice", dict(valid_slice, claims=["O1", "E1"])) == []
+
+    # Claim pattern requires CR-001 (3+ digits) or short labels like O1
     invalid_claim_slice = dict(valid_slice, claims=["CR-1"])
     assert len(registry.validate("slice", invalid_claim_slice)) > 0
 

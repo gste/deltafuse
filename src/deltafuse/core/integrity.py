@@ -71,11 +71,27 @@ def scan_changed_paths_for_private_test_access(
     return errors
 
 
+_CR_CLAIM = re.compile(r"\b(CR-[0-9]{3,})\b")
+_BULLET_CLAIM = re.compile(
+    r"(?m)^[ \t]*[-*][ \t]+(CR-[0-9]{3,}|[A-Z]{1,3}[0-9]{1,3})\b"
+)
+
+
 def extract_claims_from_request(request_md_content: str) -> list[str]:
-    """Extracts claim IDs defined in request.md."""
-    pattern = re.compile(r"\b(CR-[0-9]{3,})\b")
-    found = pattern.findall(request_md_content)
-    return list(dict.fromkeys(found))
+    """Extract stable claim IDs from request.md (CR-* and S02-style O1/E1 bullets)."""
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def add(cid: str) -> None:
+        if cid not in seen:
+            seen.add(cid)
+            found.append(cid)
+
+    for match in _BULLET_CLAIM.finditer(request_md_content):
+        add(match.group(1))
+    for match in _CR_CLAIM.finditer(request_md_content):
+        add(match.group(1))
+    return found
 
 
 def path_is_inside_repo(path: Path, repo_root: Path) -> bool:

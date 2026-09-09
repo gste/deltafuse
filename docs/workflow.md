@@ -271,7 +271,7 @@ Verify cross-artifact consistency across all layers of the Change package, verif
 
 ### Traceability Verification
 The Verifier checks that:
-1. Every normalized claim `CR-*` in `request.md` traces to a slice in `routing.yaml`.
+1. Every normalized claim in `request.md` (`CR-*` or stable labels such as `O1`/`E1`) traces to a slice in `routing.yaml`.
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
 4. Every task has verified `red`, `green`, and `regression` evidence artifacts.

@@ -14,6 +14,23 @@ def test_extract_claims_from_request():
     claims = extract_claims_from_request(content)
     assert claims == ["CR-001", "CR-002", "CR-999"]
 
+
+def test_extract_claims_from_request_s02_labels():
+    """F-008 / S02 r2: observation/expectation IDs are claims, not only CR-*."""
+    content = (
+        "## Claims\n\n"
+        "### Observation\n"
+        "- O1: limiter consume returns False when empty.\n"
+        "- O2: no penalty parameter today.\n\n"
+        "### Expectation\n"
+        "- E1: accept optional penalty_seconds.\n\n"
+        "### Unknowns\n"
+        "- U3: concurrency is unspecified.\n"
+    )
+    claims = extract_claims_from_request(content)
+    assert claims == ["O1", "O2", "E1", "U3"]
+    assert extract_claims_from_request("TokenBucketLimiter and HTTP 200") == []
+
 def test_find_spec_anchors(tmp_path: Path):
     spec_md = tmp_path / "spec.md"
     spec_md.write_text("# Spec\n<a name=\"REQ-AUTH-01\"></a>\n## REQ-AUTH-02\nSC-LOGIN-01\nPOL-SEC-01", encoding="utf-8")

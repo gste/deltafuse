@@ -178,6 +178,7 @@ RM-030 / RM-031                    (P3)
 | Regression | По-прежнему 100% mapped claims. Не золотить extra поля routing (AB-05 — отдельно) |
 | Стоимость | S |
 | Зависимости | нет |
+| Статус | **done** 2026-09-09 — экстрактор берёт bullet `O1`/`E1` и `CR-*`; slice schema допускает те же ID; 100% coverage mapping без extra routing fields |
 
 ---
 

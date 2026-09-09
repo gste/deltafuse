@@ -644,6 +644,20 @@ def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_ro
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
+def test_analyzed_accepts_o1_e1_claims(tmp_path: Path, repo_root: Path):
+    """F-008 / RM-018: S02-style O1/E1 in request.md must not be orphans at analyzed."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-027", title="S02 labels")
+        .step_intake(claims=["O1", "E1"])
+        .step_analyze()
+    )
+    from deltafuse.core.integrity import extract_claims_from_request
+    request = (builder.change_dir / "request.md").read_text(encoding="utf-8")
+    assert extract_claims_from_request(request) == ["O1", "E1"]
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
 def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_root: Path):
     """F-005 / RM-005: cancelled/superseded siblings do not block converged."""
     install(target_dir=tmp_path, framework_root=repo_root)
