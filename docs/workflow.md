@@ -108,6 +108,9 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
 - The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
+- Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code`. `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
+
+Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
 
 ---
 

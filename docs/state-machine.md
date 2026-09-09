@@ -62,10 +62,10 @@ stateDiagram-v2
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
-| `targeting` | Preparing failing test targets for tasks. | `target-confirmed`, `not-reproduced` | Test target fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected. |
+| `targeting` | Preparing failing test targets for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `target-confirmed`, `not-reproduced` | Test target fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
 | `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
-| `implementing` | Authoring minimal code to turn tests green. | `implemented` | Tests pass; Green and Regression evidence recorded. |
-| `implemented` | All tasks implemented and verified locally. | `verifying` | All task targets green; no regression failures. |
+| `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression. `docs`/`ops`: allowed files exist; no `src/**`. |
+| `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
 | `verifying` | End-to-end traceability and convergence check. | `converged`, `analyzing`, `not-reproduced` | All claims mapped to green tests and spec (or no-op closure). |
 | `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded; tasks are `implemented`, `verified`, `cancelled`, or `superseded`; spec-delta still matches `docs/spec/**`. Archive is not a spec merge. |
 | `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |

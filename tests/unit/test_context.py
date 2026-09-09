@@ -11,6 +11,7 @@ from deltafuse.core.context import (
     try_endpoint_token_count,
     PHASE_CONTRACTS,
     task_write_globs,
+    load_change_route,
 )
 
 
@@ -121,6 +122,19 @@ def test_matches_contract_globs_src_and_tests():
     assert not matches_contract_globs("docs/spec/core.md", ["src/**", "tests/**"])
     assert matches_contract_globs("src/core.py", task_write_globs())
     assert not matches_contract_globs("docs/spec/core.md", task_write_globs())
+    assert matches_contract_globs("docs/spec/core.md", task_write_globs("docs"))
+    assert not matches_contract_globs("src/core.py", task_write_globs("docs"))
+    assert matches_contract_globs("docs/ops/runbook.md", task_write_globs("ops"))
+    assert not matches_contract_globs("src/core.py", task_write_globs("ops"))
+
+
+def test_load_change_route_defaults_to_code(tmp_path: Path):
+    change = tmp_path / "docs" / "changes" / "CHG-001-test"
+    change.mkdir(parents=True)
+    (change / "change.yaml").write_text("id: CHG-001\nstatus: analyzed\n", encoding="utf-8")
+    route, errors = load_change_route(change)
+    assert route == "code"
+    assert errors == []
 
 
 def test_validate_task_context_budget_allows_missing_allowed_path(tmp_path: Path):

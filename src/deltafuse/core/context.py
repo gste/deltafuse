@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+import yaml
 from deltafuse.core.integrity import path_is_inside_repo
 
 
@@ -108,6 +109,76 @@ PHASE_CONTRACTS: dict[str, dict[str, list[str]]] = {
         ],
     },
 }
+
+CHANGE_ROUTES = frozenset({"code", "docs", "ops"})
+DEFAULT_CHANGE_ROUTE = "code"
+_PRODUCT_CODE_GLOBS = ("src/**", "tests/**")
+_ROUTE_TARGET_EVIDENCE = [
+    "docs/changes/*/evidence/red/**",
+    "docs/changes/*/coverage.yaml",
+    "docs/changes/*/change.yaml",
+    "docs/changes/*/tasks/*",
+]
+_ROUTE_IMPLEMENT_EVIDENCE = [
+    "docs/changes/*/evidence/green/**",
+    "docs/changes/*/evidence/regression/**",
+    "docs/changes/*/coverage.yaml",
+    "docs/changes/*/change.yaml",
+    "docs/changes/*/tasks/*",
+]
+_DOCS_WRITE_GLOBS = ["docs/spec/**", "CHANGELOG.md"]
+_OPS_WRITE_GLOBS = ["deploy/**", "docs/ops/**", "ops/**"]
+
+
+def normalize_change_route(value: Any) -> str | None:
+    """Return a valid Change route or None if missing/invalid."""
+    if value is None or value == "":
+        return None
+    route = str(value).strip().lower()
+    if route in CHANGE_ROUTES:
+        return route
+    return None
+
+
+def load_change_route(change_path: Path | str) -> tuple[str, list[str]]:
+    """SSOT is change.yaml `route`; routing.yaml may echo it. Missing means code."""
+    path = Path(change_path)
+    errors: list[str] = []
+    change_route = None
+    routing_route = None
+    change_file = path / "change.yaml"
+    if change_file.is_file():
+        try:
+            data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
+        except Exception:
+            data = None
+        if isinstance(data, dict) and "route" in data:
+            change_route = normalize_change_route(data.get("route"))
+            if change_route is None:
+                errors.append(
+                    f"change.yaml: route must be one of {', '.join(sorted(CHANGE_ROUTES))}"
+                )
+    routing_file = path / "routing.yaml"
+    if routing_file.is_file():
+        try:
+            data = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
+        except Exception:
+            data = None
+        if isinstance(data, dict) and "route" in data:
+            routing_route = normalize_change_route(data.get("route"))
+            if routing_route is None:
+                errors.append(
+                    f"routing.yaml: route must be one of {', '.join(sorted(CHANGE_ROUTES))}"
+                )
+    if change_route and routing_route and change_route != routing_route:
+        errors.append(
+            f"route mismatch: change.yaml has '{change_route}' but routing.yaml has '{routing_route}'"
+        )
+    return change_route or routing_route or DEFAULT_CHANGE_ROUTE, errors
+
+
+def is_product_code_path(rel_path: str) -> bool:
+    return matches_contract_globs(rel_path, _PRODUCT_CODE_GLOBS)
 
 
 # A03-01 / F-003: words-per-token upper bounds vs ornith/Qwen BPE (not chat completions).
@@ -290,9 +361,27 @@ def phase_allowed_paths(phase: str, kind: str) -> list[str]:
     return list(contract.get(key) or [])
 
 
-def task_write_globs() -> list[str]:
-    """Declared task allowed_paths may be Target tests or Implement sources."""
-    return phase_allowed_paths("target", "write") + phase_allowed_paths("implement", "write")
+def phase_write_globs(phase: str, route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
+    """Write globs for Target/Implement evidence and task allowed_paths (RM-021)."""
+    resolved = normalize_change_route(route) or DEFAULT_CHANGE_ROUTE
+    if phase == "target":
+        if resolved == "docs":
+            return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
+        if resolved == "ops":
+            return list(_OPS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
+        return phase_allowed_paths("target", "write")
+    if phase == "implement":
+        if resolved == "docs":
+            return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
+        if resolved == "ops":
+            return list(_OPS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
+        return phase_allowed_paths("implement", "write")
+    return phase_allowed_paths(phase, "write")
+
+
+def task_write_globs(route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
+    """Declared task allowed_paths follow the Change route (code default)."""
+    return phase_write_globs("target", route) + phase_write_globs("implement", route)
 
 
 def validate_paths_against_globs(

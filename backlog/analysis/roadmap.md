@@ -210,6 +210,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Не ослабить Implement для code Change. Hidden code suite не применяется к docs-only |
 | Стоимость | L |
 | Зависимости | **RM-010** (иначе vacuous specified) |
+| Статус | **done** 2026-09-09 — `route: code\|docs\|ops` (нет поля = code); docs/ops allowed_paths вне src/tests; targeting file/schema oracle; implemented без обязательного product regression; hidden suite только для code |
 
 ### RM-022 — не хардкодить «один SLICE» + unknown keys (AB-02, AB-05)
 

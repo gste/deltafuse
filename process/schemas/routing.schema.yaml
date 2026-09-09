@@ -8,6 +8,9 @@ properties:
   change:
     type: string
     pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  route:
+    enum: [code, docs, ops]
+    description: Echo of change.yaml route. Missing means code.
   claims:
     type: object
     additionalProperties:

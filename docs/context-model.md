@@ -156,4 +156,5 @@ Each lifecycle step operates under a strict Context Contract defining what an ag
 - `PHASE_CONTRACTS` in `src/deltafuse/core/context.py` is enforced structurally: task `allowed_paths` must match Target/Implement write globs; Red `changed_paths` must match Target write; Green/regression `changed_paths` must match Implement write. Runtime tool sandboxing of agent reads remains the host IDE/CLI; the FSM does not intercept live file opens.
 - Exceeding the context budget is treated as a design defect requiring finer decomposition.
 - `workflow.call_width` (`narrow` | `medium` | `wide`) batches Analyze *writes*; it is not a second token budget and does not close `analyzed` without routing.yaml, slices/, and coverage.yaml.
+- Change `route` (`code` default, `docs`, `ops`) selects Target/Implement write globs. `docs`/`ops` stay outside `src/**` and `tests/**`; they do not skip Specify.
 - Violating the context contract (e.g., an Implementer modifying specification, or Red evidence listing `src/**`) renders the resulting artifacts invalid and halts the lifecycle gate.

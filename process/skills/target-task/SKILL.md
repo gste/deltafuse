@@ -28,3 +28,5 @@ Do not read implementation internals unless the target cannot otherwise be expre
 If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.
 
 Recommend `/implement-task <task-path>` only for confirmed Red.
+
+For `route: docs` or `ops`, record a file or schema oracle in `evidence/red/` instead of product pytest; do not list `src/**` or `tests/**`. Hidden code-suite checks do not apply.

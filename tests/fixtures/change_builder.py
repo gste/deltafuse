@@ -9,12 +9,19 @@ from deltafuse.core.hasher import compute_product_baseline_revision
 
 
 class MockChangeBuilder:
-    def __init__(self, root_dir: Path, change_id: str = "CHG-001", title: str = "Mock Change"): 
+    def __init__(
+        self,
+        root_dir: Path,
+        change_id: str = "CHG-001",
+        title: str = "Mock Change",
+        route: str = "code",
+    ): 
         self.root_dir = root_dir
         self.change_dir = root_dir / "docs" / "changes" / f"{change_id}-test"
         self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
         self.title = title
+        self.route = route
         spec_dir = self.root_dir / "docs" / "spec"
         spec_core = spec_dir / "core.md"
         if spec_dir.is_dir() and not spec_core.exists():
@@ -96,6 +103,8 @@ class MockChangeBuilder:
             "tasks": [],
             "verification": None,
         }
+        if self.route != "code":
+            change_yaml["route"] = self.route
         (self.change_dir / "change.yaml").write_text(yaml.safe_dump(change_yaml, sort_keys=False), encoding="utf-8")
         return self
 
@@ -117,6 +126,8 @@ class MockChangeBuilder:
             "change": self.change_id,
             "claims": routing_claims,
         }
+        if self.route != "code":
+            routing["route"] = self.route
         (self.change_dir / "routing.yaml").write_text(yaml.safe_dump(routing), encoding="utf-8")
         (self.change_dir / "analysis.md").write_text("# Analysis\nAnalysis summary.", encoding="utf-8")
         slices_dir = self.change_dir / "slices"
@@ -198,6 +209,15 @@ class MockChangeBuilder:
             slice_id = t.get("slice", "SLICE-01")
             deps = t.get("depends_on", [])
             deps_str = str(deps).replace("'", "")
+            if "allowed_paths" in t:
+                allowed = t["allowed_paths"]
+            elif self.route == "docs":
+                allowed = ["docs/spec/core.md"]
+            elif self.route == "ops":
+                allowed = ["docs/ops/runbook.md"]
+            else:
+                allowed = ["src/core.py"]
+            allowed_str = "[" + ", ".join(allowed) + "]"
             task_md = (
                 f"---\n"
                 f"id: {tid}\n"
@@ -209,7 +229,7 @@ class MockChangeBuilder:
                 f"requirement_delta: added\n"
                 f"spec_refs: [docs/spec/core.md#REQ-01]\n"
                 f"design_ref: null\n"
-                f"allowed_paths: [src/core.py]\n"
+                f"allowed_paths: {allowed_str}\n"
                 f"forbidden_paths: [src/secret.py]\n"
                 f"context_budget: {{max_tokens: 16000, max_files: 24}}\n"
                 f"---\n\n# {tid}\nImplementation details\n"
@@ -233,20 +253,50 @@ class MockChangeBuilder:
     def step_target(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         red_dir = self.change_dir / "evidence" / "red"
         red_dir.mkdir(parents=True, exist_ok=True)
-        ev = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "red",
-            "timestamp": "2026-09-05T12:00:00Z",
-            "command": f"pytest tests/test_{task_id.lower()}.py",
-            "exit_code": 1,
-            "result": "expected-failure",
-            "failure_category": "behavioral-mismatch",
-            "summary": "Test failed as expected",
-            "changed_paths": [f"tests/test_{task_id.lower()}.py"],
-            "spec_status": "unchanged",
-        }
+        if self.route == "docs":
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/spec/core.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "already-green",
+                "summary": "Spec file oracle already on disk",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+            }
+        elif self.route == "ops":
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/ops/runbook.md').is_file() else 1)\"",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "missing-artifact",
+                "summary": "Ops file not yet written",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+            }
+        else:
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "behavioral-mismatch",
+                "summary": "Test failed as expected",
+                "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+                "spec_status": "unchanged",
+            }
         (red_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev), encoding="utf-8")
 
         cov_file = self.change_dir / "coverage.yaml"
@@ -261,39 +311,106 @@ class MockChangeBuilder:
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         green_dir = self.change_dir / "evidence" / "green"
-        reg_dir = self.change_dir / "evidence" / "regression"
         green_dir.mkdir(parents=True, exist_ok=True)
-        reg_dir.mkdir(parents=True, exist_ok=True)
-        ev_green = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "green",
-            "timestamp": "2026-09-05T12:10:00Z",
-            "command": f"pytest tests/test_{task_id.lower()}.py",
-            "exit_code": 0,
-            "result": "passed",
-            "summary": "Test passed after implementation",
-            "changed_paths": ["src/core.py"],
-            "spec_status": "unchanged",
-            "base_revision": self._baseline_revision(),
-        }
-        (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
-        ev_reg = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "regression",
-            "timestamp": "2026-09-05T12:15:00Z",
-            "command": "pytest tests/",
-            "exit_code": 0,
-            "result": "passed",
-            "summary": "Full test suite passed",
-            "changed_paths": ["src/core.py"],
-            "spec_status": "unchanged",
-            "base_revision": self._baseline_revision(),
-        }
-        (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        if self.route == "docs":
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/spec/core.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Docs file oracle passed",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "python -c \"print('docs-route: no product pytest')\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "No src regression for docs route",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        elif self.route == "ops":
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/ops/runbook.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Ops file oracle passed",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "python -c \"print('ops-route: no product pytest')\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "No src regression for ops route",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        else:
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Test passed after implementation",
+                "changed_paths": ["src/core.py"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "pytest tests/",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Full test suite passed",
+                "changed_paths": ["src/core.py"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
 
         task_file = self.change_dir / "tasks" / f"{task_id}.md"
         if task_file.is_file():
@@ -322,7 +439,11 @@ class MockChangeBuilder:
             "change": self.change_id,
             "phase": "verification",
             "timestamp": "2026-09-05T12:20:00Z",
-            "command": "pytest tests/",
+            "command": (
+                "pytest tests/"
+                if self.route == "code"
+                else "python -c \"print('verify: file and traceability oracle')\""
+            ),
             "exit_code": 0,
             "result": "passed",
             "summary": "Verification pass passed",

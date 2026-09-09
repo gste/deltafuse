@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+import shutil
 import yaml
 from deltafuse.core.fsm import (
     validate_change_package,
@@ -772,3 +773,125 @@ def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_r
     meta["status"] = "superseded"
     task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
     assert check_gate(builder.change_dir, "converged") == []
+
+
+def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
+    """RM-021 / S08b: docs route has no limiter.py or product pytest."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-032", title="Docs only", route="docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    assert check_gate(builder.change_dir, "specified") == []
+    builder.step_decompose().step_target()
+    assert check_gate(builder.change_dir, "targeting") == []
+    red = yaml.safe_load((builder.change_dir / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8"))
+    assert red["changed_paths"] == ["docs/spec/core.md"]
+    assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
+
+
+def test_docs_route_rejects_src_allowed_paths(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-033", title="Docs forbids src", route="docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = ["src/core.py"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    errs = validate_change_package(builder.change_dir)
+    assert any("src/**" in e or "outside the phase contract" in e for e in errs)
+
+
+def test_docs_route_implemented_without_product_regression(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-034", title="Docs green", route="docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+    )
+    shutil.rmtree(builder.change_dir / "evidence" / "regression")
+    assert check_gate(builder.change_dir, "implemented") == []
+
+
+def test_code_route_still_requires_regression(tmp_path: Path, repo_root: Path):
+    """RM-021: do not weaken Implement for code Changes."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-035", title="Code still pytest")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+    )
+    shutil.rmtree(builder.change_dir / "evidence" / "regression")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("Regression evidence" in e for e in errs)
+
+
+def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
+    """RM-021 / S08c: ops files, spec/src need not change."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    ops_dir = tmp_path / "docs" / "ops"
+    ops_dir.mkdir(parents=True, exist_ok=True)
+    (ops_dir / "runbook.md").write_text("# Runbook\nhostname: limiter-prod-02\n", encoding="utf-8")
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-036", title="Ops migrate", route="ops")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    assert check_gate(builder.change_dir, "specified") == []
+    builder.step_decompose().step_target()
+    assert check_gate(builder.change_dir, "targeting") == []
+    builder.step_implement()
+    assert check_gate(builder.change_dir, "implemented") == []
+    green = yaml.safe_load((builder.change_dir / "evidence" / "green" / "TASK-001.yaml").read_text(encoding="utf-8"))
+    assert green["changed_paths"] == ["docs/ops/runbook.md"]
+    assert not any(p.startswith("src/") for p in green["changed_paths"])
+
+
+def test_missing_route_defaults_to_code(tmp_path: Path, repo_root: Path):
+    """S02/S03: omit route; still a code Change."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-037", title="Default code")
+        .step_intake()
+        .step_analyze()
+    )
+    change = yaml.safe_load((builder.change_dir / "change.yaml").read_text(encoding="utf-8"))
+    routing = yaml.safe_load((builder.change_dir / "routing.yaml").read_text(encoding="utf-8"))
+    assert "route" not in change
+    assert "route" not in routing
+    from deltafuse.core.context import load_change_route
+    route, errors = load_change_route(builder.change_dir)
+    assert route == "code"
+    assert errors == []
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_route_mismatch_is_error(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-038", title="Mismatch", route="docs")
+        .step_intake()
+        .step_analyze()
+    )
+    routing_file = builder.change_dir / "routing.yaml"
+    routing = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
+    routing["route"] = "ops"
+    routing_file.write_text(yaml.safe_dump(routing, sort_keys=False), encoding="utf-8")
+    errs = validate_change_package(builder.change_dir)
+    assert any("route mismatch" in e for e in errs)

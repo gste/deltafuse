@@ -26,3 +26,5 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 9. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
 
 Archive is provenance, not default implementation context. Do not delete completed task history.
+
+For `route: docs` or `ops`, Verify is spec/file traceability without product pytest; the hidden code suite does not apply. Specify still does not write deploy YAML.

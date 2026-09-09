@@ -23,6 +23,9 @@ properties:
       content_hash: {type: string, pattern: '^sha256:[a-fA-F0-9]{64}$'}
   intent:
     enum: [feature, bugfix, refactor, maintenance, documentation, unknown]
+  route:
+    enum: [code, docs, ops]
+    description: Execution route. Missing means code (S02/S03). docs/ops do not take product pytest or src.
   risk:
     enum: [low, medium, high, critical, unknown]
   source:

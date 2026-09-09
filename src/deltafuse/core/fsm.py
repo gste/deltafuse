@@ -10,8 +10,10 @@ from deltafuse.core.context import (
     validate_task_context_budget,
     validate_paths_against_globs,
     path_is_listed,
-    phase_allowed_paths,
+    phase_write_globs,
     task_write_globs,
+    load_change_route,
+    is_product_code_path,
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
@@ -166,6 +168,9 @@ def validate_change_package(
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}")
 
+    route, route_errs = load_change_route(change_path)
+    errors.extend(route_errs)
+
     # 1b. Validate request.md presence (P7.5)
     request_file = change_path / "request.md"
     if not request_file.is_file():
@@ -275,10 +280,17 @@ def validate_change_package(
                         f"{task_file.name}: {e}"
                         for e in validate_paths_against_globs(
                             [p for p in allowed if isinstance(p, str)],
-                            task_write_globs(),
+                            task_write_globs(route),
                             label="allowed_paths",
                         )
                     )
+                    if route in {"docs", "ops"}:
+                        for apath in allowed:
+                            if isinstance(apath, str) and is_product_code_path(apath):
+                                errors.append(
+                                    f"{task_file.name}: {route} route must not list "
+                                    f"src/** or tests/** in allowed_paths ('{apath}')"
+                                )
                     for apath in allowed:
                         if isinstance(apath, str) and path_is_listed(apath, forbidden):
                             errors.append(
@@ -399,7 +411,7 @@ def validate_change_package(
                             f"{ev_file.relative_to(change_path)}: red evidence must have "
                             f"non-zero exit_code (got 0)"
                         )
-                    if result == "expected-failure":
+                    if result == "expected-failure" and route == "code":
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
                             errors.extend(
@@ -559,13 +571,14 @@ def _validate_evidence_changed_paths_contract(
     contract_phase: str,
     *,
     gate: str,
+    route: str = "code",
 ) -> list[str]:
-    """RM-002: evidence changed_paths must stay inside PHASE_CONTRACTS write globs."""
+    """RM-002: evidence changed_paths must stay inside route write globs."""
     errors: list[str] = []
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
         return errors
-    write_globs = phase_allowed_paths(contract_phase, "write")
+    write_globs = phase_write_globs(contract_phase, route)
     tasks = _task_frontmatter_by_id(change_path)
     for ev_file in ev_dir.glob("*.yaml"):
         try:
@@ -584,6 +597,13 @@ def _validate_evidence_changed_paths_contract(
             label=f"Gate {gate} {evidence_phase} changed_paths",
         ):
             errors.append(msg)
+        if route in {"docs", "ops"}:
+            for rel in rel_paths:
+                if is_product_code_path(rel):
+                    errors.append(
+                        f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
+                        f"must not write src/** or tests/** ('{rel}')"
+                    )
         task_id = ev_data.get("task")
         forbidden = []
         if isinstance(task_id, str) and task_id in tasks:
@@ -749,32 +769,38 @@ def check_gate(
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
 
     elif gate_lower == "targeting":
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate targeting: Red evidence in evidence/red/ is required")
         errors.extend(
             _validate_evidence_changed_paths_contract(
-                change_path, "red", "target", gate="targeting"
+                change_path, "red", "target", gate="targeting", route=route
             )
         )
 
     elif gate_lower == "implemented":
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         green_dir = change_path / "evidence" / "green"
         reg_dir = change_path / "evidence" / "regression"
         if not green_dir.is_dir() or not list(green_dir.glob("*.yaml")):
             errors.append("Gate implemented: Green evidence in evidence/green/ is required")
-        if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
-            errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        if route == "code":
+            if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
+                errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
         errors.extend(
             _validate_evidence_changed_paths_contract(
-                change_path, "green", "implement", gate="implemented"
+                change_path, "green", "implement", gate="implemented", route=route
             )
         )
-        errors.extend(
-            _validate_evidence_changed_paths_contract(
-                change_path, "regression", "implement", gate="implemented"
+        if reg_dir.is_dir() and list(reg_dir.glob("*.yaml")):
+            errors.extend(
+                _validate_evidence_changed_paths_contract(
+                    change_path, "regression", "implement", gate="implemented", route=route
+                )
             )
-        )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"
