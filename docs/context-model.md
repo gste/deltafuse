@@ -144,8 +144,8 @@ Each lifecycle step operates under a strict Context Contract defining what an ag
 | Step | Allowed Read Scope (Context In) | Forbidden Read Scope | Primary Output Artifact |
 |---|---|---|---|
 | **Intake** | Raw input, issue description, logs, review comments. | `docs/spec/**`, repository source code. | `request.md` |
-| **Route & Analyze** | `request.md`, `_capabilities.yaml`, targeted spec modules for selected slice, accepted decisions. | Entire codebase, unrelated specification modules. | `routing.yaml`, `analysis.md`, `slices/**`, `coverage.yaml` |
-| **Specify** | `request.md`, `analysis.md`, `slices/SLICE-NN.md`, target spec module, accepted decisions. | Product source code. | `spec-delta.md`, updated `docs/spec/**` |
+| **Route & Analyze** | `request.md`, `_capabilities.yaml`, targeted spec modules for selected slice, accepted decisions. | Entire codebase, unrelated specification modules. | `routing.yaml`, `slices/**`, `coverage.yaml` (optional `analysis.md`) |
+| **Specify** | `request.md`, `slices/SLICE-NN.md`, target spec module, accepted decisions, and `analysis.md` when present. | Product source code. | `spec-delta.md`, updated `docs/spec/**` |
 | **Decompose** | Updated spec modules, slice definition, target test suite paths. | Full codebase. | `tasks/TASK-NNN-*.md` |
 | **Target** | Single `TASK-NNN.md`, test suite file, public interface signatures. | Implementation code under test. | Executable failing test, `evidence/red/<task-id>.yaml` |
 | **Implement** | Single `TASK-NNN.md`, Red evidence, target test, target implementation file. | Unrelated modules and packages. | Passing code, `evidence/green/<task-id>.yaml`, `evidence/regression/<task-id>.yaml` |

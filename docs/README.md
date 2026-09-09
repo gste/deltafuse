@@ -69,7 +69,7 @@ product/
     │       ├── change.yaml
     │       ├── request.md
     │       ├── routing.yaml
-    │       ├── analysis.md
+    │       ├── analysis.md          # optional
     │       ├── slices/
     │       ├── tasks/
     │       ├── evidence/

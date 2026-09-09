@@ -48,6 +48,13 @@ def test_change_schema_valid_and_invalid(registry: SchemaRegistry):
     }
     assert registry.validate("change", valid_change) == []
 
+    no_summary = dict(valid_change)
+    no_summary["analysis"] = {"routing": "routing.yaml", "summary": None}
+    assert registry.validate("change", no_summary) == []
+    omit_analysis = dict(valid_change)
+    del omit_analysis["analysis"]
+    assert registry.validate("change", omit_analysis) == []
+
     # Invalid ID format
     invalid_change = dict(valid_change, id="INVALID-ID")
     errors = registry.validate("change", invalid_change)

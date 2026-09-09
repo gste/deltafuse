@@ -241,6 +241,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Новый LLM **not-tested** — не блокировать P0 |
 | Стоимость | S |
 | Зависимости | нет |
+| Статус | **done** 2026-09-09 — skill/docs: analysis.md optional; analyzed = routing+slices+coverage; summary may be null |
 
 ### RM-031 — EARS как стиль spec; optional PBT (PP-04, KI-07)
 

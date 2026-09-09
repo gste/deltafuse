@@ -987,3 +987,24 @@ def test_analyze_skill_does_not_freeze_single_slice(repo_root: Path):
     assert "Do not collapse a multi-capability Change into a single" in skill
     assert "пиши только SLICE-01" not in skill
     assert "ONLY one file" not in skill
+
+
+def test_analyzed_does_not_require_analysis_md(tmp_path: Path, repo_root: Path):
+    """RM-030 / AB-04: analyzed is routing+slices+coverage; analysis.md is optional."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-042", title="No analysis summary")
+        .step_intake()
+        .step_analyze()
+    )
+    analysis = builder.change_dir / "analysis.md"
+    analysis.unlink()
+    assert not analysis.is_file()
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_analyze_skill_marks_analysis_md_optional(repo_root: Path):
+    skill = (repo_root / "process" / "skills" / "analyze-change" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "`analysis.md` is optional" in skill

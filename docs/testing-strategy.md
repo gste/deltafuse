@@ -143,6 +143,7 @@ delta-fuse/
   - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; split записи opt-in; routing первым шагом. Specify для feature не снимается.
   - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.
   - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
+  - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
   - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.

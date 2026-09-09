@@ -78,7 +78,7 @@ For each capability slice:
    - `implementation`: `none | add | modify | remove | mixed` (with `refs` to production code roots);
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
-4. Record analysis narrative and findings in `analysis.md`.
+4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
 5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
 
 ### Typed Delta Invariants
@@ -110,6 +110,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
 - Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
+- `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
 
 ---
 
@@ -119,7 +120,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 Apply analyzed specification deltas to the authoritative product specification in `docs/spec/**`, or verify that the accepted specification is unchanged.
 
 ### Context Contract
-- **Allowed Read Scope**: `request.md`, `analysis.md`, `slices/**`, target spec modules, accepted decisions.
+- **Allowed Read Scope**: `request.md`, slices, target spec modules, accepted decisions, and `analysis.md` when present.
 - **Forbidden Read Scope**: Product implementation source code.
 
 ### Rules
