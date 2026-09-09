@@ -5,6 +5,7 @@ from deltafuse.core.fsm import (
     validate_change_package,
     check_gate,
     can_transition,
+    missing_analyze_artifacts,
     VALID_CHANGE_STATUSES,
 )
 from deltafuse.core.archiver import is_change_id_archived
@@ -641,7 +642,93 @@ def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_ro
     errs = check_gate(builder.change_dir, "analyzed")
     assert any("routing.yaml is missing" in e for e in errs)
     builder.step_analyze()
+    assert missing_analyze_artifacts(builder.change_dir) == []
     assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_narrow_analyze_gate_after_full_set(tmp_path: Path, repo_root: Path):
+    """RM-020: narrow may write three times; analyzed still waits for the set."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    lock_path = tmp_path / ".deltafuse" / "lock.yaml"
+    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    lock.setdefault("workflow", {})["call_width"] = "narrow"
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("workflow", {})["call_width"] = "narrow"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-028", title="Narrow analyze")
+    builder.step_intake()
+    builder.step_analyze()
+    (builder.change_dir / "coverage.yaml").unlink()
+    slices = builder.change_dir / "slices"
+    for slice_file in slices.glob("*.md"):
+        slice_file.unlink()
+    slices.rmdir()
+    assert "routing.yaml" not in missing_analyze_artifacts(builder.change_dir)
+    assert missing_analyze_artifacts(builder.change_dir) == ["slices/", "coverage.yaml"]
+    errs = check_gate(builder.change_dir, "analyzed")
+    assert any("slice file" in e for e in errs)
+    assert any("coverage.yaml is missing" in e for e in errs)
+
+    builder.step_analyze()
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_wide_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
+    """RM-020: wide default may write the full Analyze set in one step."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
+    assert lock["workflow"]["call_width"] == "wide"
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-029", title="Wide analyze")
+        .step_intake()
+        .step_analyze()
+    )
+    assert missing_analyze_artifacts(builder.change_dir) == []
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_feature_analyzed_does_not_skip_specify(tmp_path: Path, repo_root: Path):
+    """RM-020 / BM-01: call_width does not skip Specify for a feature Change."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-030", title="Tiny feature")
+        .step_intake()
+        .step_analyze()
+    )
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("spec-delta.md is missing" in e for e in errs)
+
+
+def test_auto_accept_decisions_does_not_bypass_human_gate(tmp_path: Path, repo_root: Path):
+    """Q-007 flag in lock: auto_accept_decisions true still blocks proposed DEC."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    lock_path = tmp_path / ".deltafuse" / "lock.yaml"
+    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    lock["workflow"]["auto_accept_decisions"] = True
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-031", title="DEC still human")
+        .step_intake()
+        .step_analyze()
+    )
+    dec_file = tmp_path / "docs" / "decisions" / "DEC-0002-choice.md"
+    dec_file.write_text(
+        "---\n"
+        "id: DEC-0002\n"
+        "title: Choice\n"
+        "kind: architecture\n"
+        "status: proposed\n"
+        "owner: ghost\n"
+        "change: CHG-031\n"
+        "affects: {capabilities: [system.core], spec_refs: []}\n"
+        "---\n# Decision details\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "analyzed")
+    assert any("blocked-on-decision" in e and "DEC-0002" in e for e in errs)
 
 
 def test_analyzed_accepts_o1_e1_claims(tmp_path: Path, repo_root: Path):

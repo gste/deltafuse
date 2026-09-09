@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import NamedTuple
 import yaml
 from deltafuse.core.hasher import compute_framework_content_hash
+from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
 
 
 class InstallResult(NamedTuple):
@@ -181,21 +182,14 @@ def install(
             )
         config_path.write_text(config_content, encoding="utf-8")
 
-    # Write lock.yaml
-    lock_content = (
-        f"schema_version: 2\n"
-        f"framework:\n"
-        f"  version: {version}\n"
-        f"  source: {effective_source}\n"
-        f"  content_hash: sha256:{content_hash}\n"
-    )
-    lock_path.write_text(lock_content, encoding="utf-8")
-
-    # Read adapter roots from config.yaml
+    # Read product config for adapters and the pinned Analyze call-width profile.
     adapter_roots: list[str] = []
+    config_dict: dict = {}
     if config_path.is_file():
         try:
-            config_dict = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded, dict):
+                config_dict = loaded
             adapters_section = config_dict.get("adapters", {})
             if isinstance(adapters_section, dict):
                 roots = adapters_section.get("roots", [])
@@ -203,6 +197,21 @@ def install(
                     adapter_roots = [str(r).strip() for r in roots if r]
         except Exception:
             pass
+
+    call_width, auto_accept, workflow_errors = workflow_from_mapping(config_dict)
+    if workflow_errors:
+        raise InstallationError("Invalid .deltafuse/config.yaml workflow: " + "; ".join(workflow_errors))
+
+    lock_path.write_text(
+        format_lock_yaml(
+            version=version,
+            source=effective_source,
+            content_hash=content_hash,
+            call_width=call_width,
+            auto_accept_decisions=auto_accept,
+        ),
+        encoding="utf-8",
+    )
 
     if not adapter_roots:
         adapter_roots = [".agents/skills", ".cursor/skills", ".gemini/skills"]

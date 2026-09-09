@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 import yaml
+from deltafuse.core.lock import workflow_alignment_errors
 
 
 CANONICAL_SKILL_NAMES = [
@@ -43,10 +44,14 @@ def validate_product_layout(product_dir: Path | str) -> list[str]:
     config_version: str | None = None
     config_source: str | None = None
     adapter_roots: list[str] = []
+    cfg: dict[str, Any] = {}
+    lock: dict[str, Any] = {}
 
     if config_file.is_file():
         try:
-            cfg = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
+            loaded_cfg = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded_cfg, dict):
+                cfg = loaded_cfg
             config_version = cfg.get("framework", {}).get("version")
             config_source = cfg.get("framework", {}).get("source")
             adapters_sec = cfg.get("adapters", {})
@@ -68,7 +73,9 @@ def validate_product_layout(product_dir: Path | str) -> list[str]:
 
     if lock_file.is_file():
         try:
-            lock = yaml.safe_load(lock_file.read_text(encoding="utf-8")) or {}
+            loaded_lock = yaml.safe_load(lock_file.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded_lock, dict):
+                lock = loaded_lock
             lock_version = lock.get("framework", {}).get("version") or lock.get("version")
             lock_source = lock.get("framework", {}).get("source") or lock.get("source")
             lock_hash = lock.get("framework", {}).get("content_hash")
@@ -80,6 +87,8 @@ def validate_product_layout(product_dir: Path | str) -> list[str]:
                 errors.append("Lock file has no valid framework content hash")
         except Exception as ex:
             errors.append(f"Error parsing .deltafuse/lock.yaml: {ex}")
+
+    errors.extend(workflow_alignment_errors(cfg, lock))
 
     # Version / source alignment
     if config_version and lock_version and config_version != lock_version:

@@ -139,6 +139,7 @@ delta-fuse/
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
   - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
+  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; split записи opt-in; routing первым шагом. Specify для feature не снимается.
   - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
@@ -153,7 +154,7 @@ delta-fuse/
   - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
   - Флаг `--force` обновляет только управляемые фреймворком файлы.
 * **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
-  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
+  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.call_width`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
 

@@ -63,6 +63,8 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
+Routing is always the first Analyze write. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) is pinned in `.deltafuse/lock.yaml`. `narrow` writes routing, then slices, then coverage across invocations; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+
 ### Pass B: Slice Analysis
 For each capability slice:
 1. Load only the specification modules referenced by the capability.
@@ -105,6 +107,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
 
 ---
 

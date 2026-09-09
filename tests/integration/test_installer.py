@@ -28,6 +28,11 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert (tmp_path / "AGENTS.md").is_file()
     assert (tmp_path / ".deltafuse" / "config.yaml").is_file()
     assert (tmp_path / ".deltafuse" / "lock.yaml").is_file()
+    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
+    assert lock["workflow"]["call_width"] == "wide"
+    assert lock["workflow"]["auto_accept_decisions"] is False
+    cfg = yaml.safe_load((tmp_path / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["workflow"]["call_width"] == "wide"
     assert (tmp_path / "docs" / "spec" / "_capabilities.yaml").is_file()
     assert (tmp_path / "docs" / "decisions" / "DEC-0000-template.md").is_file()
     assert (tmp_path / "CHANGELOG.md").is_file()
@@ -73,3 +78,26 @@ def test_force_upgrade_with_modified_lock(tmp_path: Path, repo_root: Path):
     # With force: must succeed and update lock
     result = install(target_dir=tmp_path, force=True, framework_root=repo_root)
     assert f"content_hash: sha256:{result.content_hash}" in lock_file.read_text(encoding="utf-8")
+    lock = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
+    assert lock["workflow"]["call_width"] == "wide"
+
+
+def test_install_pins_narrow_call_width_from_config(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["workflow"]["call_width"] = "narrow"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    install(target_dir=tmp_path, framework_root=repo_root)
+    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
+    assert lock["workflow"]["call_width"] == "narrow"
+
+
+def test_install_rejects_invalid_call_width(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["workflow"]["call_width"] = "ornith"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    with pytest.raises(InstallationError, match="call_width"):
+        install(target_dir=tmp_path, framework_root=repo_root)

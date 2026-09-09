@@ -81,7 +81,7 @@ Change может быть переведён в терминальное сос
 | `normalized` | `analyzing` | Начало шага `/analyze-change`. Маршрутизация claims по capabilities. | Существует каталог capabilities (или создаётся в Bootstrap). |
 | `analyzing` | `blocked-on-decision` | Обнаружена развилка, требующая Decision Record со статусом `proposed`. | Создан документ `docs/decisions/DEC-NNNN-*.md`. |
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
-| `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. | Все claims покрыты, дельты типизированы, `coverage.yaml` валиден. |
+| `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `workflow.call_width` может разнести записи, но комплект тот же. | На диске есть `routing.yaml`, `slices/` и `coverage.yaml`; все claims покрыты; дельты типизированы. |
 | `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). | Сформирован проект правок в `docs/spec/**` и `spec-delta.md`. |
 | `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |

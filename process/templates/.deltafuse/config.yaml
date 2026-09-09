@@ -15,6 +15,10 @@ context:
   max_tokens: 16000
   max_files: 24
 
+workflow:
+  call_width: wide
+  auto_accept_decisions: false
+
 project:
   baseline: draft
   capability_catalog: docs/spec/_capabilities.yaml

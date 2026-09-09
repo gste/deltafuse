@@ -196,6 +196,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Не skip Specify для tiny (BM-01). Не вшивать A09_ANALYZE_FOCUS как единственный режим |
 | Стоимость | L |
 | Зависимости | RM-002 желателен; **после** RM-010, иначе режем пустой spec |
+| Статус | **done** 2026-09-09 — lock/config `workflow.call_width` `narrow\|medium\|wide` (default wide); `analyzed` только при routing+slices+coverage; split opt-in; routing первым; `auto_accept_decisions` не обходит Human Gate |
 
 ### RM-021 — маршруты docs \| ops \| code (Q-005 + Q-006)
 

@@ -56,7 +56,7 @@ stateDiagram-v2
 | Status | Description | Allowed Next Statuses | Transition Gate / Precondition |
 |---|---|---|---|
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
-| `analyzing` | Routing and slice analysis in progress. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
+| `analyzing` | Routing and slice analysis in progress. `workflow.call_width` may split writes; `analyzed` still needs routing+slices+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
 | `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
@@ -194,4 +194,4 @@ stateDiagram-v2
 ## Versioning Invariants
 
 1. **Schema Version Compatibility**: All product artifacts (`change.yaml`, `routing.yaml`, `coverage.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, `decisions/DEC-*.md`) must strictly match `schema_version: 2`.
-2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, and content hash. Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`.
+2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, content hash, and `workflow.call_width` (`narrow` | `medium` | `wide`). Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`. `auto_accept_decisions: true` does not bypass Human Gate on proposed Decisions.

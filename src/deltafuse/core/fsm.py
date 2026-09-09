@@ -657,6 +657,24 @@ def _validate_spec_delta_matches_disk(
     return errors
 
 
+def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
+    """Analyze substeps not yet on disk. `analyzed` requires this list to be empty.
+
+    Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
+    not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    """
+    path = Path(change_path)
+    missing: list[str] = []
+    if not (path / "routing.yaml").is_file():
+        missing.append("routing.yaml")
+    slices = path / "slices"
+    if not slices.is_dir() or not any(slices.glob("*.md")):
+        missing.append("slices/")
+    if not (path / "coverage.yaml").is_file():
+        missing.append("coverage.yaml")
+    return missing
+
+
 def check_gate(
     change_dir: Path | str,
     gate: str,
@@ -667,7 +685,6 @@ def check_gate(
 
     repo_root = find_repo_root(change_path)
     req_file = change_path / "request.md"
-    routing_file = change_path / "routing.yaml"
     spec_delta_file = change_path / "spec-delta.md"
     tasks_dir = change_path / "tasks"
 
@@ -693,12 +710,13 @@ def check_gate(
     elif gate_lower == "analyzed":
         if not req_file.is_file():
             errors.append("Gate analyzed: request.md is missing")
-        if not routing_file.is_file():
-            errors.append("Gate analyzed: routing.yaml is missing")
-        if not (change_path / "slices").is_dir() or not list((change_path / "slices").glob("*.md")):
-            errors.append("Gate analyzed: at least one slice file in slices/ is required")
-        if not (change_path / "coverage.yaml").is_file():
-            errors.append("Gate analyzed: coverage.yaml is missing")
+        for artifact in missing_analyze_artifacts(change_path):
+            if artifact == "routing.yaml":
+                errors.append("Gate analyzed: routing.yaml is missing")
+            elif artifact == "slices/":
+                errors.append("Gate analyzed: at least one slice file in slices/ is required")
+            elif artifact == "coverage.yaml":
+                errors.append("Gate analyzed: coverage.yaml is missing")
 
         # Check blocking decisions (P3)
         unresolved = find_unresolved_decisions_for_change(change_id, repo_root)

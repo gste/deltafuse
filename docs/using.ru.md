@@ -36,7 +36,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 ## Pinning and upgrades
 
-`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings. `.deltafuse/lock.yaml` фиксирует resolved version, schema version и framework content hash.
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 
 Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
 
