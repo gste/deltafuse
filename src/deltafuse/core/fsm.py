@@ -766,16 +766,17 @@ def check_gate(
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
 
-        # Check all tasks frontmatter status (P1 / T3)
+        # Check all tasks frontmatter status (P1 / T3 / RM-005)
         if tasks_dir.is_dir():
+            terminal = {"implemented", "verified", "cancelled", "superseded"}
             for task_file in tasks_dir.glob("*.md"):
                 try:
                     meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
                     task_status = meta.get("status")
-                    if task_status not in {"implemented", "verified"}:
+                    if task_status not in terminal:
                         errors.append(
                             f"Gate converged: task '{task_file.name}' has non-terminal status '{task_status}' "
-                            "(must be 'implemented' or 'verified')"
+                            "(must be 'implemented', 'verified', 'cancelled', or 'superseded')"
                         )
                 except Exception as ex:
                     errors.append(f"Gate converged: failed to parse task '{task_file.name}': {ex}")

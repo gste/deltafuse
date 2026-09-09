@@ -281,7 +281,7 @@ Raw intent (docs/intake/...)
 
 ### Архивация
 После подтверждения сходимости:
-1. Задачи переводятся в статус `verified`.
+1. Активные задачи переводятся в статус `verified`. `cancelled` и `superseded` остаются терминальными, без фальшивого `implemented`.
 2. Фиксируется итоговый статус в `change.yaml` (`converged` -> `archived`).
 3. При необходимости обновляется `CHANGELOG.md`.
 4. Вся директория изменения целиком перемещается в `docs/archive/changes/<date>-<change-id>/`.

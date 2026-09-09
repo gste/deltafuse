@@ -108,6 +108,32 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     assert any("has non-terminal status 'pending'" in e for e in gate_errs)
 
 
+def test_mutation_t3_converged_accepts_cancelled_task(tmp_path: Path, repo_root: Path):
+    """F-005: cancelled is terminal on converged; pending still fails via T3."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-213", title="T3 cancelled")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose(
+            tasks=[
+                {"id": "TASK-001", "slice": "SLICE-01", "depends_on": []},
+                {"id": "TASK-002", "slice": "SLICE-01", "depends_on": []},
+            ]
+        )
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    from deltafuse.core.frontmatter import parse_frontmatter
+    task_file = builder.change_dir / "tasks" / "TASK-002.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["status"] = "cancelled"
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    assert check_gate(builder.change_dir, "converged") == []
+
+
 def test_mutation_t4_evidence_for_nonexistent_task_rejected(tmp_path: Path):
     """T4: Evidence referencing nonexistent TASK-999 must be rejected."""
     builder = (

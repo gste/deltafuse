@@ -275,7 +275,7 @@ The Verifier checks that:
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
 4. Every task has verified `red`, `green`, and `regression` evidence artifacts.
-5. All tasks in the Change are transitioned to `verified`.
+5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses.
 
 ### Convergence Analysis
 1. Execute full project verification suite.

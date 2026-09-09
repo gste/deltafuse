@@ -21,7 +21,7 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.
 5. If automated full-suite verification is executed at the Change level, record execution evidence under `evidence/verification/run.yaml` (`phase: verification`) with `base_revision` matching the current `docs/spec/**` and `src/**` tree.
 6. The `converged` gate checks that `spec-delta.md` `added`/`modified` paths still exist under `docs/spec/**` and that `removed` paths are gone; do not treat archive as a spec merge.
-7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Set all implemented tasks to `verified`.
+7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Set implemented tasks to `verified`. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
 8. For a gap, return ownership to the corresponding upstream skill; do not repair it silently.
 9. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
 

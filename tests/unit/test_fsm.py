@@ -642,3 +642,32 @@ def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_ro
     assert any("routing.yaml is missing" in e for e in errs)
     builder.step_analyze()
     assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_root: Path):
+    """F-005 / RM-005: cancelled/superseded siblings do not block converged."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-026", title="Cancelled sibling")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose(
+            tasks=[
+                {"id": "TASK-001", "slice": "SLICE-01", "depends_on": []},
+                {"id": "TASK-002", "slice": "SLICE-01", "depends_on": ["TASK-001"]},
+            ]
+        )
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    task_file = builder.change_dir / "tasks" / "TASK-002.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["status"] = "cancelled"
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    assert check_gate(builder.change_dir, "converged") == []
+
+    meta["status"] = "superseded"
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    assert check_gate(builder.change_dir, "converged") == []

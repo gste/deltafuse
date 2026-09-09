@@ -150,6 +150,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Не drop Verify. Не ITIL |
 | Стоимость | S |
 | Зависимости | нет |
+| Статус | **done** 2026-09-09 — `converged` принимает `cancelled`/`superseded`; `pending` по-прежнему fail; Verify не снят |
 
 ### RM-008 — сверка spec-delta ↔ диск на `converged` (Q-008)
 
