@@ -57,6 +57,7 @@ RM-030 / RM-031                    (P3)
 | Стоимость | M |
 | Зависимости | RM-004 желателен (те же пути) |
 | Не делать | OpenSpec merge на archive; Spec Kit checklist как замена |
+| Статус | **done** 2026-09-08 — гейт `specified` требует status, валидный catalog, live `docs/spec/**` для add/modify и якоря `spec_refs` для none; skills не патчились |
 
 ### RM-009 — аутентичный Red / already-green (F-009)
 

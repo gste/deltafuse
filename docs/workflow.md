@@ -124,9 +124,13 @@ Apply analyzed specification deltas to the authoritative product specification i
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
-- `spec-delta.md` validates against `spec-delta.schema.yaml`.
+- `spec-delta.md` validates against `spec-delta.schema.yaml` (`added`, `modified`, and `removed` required).
+- Added or modified paths exist under `docs/spec/**` with their anchors.
+- `docs/spec/_capabilities.yaml` validates against the capability schema and lists each slice `primary_capability` with live spec files.
+- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing `#REQ-*` / `#SC-*` anchor.
 - Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
-- `change.yaml` status transitioned to `specified`.
+- `change.yaml` status is `specified` or `specification-proposed`.
+- Product source code is not required at this gate.
 
 ---
 

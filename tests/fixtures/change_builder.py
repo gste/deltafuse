@@ -14,9 +14,41 @@ class MockChangeBuilder:
         self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
         self.title = title
-        spec_core = self.root_dir / "docs" / "spec" / "core.md"
-        if (self.root_dir / "docs" / "spec").is_dir() and not spec_core.exists():
+        spec_dir = self.root_dir / "docs" / "spec"
+        spec_core = spec_dir / "core.md"
+        if spec_dir.is_dir() and not spec_core.exists():
             spec_core.write_text("# Core Spec\n## REQ-01\nCore requirement.\n", encoding="utf-8")
+        if spec_dir.is_dir() and spec_core.is_file():
+            self._ensure_core_capability()
+
+    def _ensure_core_capability(self) -> None:
+        catalog_path = self.root_dir / "docs" / "spec" / "_capabilities.yaml"
+        data: dict[str, Any] = {"schema_version": 2, "domains": {}}
+        if catalog_path.is_file():
+            loaded = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        domains = data.setdefault("domains", {})
+        if not isinstance(domains, dict):
+            domains = {}
+            data["domains"] = domains
+        system = domains.setdefault("system", {})
+        if not isinstance(system, dict):
+            system = {}
+            domains["system"] = system
+        system.setdefault("summary", "Core system")
+        caps = system.setdefault("capabilities", {})
+        if not isinstance(caps, dict):
+            caps = {}
+            system["capabilities"] = caps
+        caps.setdefault(
+            "core",
+            {
+                "summary": "Core capability",
+                "spec": ["docs/spec/core.md"],
+            },
+        )
+        catalog_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     def _update_change_yaml(self, updates: dict[str, Any]) -> None:
         cfile = self.change_dir / "change.yaml"

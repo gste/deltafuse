@@ -13,6 +13,9 @@ from deltafuse.core.integrity import (
     validate_spec_ref,
     validate_decision_ref,
     find_unresolved_decisions_for_change,
+    load_capability_catalog,
+    spec_ref_is_under_docs_spec,
+    validate_catalog_capability_specs,
 )
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
@@ -269,12 +272,20 @@ def validate_change_package(
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
             if isinstance(meta, dict):
-                added_mod = meta.get("added", []) + meta.get("modified", [])
+                added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
                     if not spec_dir_exists:
                         errors.append("spec-delta.md: Specification root directory 'docs/spec' not found")
                     else:
                         for sref in added_mod:
+                            if not isinstance(sref, str):
+                                errors.append("spec-delta.md: added/modified entries must be strings")
+                                continue
+                            if not spec_ref_is_under_docs_spec(sref, repo_root):
+                                errors.append(
+                                    f"spec-delta.md: '{sref}' must resolve under docs/spec/"
+                                )
+                                continue
                             s_err = validate_spec_ref(sref, repo_root)
                             if s_err:
                                 errors.append(f"spec-delta.md: {s_err}")
@@ -356,6 +367,101 @@ def validate_change_package(
     return errors
 
 
+def _iter_slice_frontmatter(change_path: Path) -> list[tuple[str, dict[str, Any]]]:
+    slices_dir = change_path / "slices"
+    result: list[tuple[str, dict[str, Any]]] = []
+    if not slices_dir.is_dir():
+        return result
+    for slice_file in slices_dir.glob("*.md"):
+        try:
+            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict):
+            result.append((slice_file.name, meta))
+    return result
+
+
+def _validate_specified_live_spec(
+    change_path: Path,
+    repo_root: Path,
+    change_status: str | None,
+    spec_delta_file: Path,
+    registry: SchemaRegistry,
+) -> list[str]:
+    """RM-010: specified requires live docs/spec files, a valid catalog, and exact none-refs."""
+    errors: list[str] = []
+    allowed_status = {"specified", "specification-proposed"}
+    if change_status not in allowed_status:
+        errors.append(
+            "Gate specified: change.yaml status must be 'specified' or "
+            f"'specification-proposed' (got {change_status!r})"
+        )
+
+    catalog, catalog_load_errs = load_capability_catalog(repo_root)
+    errors.extend(f"Gate specified: {e}" for e in catalog_load_errs)
+    catalog_schema_ok = False
+    if catalog is not None:
+        catalog_schema_errs = registry.validate("capability", catalog)
+        errors.extend(
+            f"Gate specified: docs/spec/_capabilities.yaml: {e}" for e in catalog_schema_errs
+        )
+        catalog_schema_ok = not catalog_schema_errs
+
+    added: list[str] = []
+    modified: list[str] = []
+    if spec_delta_file.is_file():
+        try:
+            meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
+            if isinstance(meta, dict):
+                added = [s for s in (meta.get("added") or []) if isinstance(s, str)]
+                modified = [s for s in (meta.get("modified") or []) if isinstance(s, str)]
+        except Exception as ex:
+            errors.append(f"Gate specified: spec-delta.md frontmatter error: {ex}")
+
+    slices = _iter_slice_frontmatter(change_path)
+    primary_caps_str: list[str] = []
+    for _, meta in slices:
+        cap = meta.get("primary_capability")
+        if isinstance(cap, str):
+            primary_caps_str.append(cap)
+
+    if catalog is not None and catalog_schema_ok:
+        errors.extend(
+            f"Gate specified: {e}"
+            for e in validate_catalog_capability_specs(
+                catalog, repo_root, primary_caps_str
+            )
+        )
+
+    live_ops = added + modified
+    if not live_ops:
+        if not slices:
+            errors.append(
+                "Gate specified: requirement_delta none requires slices with exact existing spec_refs"
+            )
+        for slice_name, meta in slices:
+            srefs = meta.get("spec_refs") or []
+            if not isinstance(srefs, list) or not srefs:
+                errors.append(
+                    f"Gate specified: {slice_name} has no spec_refs; "
+                    "unchanged specification must cite existing anchors"
+                )
+                continue
+            for sref in srefs:
+                if not isinstance(sref, str) or "#" not in sref:
+                    errors.append(
+                        f"Gate specified: {slice_name} spec_ref {sref!r} must include "
+                        "an existing anchor"
+                    )
+                    continue
+                s_err = validate_spec_ref(sref, repo_root)
+                if s_err:
+                    errors.append(f"Gate specified: {slice_name}: {s_err}")
+
+    return errors
+
+
 def check_gate(
     change_dir: Path | str,
     gate: str,
@@ -371,12 +477,15 @@ def check_gate(
     tasks_dir = change_path / "tasks"
 
     change_id: str = change_path.name
+    change_status: str | None = None
     change_file = change_path / "change.yaml"
     if change_file.is_file():
         try:
             cdata = yaml.safe_load(change_file.read_text(encoding="utf-8"))
-            if isinstance(cdata, dict) and "id" in cdata:
-                change_id = cdata["id"]
+            if isinstance(cdata, dict):
+                if "id" in cdata:
+                    change_id = cdata["id"]
+                change_status = cdata.get("status")
         except Exception:
             pass
 
@@ -412,6 +521,15 @@ def check_gate(
             errors.append(
                 f"Gate specified: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
             )
+        errors.extend(
+            _validate_specified_live_spec(
+                change_path,
+                repo_root,
+                change_status,
+                spec_delta_file,
+                registry or default_registry,
+            )
+        )
 
     elif gate_lower == "decomposed":
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):

@@ -89,6 +89,104 @@ def validate_decision_ref(design_ref: str | None, repo_root: Path) -> list[str]:
     return errors
 
 
+def spec_ref_is_under_docs_spec(spec_ref: str, repo_root: Path) -> bool:
+    """True if the resolved spec_ref file lives under docs/spec/ inside repo_root."""
+    file_part = spec_ref.split("#", 1)[0]
+    resolved = (repo_root / file_part).resolve()
+    if not path_is_inside_repo(resolved, repo_root):
+        return False
+    try:
+        rel = resolved.relative_to(repo_root.resolve())
+    except ValueError:
+        return False
+    parts = rel.parts
+    return len(parts) >= 2 and parts[0] == "docs" and parts[1] == "spec"
+
+
+def load_capability_catalog(repo_root: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    """Load docs/spec/_capabilities.yaml. Schema validation is the caller's job."""
+    catalog_path = repo_root / "docs" / "spec" / "_capabilities.yaml"
+    if not catalog_path.is_file():
+        return None, ["Capability catalog 'docs/spec/_capabilities.yaml' is missing"]
+    try:
+        data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return None, [f"Failed to parse docs/spec/_capabilities.yaml: {ex}"]
+    if not isinstance(data, dict):
+        return None, ["Capability catalog 'docs/spec/_capabilities.yaml' must be a mapping"]
+    return data, []
+
+
+def lookup_capability(catalog: dict[str, Any], primary: str) -> dict[str, Any] | None:
+    """Resolve a slice primary_capability to a catalog capability object."""
+    if not primary or not isinstance(catalog, dict):
+        return None
+    domains = catalog.get("domains") or {}
+    if not isinstance(domains, dict):
+        return None
+    if "." in primary:
+        domain, cap = primary.split(".", 1)
+        node = domains.get(domain)
+        if not isinstance(node, dict):
+            return None
+        caps = node.get("capabilities") or {}
+        found = caps.get(cap) if isinstance(caps, dict) else None
+        return found if isinstance(found, dict) else None
+    matches: list[dict[str, Any]] = []
+    for dobj in domains.values():
+        if not isinstance(dobj, dict):
+            continue
+        caps = dobj.get("capabilities") or {}
+        if isinstance(caps, dict) and isinstance(caps.get(primary), dict):
+            matches.append(caps[primary])
+    if len(matches) == 1:
+        return matches[0]
+    domain = domains.get(primary)
+    if isinstance(domain, dict):
+        caps = domain.get("capabilities") or {}
+        live = [c for c in caps.values() if isinstance(c, dict)] if isinstance(caps, dict) else []
+        if len(live) == 1:
+            return live[0]
+    return None
+
+
+def validate_catalog_capability_specs(
+    catalog: dict[str, Any],
+    repo_root: Path,
+    primary_capabilities: list[str],
+) -> list[str]:
+    """Each named capability must exist in the catalog with at least one live spec file."""
+    errors: list[str] = []
+    seen: set[str] = set()
+    for name in primary_capabilities:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        cap = lookup_capability(catalog, name)
+        if cap is None:
+            errors.append(
+                f"Capability '{name}' is not present in docs/spec/_capabilities.yaml"
+            )
+            continue
+        spec_paths = cap.get("spec") or []
+        if not isinstance(spec_paths, list) or not spec_paths:
+            errors.append(f"Capability '{name}' has no live spec files in the catalog")
+            continue
+        for sp in spec_paths:
+            if not isinstance(sp, str):
+                errors.append(f"Capability '{name}' has a non-string spec path")
+                continue
+            if not spec_ref_is_under_docs_spec(sp, repo_root):
+                errors.append(
+                    f"Capability '{name}' spec path '{sp}' must be under docs/spec/"
+                )
+                continue
+            s_err = validate_spec_ref(sp, repo_root)
+            if s_err:
+                errors.append(f"Capability '{name}': {s_err}")
+    return errors
+
+
 def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> list[str]:
     """Finds any decision records in docs/decisions/ associated with change_id that are in 'proposed' status."""
     dec_dir = repo_root / "docs" / "decisions"

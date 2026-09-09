@@ -9,6 +9,8 @@ from deltafuse.core.fsm import (
 )
 from deltafuse.core.archiver import is_change_id_archived
 from deltafuse.core.installer import install
+from deltafuse.core.frontmatter import parse_frontmatter
+from tests.fixtures.change_builder import MockChangeBuilder
 
 
 def test_validate_empty_directory(tmp_path: Path):
@@ -189,3 +191,187 @@ def test_task_design_ref_validation(tmp_path: Path):
     )
     errs = validate_change_package(builder.change_dir)
     assert not any("Referenced decision" in e for e in errs)
+
+
+def _write_security_ratelimit_catalog(root: Path) -> None:
+    catalog = {
+        "schema_version": 2,
+        "domains": {
+            "security": {
+                "summary": "Security controls",
+                "capabilities": {
+                    "ratelimit": {
+                        "summary": "Token bucket limiter",
+                        "spec": ["docs/spec/security/ratelimit.md"],
+                    }
+                },
+            }
+        },
+    }
+    (root / "docs" / "spec" / "_capabilities.yaml").write_text(
+        yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
+    )
+
+
+def _write_ratelimit_spec(root: Path) -> None:
+    spec = root / "docs" / "spec" / "security" / "ratelimit.md"
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    spec.write_text("# Rate limit\n## REQ-RL-01\nLimiter MUST initialize a token bucket.\n", encoding="utf-8")
+
+
+def _set_slice_capability(change_dir: Path, capability: str, spec_refs: list[str] | None = None) -> None:
+    slice_file = change_dir / "slices" / "SLICE-01.md"
+    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+    meta["primary_capability"] = capability
+    if spec_refs is not None:
+        meta["spec_refs"] = spec_refs
+    slice_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+
+def test_specified_rejects_missing_live_spec_and_invalid_catalog(tmp_path: Path, repo_root: Path):
+    """F-010 / S01: spec-delta alone is not enough without ratelimit.md and a valid catalog."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-010", title="S01 vacuous specify")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    _set_slice_capability(builder.change_dir, "security.ratelimit", spec_refs=[])
+    (tmp_path / "docs" / "spec" / "_capabilities.yaml").write_text(
+        "schema_version: 2\n"
+        "domains:\n"
+        "  rate-limiter:\n"
+        "    capabilities:\n"
+        "      token-bucket:\n"
+        "        requirements: [CR-001]\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("docs/spec/_capabilities.yaml" in e for e in errs)
+    assert not (tmp_path / "docs" / "spec" / "security" / "ratelimit.md").is_file()
+    assert any("Capability 'security.ratelimit'" in e or "must be a mapping" in e
+               or "required" in e.lower() or "summary" in e or "spec" in e for e in errs)
+
+
+def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, repo_root: Path):
+    """Specified must not require product code; live spec + catalog is enough."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-011", title="Live specify")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    _write_ratelimit_spec(tmp_path)
+    _write_security_ratelimit_catalog(tmp_path)
+    _set_slice_capability(
+        builder.change_dir,
+        "security.ratelimit",
+        spec_refs=["docs/spec/security/ratelimit.md#REQ-RL-01"],
+    )
+    spec_delta = (
+        "---\n"
+        f"change: {builder.change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01]\n"
+        "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
+        "modified: []\n"
+        "removed: []\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    assert check_gate(builder.change_dir, "specified") == []
+    assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
+
+
+def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Path):
+    """S03: requirement_delta none is only valid with exact live spec_refs."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-012", title="Unchanged spec")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    assert check_gate(builder.change_dir, "specified") == []
+
+    _set_slice_capability(builder.change_dir, "system.core", spec_refs=["docs/spec/core.md"])
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("must include an existing anchor" in e for e in errs)
+
+
+def test_specified_rejects_normalized_status(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-013", title="Status still normalized")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    cfile = builder.change_dir / "change.yaml"
+    cdata = yaml.safe_load(cfile.read_text(encoding="utf-8"))
+    cdata["status"] = "normalized"
+    cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("status must be 'specified' or 'specification-proposed'" in e for e in errs)
+
+
+def test_specified_rejects_missing_usage_stats_file(tmp_path: Path, repo_root: Path):
+    """F-010 / S05: catalog pointing at usage_stats.md fails specified if the file is absent."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-014", title="S05 missing stats spec")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    catalog = {
+        "schema_version": 2,
+        "domains": {
+            "monitoring": {
+                "summary": "Usage monitoring",
+                "capabilities": {
+                    "usage_stats": {
+                        "summary": "Per-key usage statistics",
+                        "spec": ["docs/spec/monitoring/usage_stats.md"],
+                    }
+                },
+            }
+        },
+    }
+    (tmp_path / "docs" / "spec" / "_capabilities.yaml").write_text(
+        yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
+    )
+    _set_slice_capability(
+        builder.change_dir,
+        "monitoring.usage_stats",
+        spec_refs=["docs/spec/monitoring/usage_stats.md#REQ-US-01"],
+    )
+    spec_delta = (
+        "---\n"
+        f"change: {builder.change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01]\n"
+        "added: [docs/spec/monitoring/usage_stats.md#REQ-US-01]\n"
+        "modified: []\n"
+        "removed: []\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("usage_stats.md" in e and "does not exist" in e for e in errs)
+
+
+def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
+    """AB-06 S04: targeting does not require spec-delta or the specified gate."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-015", title="Bugfix no specify")
+        .step_intake()
+        .step_analyze()
+        .step_decompose()
+        .step_target()
+    )
+    assert not (builder.change_dir / "spec-delta.md").is_file()
+    assert check_gate(builder.change_dir, "targeting") == []

@@ -60,7 +60,7 @@ stateDiagram-v2
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
 | `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
-| `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Specification changes merged into product spec (or proof recorded in spec-delta.md). |
+| `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
 | `targeting` | Preparing failing test targets for tasks. | `target-confirmed`, `not-reproduced` | Test target executed; fails with Red evidence (or proves unreproducible). |
 | `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |

@@ -236,6 +236,14 @@ def test_spec_delta_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("spec-delta", valid_spec_delta) == []
 
+    missing_ops = {
+        "change": "CHG-001",
+        "status": "proposed",
+        "slices": ["SLICE-01"],
+    }
+    missing_errs = registry.validate("spec-delta", missing_ops)
+    assert any("added" in err or "modified" in err or "removed" in err for err in missing_errs)
+
 
 def test_bootstrap_decision_schema_validation(registry: SchemaRegistry):
     valid_bootstrap = {
