@@ -54,3 +54,7 @@ Never manually edit generated skills or create a local process fork. Product-spe
 | Accepted specification exists | Set `project.baseline: accepted`, create Changes via `/intake` |
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
+
+## External boards
+
+A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md), not a private parse of `docs/changes/**`. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.

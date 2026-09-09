@@ -54,3 +54,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 | Accepted specification существует | Установить `project.baseline: accepted`, создавать Changes через `/intake` |
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
+
+## Внешние доски
+
+Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md), а не свой разбор `docs/changes/**`. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.

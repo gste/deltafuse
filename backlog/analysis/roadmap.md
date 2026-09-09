@@ -270,6 +270,8 @@ RM-030 / RM-031                    (P3)
 | Analog live rank | not-tested A11-06 |
 | Снятие Human Gate / hidden suite | A10-01: не улучшение |
 
+После A12 продуктовые идеи (не findings) — [product backlog](../product/index.md). Контракт fuse-map: [board-snapshot](../../docs/contracts/board-snapshot.md). Реализация CLI — [FM-001](../product/FM-001.md), отдельная ветка.
+
 ---
 
 ## Неизвестные после roadmap

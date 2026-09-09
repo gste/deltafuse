@@ -1,0 +1,107 @@
+# Canonical board snapshot schema_version 1 (producer).
+# Consumer pin: sibling ../fuse-map/docs/contracts/board-snapshot.schema.yaml
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/contracts/board-snapshot/v1
+title: DeltaFuse board snapshot (fuse-map read contract)
+description: >
+  Read-only projection of product Changes for an external board.
+  schema_version is independent of change.yaml schema_version.
+  Unknown properties on objects are allowed so producers may add fields
+  without a breaking bump; consumers MUST ignore them.
+type: object
+additionalProperties: true
+required: [schema_version, product, changes]
+properties:
+  schema_version:
+    const: 1
+    description: Board snapshot contract version. Breaking changes bump this integer.
+  generated_at:
+    type: string
+    description: UTC timestamp (RFC 3339) when the snapshot was built. Optional.
+  product:
+    type: object
+    additionalProperties: true
+    required: [baseline, changes_path]
+    properties:
+      baseline:
+        enum: [draft, accepted]
+      framework_version:
+        type: string
+      framework_content_hash:
+        type: string
+      call_width:
+        enum: [narrow, medium, wide]
+      changes_path:
+        type: string
+        description: POSIX-relative path from product root (from config paths.changes).
+      archive_changes_path:
+        type: string
+        description: POSIX-relative path of archived Changes (from config paths.archive + /changes).
+  changes:
+    type: array
+    items:
+      $ref: '#/$defs/card'
+    description: Active Change packages only. Empty array if none.
+  archive:
+    type: array
+    items:
+      $ref: '#/$defs/card'
+    description: Present only when the caller requested archive cards.
+  warnings:
+    type: array
+    items:
+      type: string
+    description: Non-fatal notes (unreadable package skipped). Must not replace a hard error.
+$defs:
+  card:
+    type: object
+    additionalProperties: true
+    required: [id, title, status, route, path]
+    properties:
+      id:
+        type: string
+        pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+      title:
+        type: string
+      status:
+        enum:
+          - normalized
+          - analyzing
+          - blocked-on-decision
+          - analyzed
+          - specification-proposed
+          - specified
+          - decomposed
+          - targeting
+          - target-confirmed
+          - implementing
+          - implemented
+          - verifying
+          - converged
+          - archived
+          - rejected
+          - duplicate
+          - not-reproduced
+          - superseded
+      route:
+        enum: [code, docs, ops]
+        description: Missing change.yaml route MUST be emitted as code.
+      path:
+        type: string
+        description: POSIX-relative directory of the Change package from product root.
+      blocked_decisions:
+        type: array
+        items:
+          type: string
+          pattern: '^DEC-[0-9]{4,}'
+        description: Decision ids still in proposed that block this Change.
+      slice_count:
+        type: integer
+        minimum: 0
+      task_count:
+        type: integer
+        minimum: 0
+      has_red:
+        type: boolean
+      has_green:
+        type: boolean
