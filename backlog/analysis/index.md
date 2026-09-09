@@ -1,18 +1,13 @@
 # Очередь анализа DeltaFuse
 
-Дата обновления: 2026-09-08.
+Дата обновления: 2026-09-09.
 
-- **Статус:** `done` — очередь анализа A00–A12 закрыта.
+- **Статус:** `planned` — A00–A12 закрыты; A13 регресс RM-* не начат.
 - **Текущая задача аудита:** нет.
-- **Следующая задача:** нет.
-- **Счётчики:** всего 84; `planned` 0; `in-progress` 0; `done` 84; `blocked` 0.
+- **Следующая задача:** [A13-01](packets/A13-01.md) контрактный регресс (без LLM).
+- **Счётчики:** всего 88; `planned` 4; `in-progress` 0; `done` 84; `blocked` 0.
 
-
-
-
-
-
-
+План регресса: [regression-plan.md](regression-plan.md). Не смешивать с `backlog/llm-optimization-v2/`.
 
 - **Локальная модель:** `ornith-1.5-35b-a3b` Q4_K_M, голый llama-server `:1240`, `--reasoning off`, `--cpu-moe` — [local-runtime](experiments/local-runtime/README.md). Исторический Studio-снимок: [A03-03](experiments/A03-03/profile.md).
 
@@ -173,3 +168,14 @@
 | [A12-02 — Ответить на четыре исходных вопроса](packets/A12-02.md) | A12-01 | done | [pass; four answers + core vs optional; summary.md](experiments/A12-02/result.md) |
 | [A12-04 — Разобрать отложенные вопросы доработки](packets/A12-04.md) | A12-02 | done | [pass; Q-004 reject; Q-001/002/005/006/008 accept; parking](experiments/A12-04/result.md) |
 | [A12-03 — Сформировать roadmap проверяемых изменений](packets/A12-03.md) | A12-02, A12-04 | done | [pass; RM-* P0–P3; roadmap.md; queue complete](experiments/A12-03/result.md) |
+
+## A13
+
+Регресс реализации RM-*. Не новый аудит. План: [regression-plan.md](regression-plan.md).
+
+| Задача | Зависимости | Статус | Evidence / блокировка |
+|---|---|---|---|
+| [A13-01 — Контрактный регресс RM-* (без LLM)](packets/A13-01.md) | RM-031 на ветке | planned | — |
+| [A13-02 — P0 holdout на ornith](packets/A13-02.md) | A13-01 | planned | нужен `:1240` |
+| [A13-03 — Маршруты docs/ops и Analyze на ornith](packets/A13-03.md) | A13-02 | planned | нужен `:1240` |
+| [A13-04 — Неизвестные A12 на SUT](packets/A13-04.md) | A13-02 | planned | optional; не блокер контракта |

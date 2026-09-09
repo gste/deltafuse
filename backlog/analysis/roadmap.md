@@ -276,4 +276,4 @@ RM-030 / RM-031                    (P3)
 
 Verify/Archive на ornith после RM-010+; interrupt S10; F-006 на живой серии Changes; analog на `:1240`; `usage` tokens в harness; GPU-only 8 GB; другие модели; mutation score продукта (A07-03).
 
-Повторный holdout A09 **не** начинать, пока не закрыты RM-010 и RM-009 (иначе снова F-010/F-009).
+RM-010 и RM-009 **закрыты в коде**. Живой регресс — [regression-plan.md](regression-plan.md) / очередь A13. Не начинать полный A09 11/11 до A13-02.
