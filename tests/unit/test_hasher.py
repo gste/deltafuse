@@ -62,3 +62,9 @@ def test_hasher_sensitivity_on_single_char_change(tmp_path: Path):
     h2 = compute_framework_content_hash(tmp_path)
 
     assert h1 != h2, "Framework hash must be sensitive to any single character change"
+
+
+def test_gitattributes_pins_lf_for_shell_scripts(repo_root: Path):
+    attrs = (repo_root / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.sh text eol=lf" in attrs
+    assert "text=auto" in attrs
