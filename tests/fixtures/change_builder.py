@@ -204,6 +204,7 @@ class MockChangeBuilder:
                 f"design_ref: null\n"
                 f"allowed_paths: [src/core.py]\n"
                 f"forbidden_paths: [src/secret.py]\n"
+                f"context_budget: {{max_tokens: 16000, max_files: 24}}\n"
                 f"---\n\n# {tid}\nImplementation details\n"
             )
             (tasks_dir / f"{tid}.md").write_text(task_md, encoding="utf-8")

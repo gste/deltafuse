@@ -11,6 +11,9 @@ spec_refs:
 design_ref: null
 allowed_paths: []
 forbidden_paths: []
+context_budget:
+  max_tokens: 16000
+  max_files: 24
 ---
 
 # Task outcome

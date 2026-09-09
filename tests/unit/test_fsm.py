@@ -569,3 +569,76 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
     )
     assert not (builder.change_dir / "spec-delta.md").is_file()
     assert check_gate(builder.change_dir, "converged") == []
+
+
+def test_decomposed_rejects_task_without_budget(tmp_path: Path, repo_root: Path):
+    """F-002 / RM-002: TASK without context_budget fails decomposed."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-022", title="No budget")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    assert check_gate(builder.change_dir, "decomposed") == []
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    del meta["context_budget"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    errs = check_gate(builder.change_dir, "decomposed")
+    assert any("context_budget" in e for e in errs)
+
+
+def test_decomposed_rejects_fifty_allowed_paths(tmp_path: Path, repo_root: Path):
+    """F-002 / RM-002: 50 allowed_paths exceed max_files 24."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-023", title="Fifty files")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    src = tmp_path / "src"
+    src.mkdir(exist_ok=True)
+    allowed = []
+    for i in range(50):
+        (src / f"f{i:02d}.py").write_text("x = 1\n", encoding="utf-8")
+        allowed.append(f"src/f{i:02d}.py")
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = allowed
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    errs = check_gate(builder.change_dir, "decomposed")
+    assert any("maximum allowed is 24" in e for e in errs)
+
+
+def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: Path):
+    """RM-002: Red evidence must not write src/** (PHASE_CONTRACTS target)."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-024", title="Red writes src")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+    )
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["changed_paths"] = ["src/core.py"]
+    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("outside the phase contract" in e and "src/core.py" in e for e in errs)
+
+
+def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_root: Path):
+    """RM-002 regression: Analyze still requires routing+slices+coverage."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-025", title="Analyze artifacts")
+    builder.step_intake()
+    errs = check_gate(builder.change_dir, "analyzed")
+    assert any("routing.yaml is missing" in e for e in errs)
+    builder.step_analyze()
+    assert check_gate(builder.change_dir, "analyzed") == []

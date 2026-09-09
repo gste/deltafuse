@@ -70,7 +70,8 @@ def test_task_schema_validation(registry: SchemaRegistry):
         "spec_refs": ["docs/spec/auth.md#REQ-01"],
         "design_ref": None,
         "allowed_paths": ["src/auth.py"],
-        "forbidden_paths": ["src/billing.py"]
+        "forbidden_paths": ["src/billing.py"],
+        "context_budget": {"max_tokens": 16000, "max_files": 24},
     }
     assert registry.validate("task", valid_task) == []
 
@@ -82,6 +83,10 @@ def test_task_schema_validation(registry: SchemaRegistry):
     missing_allowed = dict(valid_task)
     del missing_allowed["allowed_paths"]
     assert len(registry.validate("task", missing_allowed)) > 0
+
+    missing_budget = dict(valid_task)
+    del missing_budget["context_budget"]
+    assert len(registry.validate("task", missing_budget)) > 0
 
 def test_slice_schema_validation(registry: SchemaRegistry):
     valid_slice = {

@@ -5,7 +5,10 @@ from deltafuse.core.context import (
     estimate_tokens,
     estimate_files_tokens,
     validate_context_budget,
+    validate_task_context_budget,
+    matches_contract_globs,
     PHASE_CONTRACTS,
+    task_write_globs,
 )
 
 
@@ -78,3 +81,44 @@ def test_phase_contracts_completeness():
         assert p in PHASE_CONTRACTS
         assert "allowed_read" in PHASE_CONTRACTS[p]
         assert "allowed_write" in PHASE_CONTRACTS[p]
+
+
+def test_matches_contract_globs_src_and_tests():
+    assert matches_contract_globs("src/core.py", ["src/**"])
+    assert matches_contract_globs("tests/test_task-001.py", ["tests/**"])
+    assert not matches_contract_globs("docs/spec/core.md", ["src/**", "tests/**"])
+    assert matches_contract_globs("src/core.py", task_write_globs())
+    assert not matches_contract_globs("docs/spec/core.md", task_write_globs())
+
+
+def test_validate_task_context_budget_allows_missing_allowed_path(tmp_path: Path):
+    spec = tmp_path / "docs" / "spec" / "core.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
+    errs = validate_task_context_budget(
+        {"max_tokens": 16000, "max_files": 24},
+        ["docs/spec/core.md#REQ-01"],
+        ["src/core.py"],
+        tmp_path,
+    )
+    assert errs == []
+
+
+def test_validate_task_context_budget_counts_declared_files(tmp_path: Path):
+    spec = tmp_path / "docs" / "spec" / "core.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
+    src = tmp_path / "src"
+    src.mkdir()
+    allowed = []
+    for i in range(50):
+        p = src / f"f{i:02d}.py"
+        p.write_text("x = 1\n", encoding="utf-8")
+        allowed.append(f"src/f{i:02d}.py")
+    errs = validate_task_context_budget(
+        {"max_tokens": 16000, "max_files": 24},
+        ["docs/spec/core.md#REQ-01"],
+        allowed,
+        tmp_path,
+    )
+    assert any("files loaded, maximum allowed is 24" in e for e in errs)

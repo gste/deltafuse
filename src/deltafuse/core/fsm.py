@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.context import validate_context_budget
+from deltafuse.core.context import (
+    validate_context_budget,
+    validate_task_context_budget,
+    validate_paths_against_globs,
+    path_is_listed,
+    phase_allowed_paths,
+    task_write_globs,
+)
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import (
@@ -257,6 +264,41 @@ def validate_change_package(
                     if design_ref:
                         d_errs = validate_decision_ref(design_ref, repo_root)
                         errors.extend(f"{task_file.name}: {de}" for de in d_errs)
+
+                    allowed = meta.get("allowed_paths") or []
+                    forbidden = meta.get("forbidden_paths") or []
+                    if not isinstance(allowed, list):
+                        allowed = []
+                    if not isinstance(forbidden, list):
+                        forbidden = []
+                    errors.extend(
+                        f"{task_file.name}: {e}"
+                        for e in validate_paths_against_globs(
+                            [p for p in allowed if isinstance(p, str)],
+                            task_write_globs(),
+                            label="allowed_paths",
+                        )
+                    )
+                    for apath in allowed:
+                        if isinstance(apath, str) and path_is_listed(apath, forbidden):
+                            errors.append(
+                                f"{task_file.name}: allowed_paths '{apath}' is also in forbidden_paths"
+                            )
+
+                    context_budget = meta.get("context_budget")
+                    if not context_budget or not isinstance(context_budget, dict):
+                        errors.append(
+                            f"{task_file.name}: context_budget is required "
+                            "(max_tokens/max_files) for Target and Implement"
+                        )
+                    else:
+                        b_errs = validate_task_context_budget(
+                            context_budget,
+                            srefs if isinstance(srefs, list) else [],
+                            allowed,
+                            repo_root,
+                        )
+                        errors.extend(f"{task_file.name}: {be}" for be in b_errs)
             except Exception as ex:
                 errors.append(f"{task_file.name} frontmatter error: {ex}")
 
@@ -496,6 +538,67 @@ def _validate_specified_live_spec(
     return errors
 
 
+def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
+    tasks: dict[str, dict[str, Any]] = {}
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return tasks
+    for task_file in tasks_dir.glob("*.md"):
+        try:
+            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict) and isinstance(meta.get("id"), str):
+            tasks[meta["id"]] = meta
+    return tasks
+
+
+def _validate_evidence_changed_paths_contract(
+    change_path: Path,
+    evidence_phase: str,
+    contract_phase: str,
+    *,
+    gate: str,
+) -> list[str]:
+    """RM-002: evidence changed_paths must stay inside PHASE_CONTRACTS write globs."""
+    errors: list[str] = []
+    ev_dir = change_path / "evidence" / evidence_phase
+    if not ev_dir.is_dir():
+        return errors
+    write_globs = phase_allowed_paths(contract_phase, "write")
+    tasks = _task_frontmatter_by_id(change_path)
+    for ev_file in ev_dir.glob("*.yaml"):
+        try:
+            ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(ev_data, dict):
+            continue
+        changed = ev_data.get("changed_paths") or []
+        if not isinstance(changed, list):
+            continue
+        rel_paths = [p for p in changed if isinstance(p, str)]
+        for msg in validate_paths_against_globs(
+            rel_paths,
+            write_globs,
+            label=f"Gate {gate} {evidence_phase} changed_paths",
+        ):
+            errors.append(msg)
+        task_id = ev_data.get("task")
+        forbidden = []
+        if isinstance(task_id, str) and task_id in tasks:
+            raw = tasks[task_id].get("forbidden_paths") or []
+            if isinstance(raw, list):
+                forbidden = [p for p in raw if isinstance(p, str)]
+        for rel in rel_paths:
+            if path_is_listed(rel, forbidden):
+                errors.append(
+                    f"Gate {gate}: {ev_file.relative_to(change_path)} changed_paths "
+                    f"'{rel}' is listed in task forbidden_paths"
+                )
+    return errors
+
+
 def _spec_delta_ops(spec_delta_file: Path) -> tuple[dict[str, list[str]], list[str]]:
     ops: dict[str, list[str]] = {"added": [], "modified": [], "removed": []}
     errors: list[str] = []
@@ -631,6 +734,11 @@ def check_gate(
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate targeting: Red evidence in evidence/red/ is required")
+        errors.extend(
+            _validate_evidence_changed_paths_contract(
+                change_path, "red", "target", gate="targeting"
+            )
+        )
 
     elif gate_lower == "implemented":
         green_dir = change_path / "evidence" / "green"
@@ -639,6 +747,16 @@ def check_gate(
             errors.append("Gate implemented: Green evidence in evidence/green/ is required")
         if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
             errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        errors.extend(
+            _validate_evidence_changed_paths_contract(
+                change_path, "green", "implement", gate="implemented"
+            )
+        )
+        errors.extend(
+            _validate_evidence_changed_paths_contract(
+                change_path, "regression", "implement", gate="implemented"
+            )
+        )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"

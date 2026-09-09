@@ -1,9 +1,10 @@
 """Context contract and budget validation engine for DeltaFuse Change packages."""
 
 from __future__ import annotations
+import fnmatch
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Sequence
 from deltafuse.core.integrity import path_is_inside_repo
 
 
@@ -180,4 +181,118 @@ def validate_context_budget(
                 f"maximum allowed is {max_tokens}"
             )
 
+    return errors
+
+
+DEFAULT_TASK_BUDGET = {"max_tokens": 16000, "max_files": 24}
+
+
+def posix_relpath(path: str) -> str:
+    return Path(path).as_posix().lstrip("./")
+
+
+def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:
+    """True if *rel_path* matches any PHASE_CONTRACTS glob (fnmatch, POSIX slashes)."""
+    rel = posix_relpath(rel_path)
+    for raw in globs:
+        pattern = raw.replace("\\", "/")
+        if fnmatch.fnmatch(rel, pattern):
+            return True
+    return False
+
+
+def phase_allowed_paths(phase: str, kind: str) -> list[str]:
+    contract = PHASE_CONTRACTS.get(phase)
+    if not contract:
+        return []
+    key = "allowed_read" if kind == "read" else "allowed_write"
+    return list(contract.get(key) or [])
+
+
+def task_write_globs() -> list[str]:
+    """Declared task allowed_paths may be Target tests or Implement sources."""
+    return phase_allowed_paths("target", "write") + phase_allowed_paths("implement", "write")
+
+
+def validate_paths_against_globs(
+    rel_paths: Iterable[str],
+    globs: Sequence[str],
+    *,
+    label: str,
+) -> list[str]:
+    errors: list[str] = []
+    for raw in rel_paths:
+        if not isinstance(raw, str) or not raw:
+            continue
+        if not matches_contract_globs(raw, globs):
+            errors.append(f"{label}: '{raw}' is outside the phase contract")
+    return errors
+
+
+def path_is_listed(rel_path: str, listed: Sequence[str]) -> bool:
+    rel = posix_relpath(rel_path)
+    for item in listed:
+        if not isinstance(item, str):
+            continue
+        listed_posix = posix_relpath(item)
+        if rel == listed_posix or fnmatch.fnmatch(rel, listed_posix):
+            return True
+    return False
+
+
+def validate_task_context_budget(
+    context_budget: dict[str, Any],
+    spec_refs: Sequence[Any],
+    allowed_paths: Sequence[Any],
+    repo_root: Path,
+) -> list[str]:
+    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes."""
+    errors: list[str] = []
+    max_files = context_budget.get("max_files")
+    max_tokens = context_budget.get("max_tokens")
+    root = repo_root.resolve()
+    unique_declared: list[Path] = []
+    unique_existing: list[Path] = []
+    seen: set[Path] = set()
+
+    def consider(raw: Any, *, must_exist: bool) -> None:
+        if not isinstance(raw, str) or not raw:
+            return
+        file_part = raw.split("#", 1)[0]
+        try:
+            resolved = (root / file_part).resolve()
+        except OSError as ex:
+            errors.append(f"Invalid path '{file_part}': {ex}")
+            return
+        if not path_is_inside_repo(resolved, root):
+            errors.append(
+                f"Path traversal forbidden: '{file_part}' is outside repository root"
+            )
+            return
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        unique_declared.append(resolved)
+        if resolved.is_file():
+            unique_existing.append(resolved)
+        elif must_exist:
+            errors.append(f"Referenced file does not exist: '{file_part}'")
+
+    for sref in spec_refs:
+        consider(sref, must_exist=True)
+    for apath in allowed_paths:
+        consider(apath, must_exist=False)
+
+    if max_files is not None and len(unique_declared) > max_files:
+        errors.append(
+            f"Context budget exceeded: {len(unique_declared)} files loaded, "
+            f"maximum allowed is {max_files}"
+        )
+    if max_tokens is not None:
+        estimated = estimate_files_tokens(unique_existing)
+        if estimated > max_tokens:
+            errors.append(
+                f"Context budget exceeded: estimated {estimated} tokens loaded, "
+                f"maximum allowed is {max_tokens}"
+            )
     return errors

@@ -224,6 +224,7 @@ class MockLLMProvider(LLMProvider):
             f"design_ref: null\n"
             f"allowed_paths: [src/core.py]\n"
             f"forbidden_paths: [src/secret.py]\n"
+            f"context_budget: {{max_tokens: 16000, max_files: 24}}\n"
             f"---\n\n# TASK-001\nImplementation details\n"
         )
         (tasks_dir / "TASK-001.md").write_text(task_md, encoding="utf-8")

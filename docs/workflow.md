@@ -162,6 +162,9 @@ allowed_paths:
   - tests/identity/auth/**
 forbidden_paths:
   - src/identity/session/**
+context_budget:
+  max_tokens: 16000
+  max_files: 24
 ---
 ```
 
@@ -189,7 +192,8 @@ Validate credentials and issue an initial access token.
 ```
 
 ### Gate
-- All tasks validate against `task.schema.yaml`.
+- All tasks validate against `task.schema.yaml` and declare `context_budget`.
+- Declared `allowed_paths` and evidence `changed_paths` stay inside `PHASE_CONTRACTS` write globs for Target/Implement.
 - Task dependencies form an acyclic directed graph (DAG).
 - All claims in `coverage.yaml` mapped to at least one task.
 - `change.yaml` status transitioned to `decomposed`.

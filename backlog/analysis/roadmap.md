@@ -121,6 +121,7 @@ RM-030 / RM-031                    (P3)
 | Regression | Analyze по-прежнему требует routing+slices+coverage. Не sandbox через ADR/Pact |
 | Стоимость | M–L |
 | Зависимости | RM-003 желателен для честных токенов; иначе conservative fallback |
+| Статус | **done** 2026-09-09 — TASK `context_budget` обязателен; budget на spec_refs+allowed_paths; Red/Green `changed_paths` сверяются с `PHASE_CONTRACTS`; tokenizer пока `words * 1.3` |
 
 ### RM-003 — tokenizer вместо `words * 1.3` (F-003, Q-002)
 

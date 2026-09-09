@@ -176,6 +176,9 @@ allowed_paths:
   - tests/identity/auth/**
 forbidden_paths:
   - src/identity/session/**
+context_budget:
+  max_tokens: 16000
+  max_files: 24
 ---
 ```
 
