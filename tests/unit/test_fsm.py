@@ -430,3 +430,32 @@ def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
     red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
     errs = check_gate(builder.change_dir, "targeting")
     assert any("private symbols" in e for e in errs)
+
+
+def test_implemented_rejects_stale_green_after_spec_change(tmp_path: Path, repo_root: Path):
+    """F-006 / RM-006: old green yaml must not pass after docs/spec changes."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-018", title="Stale green")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_target()
+        .step_implement()
+    )
+    assert check_gate(builder.change_dir, "implemented") == []
+
+    spec = tmp_path / "docs" / "spec" / "core.md"
+    spec.write_text(spec.read_text(encoding="utf-8") + "\n## REQ-STALE\n", encoding="utf-8")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("stale evidence" in e for e in errs)
+
+    from deltafuse.core.hasher import compute_product_baseline_revision
+    fresh = compute_product_baseline_revision(tmp_path)
+    for rel in ("green/TASK-001.yaml", "regression/TASK-001.yaml"):
+        ev_file = builder.change_dir / "evidence" / rel
+        data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
+        data["base_revision"] = fresh
+        ev_file.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    assert check_gate(builder.change_dir, "implemented") == []

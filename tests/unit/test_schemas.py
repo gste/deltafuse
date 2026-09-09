@@ -158,9 +158,14 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
         "result": "passed",
         "summary": "Regression suite passed",
         "changed_paths": ["src/auth.py"],
-        "spec_status": "unchanged"
+        "spec_status": "unchanged",
+        "base_revision": "sha256:" + ("0" * 64),
     }
     assert registry.validate("evidence", valid_regression) == []
+
+    missing_revision = dict(valid_regression)
+    del missing_revision["base_revision"]
+    assert len(registry.validate("evidence", missing_revision)) > 0
 
 def test_decision_schema_validation(registry: SchemaRegistry):
     valid_decision = {

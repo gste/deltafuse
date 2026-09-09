@@ -46,3 +46,31 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
     records.sort()
     payload = "\n".join(records) + "\n"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
+
+
+_SKIP_PARTS = {"__pycache__", ".pytest_cache"}
+
+
+def compute_product_baseline_revision(repo_root: Path | str) -> str:
+    """SHA-256 of docs/spec/** and src/**. Used as evidence base_revision (F-006 / RM-006).
+
+    Content hash, not git HEAD and not a timestamp: a merged spec/code tree must
+    invalidate Green recorded against the previous tree.
+    """
+    root = Path(repo_root).resolve()
+    records: list[str] = []
+    for root_name in ("docs/spec", "src"):
+        tree = root / Path(root_name)
+        if not tree.is_dir():
+            continue
+        for file_path in tree.rglob("*"):
+            if not file_path.is_file():
+                continue
+            if any(part in _SKIP_PARTS for part in file_path.parts):
+                continue
+            rel_path = file_path.relative_to(root).as_posix().lower()
+            records.append(f"{rel_path}:{compute_file_sha256(file_path)}")
+    records.sort()
+    payload = "\n".join(records) + "\n"
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
+    return f"sha256:{digest}"

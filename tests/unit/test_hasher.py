@@ -1,7 +1,7 @@
 """Unit tests for DeltaFuse framework hasher and sensitivity invariant."""
 
 from pathlib import Path
-from deltafuse.core.hasher import compute_framework_content_hash
+from deltafuse.core.hasher import compute_framework_content_hash, compute_product_baseline_revision
 
 
 def test_hasher_skips_transient_caches(tmp_path: Path):
@@ -68,3 +68,23 @@ def test_gitattributes_pins_lf_for_shell_scripts(repo_root: Path):
     attrs = (repo_root / ".gitattributes").read_text(encoding="utf-8")
     assert "*.sh text eol=lf" in attrs
     assert "text=auto" in attrs
+
+
+def test_product_baseline_revision_ignores_timestamp_and_tracks_spec_src(tmp_path: Path):
+    spec = tmp_path / "docs" / "spec"
+    src = tmp_path / "src"
+    spec.mkdir(parents=True)
+    src.mkdir()
+    (spec / "core.md").write_text("# Spec\n## REQ-01\n", encoding="utf-8")
+    (src / "core.py").write_text("x = 1\n", encoding="utf-8")
+    h1 = compute_product_baseline_revision(tmp_path)
+    assert h1.startswith("sha256:")
+    assert h1 == compute_product_baseline_revision(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_core.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    assert compute_product_baseline_revision(tmp_path) == h1
+
+    (spec / "core.md").write_text("# Spec\n## REQ-01\nChanged.\n", encoding="utf-8")
+    h2 = compute_product_baseline_revision(tmp_path)
+    assert h2 != h1

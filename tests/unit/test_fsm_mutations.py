@@ -6,6 +6,7 @@ import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.installer import install
+from deltafuse.core.hasher import compute_product_baseline_revision
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -32,6 +33,7 @@ def test_mutation_t1_green_evidence_in_red_folder_rejected(tmp_path: Path):
         "summary": "Faked green evidence in red folder",
         "changed_paths": ["src/core.py"],
         "spec_status": "unchanged",
+        "base_revision": compute_product_baseline_revision(tmp_path),
     }
     (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(green_fake), encoding="utf-8")
 
@@ -98,7 +100,8 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     (ver_dir / "run.yaml").write_text(yaml.safe_dump({
         "schema_version": 2, "change": "CHG-203", "phase": "verification",
         "timestamp": "2026-09-05T12:00:00Z", "command": "pytest", "exit_code": 0,
-        "result": "passed", "summary": "Passed", "changed_paths": [], "spec_status": "unchanged"
+        "result": "passed", "summary": "Passed", "changed_paths": [], "spec_status": "unchanged",
+        "base_revision": compute_product_baseline_revision(tmp_path),
     }), encoding="utf-8")
 
     gate_errs = check_gate(builder.change_dir, "converged")

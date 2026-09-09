@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.hasher import compute_product_baseline_revision
 
 
 class MockChangeBuilder:
@@ -49,6 +50,9 @@ class MockChangeBuilder:
             },
         )
         catalog_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    def _baseline_revision(self) -> str:
+        return compute_product_baseline_revision(self.root_dir)
 
     def _update_change_yaml(self, updates: dict[str, Any]) -> None:
         cfile = self.change_dir / "change.yaml"
@@ -264,6 +268,7 @@ class MockChangeBuilder:
             "summary": "Test passed after implementation",
             "changed_paths": ["src/core.py"],
             "spec_status": "unchanged",
+            "base_revision": self._baseline_revision(),
         }
         (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
         ev_reg = {
@@ -278,6 +283,7 @@ class MockChangeBuilder:
             "summary": "Full test suite passed",
             "changed_paths": ["src/core.py"],
             "spec_status": "unchanged",
+            "base_revision": self._baseline_revision(),
         }
         (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
 
@@ -314,6 +320,7 @@ class MockChangeBuilder:
             "summary": "Verification pass passed",
             "changed_paths": [],
             "spec_status": "unchanged",
+            "base_revision": self._baseline_revision(),
         }
         (ver_dir / "run.yaml").write_text(yaml.safe_dump(ev_ver), encoding="utf-8")
 

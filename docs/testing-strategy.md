@@ -138,6 +138,7 @@ delta-fuse/
   - **T8**: Повторная архивация при наличии существующего архива запрещена (неизменяемость архива, отказ от `rmtree`).
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
   - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
+  - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
 
 ---

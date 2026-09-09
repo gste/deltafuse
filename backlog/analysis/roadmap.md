@@ -89,6 +89,7 @@ RM-030 / RM-031                    (P3)
 | Стоимость | M |
 | Зависимости | нет |
 | Не делать | доверять timestamp агента без содержимого |
+| Статус | **done** 2026-09-09 — `base_revision` = hash `docs/spec/**`+`src/**`; stale Green ломает `implemented`/`converged` |
 
 ---
 

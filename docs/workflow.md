@@ -255,7 +255,7 @@ Author the minimal production code necessary to turn the failing test target gre
 ### Gate
 - Test target passes cleanly.
 - Full regression suite passes without failures.
-- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid.
+- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
 - Task status transitioned to `implemented`.
 
 ---
@@ -275,7 +275,7 @@ The Verifier checks that:
 
 ### Convergence Analysis
 1. Execute full project verification suite.
-2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`).
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
    - Traceability matrix;
    - Evidence audit;

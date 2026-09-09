@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 import yaml
 from deltafuse.evals.dataset import EvalCase
+from deltafuse.core.hasher import compute_product_baseline_revision
 
 
 class LLMProvider(ABC):
@@ -45,6 +46,7 @@ class MockLLMProvider(LLMProvider):
         spec_file = spec_dir / "core.md"
         if not spec_file.is_file():
             spec_file.write_text("# Specification\n## REQ-01\nRequirement 01\n", encoding="utf-8")
+        baseline = compute_product_baseline_revision(repo_root)
         cid = case.case_id if case.case_id.startswith("CHG-") else f"CHG-999-{case.case_id.lower().replace('_', '-')}"
 
         # 1. request.md
@@ -270,6 +272,7 @@ class MockLLMProvider(LLMProvider):
             "summary": "Green test pass",
             "changed_paths": ["src/core.py"],
             "spec_status": "unchanged",
+            "base_revision": baseline,
         }
         (green_dir / "TASK-001.yaml").write_text(yaml.safe_dump(ev_green, sort_keys=False), encoding="utf-8")
 
@@ -285,6 +288,7 @@ class MockLLMProvider(LLMProvider):
             "summary": "Regression suite pass",
             "changed_paths": ["src/core.py"],
             "spec_status": "unchanged",
+            "base_revision": baseline,
         }
         (reg_dir / "TASK-001.yaml").write_text(yaml.safe_dump(ev_reg, sort_keys=False), encoding="utf-8")
 
@@ -306,6 +310,7 @@ class MockLLMProvider(LLMProvider):
             "summary": "Full verification run passed",
             "changed_paths": [],
             "spec_status": "unchanged",
+            "base_revision": baseline,
         }
         (ver_dir / "run.yaml").write_text(yaml.safe_dump(ev_ver, sort_keys=False), encoding="utf-8")
 

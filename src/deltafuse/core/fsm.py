@@ -7,6 +7,7 @@ import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.context import validate_context_budget
 from deltafuse.core.graph import topological_sort, DependencyCycleError
+from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
@@ -378,6 +379,21 @@ def validate_change_package(
                     if exit_code != 0:
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
+                        )
+
+                if phase in {"green", "regression", "verification"}:
+                    recorded = ev_data.get("base_revision")
+                    current = compute_product_baseline_revision(repo_root)
+                    rel_ev = ev_file.relative_to(change_path)
+                    if not recorded:
+                        errors.append(
+                            f"{rel_ev}: missing base_revision; Green/regression/verification "
+                            "must stamp the docs/spec/** and src/** content hash"
+                        )
+                    elif recorded != current:
+                        errors.append(
+                            f"{rel_ev}: stale evidence: base_revision '{recorded}' does not "
+                            f"match current docs/spec/** and src/** tree '{current}'"
                         )
             except Exception as ex:
                 errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
