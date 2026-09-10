@@ -26,12 +26,12 @@ EXPERIMENT = Path(_EXPERIMENT_DIR) if _EXPERIMENT_DIR else Path(__file__).resolv
 CASES = FRAMEWORK / "backlog" / "analysis" / "experiments" / "cases"
 SKILLS = {
     "intake": FRAMEWORK / "process" / "skills" / "intake" / "SKILL.md",
-    "analyze": FRAMEWORK / "process" / "skills" / "analyze-change" / "SKILL.md",
-    "specify": FRAMEWORK / "process" / "skills" / "specify-change" / "SKILL.md",
-    "decompose": FRAMEWORK / "process" / "skills" / "decompose-change" / "SKILL.md",
-    "target": FRAMEWORK / "process" / "skills" / "target-task" / "SKILL.md",
-    "implement": FRAMEWORK / "process" / "skills" / "implement-task" / "SKILL.md",
-    "verify": FRAMEWORK / "process" / "skills" / "verify-change" / "SKILL.md",
+    "analyze": FRAMEWORK / "process" / "skills" / "analyze" / "SKILL.md",
+    "specify": FRAMEWORK / "process" / "skills" / "specify" / "SKILL.md",
+    "decompose": FRAMEWORK / "process" / "skills" / "decompose" / "SKILL.md",
+    "target": FRAMEWORK / "process" / "skills" / "declare" / "SKILL.md",
+    "implement": FRAMEWORK / "process" / "skills" / "implement" / "SKILL.md",
+    "verify": FRAMEWORK / "process" / "skills" / "verify" / "SKILL.md",
 }
 GATES = {
     "intake": "intake",

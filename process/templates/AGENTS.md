@@ -10,7 +10,7 @@ This product repository uses the DeltaFuse framework version pinned in `.deltafu
 - Raw input: `docs/intake/**`.
 - Project configuration: `.deltafuse/config.yaml`.
 
-Load the pinned/generated DeltaFuse skill for the requested lifecycle operation. Do not implement directly from chat, raw intake, a Decision, a diff, or an unaccepted specification change.
+Load the pinned/generated DeltaFuse skill for the requested lifecycle operation (`/intake`, `/analyze`, `/specify`, `/decompose`, `/declare`, `/implement`, `/verify`). Do not implement directly from chat, raw intake, a Decision, a diff, or an unaccepted specification change.
 
 Do not edit generated skill snapshots under `.agents/skills/**`, `.cursor/skills/**`, or `.gemini/skills/**`. Regenerate them through the DeltaFuse installer/update command and validate them against `.deltafuse/lock.yaml`.
 

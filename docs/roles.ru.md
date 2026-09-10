@@ -54,7 +54,7 @@ DeltaFuse разграничивает зоны ответственности �
 | **Analyst** | ИИ-агент | Маршрутизация по capabilities, вычисление типизированных дельт, подготовка черновиков решений (`DEC-*`). |
 | **Spec Editor** | ИИ готовит черновик, **человек утверждает** | Актуализация `docs/spec/**`, зеркалирование принятых Decisions в императивный текст требований. |
 | **Task Planner** | ИИ-агент | Декомпозиция принятой спецификации на упорядоченные атомарные задачи с явным Test Oracle. |
-| **Implementer** | ИИ-агент | Написание минимального теста (Target / Red) и минимального продуктового кода (Implement / Green). |
+| **Implementer** | ИИ-агент | Написание объявленного Red-оракула (Declare) и минимального продуктового кода (Implement / Green). |
 | **Verifier** | ИИ-агент | Проверка сквозной трассируемости, сходимости слоёв и архивация завершённого пакета. |
 | **Maintainer** | **Только человек** | Утверждение baseline, мердж спецификации и кода, управление релизами и публикацией. |
 
@@ -65,15 +65,15 @@ DeltaFuse разграничивает зоны ответственности �
 | Этап / Активность | AI Analyst / Planner | AI Implementer | AI Verifier | Человек (Maintainer) |
 |---|:---:|:---:|:---:|:---:|
 | Нормализация сырого ввода (`/intake`) | **R** | — | — | **A** |
-| Маршрутизация и дельты (`/analyze-change`) | **R** | — | — | **A** |
+| Маршрутизация и дельты (`/analyze`) | **R** | — | — | **A** |
 | Черновик решения (`DEC-NNNN proposed`) | **R** | — | — | C |
 | **Принятие решения (`accepted: true`)** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
-| Подготовка правок спеки (`/specify-change`) | **R** | — | — | C |
+| Подготовка правок спеки (`/specify`) | **R** | — | — | C |
 | **Принятие спецификации (`docs/spec/`)** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
-| Декомпозиция на задачи (`/decompose-change`) | **R** | C | — | **A** |
-| Написание теста и Red evidence (`/target-task`) | — | **R** | — | C |
-| Написание кода и Green evidence (`/implement-task`) | — | **R** | — | C |
-| Проверка сходимости и архив (`/verify-change`) | — | — | **R** | **A** |
+| Декомпозиция на задачи (`/decompose`) | **R** | C | — | **A** |
+| Объявление Red-оракула (`/declare`) | — | **R** | — | C |
+| Написание кода и Green evidence (`/implement`) | — | **R** | — | C |
+| Проверка сходимости и архив (`/verify`) | — | — | **R** | **A** |
 | **Code Review и Merge в main** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
 | **Git Push в удалённый репозиторий** | ❌ Запрещено | ❌ Запрещено | ❌ Запрещено | **Только человек (A)** |
 
@@ -85,21 +85,21 @@ DeltaFuse разграничивает зоны ответственности �
 
 Жизненный цикл DeltaFuse базируется на 7 канонических скиллах-примитивах (`process/skills/*`):
 - `intake` — нормализация входящего запроса в `CHG-NNN`;
-- `analyze-change` — маршрутизация по capabilities и вычисление дельт;
-- `specify-change` — применение дельт к нормативной спецификации;
-- `decompose-change` — нарезка на атомарные задачи реализации;
-- `target-task` — подготовка исполняемого тест-таргета и фиксация Red evidence;
-- `implement-task` — реализация кода и фиксация Green/Regression evidence;
-- `verify-change` — проверка сходимости артефактов и архивация.
+- `analyze` — маршрутизация по capabilities и вычисление дельт;
+- `specify` — применение дельт к нормативной спецификации;
+- `decompose` — нарезка на атомарные задачи реализации;
+- `declare` — объявить, что должно стать правдой (Red-оракул) до Implement;
+- `implement` — реализация кода и фиксация Green/Regression evidence;
+- `verify` — проверка сходимости артефактов и архивация.
 
 ### Профили исполнения (Execution Profiles)
 
 Высокоуровневые сценарии работы формируются последовательным вызовом канонических примитивов:
 
 1. **Стандартная доработка (Feature / Specification Change)**:
-   `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → цикл по задачам (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → цикл по задачам (`declare` → `implement`) → `verify` → *(Human Gate: Merge)*.
 2. **Исправление дефекта реализации (Implementation Bug)**:
-   `intake` → `analyze-change` *(дельта specification.operation: none)* → `specify-change` *(доказательство неизменности спеки в spec-delta.md)* → `decompose-change` *(создание задачи фикса)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze` *(дельта specification.operation: none)* → `specify` *(доказательство неизменности спеки в spec-delta.md)* → `decompose` *(создание задачи фикса)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Инициализация проекта (Bootstrap Profile)**:
    Формирование начального каталога `docs/spec/_capabilities.yaml`, принятие базовых архитектурных решений (`docs/decisions/DEC-*` с `change: null`) и фиксация `project.baseline: accepted` в `.deltafuse/config.yaml` до запуска первого Change.
 

@@ -26,27 +26,26 @@ Small local models fail when a workflow treats the whole repository as context. 
 ```mermaid
 flowchart LR
     Raw[Raw intent] --> Intake[Intake]
-    Intake --> Analyze[Route and Analyze]
+    Intake --> Analyze[Analyze]
     Analyze <-->|Decision convergence| Decision{Human Decision gate}
     Analyze --> Specify[Specify]
     Specify --> Decompose[Decompose]
-    Decompose --> Target[Target / Red]
-    Target --> Implement[Implement / Green]
-    Implement --> Verify[Verify and Converge]
-    Verify --> Archive[Archive Change]
+    Decompose --> Declare[Declare]
+    Declare --> Implement[Implement]
+    Implement --> Verify[Verify]
 ```
 
 | Step | Skill | Primary result |
 |---|---|---|
 | Intake | `/intake` | Immutable request and Change root |
-| Route and Analyze | `/analyze-change` | Routing, slices, Decisions, typed deltas |
-| Specify | `/specify-change` | Accepted normative state or proven unchanged spec |
-| Decompose | `/decompose-change` | Atomic tasks inside the Change |
-| Target | `/target-task` | Failing executable target and Red evidence |
-| Implement | `/implement-task` | Minimal code and Green evidence |
-| Verify | `/verify-change` | Convergence proof and archived Change |
+| Analyze | `/analyze` | Routing, slices, Decisions, typed deltas |
+| Specify | `/specify` | Accepted normative state or proven unchanged spec |
+| Decompose | `/decompose` | Atomic tasks inside the Change |
+| Declare | `/declare` | Declared Red oracle: what must become true, proven failing on unchanged code |
+| Implement | `/implement` | Minimal code and Green evidence |
+| Verify | `/verify` | Convergence proof and archived Change |
 
-Route and Analyze repeats until all blocking Decisions are terminal and global reconciliation finds no new material question.
+Analyze repeats until all blocking Decisions are terminal and global reconciliation finds no new material question.
 
 ## Framework and product boundary
 

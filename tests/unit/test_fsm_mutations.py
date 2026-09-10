@@ -83,7 +83,7 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
     )
     # Revert task frontmatter back to pending
@@ -122,7 +122,7 @@ def test_mutation_t3_converged_accepts_cancelled_task(tmp_path: Path, repo_root:
                 {"id": "TASK-002", "slice": "SLICE-01", "depends_on": []},
             ]
         )
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -241,7 +241,7 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -256,7 +256,7 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )

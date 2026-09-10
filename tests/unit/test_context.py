@@ -109,7 +109,7 @@ def test_estimate_files_tokens_deduplicates(tmp_path: Path):
 
 
 def test_phase_contracts_completeness():
-    phases = ["intake", "analyze", "specify", "decompose", "target", "implement", "verify"]
+    phases = ["intake", "analyze", "specify", "decompose", "declare", "implement", "verify"]
     for p in phases:
         assert p in PHASE_CONTRACTS
         assert "allowed_read" in PHASE_CONTRACTS[p]

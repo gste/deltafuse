@@ -44,15 +44,15 @@ Only `docs/spec/**` is implementation law. Raw intake, Change requests, Decision
 
 ```text
 Intake
-  -> Route and Analyze
+  -> Analyze
   -> Specify
   -> Decompose
-  -> Target
+  -> Declare
   -> Implement
-  -> Verify, Converge and Archive
+  -> Verify
 ```
 
-`Red` and `Green` are evidence states inside Target and Implement, not top-level steps.
+`Red` and `Green` are evidence states inside Declare and Implement, not top-level steps.
 
 ## Product artifact layout
 

@@ -378,7 +378,7 @@ def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
         .step_intake()
         .step_analyze()
         .step_decompose()
-        .step_target()
+        .step_declare()
     )
     assert not (builder.change_dir / "spec-delta.md").is_file()
     assert check_gate(builder.change_dir, "targeting") == []
@@ -393,7 +393,7 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
     )
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
@@ -421,7 +421,7 @@ def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
     )
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
@@ -448,7 +448,7 @@ def test_implemented_rejects_stale_green_after_spec_change(tmp_path: Path, repo_
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
     )
     assert check_gate(builder.change_dir, "implemented") == []
@@ -512,7 +512,7 @@ def test_converged_rejects_wiped_added_spec_after_specify(tmp_path: Path, repo_r
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -542,7 +542,7 @@ def test_converged_rejects_removed_spec_still_on_disk(tmp_path: Path, repo_root:
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -570,7 +570,7 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
         .step_intake()
         .step_analyze()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -630,7 +630,7 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
     )
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
@@ -765,7 +765,7 @@ def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_r
                 {"id": "TASK-002", "slice": "SLICE-01", "depends_on": ["TASK-001"]},
             ]
         )
-        .step_target()
+        .step_declare()
         .step_implement()
         .step_verify()
     )
@@ -790,7 +790,7 @@ def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
         .step_specify()
     )
     assert check_gate(builder.change_dir, "specified") == []
-    builder.step_decompose().step_target()
+    builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "targeting") == []
     red = yaml.safe_load((builder.change_dir / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8"))
     assert red["changed_paths"] == ["docs/spec/core.md"]
@@ -822,7 +822,7 @@ def test_docs_route_implemented_without_product_regression(tmp_path: Path, repo_
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
     )
     shutil.rmtree(builder.change_dir / "evidence" / "regression")
@@ -838,7 +838,7 @@ def test_code_route_still_requires_regression(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
-        .step_target()
+        .step_declare()
         .step_implement()
     )
     shutil.rmtree(builder.change_dir / "evidence" / "regression")
@@ -859,7 +859,7 @@ def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
         .step_specify()
     )
     assert check_gate(builder.change_dir, "specified") == []
-    builder.step_decompose().step_target()
+    builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "targeting") == []
     builder.step_implement()
     assert check_gate(builder.change_dir, "implemented") == []
@@ -981,7 +981,7 @@ def test_two_slices_do_not_satisfy_specified_without_live_spec(tmp_path: Path, r
 
 def test_analyze_skill_does_not_freeze_single_slice(repo_root: Path):
     """RM-022 / AB-02: canonical skill must not freeze Analyze to one SLICE-01 file."""
-    skill = (repo_root / "process" / "skills" / "analyze-change" / "SKILL.md").read_text(
+    skill = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(
         encoding="utf-8"
     )
     assert "Do not collapse a multi-capability Change into a single" in skill
@@ -1004,7 +1004,7 @@ def test_analyzed_does_not_require_analysis_md(tmp_path: Path, repo_root: Path):
 
 
 def test_analyze_skill_marks_analysis_md_optional(repo_root: Path):
-    skill = (repo_root / "process" / "skills" / "analyze-change" / "SKILL.md").read_text(
+    skill = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(
         encoding="utf-8"
     )
     assert "`analysis.md` is optional" in skill

@@ -34,4 +34,4 @@ Later clarification is appended as a revision or superseding claim. Never silent
 
 Every material input statement is represented by a claim or explicitly excluded. Product artifacts remain unread and unchanged.
 
-Return the Change path and recommend `/analyze-change <change-id>`.
+Return the Change path and recommend `/analyze <change-id>`.

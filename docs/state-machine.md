@@ -13,23 +13,23 @@ A Change is the complete lifecycle container for an atomic set of modifications 
 ```mermaid
 stateDiagram-v2
     [*] --> normalized: intake
-    normalized --> analyzing: analyze-change
+    normalized --> analyzing: analyze
     analyzing --> blocked_on_decision: decision required
     blocked_on_decision --> analyzing: decision accepted/rejected
     analyzing --> analyzed: analysis complete
     
-    analyzed --> specification_proposed: specify-change
+    analyzed --> specification_proposed: specify
     specification_proposed --> specified: human gate passed
     analyzed --> specified: implementation bug (spec unchanged)
     
-    specified --> decomposed: decompose-change
-    decomposed --> targeting: target-task
+    specified --> decomposed: decompose
+    decomposed --> targeting: declare
     
     targeting --> target_confirmed: red evidence verified
-    target_confirmed --> implementing: implement-task
+    target_confirmed --> implementing: implement
     implementing --> implemented: green & regression evidence
     
-    implemented --> verifying: verify-change
+    implemented --> verifying: verify
     verifying --> converged: all claims verified & traced
     converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
@@ -62,7 +62,7 @@ stateDiagram-v2
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
-| `targeting` | Preparing failing test targets for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `target-confirmed`, `not-reproduced` | Test target fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
+| `targeting` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `target-confirmed`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
 | `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
 | `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression. `docs`/`ops`: allowed files exist; no `src/**`. |
 | `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
@@ -82,13 +82,13 @@ A Slice is an autonomous, independently verifiable capability slice within a Cha
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft: analyze-change
+    [*] --> draft: analyze
     draft --> analyzing: boundary mapping
     analyzing --> blocked: blocked on decision
     blocked --> analyzing: decision resolved
     analyzing --> analyzed: delta computed
-    analyzed --> specified: specify-change
-    specified --> decomposed: decompose-change
+    analyzed --> specified: specify
+    specified --> decomposed: decompose
     decomposed --> verified: all tasks verified
     verified --> [*]
 ```
@@ -113,12 +113,12 @@ A Task is an atomic, independently verifiable work unit owned by a specific Slic
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: decompose-change
-    pending --> targeting: target-task
+    [*] --> pending: decompose
+    pending --> targeting: declare
     targeting --> target_confirmed: red evidence verified
-    target_confirmed --> implementing: implement-task
+    target_confirmed --> implementing: implement
     implementing --> implemented: green evidence verified
-    implemented --> verified: verify-change
+    implemented --> verified: verify
     
     pending --> blocked: external dependency
     blocked --> pending: unblocked
@@ -173,8 +173,8 @@ Evidence is the machine-verifiable proof of behavior recorded at each critical s
 
 ```mermaid
 stateDiagram-v2
-    [*] --> red: target-task fails on unchanged code
-    red --> green: implement-task succeeds on new code
+    [*] --> red: declare fails on unchanged code
+    red --> green: implement succeeds on new code
     green --> regression: full regression suite passes
     regression --> verification: change-level verification passes
     verification --> [*]

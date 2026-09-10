@@ -9,4 +9,4 @@ Statuses: `proposed`, `accepted`, `rejected`, `superseded`.
 | Decision | Kind | Status | Owner | Change |
 |---|---|---|---|---|
 
-Only a human Decision owner changes a proposed record to a terminal status. An accepted Decision is rationale, not implementation law. If it affects observable behavior, a contract, policy, or required invariant, `/specify-change` must mirror that effect into `docs/spec/**`.
+Only a human Decision owner changes a proposed record to a terminal status. An accepted Decision is rationale, not implementation law. If it affects observable behavior, a contract, policy, or required invariant, `/specify` must mirror that effect into `docs/spec/**`.

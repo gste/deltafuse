@@ -78,20 +78,20 @@ Change может быть переведён в терминальное сос
 | Исходное состояние | Целевое состояние | Событие / Условие перехода | Gate |
 |---|---|---|---|
 | *none* | `normalized` | Завершён `/intake`. Создан `request.md` с claim IDs `CR-*`. | Каждое утверждение пользователя представлено claim либо исключено. |
-| `normalized` | `analyzing` | Начало шага `/analyze-change`. Маршрутизация claims по capabilities. | Существует каталог capabilities (или создаётся в Bootstrap). |
+| `normalized` | `analyzing` | Начало шага `/analyze`. Маршрутизация claims по capabilities. | Существует каталог capabilities (или создаётся в Bootstrap). |
 | `analyzing` | `blocked-on-decision` | Обнаружена развилка, требующая Decision Record со статусом `proposed`. | Создан документ `docs/decisions/DEC-NNNN-*.md`. |
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
 | `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `workflow.call_width` может разнести записи, но комплект тот же. | На диске есть `routing.yaml`, `slices/` и `coverage.yaml`; все claims покрыты; дельты типизированы. |
 | `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). | Сформирован проект правок в `docs/spec/**` и `spec-delta.md`. |
 | `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
-| `specified` | `decomposed` | Завершён `/decompose-change`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
-| `decomposed` | `targeting` | Выбрана задача для реализации, запущен `/target-task`. | Предшествующие зависимые задачи выполнены. |
+| `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
+| `decomposed` | `targeting` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
 | `targeting` | `target-confirmed` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
-| `target-confirmed` | `implementing` | Запущен `/implement-task`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
+| `target-confirmed` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
 | `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. |
 | `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
-| `verifying` | `converged` | Запущен `/verify-change`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
+| `verifying` | `converged` | Запущен `/verify`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
 | `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |
 | `verifying` | `not-reproduced` | Закрытие Change как невоспроизведённого дефекта или подтверждённого no-op. | В `verification.md` зафиксирован исход `not-reproduced`. |
 | `analyzing` / `targeting` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |

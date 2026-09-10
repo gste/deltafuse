@@ -14,12 +14,12 @@ Request -> Analyze -> Delta -> Fuse -> Converge
 
 ```text
 Intake
-  -> Route and Analyze
+  -> Analyze
   -> Specify
   -> Decompose
-  -> Target
+  -> Declare
   -> Implement
-  -> Verify, Converge and Archive
+  -> Verify
 ```
 
 ---
@@ -50,7 +50,7 @@ Normalize an incoming raw request (issue, chat transcript, bug report, review no
 
 ---
 
-## 2. Route and Analyze
+## 2. Analyze
 
 ### Purpose
 Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, compute typed deltas, detect contradictions, and formulate architectural decisions.
@@ -200,17 +200,17 @@ Validate credentials and issue an initial access token.
 
 ### Gate
 - All tasks validate against `task.schema.yaml` and declare `context_budget`.
-- Declared `allowed_paths` and evidence `changed_paths` stay inside `PHASE_CONTRACTS` write globs for Target/Implement.
+- Declared `allowed_paths` and evidence `changed_paths` stay inside `PHASE_CONTRACTS` write globs for Declare/Implement.
 - Task dependencies form an acyclic directed graph (DAG).
 - All claims in `coverage.yaml` mapped to at least one task.
 - `change.yaml` status transitioned to `decomposed`.
 
 ---
 
-## 5. Target
+## 5. Declare
 
 ### Purpose
-Create or update an executable test target for a single atomic task and verify that it fails on unchanged production code for the exact expected reason (TDD Red Evidence).
+Declare what must become true for one atomic task: freeze a Red oracle that fails on unchanged production code for the expected reason. Writing that Red test before Implement is the declaration.
 
 ### Context Contract
 - **Allowed Read Scope**: Single `TASK-NNN.md`, target test file, public API signatures of target module.
@@ -244,7 +244,7 @@ Create or update an executable test target for a single atomic task and verify t
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `target-confirmed`.
 - Hidden / independent suites are not replaced by the agent's tests.
-- Property-based tests are optional Target extras; missing a local runner is skip, not a gate fail.
+- Property-based tests are optional Declare extras; missing a local runner is skip, not a gate fail.
 
 ---
 
@@ -273,7 +273,7 @@ Author the minimal production code necessary to turn the failing test target gre
 
 ---
 
-## 7. Verify, Converge and Archive
+## 7. Verify
 
 ### Purpose
 Verify cross-artifact consistency across all layers of the Change package, verify that all tasks are green, confirm claim coverage, and archive the completed package.
@@ -313,7 +313,7 @@ The Verifier checks that:
   2. Analyze verifies that existing specification already requires the expected behavior (`specification.operation: none`).
   3. Specify transitions Change from `analyzed` to `specified`, recording proof in `spec-delta.md` that existing specification already requires the behavior without modifying normative spec.
   4. Decompose creates bugfix task.
-  5. Target writes reproducing test; records Red evidence.
+  5. Declare writes the Red oracle (what must become true); records Red evidence.
   6. Implement fixes code; records Green & Regression evidence.
   7. Verify checks convergence and archives package.
 

@@ -21,15 +21,15 @@ Request -> Analyze -> Delta -> Fuse -> Converge
 
 ```text
 Intake
-  -> Route and Analyze
+  -> Analyze
   -> Specify
   -> Decompose
-  -> Target
+  -> Declare
   -> Implement
-  -> Verify, Converge and Archive
+  -> Verify
 ```
 
-`Red` и `Green` не являются этапами верхнего уровня; это внутренние состояния TDD-evidence на этапах **Target** и **Implement**.
+`Red` и `Green` не являются этапами верхнего уровня; это внутренние состояния TDD-evidence на этапах **Declare** и **Implement**.
 
 ---
 
@@ -59,7 +59,7 @@ Intake
 
 ---
 
-## 2. Route and Analyze
+## 2. Analyze
 
 ### Цель
 Сопоставить требования (claims) с принятым состоянием продукта (`docs/spec/**`), сгруппировать их в изолированные слайсы (Slices), выявить развилки решений и сформировать типизированную дельту (Delta) по каждому затронутому слою.
@@ -112,7 +112,7 @@ Intake
 | `not-enough-information` | Недостаточно данных для локализации и границ | Остановка и запрос информации у пользователя (Stop-and-Ask) |
 
 ### Decision Convergence Loop
-Route and Analyze — итеративный шаг. Если возникают существенные развилки:
+Analyze — итеративный шаг. Если возникают существенные развилки:
 1. Создаются черновики решений `DEC-NNNN` со статусом `proposed`.
 2. Change переходит в состояние `blocked-on-decision`.
 3. Человек принимает (`accepted`) или отклоняет (`rejected`) решения.
@@ -213,10 +213,10 @@ context_budget:
 
 ---
 
-## 5. Target
+## 5. Declare
 
 ### Цель
-Сформировать исполняемый тестовый таргет, доказывающий наличие дефекта или отсутствие функциональности **до** внесения любых изменений в рабочий код (Red Evidence).
+Объявить, что должно стать правдой для одной атомарной задачи: зафиксировать Red-оракул, который падает на неизменённом коде по ожидаемой причине. Написание этого Red-теста до Implement и есть объявление.
 
 ### Context Contract
 - **Reads**: ровно одна задача `TASK-NNN`, ссылки на требования спеки, публичные интерфейсы системы, тестовые утилиты и фикстуры.
@@ -259,7 +259,7 @@ context_budget:
 
 ---
 
-## 7. Verify, Converge and Archive
+## 7. Verify
 
 ### Цель
 Доказать полную сходимость (Convergence) всех объявленных проекций дельты, проверить сквозную трассируемость и перенести завершённый Change в архив без потери истории.
@@ -273,7 +273,7 @@ Raw intent (docs/intake/...)
   -> Slice Delta (slices/SLICE-NN.md, change.yaml)
   -> Specification Requirement (docs/spec/... REQ-*)
   -> Atomic Task (tasks/TASK-NNN-*.md)
-  -> Target Test (evidence/red/...)
+  -> Declare Test (evidence/red/...)
   -> Implementation & Regressions (evidence/green/...)
   -> Verification Report (verification.md)
 ```
@@ -300,8 +300,8 @@ Raw intent (docs/intake/...)
 ### 1. Implementation Bug
 Спецификация продукта однозначно описывает корректное поведение, но фактическое поведение в рантайме ему противоречит:
 ```text
-Request -> Route and Analyze -> conformance Delta
-  -> requirement_delta: none -> Decompose -> Target (Red)
+Request -> Analyze -> conformance Delta
+  -> requirement_delta: none -> Decompose -> Declare (Red)
   -> Implement (Green) -> Verify -> Archive
 ```
 Баг считается подтверждённым только после записи воспроизводимого Red evidence.
@@ -309,9 +309,9 @@ Request -> Route and Analyze -> conformance Delta
 ### 2. Specification Bug
 Спецификация отсутствует, неоднозначна, содержит логические противоречия или требует изменения продуктового инварианта:
 ```text
-Request -> Route and Analyze -> requirement_delta: modify/add
+Request -> Analyze -> requirement_delta: modify/add
   -> optional Decision (Human Gate) -> Specify -> Decompose
-  -> Target -> Implement -> Verify -> Archive
+  -> Declare -> Implement -> Verify -> Archive
 ```
 
 ### 3. Not a Bug
