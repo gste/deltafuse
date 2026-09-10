@@ -4,13 +4,14 @@
 
 - **Статус:** `in-progress`.
 - **Текущая карточка:** [WQ-001](WQ-001.md) ready-rail в fuse-map (не этот репозиторий).
-- **Следующая:** Specify F-010 по срезу. UI в `../fuse-map`.
-- **Счётчики:** всего 9; `planned` 1; `in-progress` 0; `done` 8.
+- **Следующая:** UI в `../fuse-map`. Analyze/Specify kernel (AN-001…AN-003) закрыт.
+- **Счётчики:** всего 10; `planned` 1; `in-progress` 0; `done` 9.
 
 Не сюда: повтор A09, analog SDD, MCP-оркестратор, auto-accept DEC.
 
 | ID | Идея | Слой | Статус |
 |---|---|---|---|
+| [AN-003](AN-003.md) | Specify: `next` один срез; live spec только в `spec_refs` | CLI / гейт / skill | done |
 | [AN-002](AN-002.md) | Ядро пишет `coverage.yaml` из routing и срезов | CLI / гейт / skill | done |
 | [AN-001](AN-001.md) | Analyze: `next` один pass; `analyzed` = срез на каждую routing capability | CLI / гейт / skill | done |
 | [WK-005](WK-005.md) | LLM adapter: скиллы пишут файлы, ядро оркестрирует | `process/skills/**` | done |

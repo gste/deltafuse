@@ -120,13 +120,13 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 Apply analyzed specification deltas to the authoritative product specification in `docs/spec/**`, or verify that the accepted specification is unchanged.
 
 ### Context Contract
-- **Allowed Read Scope**: `request.md`, slices, target spec modules, accepted decisions, and `analysis.md` when present.
-- **Forbidden Read Scope**: Product implementation source code.
+- **Allowed Read Scope**: named slice, `spec_refs` from `next`, accepted decisions, and `analysis.md` when present. Not the whole `docs/spec/**` tree.
+- **Forbidden Read Scope**: Product implementation source code, unrelated specification modules.
 
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
-3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close` for `check-gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
@@ -138,6 +138,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 - `change.yaml` status is `specified` or `specification-proposed`.
 - Product source code is not required at this gate.
 - EARS phrasing does not replace live `docs/spec/**` (F-010).
+- `added` / `modified` in `spec-delta.md` must resolve to files in slice `spec_refs` (or that capability's catalog `spec:`) or `docs/spec/_capabilities.yaml`.
 
 ---
 

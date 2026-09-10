@@ -292,6 +292,31 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
     assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
 
 
+def test_specified_rejects_spec_delta_outside_slice_refs(tmp_path: Path, repo_root: Path):
+    """AN-003: spec-delta added/modified must stay inside slice spec_refs."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-076", title="Outside slice spec")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    _write_ratelimit_spec(tmp_path)
+    spec_delta = (
+        "---\n"
+        f"change: {builder.change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01]\n"
+        "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
+        "modified: []\n"
+        "removed: []\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("outside slice spec_refs" in e for e in errs)
+
+
 def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Path):
     """S03: requirement_delta none is only valid with exact live spec_refs."""
     install(target_dir=tmp_path, framework_root=repo_root)

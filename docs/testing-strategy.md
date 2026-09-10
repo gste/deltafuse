@@ -153,6 +153,7 @@ delta-fuse/
   - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage), wide не склеивает срезы; routing первым шагом. Specify для feature не снимается.
   - **AN-001 / analyzed**: каждый distinct `primary_capability` в `routing.yaml` покрыт slice-файлом с тем же полем; один `SLICE-01` на две capability валит `analyzed`.
   - **AN-002 / analyzed**: `deltafuse coverage` пишет матрицу из routing+slices; unknown top-level keys на `coverage.yaml` не валят гейт; воркер не hand-write YAML.
+  - **AN-003 / specified**: `next` один срез Specify; spec-delta added/modified только в slice `spec_refs`; F-010 live spec не снимается.
   - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.
   - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
   - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.

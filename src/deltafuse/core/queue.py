@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
+from deltafuse.core.specify import SpecifyCursor, next_specify_pass
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.integrity import find_unresolved_decisions_for_change
@@ -44,6 +45,7 @@ class WorkItem:
     task_path: str | None
     reason: str
     analyze_pass: str | None = None
+    specify_pass: str | None = None
     capability: str | None = None
     slice_id: str | None = None
     spec_refs: list[str] = field(default_factory=list)
@@ -79,6 +81,7 @@ def _item_for_step(
     task_path: str | None = None,
     kind: str = "ready",
     analyze_pass: str | None = None,
+    specify_pass: str | None = None,
     capability: str | None = None,
     slice_id: str | None = None,
     spec_refs: list[str] | None = None,
@@ -97,6 +100,7 @@ def _item_for_step(
         task_path=task_path,
         reason=reason,
         analyze_pass=analyze_pass,
+        specify_pass=specify_pass,
         capability=capability,
         slice_id=slice_id,
         spec_refs=list(spec_refs or []),
@@ -117,6 +121,26 @@ def _item_for_analyze(
         path=path,
         reason=cursor.reason,
         analyze_pass=cursor.pass_name,
+        capability=cursor.capability,
+        slice_id=cursor.slice_id,
+        spec_refs=cursor.spec_refs,
+        allowed_read=cursor.allowed_read,
+        allowed_write=cursor.allowed_write,
+    )
+
+
+def _item_for_specify(
+    *,
+    change_id: str,
+    path: str,
+    cursor: SpecifyCursor,
+) -> WorkItem:
+    return _item_for_step(
+        "specify",
+        change_id=change_id,
+        path=path,
+        reason=cursor.reason,
+        specify_pass=cursor.pass_name,
         capability=cursor.capability,
         slice_id=cursor.slice_id,
         spec_refs=cursor.spec_refs,
@@ -291,14 +315,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     reason="Bugfix may skip Specify; Decompose from accepted spec",
                 )
             ], []
-        return [
-            _item_for_step(
-                "specify",
-                change_id=change_id,
-                path=rel,
-                reason="Change is analyzed; next is Specify",
-            )
-        ], []
+        cursor = next_specify_pass(change_path, product_root)
+        return [_item_for_specify(change_id=change_id, path=rel, cursor=cursor)], []
 
     if status == "specified":
         return [
@@ -408,6 +426,14 @@ def format_item(item: WorkItem) -> str:
             lines.append(f"slice_id: {item.slice_id}")
         if item.spec_refs:
             lines.append("spec_refs: " + ", ".join(item.spec_refs))
+    elif item.specify_pass:
+        lines.append(f"specify_pass: {item.specify_pass}")
+        if item.capability:
+            lines.append(f"capability: {item.capability}")
+        if item.slice_id:
+            lines.append(f"slice_id: {item.slice_id}")
+        if item.spec_refs:
+            lines.append("spec_refs: " + ", ".join(item.spec_refs))
     lines.append(f"reason: {item.reason}")
     return "\n".join(lines)
 
@@ -422,6 +448,10 @@ def format_queue(queue: WorkQueue) -> str:
             extra += f"  {item.analyze_pass}"
             if item.capability:
                 extra += f" {item.capability}"
+        elif item.specify_pass:
+            extra += f"  {item.specify_pass}"
+            if item.slice_id:
+                extra += f" {item.slice_id}"
         loc = item.path or "-"
         lines.append(f"  /{item.skill}  {item.change_id or '-'}{extra}  {loc}  gate={item.gate}")
     lines.append("Blocked:")
@@ -467,6 +497,12 @@ def format_human_guide(item: WorkItem) -> str:
             lines.append(f"capability: {item.capability}")
         if item.slice_id:
             lines.append(f"slice_id: {item.slice_id}")
+    elif item.specify_pass:
+        lines.append(f"specify_pass: {item.specify_pass}")
+        if item.capability:
+            lines.append(f"capability: {item.capability}")
+        if item.slice_id:
+            lines.append(f"slice_id: {item.slice_id}")
     lines.extend(
         [
             f"reason: {item.reason}",
@@ -502,8 +538,11 @@ def format_human_guide(item: WorkItem) -> str:
         lines.append(f"- `deltafuse coverage {change_dir}`")
     lines.append("")
     lines.append("## Close the gate")
-    if item.analyze_pass in {"routing", "slice"}:
-        lines.append("Do not run `check-gate --gate analyzed` yet. Write only this pass, then `deltafuse next`.")
+    if item.analyze_pass in {"routing", "slice"} or item.specify_pass == "slice":
+        gate_name = "analyzed" if item.analyze_pass else "specified"
+        lines.append(
+            f"Do not run `check-gate --gate {gate_name}` yet. Write only this pass, then `deltafuse next`."
+        )
     elif item.path and item.gate:
         lines.append(f"`deltafuse check-gate {item.path} --gate {item.gate}`")
     elif item.gate:

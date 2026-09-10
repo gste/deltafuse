@@ -85,6 +85,7 @@ class SliceRecord:
     primary_capability: str
     claims: tuple[str, ...]
     spec_refs: tuple[str, ...]
+    status: str | None = None
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
@@ -293,12 +294,14 @@ def load_slice_records(change_path: Path | str) -> list[SliceRecord]:
         claims = tuple(c for c in raw_claims if isinstance(c, str)) if isinstance(raw_claims, list) else ()
         raw_refs = meta.get("spec_refs") or []
         refs = tuple(r for r in raw_refs if isinstance(r, str)) if isinstance(raw_refs, list) else ()
+        status = meta.get("status")
         records.append(
             SliceRecord(
                 slice_id=slice_id,
                 primary_capability=cap,
                 claims=claims,
                 spec_refs=refs,
+                status=status if isinstance(status, str) else None,
             )
         )
     records.sort(key=lambda row: row.slice_id)

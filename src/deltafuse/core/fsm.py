@@ -18,6 +18,7 @@ from deltafuse.core.context import (
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.analyze import uncovered_primary_capabilities
+from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
@@ -531,6 +532,8 @@ def _validate_specified_live_spec(
         )
 
     live_ops = added + modified
+    if live_ops:
+        errors.extend(spec_delta_outside_slice_files(change_path, repo_root))
     if not live_ops:
         if not slices:
             errors.append(

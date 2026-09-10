@@ -75,6 +75,10 @@ deltafuse coverage <change-dir>
 
 Затем `check-gate --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
 
+## Specify по одному срезу
+
+После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `check-gate --gate specified`. Не закрывайте гейт Change на середине набора.
+
 ## Следующая работа
 
 Change id не обязателен: Ядро берёт первый ready элемент.

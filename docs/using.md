@@ -75,6 +75,10 @@ deltafuse coverage <change-dir>
 
 Then `check-gate --gate analyzed`. Re-running keeps existing `tasks` / `evidence` / `status`.
 
+## Specify one slice
+
+After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: `check-gate --gate specified`. Do not close the Change gate mid-set.
+
 ## Next work
 
 Do not pass a Change id unless you mean a specific package. The Core picks the first ready item:

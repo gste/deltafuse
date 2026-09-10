@@ -24,6 +24,15 @@ def test_analyze_skill_follows_next_pass(repo_root: Path):
     assert "deltafuse coverage" in text
 
 
+def test_specify_skill_follows_next_pass(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "specify" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "specify_pass" in text
+    assert "do not call `check-gate --gate specified`" in text
+    assert "spec_refs" in text
+
+
 def test_declare_and_implement_call_evidence_runner(repo_root: Path):
     declare = (repo_root / "process" / "skills" / "declare" / "SKILL.md").read_text(
         encoding="utf-8"
