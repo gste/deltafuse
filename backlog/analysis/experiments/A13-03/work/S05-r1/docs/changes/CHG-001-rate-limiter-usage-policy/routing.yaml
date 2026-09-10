@@ -1,0 +1,86 @@
+change: CHG-001-rate-limiter-usage-policy
+route: code
+claims:
+  CR-001:
+    summary: >-
+      Per-key usage statistics capability tracking total consumes, successful
+      and denied counts, and peak load.
+    primary_capability: monitoring.usage_stats
+    related_capabilities:
+      - security.ratelimit
+    confidence: high
+  CR-002:
+    summary: >-
+      get_stats(key) returns a dictionary of the tracked per-key statistics.
+    primary_capability: monitoring.usage_stats
+    related_capabilities:
+      - security.ratelimit
+    confidence: high
+  CR-003:
+    summary: >-
+      Policy that auto-blocks a key after a threshold of consecutive denied
+      consumes for a configurable period.
+    primary_capability: security.rate_policy
+    related_capabilities:
+      - security.ratelimit
+    confidence: high
+  CR-004:
+    summary: >-
+      Blocked keys return False from consume without consuming tokens and expose
+      a blocked_until label in stats.
+    primary_capability: security.rate_policy
+    related_capabilities:
+      - security.ratelimit
+      - monitoring.usage_stats
+    confidence: high
+  CR-005:
+    summary: >-
+      Both changes must be mutually compatible; stats must reflect denials from
+      both token shortage and policy blocking.
+    primary_capability: security.ratelimit
+    related_capabilities:
+      - monitoring.usage_stats
+      - security.rate_policy
+    confidence: medium
+  CR-006:
+    summary: >-
+      Integration tests verifying the interaction between usage-stats and
+      rate-policy blocking.
+    primary_capability: security.ratelimit
+    related_capabilities:
+      - monitoring.usage_stats
+      - security.rate_policy
+    confidence: high
+  CR-007:
+    summary: >-
+      Threshold and block duration are configurable; default block duration is
+      300 seconds.
+    primary_capability: security.rate_policy
+    related_capabilities:
+      - security.ratelimit
+    confidence: high
+  CR-008:
+    summary: >-
+      Peak load measured as the maximum consume calls within any one-second
+      window.
+    primary_capability: monitoring.usage_stats
+    related_capabilities:
+      - security.ratelimit
+    confidence: medium
+  CR-009:
+    summary: >-
+      Exact data types and key names inside the get_stats return dictionary are
+      unspecified and must be defined.
+    primary_capability: monitoring.usage_stats
+    related_capabilities:
+      - security.ratelimit
+    confidence: low
+  CR-010:
+    summary: >-
+      Whether blocked_until is an absolute timestamp or relative duration is
+      unspecified and must be defined.
+    primary_capability: security.rate_policy
+    related_capabilities:
+      - security.ratelimit
+      - monitoring.usage_stats
+    confidence: low

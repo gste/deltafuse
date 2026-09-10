@@ -1,0 +1,16 @@
+case: S02
+repeat: 1
+tag: a13
+phases:
+- phase: intake
+  outcome: pass
+  attempts: 1
+- phase: analyze-routing
+  outcome: pass
+  attempts: 1
+- phase: analyze-slices
+  outcome: pass
+  attempts: 1
+- phase: analyze-coverage
+  outcome: pass
+  attempts: 1

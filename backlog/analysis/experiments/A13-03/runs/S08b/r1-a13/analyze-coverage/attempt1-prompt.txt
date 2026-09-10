@@ -1,0 +1,420 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: analyze-change
+description: Route a normalized DeltaFuse Change through product capabilities, compare bounded slices with accepted specification and Decisions, and compute typed deltas. Use iteratively until blocking Decisions converge.
+---
+
+# Analyze Change
+
+Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterative Decision-convergence step.
+
+Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Start with `request.md`, `docs/spec/_capabilities.yaml`, compact global policy summaries, and the configured context budget. Route before loading detailed specification.
+
+After routing, read only selected spec modules, related Decision records, and explicitly requested diagnostic evidence. Do not load the whole spec, codebase, tests, or unrelated Changes/tasks by default.
+
+## Procedure
+
+1. Assign every `CR-*` claim one owning capability plus optional related capabilities and policies in `routing.yaml`.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`.
+3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
+4. Classify independently: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
+5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
+6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices. Do not accept them.
+7. Re-run only affected slices after human clarification or a terminal Decision.
+8. Perform global reconciliation over slice summaries, dependency graph, claim coverage, policies, and Decision statuses.
+
+If context exceeds budget, split by connected capability components and outcomes; add integration slices instead of truncating context.
+
+## Gate
+
+Exit only when all claims are routed, every slice has a typed delta, blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
+
+Write `routing.yaml`, `slices/**`, `coverage.yaml`, Decision/catalog proposals, and updated `change.yaml`. `analysis.md` is optional. Recommend `/specify-change <change-id> [slice-id]`.
+
+Read `.deltafuse/lock.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). Always write `routing.yaml` first. `narrow` writes one of routing, slices, or coverage per invocation; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Leave status `analyzing` until routing, slices, and coverage are on disk — call width does not close the gate. Do not skip Specify. Do not auto-accept Decisions.
+
+Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. `docs`/`ops` do not skip Specify.
+
+Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. `routing.yaml` itself remains required. Two slice files do not satisfy Specify without live `docs/spec/**`.
+
+`analysis.md` is optional. `analyzed` is routing, slices, and coverage; `change.yaml` `analysis.summary` may be null.
+
+
+----- USER -----
+
+Phase: analyze
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'analyze'
+Gate to satisfy after this call: analyzed
+This call writes ONLY docs/changes/<id>/coverage.yaml matching coverage.schema.yaml. Do not add schema_version. Do not rewrite slices or analysis.md. Use status continue. Do not set blocked-on-decision and do not write Decision files: intake unknowns (U*) are not blocking Decisions for a single unambiguous feature. Map each CR-NNN id from request.md to slice SLICE-01.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+workflow:
+  call_width: wide
+  auto_accept_decisions: false
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+workflow:
+  call_width: wide
+  auto_accept_decisions: false
+
+
+=== FILE docs/changes/CHG-001-doc-update/change.yaml ===
+schema_version: 2
+id: CHG-001-doc-update
+title: Update Rate Limiter documentation (security.ratelimit)
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: maintenance
+route: docs
+risk: low
+source:
+  request: docs/intake/S08b.md
+  intake_refs:
+    - docs/intake/S08b.md
+deltas: []
+slices: []
+decisions: []
+tasks: []
+
+
+=== FILE docs/changes/CHG-001-doc-update/request.md ===
+# Request: Update Rate Limiter Documentation (security.ratelimit)
+
+## Summary
+
+Update the documentation for the `security.ratelimit` module. Code and tests are
+not changed; system behavior is not changed. The work is documentation-only:
+
+- Add a "Usage Examples" section to `docs/spec/security/ratelimit.md` with 3
+  typical scenarios (initialization, consume with validation, handling
+  `ValueError`).
+- Add a "Architectural Decisions" section describing the choice of the Token
+  Bucket algorithm with justification (reference to RFC 2697, comparison with
+  Leaky Bucket).
+- Fix a typo in the description of the `refill_rate` parameter: «скокрость» →
+  «скорость».
+- Update `CHANGELOG.md` with an entry about the documentation change.
+
+## Claims
+
+- CR-001 (expectation): `docs/spec/security/ratelimit.md` should contain a
+  "Usage Examples" section with 3 typical scenarios: initialization, consume
+  with validation, and handling `ValueError`.
+- CR-002 (expectation): `docs/spec/security/ratelimit.md` should contain an
+  "Architectural Decisions" section describing the Token Bucket algorithm
+  choice, referencing RFC 2697 and comparing it with Leaky Bucket.
+- CR-003 (constraint): Fix the typo «скокрость» → «скорость» in the
+  `refill_rate` parameter description.
+- CR-004 (expectation): `CHANGELOG.md` should include an entry about the
+  documentation change.
+- CR-005 (constraint): Code and tests are not modified; system behavior is not
+  modified.
+
+
+=== FILE docs/changes/CHG-001-doc-update/routing.yaml ===
+change: CHG-001-doc-update
+route: docs
+claims:
+  CR-001:
+    summary: Add Usage Examples section with 3 scenarios to ratelimit.md
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: Add Architectural Decisions section on Token Bucket vs Leaky Bucket
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Fix typo скокрость -> скорость in refill_rate description
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Add CHANGELOG.md entry for documentation change
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-005:
+    summary: Code and tests unchanged; system behavior unchanged
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-doc-update/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-doc-update
+title: Update security.ratelimit documentation
+status: analyzing
+primary_capability: security.ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+  - docs/spec/README.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+---
+
+## In scope
+
+- Add "Usage Examples" section (3 scenarios) to `docs/spec/security/ratelimit.md`.
+- Add "Architectural Decisions" section (Token Bucket vs Leaky Bucket, RFC 2697).
+- Fix typo `скокрость` → `скорость` in `refill_rate` description.
+- Add CHANGELOG.md entry for the documentation change.
+
+## Out of scope
+
+- Any code, test, or behavioral change (CR-005).
+
+## Dependencies
+
+- None. Reads `docs/spec/security/ratelimit.md` and `CHANGELOG.md`.
+
+## Spec references
+
+- `docs/spec/security/ratelimit.md` (target of edits).
+- `docs/spec/README.md` (requirement style, live-spec rules).
+
+## Unchanged behavior
+
+- REQ-RL-01..04 semantics unchanged; only the `refill_rate` wording typo is corrected.
+
+## Risks
+
+- Editing a live spec file; keep edits documentation-only and traceable to this Change.
+
+## Context budget
+
+- max_tokens: 16000, max_files: 24.
+
+## Typed delta
+
+- intent: documentation update
+- delta_kind: docs
+- requirement_delta: none (no new/changed requirements)
+- design_impact: none
+- risk: low
+- size: small
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior. Prefer RFC 2119 / EARS phrasing (see [README.md](./README.md)).
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+## Requirement style (SPEC-003)
+
+Write live requirements with RFC 2119 keywords (`MUST`, `MUST NOT`, `SHOULD`, `MAY`) or Russian equivalents (`ДОЛЖЕН`, `НЕ ДОЛЖЕН`). Prefer EARS so each requirement has a trigger or state and an observable outcome:
+
+- WHEN [trigger] THE SYSTEM SHALL [behavior]
+- WHILE [in state] THE SYSTEM SHALL [behavior]
+- IF [unwanted condition] THEN THE SYSTEM SHALL [behavior]
+
+EARS is phrasing, not a new file format and not a Specify gate. Vague words ("fast", "convenient") remain invalid. Live files under `docs/spec/**` remain required.
+
+Do not add `.kiro/` specs or Cucumber features as a second source of truth.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0 (скокрость пополнения).
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/coverage.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/coverage.schema.yaml
+title: DeltaFuse Claim Coverage
+type: object
+additionalProperties: false
+required: [change, claims]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  claims:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        slice:
+          type: string
+          pattern: '^SLICE-[0-9]{2,}$'
+        tasks:
+          type: array
+          items:
+            type: string
+            pattern: '^TASK-[0-9]{3,}$'
+        spec_refs:
+          type: array
+          items:
+            type: string
+        evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            red:
+              type: string
+            green:
+              type: string
+            regression:
+              type: string
+            verification:
+              type: string
+        status:
+          enum: [pending, analyzing, analyzed, specified, decomposed, targeting, target-confirmed, implementing, implemented, verified, rejected, not-reproduced]

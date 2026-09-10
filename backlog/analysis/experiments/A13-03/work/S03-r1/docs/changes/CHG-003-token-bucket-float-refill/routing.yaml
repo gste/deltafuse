@@ -1,0 +1,33 @@
+change: CHG-003-token-bucket-float-refill
+route: code
+claims:
+  CR-001:
+    summary: Integer division in refill drops fractional token accrual.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: Refill must accumulate tokens as float across calls.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: consume must debit integer or fractional token counts.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Existing ratelimit spec requires proportional refill and stays unchanged.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: A failing Red test reproducing fractional-token accrual should be created.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium

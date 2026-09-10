@@ -1,0 +1,28 @@
+schema_version: 2
+id: CHG-001-extend-rate-limiter-usage-policy
+title: Extend Rate Limiter with usage stats capability and rate policy
+description: >
+  Add a new capability monitoring.usage_stats exposing per-key usage statistics
+  via get_stats(key), and a new policy security.rate_policy that auto-blocks a
+  key after a configurable run of consecutive denied consumes. Both changes
+  must be mutually compatible: stats must reflect denials caused by both token
+  exhaustion and policy-based blocking. Integration tests required.
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: feature
+route: code
+risk: medium
+source:
+  request: docs/intake/S05.md
+  intake_refs:
+    - docs/intake/S05.md
+analysis:
+  routing: null
+  summary: null
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
