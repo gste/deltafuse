@@ -85,3 +85,10 @@ Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.
+
+```text
+deltafuse board <product-root> --json
+deltafuse board <product-root> --json --archive
+```
+
+Stdout is one JSON object. No product files are written. Missing `.deltafuse/lock.yaml` is a hard error, not an empty board.

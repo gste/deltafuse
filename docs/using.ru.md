@@ -85,3 +85,10 @@ deltafuse next --step declare --json
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.
+
+```text
+deltafuse board <product-root> --json
+deltafuse board <product-root> --json --archive
+```
+
+Stdout — один JSON. Файлы продукта не пишутся. Нет `.deltafuse/lock.yaml` — ошибка, не пустая доска.

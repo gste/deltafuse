@@ -10,6 +10,7 @@ from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_ro
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
+from deltafuse.core.board import BoardError, build_board_snapshot
 from deltafuse.core.queue import (
     QueueError,
     build_work_queue,
@@ -115,6 +116,29 @@ def main(argv: list[str] | None = None) -> int:
         "--step",
         choices=list(step_names()),
         help="Only select this step",
+    )
+
+    # board snapshot (FM-001)
+    board_parser = subparsers.add_parser(
+        "board",
+        help="Emit a read-only fuse-map board snapshot (no product writes)",
+    )
+    board_parser.add_argument(
+        "product_path",
+        nargs="?",
+        default=".",
+        help="Product repository root (default: current dir)",
+    )
+    board_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=True,
+        help="Write the snapshot JSON to stdout (default; the only stdout on success)",
+    )
+    board_parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="Include archived Change cards",
     )
 
     # lint-context command (P7.6)
@@ -247,6 +271,18 @@ def main(argv: list[str] | None = None) -> int:
             print(format_queue(queue), file=sys.stderr)
             print("To start a new Change: /intake", file=sys.stderr)
         return 0 if selected is not None else 1
+
+    elif args.command == "board":
+        try:
+            snapshot = build_board_snapshot(
+                Path(args.product_path),
+                include_archive=args.archive,
+            )
+        except BoardError as ex:
+            print(f"Board failed: {ex}", file=sys.stderr)
+            return 2
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
 
     elif args.command == "lint-context":
         target = Path(args.change_path)

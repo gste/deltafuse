@@ -14,6 +14,7 @@ tests/
 │   ├── test_fsm.py               # FSM canonical states, allowed transitions, gate enforcement
 │   ├── test_evidence.py          # Evidence runner classification and YAML write
 │   ├── test_queue.py             # Derived work queue and deltafuse next
+│   ├── test_board.py             # Read-only fuse-map board snapshot
 │   ├── test_llm_adapter.py       # Skills are LLM adapters, not the orchestrator
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
 ├── integration/
@@ -61,6 +62,11 @@ deltafuse evidence docs/changes/CHG-001 --phase red --task TASK-001 --changed-pa
 ```bash
 deltafuse next --list
 deltafuse next --human
+```
+
+### Board snapshot (fuse-map)
+```bash
+deltafuse board . --json
 ```
 
 ### Run with Coverage

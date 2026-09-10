@@ -32,9 +32,10 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, lint-context, eval)
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, board, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
+│   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
 │   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
 │   │   ├── evidence.py               # Прогон команды продукта и запись evidence YAML (без LLM)
 │   │   ├── queue.py                  # Производная очередь ready/blocked и deltafuse next
@@ -69,6 +70,7 @@ delta-fuse/
 │   │   ├── test_hasher.py            # Чувствительность sha256 content_hash к изменениям дистрибутива
 │   │   ├── test_evidence.py          # Evidence runner: классификация и YAML
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
+│   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_llm_adapter.py       # Skills — LLM adapter, не оркестратор
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
@@ -232,7 +234,10 @@ deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --chang
 deltafuse next --list
 deltafuse next --human
 
-# 9. Запуск детерминированного бенчмарка LLM Evals
+# 9. Снимок доски для fuse-map (без записи в продукт)
+deltafuse board . --json
+
+# 10. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
 ```
 
