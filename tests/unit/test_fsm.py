@@ -1005,6 +1005,7 @@ def test_analyze_skill_does_not_freeze_single_slice(repo_root: Path):
         encoding="utf-8"
     )
     assert "Do not collapse a multi-capability Change into a single" in skill
+    assert "analyze_pass" in skill
     assert "пиши только SLICE-01" not in skill
     assert "ONLY one file" not in skill
 

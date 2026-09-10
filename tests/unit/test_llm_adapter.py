@@ -15,6 +15,14 @@ def test_canonical_skills_bind_worker_to_llm(repo_root: Path):
         assert "Recommend /" not in text, f"{step}: still recommends a slash command"
 
 
+def test_analyze_skill_follows_next_pass(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "analyze_pass" in text
+    assert "do not call `check-gate --gate analyzed`" in text
+
+
 def test_declare_and_implement_call_evidence_runner(repo_root: Path):
     declare = (repo_root / "process" / "skills" / "declare" / "SKILL.md").read_text(
         encoding="utf-8"

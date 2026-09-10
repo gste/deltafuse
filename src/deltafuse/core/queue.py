@@ -8,8 +8,9 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.fsm import find_repo_root, missing_analyze_artifacts
+from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.integrity import find_unresolved_decisions_for_change
 from deltafuse.core.context import PHASE_CONTRACTS
 from deltafuse.core.steps import STEP_CONTRACTS
@@ -42,6 +43,12 @@ class WorkItem:
     task: str | None
     task_path: str | None
     reason: str
+    analyze_pass: str | None = None
+    capability: str | None = None
+    slice_id: str | None = None
+    spec_refs: list[str] = field(default_factory=list)
+    allowed_read: list[str] = field(default_factory=list)
+    allowed_write: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -71,6 +78,12 @@ def _item_for_step(
     task: str | None = None,
     task_path: str | None = None,
     kind: str = "ready",
+    analyze_pass: str | None = None,
+    capability: str | None = None,
+    slice_id: str | None = None,
+    spec_refs: list[str] | None = None,
+    allowed_read: list[str] | None = None,
+    allowed_write: list[str] | None = None,
 ) -> WorkItem:
     spec = STEP_CONTRACTS[step]
     return WorkItem(
@@ -83,6 +96,32 @@ def _item_for_step(
         task=task,
         task_path=task_path,
         reason=reason,
+        analyze_pass=analyze_pass,
+        capability=capability,
+        slice_id=slice_id,
+        spec_refs=list(spec_refs or []),
+        allowed_read=list(allowed_read or []),
+        allowed_write=list(allowed_write or []),
+    )
+
+
+def _item_for_analyze(
+    *,
+    change_id: str,
+    path: str,
+    cursor: AnalyzeCursor,
+) -> WorkItem:
+    return _item_for_step(
+        "analyze",
+        change_id=change_id,
+        path=path,
+        reason=cursor.reason,
+        analyze_pass=cursor.pass_name,
+        capability=cursor.capability,
+        slice_id=cursor.slice_id,
+        spec_refs=cursor.spec_refs,
+        allowed_read=cursor.allowed_read,
+        allowed_write=cursor.allowed_write,
     )
 
 
@@ -238,16 +277,9 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             )
         ], []
 
-    missing = missing_analyze_artifacts(change_path)
-    if status in {"normalized", "analyzing"} or missing:
-        return [
-            _item_for_step(
-                "analyze",
-                change_id=change_id,
-                path=rel,
-                reason="Analyze artifacts incomplete" if missing else f"Change status is '{status}'",
-            )
-        ], []
+    cursor = next_analyze_pass(change_path, product_root)
+    if cursor is not None:
+        return [_item_for_analyze(change_id=change_id, path=rel, cursor=cursor)], []
 
     if status == "analyzed":
         if intent == "bugfix":
@@ -367,8 +399,16 @@ def format_item(item: WorkItem) -> str:
         f"path: {item.path or '-'}",
         f"task: {item.task or '-'}",
         f"task_path: {item.task_path or '-'}",
-        f"reason: {item.reason}",
     ]
+    if item.analyze_pass:
+        lines.append(f"analyze_pass: {item.analyze_pass}")
+        if item.capability:
+            lines.append(f"capability: {item.capability}")
+        if item.slice_id:
+            lines.append(f"slice_id: {item.slice_id}")
+        if item.spec_refs:
+            lines.append("spec_refs: " + ", ".join(item.spec_refs))
+    lines.append(f"reason: {item.reason}")
     return "\n".join(lines)
 
 
@@ -378,6 +418,10 @@ def format_queue(queue: WorkQueue) -> str:
         lines.append("  (none)")
     for item in queue.ready:
         extra = f"  {item.task}" if item.task else ""
+        if item.analyze_pass:
+            extra += f"  {item.analyze_pass}"
+            if item.capability:
+                extra += f" {item.capability}"
         loc = item.path or "-"
         lines.append(f"  /{item.skill}  {item.change_id or '-'}{extra}  {loc}  gate={item.gate}")
     lines.append("Blocked:")
@@ -416,15 +460,32 @@ def format_human_guide(item: WorkItem) -> str:
         f"path: {item.path or '-'}",
         f"task: {item.task or '-'}",
         f"task_path: {item.task_path or '-'}",
-        f"reason: {item.reason}",
-        "",
-        "## Read",
     ]
-    for glob in phase.get("allowed_read") or []:
+    if item.analyze_pass:
+        lines.append(f"analyze_pass: {item.analyze_pass}")
+        if item.capability:
+            lines.append(f"capability: {item.capability}")
+        if item.slice_id:
+            lines.append(f"slice_id: {item.slice_id}")
+    lines.extend(
+        [
+            f"reason: {item.reason}",
+            "",
+            "## Read",
+        ]
+    )
+    read_globs = item.allowed_read or phase.get("allowed_read") or []
+    for glob in read_globs:
         lines.append(f"- {glob}")
+    if item.spec_refs:
+        lines.append("")
+        lines.append("## Spec refs (this slice)")
+        for ref in item.spec_refs:
+            lines.append(f"- {ref}")
     lines.append("")
     lines.append("## Write")
-    for glob in phase.get("allowed_write") or []:
+    write_globs = item.allowed_write or phase.get("allowed_write") or []
+    for glob in write_globs:
         lines.append(f"- {glob}")
     if item.step in _EVIDENCE_HINTS:
         lines.append("")
@@ -437,7 +498,9 @@ def format_human_guide(item: WorkItem) -> str:
             )
     lines.append("")
     lines.append("## Close the gate")
-    if item.path and item.gate:
+    if item.analyze_pass in {"routing", "slice"}:
+        lines.append("Do not run `check-gate --gate analyzed` yet. Write only this pass, then `deltafuse next`.")
+    elif item.path and item.gate:
         lines.append(f"`deltafuse check-gate {item.path} --gate {item.gate}`")
     elif item.gate:
         lines.append(f"`deltafuse check-gate <change-dir> --gate {item.gate}`")

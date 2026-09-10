@@ -166,7 +166,7 @@ context:
 ### Политики эскалации
 - **On missing context**: если агенту не хватает данных или спецификация неоднозначна — **Stop-and-Ask** (остановка и оформление вопроса/Decision вместо додумывания).
 - **On budget exceeded**: если контекст слайса превышает установленный лимит — **Split-Slice** (деление слайса на более мелкие изолированные части).
-- `workflow.call_width` (`narrow` | `medium` | `wide`) пакетирует *записи* Analyze; это не второй токен-бюджет и не закрывает `analyzed` без `routing.yaml`, `slices/` и `coverage.yaml`.
+- `workflow.call_width` (`narrow` | `medium` | `wide`) — записанный профиль Analyze. `deltafuse next` всё равно выбирает один pass (routing, затем один срез capability, затем coverage). Это не второй токен-бюджет и не закрывает `analyzed` без `routing.yaml`, срезов на каждую routing primary capability и `coverage.yaml`.
 - `route` Change (`code` по умолчанию, `docs`, `ops`) выбирает write-глобы Declare/Implement. `docs`/`ops` вне `src/**` и `tests/**`; Specify не снимается.
 
 ---

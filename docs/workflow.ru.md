@@ -72,7 +72,7 @@ Intake
    - опциональные связанные capabilities и применимые политики (`policies`).
 4. Результат маршрутизации фиксируется в `routing.yaml`.
 
-Маршрутизация — первая запись Analyze. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml`. `narrow` пишет routing, затем slices, затем coverage за отдельные вызовы; `medium` — routing, затем slices и coverage вместе; `wide` может закрыть Analyze одним вызовом. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
+Маршрутизация — первая запись Analyze. `deltafuse next` выбирает один Analyze pass за вызов: `routing`, затем один `slice` на непокрытую primary capability из routing, затем `coverage`. Две capability не попадают в один `next`, в том числе при `call_width: wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml` как профиль; он не склеивает pass. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 1. Связанные claims группируются в изолированные аналитические слайсы (`slices/SLICE-NN.md`). Один файл на primary capability: две capability дают `SLICE-01` и `SLICE-02`, не один `SLICE-01`.
@@ -120,7 +120,7 @@ Analyze — итеративный шаг. Если возникают суще�
 5. Итерация повторяется до тех пор, пока все блокирующие развилки не будут закрыты терминальными решениями.
 
 ### Gate
-Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
+Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
 
 ---
 

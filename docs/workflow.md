@@ -63,7 +63,7 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
-Routing is always the first Analyze write. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) is pinned in `.deltafuse/lock.yaml`. `narrow` writes routing, then slices, then coverage across invocations; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item, including when lock `workflow.call_width` is `wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) remains pinned in `.deltafuse/lock.yaml` as a recorded profile; it does not merge passes. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 For each capability slice:
@@ -107,7 +107,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
-- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
 - Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 - `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.

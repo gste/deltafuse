@@ -56,7 +56,7 @@ stateDiagram-v2
 | Status | Description | Allowed Next Statuses | Transition Gate / Precondition |
 |---|---|---|---|
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
-| `analyzing` | Routing and slice analysis in progress. `workflow.call_width` may split writes; `analyzed` still needs routing+slices+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
+| `analyzing` | Routing and slice analysis in progress. `deltafuse next` names one Analyze pass at a time; `analyzed` still needs routing+slices covering every routing primary capability+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
 | `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |

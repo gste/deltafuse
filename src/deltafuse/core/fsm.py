@@ -17,6 +17,7 @@ from deltafuse.core.context import (
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
+from deltafuse.core.analyze import uncovered_primary_capabilities
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
@@ -689,6 +690,8 @@ def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
 
     Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
     not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    One slice file does not cover two routing primary capabilities; that is a
+    separate `analyzed` error from `uncovered_primary_capabilities`.
     """
     path = Path(change_path)
     missing: list[str] = []
@@ -744,6 +747,10 @@ def check_gate(
                 errors.append("Gate analyzed: at least one slice file in slices/ is required")
             elif artifact == "coverage.yaml":
                 errors.append("Gate analyzed: coverage.yaml is missing")
+        for cap in uncovered_primary_capabilities(change_path):
+            errors.append(
+                f"Gate analyzed: routing capability '{cap}' has no slice"
+            )
 
         # Check blocking decisions (P3)
         unresolved = find_unresolved_decisions_for_change(change_id, repo_root)

@@ -159,3 +159,55 @@ def test_next_human_blocked_is_human_gate(tmp_path: Path, repo_root: Path, capsy
     assert "Do not auto-accept Decisions" in err
     assert "Do not run an LLM skill" in err
     assert "CHG-039" in err
+
+
+def test_next_analyze_json_names_routing_pass(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-055", title="Pass json").step_intake()
+    import json
+
+    before = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
+    ret = main(["next", str(tmp_path), "--json"])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    data = json.loads(out)
+    selected = data["selected"]
+    assert selected["skill"] == "analyze"
+    assert selected["analyze_pass"] == "routing"
+    assert selected["capability"] is None
+    assert "docs/spec/_capabilities.yaml" in selected["allowed_read"]
+    assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
+
+
+def test_next_analyze_wide_still_one_slice(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
+    assert lock["workflow"]["call_width"] == "wide"
+    builder = MockChangeBuilder(
+        tmp_path, change_id="CHG-056", title="Wide serial"
+    ).step_intake(claims=["CR-001", "CR-002"])
+    routing = {
+        "change": builder.change_id,
+        "claims": {
+            "CR-001": {"primary_capability": "billing.invoices", "confidence": "high"},
+            "CR-002": {"primary_capability": "system.core", "confidence": "high"},
+        },
+    }
+    (builder.change_dir / "routing.yaml").write_text(yaml.safe_dump(routing), encoding="utf-8")
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.analyze_pass == "slice"
+    assert selected.capability == "billing.invoices"
+    assert selected.slice_id == "SLICE-01"
+
+
+def test_next_human_analyze_routing_skips_analyzed_gate(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    MockChangeBuilder(tmp_path, change_id="CHG-057", title="Human routing").step_intake()
+    ret = main(["next", str(tmp_path), "--human", "--step", "analyze"])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert "analyze_pass: routing" in out
+    assert "Do not run `check-gate --gate analyzed` yet" in out
+    assert "docs/spec/**" not in out
+    assert "docs/spec/_capabilities.yaml" in out
