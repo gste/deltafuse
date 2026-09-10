@@ -139,7 +139,8 @@ def test_next_human_declare_checklist(tmp_path: Path, repo_root: Path, capsys):
     ret = main(["next", str(tmp_path), "--human", "--step", "declare"])
     out, _ = capsys.readouterr()
     assert ret == 0
-    assert "not a second lifecycle" in out
+    assert "not a second Process" in out
+    assert "Thinker (human)" in out
     assert "docs/changes/*/evidence/red/**" in out
     assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate targeting" in out
     assert "deltafuse evidence" in out and "--phase red" in out

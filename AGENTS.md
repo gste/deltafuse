@@ -32,11 +32,19 @@ Use these names consistently:
 
 `Red` and `Green` are evidence states inside Declare and Implement, not lifecycle step names.
 
+**Process** — the lifecycle machine (kernel CLI: `next`, `evidence`, `check-gate`, `archive`). It does not write product prose or code.
+
+**Thinker** — LLM or human who writes the same Change artifacts. Skills bind an LLM; `deltafuse next --human` binds a person.
+
+**Human Gate** — a Process halt (DEC / spec / merge). Not a Thinker step.
+
+See [docs/process-and-thinker.md](docs/process-and-thinker.md).
+
 ## Change rules
 
 - Treat canonical documentation in [docs/](docs/README.md) as the authoritative process specification.
 - Update canonical docs, skills, schemas, templates, installers, validators, and tests together when a contract changes.
-- Keep skills concise and self-contained enough to work as generated snapshots. They are the LLM adapter; kernel CLI (`next`, `evidence`, `check-gate`) orchestrates.
+- Keep skills concise and self-contained enough to work as generated snapshots. They bind the Thinker to an LLM; the Process (`next`, `evidence`, `check-gate`) selects the step and checks gates.
 - Preserve user intent and do not invent product requirements.
 - Never run `git push`, destructive git commands, or merge into the default branch.
 - Do not commit secrets, credentials, or environment-specific absolute paths.

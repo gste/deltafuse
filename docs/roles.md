@@ -2,7 +2,9 @@
 
 [**English**](roles.md) | [Русский](roles.ru.md)
 
-DeltaFuse separates responsibilities between humans and AI. No role is permitted to conflate "inventing a requirement" and "writing code for it" into a single unconstrained step.
+DeltaFuse separates **Process** from **Thinker**. See [process-and-thinker.md](./process-and-thinker.md).
+
+The Process is the lifecycle machine (kernel CLI). The Thinker is an LLM or a human who writes the same Change files. Human Gates are Process stops, not Thinker steps. No role may conflate "inventing a requirement" and "writing code for it" into a single unconstrained step.
 
 ---
 
@@ -34,7 +36,7 @@ The AI is **strictly forbidden** from:
 
 ## Human Gates
 
-Humans remain the final arbiters and make decisions at five key gates:
+A Human Gate is a Process halt. Passing it is not Thinker work. Humans remain the final arbiters at five key gates:
 
 | Human Gate | Description of Human Responsibility | Artifact |
 |---|---|---|
@@ -47,6 +49,8 @@ Humans remain the final arbiters and make decisions at five key gates:
 ---
 
 ## Process Participant Roles
+
+Analyst, Spec Editor, Planner, Implementer, and Verifier are **Thinker** hats (LLM or human). Maintainer is **Human Gate** work.
 
 | Role | Performer | Primary Responsibilities |
 |---|---|---|
@@ -92,7 +96,7 @@ The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/ski
 - `implement` — implement code and record Green/Regression evidence;
 - `verify` — verify artifact convergence and archive package.
 
-Those files are the LLM adapter. The kernel CLI (`deltafuse next`, `evidence`, `check-gate`) orchestrates. Skills do not choose the next step.
+Those files bind the Thinker to an LLM. They are not the Process. The Process (`deltafuse next`, `evidence`, `check-gate`) selects the step and checks gates. Skills do not choose the next step.
 
 ### Execution Profiles
 

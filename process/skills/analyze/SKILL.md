@@ -9,9 +9,9 @@ Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterat
 
 Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-## LLM adapter
+## Thinker (LLM)
 
-This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+This file binds the Thinker to an LLM. It is not the Process. The Process owns `next`, `evidence`, and `check-gate`.
 
 1. If no Change was named, run `deltafuse next --step analyze` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).

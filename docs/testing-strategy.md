@@ -71,7 +71,7 @@ delta-fuse/
 │   │   ├── test_evidence.py          # Evidence runner: классификация и YAML
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
-│   │   ├── test_llm_adapter.py       # Skills — LLM adapter, не оркестратор
+│   │   ├── test_llm_adapter.py       # Skills — привязка мыслителя (LLM), не Процесс
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade

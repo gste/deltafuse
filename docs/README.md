@@ -4,6 +4,8 @@
 
 DeltaFuse is a context-sliced, specification-driven workflow that turns raw intent into verified code through small, strictly bounded contexts.
 
+Two names stay distinct: **Process** (the lifecycle machine) and **Thinker** (LLM or human who writes Change files). See [process-and-thinker.md](./process-and-thinker.md).
+
 ```text
 Request -> Analyze -> Delta -> Fuse -> Converge
 ```
@@ -87,6 +89,7 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 
 | Document | Purpose |
 |---|---|
+| [process-and-thinker.md](./process-and-thinker.md) ([ru](./process-and-thinker.ru.md)) | Process vs Thinker: kernel vs LLM/human who writes files |
 | [workflow.md](./workflow.md) ([ru](./workflow.ru.md)) | Lifecycle, gates, bugs, Bootstrap, and convergence |
 | [state-machine.md](./state-machine.md) ([ru](./state-machine.ru.md)) | Change, slice, task, and Decision states |
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
@@ -94,5 +97,5 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
 | [contracts/board-snapshot.md](./contracts/board-snapshot.md) ([ru](./contracts/board-snapshot.ru.md)) | Read-only board snapshot for fuse-map (`schema_version: 1`) |
 
-Executable step contracts live in `process/skills/**`; Change/artifact schemas live in `process/schemas/**`. The board snapshot schema is a **tool compatibility** contract under `docs/contracts/`, not a product artifact schema; do not copy it into consuming products.
+Executable Thinker (LLM) bindings live in `process/skills/**`; the Process machine contract lives in the kernel. Change/artifact schemas live in `process/schemas/**`. The board snapshot schema is a **tool compatibility** contract under `docs/contracts/`, not a product artifact schema; do not copy it into consuming products.
 

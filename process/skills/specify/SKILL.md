@@ -9,9 +9,9 @@ Establish the normative state from which tasks may be derived.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-## LLM adapter
+## Thinker (LLM)
 
-This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+This file binds the Thinker to an LLM. It is not the Process. The Process owns `next`, `evidence`, and `check-gate`.
 
 1. If no Change was named, run `deltafuse next --step specify` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).

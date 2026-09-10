@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         dest="changed_paths",
-        help="Relative path written by the worker (repeatable)",
+        help="Relative path written by the Thinker (repeatable)",
     )
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
 

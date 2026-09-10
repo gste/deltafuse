@@ -9,9 +9,9 @@ Create the provenance root for one logical Change.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-## LLM adapter
+## Thinker (LLM)
 
-This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+This file binds the Thinker to an LLM. It is not the Process. The Process owns `next`, `evidence`, and `check-gate`.
 
 1. If the caller asked to continue existing work without an id, run `deltafuse next` and follow that step instead of creating another Change. Use this skill only to start a new Change.
 2. Write only this step's artifacts (see Procedure).

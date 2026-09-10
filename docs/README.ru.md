@@ -4,6 +4,8 @@
 
 DeltaFuse — specification-driven workflow, преобразующий сырой запрос в проверенный код через небольшие явно ограниченные контексты.
 
+Два имени не смешивать: **Процесс** (машина lifecycle) и **Мыслитель** (LLM или человек, который пишет файлы Change). См. [process-and-thinker.ru.md](./process-and-thinker.ru.md).
+
 ```text
 Request -> Analyze -> Delta -> Fuse -> Converge
 ```
@@ -87,6 +89,7 @@ product/
 
 | Документ | Назначение |
 |---|---|
+| [process-and-thinker.ru.md](./process-and-thinker.ru.md) ([en](./process-and-thinker.md)) | Процесс и мыслитель: ядро vs LLM/человек, который пишет файлы |
 | [workflow.md](./workflow.md) | Lifecycle, gates, bugs, Bootstrap и convergence |
 | [state-machine.md](./state-machine.md) | Состояния Change, slice, task и Decision |
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
@@ -94,5 +97,5 @@ product/
 | [using.ru.md](./using.ru.md) | Установка и product integration |
 | [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
 
-Исполнимые контракты шагов находятся в `process/skills/**`, схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
+Исполняемые привязки мыслителя (LLM) — `process/skills/**`; машинный контракт Процесса — ядро. Схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
 

@@ -8,4 +8,5 @@ This is the canonical DeltaFuse framework repository. Read and follow `AGENTS.md
 - Product scaffolding is under `process/templates/**`; it must not vendor canonical process files.
 - Layout validators and smoke tests are under `tests/**`.
 - Use the lifecycle `Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> Verify`.
+- Process vs Thinker: [docs/process-and-thinker.md](docs/process-and-thinker.md).
 - Never run `git push`.

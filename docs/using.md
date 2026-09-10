@@ -57,7 +57,7 @@ The initial capability catalog is proposed by AI and accepted by a human. After 
 
 ## Kernel evidence
 
-Workers write tests and production files. The kernel records proof:
+The Thinker writes tests and production files. The Process records proof:
 
 ```text
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
@@ -67,7 +67,7 @@ Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate
 
 ## Next work
 
-Do not pass a Change id unless you mean a specific package. The kernel picks the first ready item:
+Do not pass a Change id unless you mean a specific package. The Process picks the first ready item:
 
 ```text
 deltafuse next
@@ -76,9 +76,9 @@ deltafuse next --human
 deltafuse next --step declare --json
 ```
 
-`--human` is the same step for a person: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
+`--human` is the same step for a human Thinker: read/write globs, `evidence` where needed, then `check-gate`. Not a second Process.
 
-Generated skills are the LLM adapter. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
+Generated skills bind the Thinker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
 
 Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
 

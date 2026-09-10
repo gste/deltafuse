@@ -42,10 +42,12 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert (agents_skills / "intake" / "SKILL.md").is_file()
     assert (agents_skills / "analyze" / ".deltafuse-generated.yaml").is_file()
     intake = (agents_skills / "intake" / "SKILL.md").read_text(encoding="utf-8")
-    assert "LLM adapter, not the orchestrator" in intake
+    assert "LLM adapter, not the orchestrator" not in intake
+    assert "binds the Thinker to an LLM" in intake
     assert "--gate intake" in intake
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
-    assert "kernel CLI orchestrates" in agents
+    assert "The Process" in agents
+    assert "The Thinker" in agents
 
 def test_idempotent_upgrade_preserves_custom_files(tmp_path: Path, repo_root: Path):
     # Step 1: initial install
