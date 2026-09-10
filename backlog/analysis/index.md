@@ -44,12 +44,12 @@
 |---|---|---|---|
 | [A02-01 — Сопоставить контракт ограничения контекста](packets/A02-01.md) | A01-01, A01-02, A01-03, A01-04 | done | [pass; contracts.md, F-002; результат](experiments/A02-01/result.md), [F-002](../findings/F-002.md) |
 | [A02-02 — Проверить контракт Intake](packets/A02-02.md) | A02-01 | done | [INT-01..06: pass; contracts.md, результат](experiments/A02-02/result.md) |
-| [A02-03 — Проверить контракт Route and Analyze](packets/A02-03.md) | A02-01 | done | [ANA-01..06: pass; contracts.md, результат](experiments/A02-03/result.md) |
+| [A02-03 — Проверить контракт Analyze](packets/A02-03.md) | A02-01 | done | [ANA-01..06: pass; contracts.md, результат](experiments/A02-03/result.md) |
 | [A02-04 — Проверить контракт Specify](packets/A02-04.md) | A02-01 | done | [SPC-01..06: pass; contracts.md, результат](experiments/A02-04/result.md) |
 | [A02-05 — Проверить контракт Decompose](packets/A02-05.md) | A02-01 | done | [DEC-01..06: pass; contracts.md, результат](experiments/A02-05/result.md) |
-| [A02-06 — Проверить контракт Target](packets/A02-06.md) | A02-01 | done | [TAR-01..06: pass; contracts.md, результат](experiments/A02-06/result.md) |
+| [A02-06 — Проверить контракт Declare](packets/A02-06.md) | A02-01 | done | [TAR-01..06: pass; contracts.md, результат](experiments/A02-06/result.md) |
 | [A02-07 — Проверить контракт Implement](packets/A02-07.md) | A02-01 | done | [IMP-01..06: pass; contracts.md, результат](experiments/A02-07/result.md) |
-| [A02-08 — Проверить контракт Verify, Converge and Archive](packets/A02-08.md) | A02-01 | done | [VER-01..06: pass; contracts.md, результат](experiments/A02-08/result.md) |
+| [A02-08 — Проверить контракт Verify](packets/A02-08.md) | A02-01 | done | [VER-01..06: pass; contracts.md, результат](experiments/A02-08/result.md) |
 | [A02-09 — Проверить обходы gate и terminal paths](packets/A02-09.md) | A02-02, A02-03, A02-04, A02-05, A02-06, A02-07, A02-08 | done | [BYP-01..07: pass; contracts.md, результат](experiments/A02-09/result.md) |
 | [A02-10 — Сверить RU/EN, CLI и инструкции установки](packets/A02-10.md) | A02-09 | done | [PROC-001, PROC-006, SPEC-006: pass; contracts.md, результат](experiments/A02-10/result.md) |
 

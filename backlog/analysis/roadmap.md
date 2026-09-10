@@ -63,16 +63,16 @@ RM-030 / RM-031                    (P3)
 
 | | |
 |---|---|
-| Эффект | Target не закрывает overshoot фиктивным Red и не смотрит в `_private` |
+| Эффект | Declare не закрывает overshoot фиктивным Red и не смотрит в `_private` |
 | Минимум | (1) `already-green`, если публичный оракул уже выполняется; (2) отказ Red-теста с импортом приватных символов; (3) не выдумывать падение, если поведение уже в diff TASK-001 |
-| Слои | FSM `targeting` + схема evidence; при необходимости инструкция Target — **после** гейта, не вместо |
+| Слои | FSM `targeting` + схема evidence; при необходимости инструкция Declare — **после** гейта, не вместо |
 | Критерии | `TEST-004`, `TEST-002` |
 | Acceptance | Репро S02 TASK-002: уже реализованный lift → `already-green` или halt, не `expected-failure` на private. Hidden suite A10-01 класс: свои тесты pass + hidden fail остаётся fail продукта |
 | Regression | S03 authentic Red на отсутствующий `int()` / поведение. Hidden suite не заменяется |
 | Стоимость | M |
 | Зависимости | нет (можно параллельно RM-010) |
 | Не делать | mutation score как Specify; ослабить hidden |
-| Статус | **done** 2026-09-08 — `already-green` в evidence; Red с `._` / `_private` отвергается; target-task уточнён после гейта |
+| Статус | **done** 2026-09-08 — `already-green` в evidence; Red с `._` / `_private` отвергается; declare уточнён после гейта |
 
 Тип F-009 — дефект TDD/агента, не только FSM: минимум всё равно **проверяемый гейт**, не «напишите лучше промпт».
 
@@ -114,7 +114,7 @@ RM-030 / RM-031                    (P3)
 | | |
 |---|---|
 | Эффект | Чтение/запись вне контракта фазы и переполнение task-бюджета ломают гейт, не docs |
-| Минимум | Использовать `PHASE_CONTRACTS` в `fsm.py`; `context_budget` на TASK; `validate_context_budget` на Target/Implement |
+| Минимум | Использовать `PHASE_CONTRACTS` в `fsm.py`; `context_budget` на TASK; `validate_context_budget` на Declare/Implement |
 | Слои | `fsm.py`, `task.schema.yaml`, `context.py` |
 | Критерии | `PROC-004`, `CODE-002` |
 | Acceptance | Репро F-002: TASK без budget / 50 файлов → decomposed/targeting fail. Легитимный слайс 16k/24 → pass |
@@ -203,7 +203,7 @@ RM-030 / RM-031                    (P3)
 | | |
 |---|---|
 | Эффект | S08b/S08c не требуют `limiter.py` и Red pytest по коду |
-| Минимум | Один вид Change: `code` (как сейчас) / `docs` / `ops`. docs/ops: `allowed_paths` вне src; Verify трассировки/файлов без Target Red по коду |
+| Минимум | Один вид Change: `code` (как сейчас) / `docs` / `ops`. docs/ops: `allowed_paths` вне src; Verify трассировки/файлов без Declare Red по коду |
 | Слои | routing schema, FSM, task schema |
 | Критерии | `SPEC-006`, `CODE-002`, `PROC-003` |
 | Acceptance | Фикстура S08b: только spec, без правки limiter. S08c: ops файлы, spec/src не обязаны меняться. S02/S03 **без** этого маршрута |
@@ -248,13 +248,13 @@ RM-030 / RM-031                    (P3)
 | | |
 |---|---|
 | Эффект | Короче проверяемые формулировки; больше входов теста **без** замены hidden suite |
-| Минимум | Гайд в `docs/spec` / SPEC-003: WHEN/SHALL рядом с RFC 2119. PBT — optional Target, локальный runner, не генератор Kiro |
+| Минимум | Гайд в `docs/spec` / SPEC-003: WHEN/SHALL рядом с RFC 2119. PBT — optional Declare, локальный runner, не генератор Kiro |
 | Слои | docs; optional tests |
 | Acceptance | Редакционный: новые req в гайде. PBT: отдельный Change, skip если нет runner |
 | Regression | Не `.kiro` файлы; не ослаблять F-010; не Cucumber |
 | Стоимость | S (EARS) / M (PBT) |
 | Зависимости | RM-010 для смысла SHALL |
-| Статус | **done** 2026-09-09 — EARS WHEN/SHALL рядом с RFC 2119 в docs/spec template и Specify; PBT optional Target, skip без runner; не `.kiro`, не Cucumber, не замена hidden |
+| Статус | **done** 2026-09-09 — EARS WHEN/SHALL рядом с RFC 2119 в docs/spec template и Specify; PBT optional Declare, skip без runner; не `.kiro`, не Cucumber, не замена hidden |
 
 ---
 

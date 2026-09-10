@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import shutil
 
 import yaml
@@ -260,6 +261,36 @@ def test_compare_table():
     assert "retries" in text
 
 
+def test_bench_cli_init_existing_dir_suggests_force(
+    tmp_path: Path, repo_root: Path, capsys, monkeypatch
+):
+    monkeypatch.chdir(repo_root)
+    product = tmp_path / "cli-m01"
+    assert main(["bench", "init", "M01-cooldown", str(product)]) == 0
+    leftover = product / "docs" / "changes" / "stale.md"
+    leftover.parent.mkdir(parents=True, exist_ok=True)
+    leftover.write_text("stale", encoding="utf-8")
+    capsys.readouterr()
+    ret = main(["bench", "init", "M01-cooldown", str(product)])
+    _, err = capsys.readouterr()
+    assert ret == 2
+    assert "already exists" in err
+    assert "--force" in err
+    assert "deltafuse bench init M01-cooldown" in err
+    assert leftover.is_file()
+    assert main(["bench", "init", "M01-cooldown", str(product), "--force"]) == 0
+    assert not leftover.is_file()
+    assert (product / ".deltafuse" / "bench.yaml").is_file()
+    assert (product / "docs" / "intake" / "M01-cooldown.md").is_file()
+
+
+def test_bench_init_empty_dir_does_not_need_force(tmp_path: Path, repo_root: Path):
+    product = tmp_path / "empty-m01"
+    product.mkdir()
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    assert (product / ".deltafuse" / "bench.yaml").is_file()
+
+
 def test_bench_cli_init_prints_worker_prompt(tmp_path: Path, repo_root: Path, capsys, monkeypatch):
     monkeypatch.chdir(repo_root)
     product = tmp_path / "cli-m01"
@@ -404,6 +435,8 @@ def test_journal_retries_feed_process_score(tmp_path: Path, repo_root: Path):
     assert report["stages"]["intake"]["gate_attempts"] == 3
     assert report["efficiency"] == round(report["correctness"] * report["process"] / 100.0, 1)
     assert report["score"] == round(0.6 * report["correctness"] + 0.4 * report["process"], 1)
+    assert report["attempts"]["source"] == "core"
+    assert report["attempts"]["retries"]["check_gate"] == 2
 
 
 def test_check_gate_cli_appends_journal(tmp_path: Path, repo_root: Path):
@@ -421,6 +454,89 @@ def test_check_gate_cli_appends_journal(tmp_path: Path, repo_root: Path):
     assert events[-1]["cmd"] == "check-gate"
     assert events[-1]["gate"] == "intake"
     assert events[-1]["ok"] is True
+
+
+def test_core_commands_append_jsonl_journal(tmp_path: Path, repo_root: Path, capsys):
+    from deltafuse.bench.journal import JOURNAL_JSONL, collect_attempts, journal_path, load_events
+
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    builder = MockChangeBuilder(product, change_id="CHG-091", title="Penalty").step_intake(
+        claims=["CR-001", "CR-002", "CR-003"]
+    )
+    assert main(["next", str(product)]) == 0
+    assert main(["check-gate", str(builder.change_dir), "--gate", "analyzed"]) == 1
+    path = journal_path(product)
+    assert path == product / JOURNAL_JSONL
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) >= 2
+    first = json.loads(lines[0])
+    assert first["v"] == 1
+    assert first["cmd"] == "next"
+    assert first["seq"] == 1
+    fail = json.loads(lines[-1])
+    assert fail["cmd"] == "check-gate"
+    assert fail["ok"] is False
+    assert fail["gate"] == "analyzed"
+    assert fail["n_errors"] >= 1
+    assert fail["errors"]
+    events = load_events(product)
+    rolled = collect_attempts(events)
+    assert rolled["source"] == "core"
+    assert rolled["commands"]["next"]["n"] >= 1
+    assert rolled["gates"]["analyzed"]["fail"] >= 1
+    cycles = [row for row in rolled["cycles"] if row.get("gate") == "analyzed"]
+    assert cycles
+    assert cycles[0]["ok"] is False
+    assert cycles[0]["fail"] >= 1
+    capsys.readouterr()
+    out_ret = main(["bench", "journal", str(product)])
+    out, _ = capsys.readouterr()
+    assert out_ret == 0
+    payload = json.loads(out)
+    assert payload["source"] == "core"
+    assert payload["commands"]["check-gate"]["fail"] >= 1
+
+
+def test_collect_attempts_groups_gate_retries():
+    from deltafuse.bench.journal import collect_attempts
+
+    events = [
+        {"seq": 1, "cmd": "check-gate", "gate": "intake", "ok": False},
+        {"seq": 2, "cmd": "check-gate", "gate": "intake", "ok": False},
+        {"seq": 3, "cmd": "check-gate", "gate": "intake", "ok": True},
+        {"seq": 4, "cmd": "next", "ok": True, "skill": "analyze"},
+        {"seq": 5, "cmd": "check-gate", "gate": "analyzed", "ok": True},
+    ]
+    rolled = collect_attempts(events)
+    assert rolled["retries"]["check_gate"] == 2
+    intake = next(row for row in rolled["cycles"] if row.get("gate") == "intake")
+    assert intake["n"] == 3
+    assert intake["fail"] == 2
+    assert intake["ok"] is True
+    assert intake["seq"] == [1, 2, 3]
+
+
+def test_load_events_falls_back_to_yaml(tmp_path: Path, repo_root: Path):
+    from deltafuse.bench.journal import JOURNAL_YAML, load_events
+
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    (product / JOURNAL_YAML).write_text(
+        yaml.dump(
+            {
+                "events": [
+                    {"seq": 1, "cmd": "check-gate", "gate": "intake", "ok": False},
+                    {"seq": 2, "cmd": "check-gate", "gate": "intake", "ok": True},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    events = load_events(product)
+    assert len(events) == 2
+    assert events[0]["ok"] is False
+    assert events[1]["ok"] is True
 
 
 def _install_m02_impl(product: Path) -> None:
@@ -517,6 +633,19 @@ def test_m02_init_keeps_oracle_off_disk(tmp_path: Path, repo_root: Path):
     limiter = (product / "src" / "ratelimit" / "limiter.py").read_text(encoding="utf-8")
     assert "get_stats" not in limiter
     assert "redis" not in limiter.lower()
+    intake = (product / "docs" / "intake" / "M02-policy-stats.md").read_text(encoding="utf-8")
+    for token in (
+        "get_stats",
+        "peak_rate",
+        "token_rejects",
+        "policy_rejects",
+        "successful_calls",
+        "reject_threshold",
+        "block_seconds",
+        "src/ratelimit/stats.py",
+        "src/ratelimit/policy.py",
+    ):
+        assert token in intake
 
 
 def test_m02_specify_requires_both_live_specs(tmp_path: Path, repo_root: Path):
@@ -545,6 +674,12 @@ def test_m02_specify_requires_both_live_specs(tmp_path: Path, repo_root: Path):
         c["id"].startswith("live.spec.rate_policy") and c["pass"]
         for c in again["stages"]["specify"]["checks"]
     )
+    lying = [
+        c
+        for c in again["stages"]["specify"]["checks"]
+        if c["pass"] and "missing" in str(c.get("detail") or "")
+    ]
+    assert lying == []
 
 
 def test_m02_hidden_suite_fails_on_seed(tmp_path: Path, repo_root: Path):

@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from deltafuse.bench import BenchError
+from deltafuse.bench import BenchError, framework_root as package_root
 from deltafuse.bench.loader import load_case, resolve_cases_root
 from deltafuse.core.hasher import compute_file_sha256
 from deltafuse.core.installer import install
@@ -27,6 +27,34 @@ def _copy_tree(src: Path, dest: Path) -> None:
         shutil.copy2(item, target)
 
 
+def _occupied(path: Path) -> bool:
+    if path.is_file():
+        return True
+    if not path.is_dir():
+        return False
+    try:
+        next(path.iterdir())
+    except StopIteration:
+        return False
+    return True
+
+
+def _looks_like_framework(path: Path) -> bool:
+    return (path / "src" / "deltafuse").is_dir() and (path / "process" / "bench" / "cases").is_dir()
+
+
+def _recreate(product: Path, *, framework: Path) -> None:
+    resolved = product.resolve()
+    if resolved == resolved.anchor or len(resolved.parts) < 2:
+        raise BenchError(f"refusing to recreate {resolved}")
+    if _looks_like_framework(resolved) or resolved == framework.resolve():
+        raise BenchError(f"refusing to recreate the framework at {resolved}")
+    try:
+        shutil.rmtree(resolved)
+    except OSError as ex:
+        raise BenchError(f"could not recreate {resolved}: {ex}") from ex
+
+
 def init_bench_product(
     case_id: str,
     product_dir: Path | str,
@@ -37,9 +65,16 @@ def init_bench_product(
 ) -> dict[str, Any]:
     """Create a worker sandbox. Oracle and hidden_suite stay in the judge pack."""
     product = Path(product_dir).resolve()
-    marker = product / ".deltafuse" / "bench.yaml"
-    if marker.is_file() and not force:
-        raise BenchError(f"{product} already has a bench workspace (use --force)")
+    if product.is_file():
+        raise BenchError(f"{product} is a file, not a directory")
+    fw = Path(framework_root).resolve() if framework_root is not None else package_root()
+    if _occupied(product):
+        if not force:
+            raise BenchError(
+                f"{product} already exists. Recreate a clean sandbox with:\n"
+                f"  deltafuse bench init {case_id} {product} --force"
+            )
+        _recreate(product, framework=fw)
     cases = resolve_cases_root(pack_root, default_framework=True)
     case = load_case(case_id, cases, oracle=False)
     case_dir: Path = case["dir"]
@@ -65,6 +100,7 @@ def init_bench_product(
         "intake": f"docs/intake/{intake_name}",
         "seed_hashes": seed_hashes,
     }
+    marker = product / ".deltafuse" / "bench.yaml"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     return meta

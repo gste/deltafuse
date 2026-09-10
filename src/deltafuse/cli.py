@@ -32,6 +32,12 @@ from deltafuse.evals.reporter import export_report
 from deltafuse.evals.runner import run_eval
 
 
+def _journal(start: Path | str, **event: object) -> None:
+    from deltafuse.bench.journal import record_event
+
+    record_event(start, **event)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         if hasattr(sys.stdout, "reconfigure"):
@@ -160,8 +166,13 @@ def main(argv: list[str] | None = None) -> int:
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
     bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
     bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
-    bench_init.add_argument("product_dir", help="Empty or new worker sandbox directory")
-    bench_init.add_argument("--force", "-f", action="store_true", help="Overwrite an existing bench workspace")
+    bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
+    bench_init.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Recreate the sandbox if the directory already exists",
+    )
     bench_init.add_argument(
         "--pack",
         default=None,
@@ -186,6 +197,11 @@ def main(argv: list[str] | None = None) -> int:
     bench_cmp = bench_sub.add_parser("compare", help="Compare two bench score JSON files")
     bench_cmp.add_argument("left", help="First score JSON")
     bench_cmp.add_argument("right", help="Second score JSON")
+    bench_journal = bench_sub.add_parser(
+        "journal",
+        help="Judge: collect Core attempts from a sandbox journal (no LLM)",
+    )
+    bench_journal.add_argument("product_dir", help="Product root created by bench init")
 
     # eval command (Stage 5)
     eval_parser = subparsers.add_parser("eval", help="Run LLM Eval benchmark against DeltaFuse dataset and gatekeepers")
@@ -215,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "validate":
         target = Path(args.change_path)
         errors = validate_change_package(target)
+        _journal(target, cmd="validate", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -224,11 +241,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "check-gate":
-        from deltafuse.bench.journal import record_event
-
         target = Path(args.change_path)
         errors = check_gate(target, args.gate)
-        record_event(target, cmd="check-gate", gate=args.gate, ok=not errors)
+        _journal(
+            target,
+            cmd="check-gate",
+            gate=args.gate,
+            ok=not errors,
+            errors=errors,
+            n_errors=len(errors),
+        )
         if errors:
             print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
             for err in errors:
@@ -241,18 +263,22 @@ def main(argv: list[str] | None = None) -> int:
         target = Path(args.change_path)
         try:
             dest = archive_change(target, force=args.force)
+            _journal(target, cmd="archive", ok=True)
             print(f"Change package {target.name} successfully archived to {dest}")
             return 0
         except ArchivalError as ae:
+            _journal(target, cmd="archive", ok=False, errors=[str(ae)])
             print(f"Archival failed: {ae}", file=sys.stderr)
             return 1
         except Exception as ex:
+            _journal(target, cmd="archive", ok=False, errors=[str(ex)])
             print(f"Unexpected error during archival: {ex}", file=sys.stderr)
             return 2
 
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
+        _journal(target, cmd="validate-layout", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -262,8 +288,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "evidence":
-        from deltafuse.bench.journal import record_event
-
         try:
             outcome = run_evidence(
                 Path(args.change_path),
@@ -274,16 +298,24 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=args.timeout,
             )
         except EvidenceRunError as ex:
-            record_event(
-                Path(args.change_path), cmd="evidence", phase=args.phase, ok=False
+            _journal(
+                Path(args.change_path),
+                cmd="evidence",
+                phase=args.phase,
+                task=args.task,
+                ok=False,
+                errors=[str(ex)],
             )
             print(f"Evidence run failed: {ex}", file=sys.stderr)
             return 2
-        record_event(
+        _journal(
             Path(args.change_path),
             cmd="evidence",
             phase=args.phase,
+            task=args.task,
             ok=bool(outcome.authentic),
+            errors=list(outcome.errors or []),
+            n_errors=len(outcome.errors or []),
         )
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
@@ -295,31 +327,41 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     elif args.command == "coverage":
-        from deltafuse.bench.journal import record_event
-
         try:
             dest = write_coverage(Path(args.change_path))
         except CoverageError as ex:
-            record_event(Path(args.change_path), cmd="coverage", ok=False)
+            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 1
         except Exception as ex:
-            record_event(Path(args.change_path), cmd="coverage", ok=False)
+            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 2
-        record_event(Path(args.change_path), cmd="coverage", ok=True)
+        _journal(Path(args.change_path), cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
     elif args.command == "next":
         target = Path(args.path)
+        mode = "list" if args.list else "json" if args.json else "human" if args.human else "select"
         try:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
             queue = build_work_queue(target, only_change=only)
         except QueueError as ex:
+            _journal(target, cmd="next", ok=False, mode=mode, errors=[str(ex)])
             print(f"Next failed: {ex}", file=sys.stderr)
             return 2
         selected = select_next(queue, step=args.step)
+        _journal(
+            target if only is None else only,
+            cmd="next",
+            ok=True if mode in {"list", "json"} else selected is not None,
+            mode=mode,
+            skill=selected.skill if selected is not None else None,
+            step=selected.step if selected is not None else None,
+            change=selected.change_id if selected is not None else None,
+            empty=selected is None,
+        )
         guide = (
             format_human_guide(selected)
             if selected is not None
@@ -346,14 +388,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if selected is not None else 1
 
     elif args.command == "board":
+        target = Path(args.product_path)
         try:
             snapshot = build_board_snapshot(
-                Path(args.product_path),
+                target,
                 include_archive=args.archive,
             )
         except BoardError as ex:
+            _journal(target, cmd="board", ok=False, errors=[str(ex)])
             print(f"Board failed: {ex}", file=sys.stderr)
             return 2
+        _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
 
@@ -399,6 +444,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 except Exception as ex:
                     errors.append(f"{tf.name}: {ex}")
+        _journal(target, cmd="lint-context", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -449,6 +495,12 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print(format_score(report))
                 return 0 if report.get("pass") else 1
+            if args.bench_cmd == "journal":
+                from deltafuse.bench.journal import collect_attempts, load_events
+
+                payload = collect_attempts(load_events(Path(args.product_dir).resolve()))
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
             left = json.loads(Path(args.left).read_text(encoding="utf-8"))
             right = json.loads(Path(args.right).read_text(encoding="utf-8"))
             print(compare_reports(left, right))

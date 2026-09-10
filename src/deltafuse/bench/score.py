@@ -14,7 +14,7 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError
-from deltafuse.bench.journal import load_events, summarize_journal
+from deltafuse.bench.journal import collect_attempts, load_events, summarize_journal
 from deltafuse.bench.loader import STAGES, load_case, resolve_cases_root
 from deltafuse.core.analyze import load_slice_records, routing_claim_capabilities
 from deltafuse.core.fsm import check_gate
@@ -75,10 +75,11 @@ def assert_sandbox_clean(product: Path) -> None:
         )
 
 
-def _check(cid: str, ok: bool, detail: str = "") -> dict[str, Any]:
+def _check(cid: str, ok: bool, detail: str = "", *, fail: str | None = None) -> dict[str, Any]:
     row: dict[str, Any] = {"id": cid, "pass": bool(ok)}
-    if detail:
-        row["detail"] = detail
+    text = detail if ok or fail is None else fail
+    if text:
+        row["detail"] = text
     return row
 
 
@@ -291,7 +292,14 @@ def _apply_points(stages: dict[str, Any], case: dict[str, Any]) -> tuple[float, 
 def score_intake(product: Path, case: dict[str, Any], change_dir: Path | None) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     status = _status(change_dir)
-    checks.append(_check("present", status in _AFTER_INTAKE, "need Change from /intake"))
+    checks.append(
+        _check(
+            "present",
+            status in _AFTER_INTAKE,
+            "Change present",
+            fail="need Change from /intake",
+        )
+    )
     if status not in _AFTER_INTAKE:
         return _stage_result(checks, {})
     checks.append(
@@ -416,7 +424,8 @@ def score_specify(
                 _check(
                     _spec_token_id(tok, spec_path=rel if multi else None),
                     ok,
-                    f"missing {tok!r} in {rel}",
+                    f"{tok!r} in {rel}",
+                    fail=f"missing {tok!r} in {rel}",
                 )
             )
     catalog_caps = case.get("catalog_must_contain")
@@ -427,7 +436,8 @@ def score_specify(
             _check(
                 f"catalog.{_slug(str(cap))}",
                 _catalog_has_capability(product, str(cap)),
-                f"{cap} missing from docs/spec/_capabilities.yaml",
+                f"{cap} in catalog",
+                fail=f"{cap} missing from docs/spec/_capabilities.yaml",
             )
         )
     checks.append(_check("spec-delta", (change_dir / "spec-delta.md").is_file()))
@@ -481,7 +491,14 @@ def score_declare(product: Path, case: dict[str, Any], change_dir: Path | None) 
     )
     red_dir = change_dir / "evidence" / "red"
     red_files = list(red_dir.glob("*.yaml")) if red_dir.is_dir() else []
-    checks.append(_check("evidence.red", bool(red_files), "need evidence/red"))
+    checks.append(
+        _check(
+            "evidence.red",
+            bool(red_files),
+            f"{len(red_files)} red file(s)",
+            fail="need evidence/red",
+        )
+    )
     private = False
     for rf in red_files:
         data = _load_yaml(rf)
@@ -604,7 +621,14 @@ def score_implement(
                 )
                 if row_id and len(tokens) > 1:
                     cid = f"{row_id}.{_slug(tok)}"
-                checks.append(_check(cid, tok in text, f"missing {tok!r} in {rel}"))
+                checks.append(
+                    _check(
+                        cid,
+                        tok in text,
+                        f"{tok!r} in {rel}",
+                        fail=f"missing {tok!r} in {rel}",
+                    )
+                )
     else:
         limiter_path = product / "src" / "ratelimit" / "limiter.py"
         limiter = limiter_path.read_text(encoding="utf-8") if limiter_path.is_file() else ""
@@ -689,7 +713,8 @@ def score_product(
             )
         else:
             stages[name] = score_verify(product, case, change_dir)
-    journal = summarize_journal(load_events(product))
+    events = load_events(product)
+    journal = summarize_journal(events)
     by_stage = journal.get("by_stage") or {}
     for name, row in stages.items():
         extra = by_stage.get(name) or {}
@@ -750,6 +775,7 @@ def score_product(
             "gate_attempts": journal.get("gate_attempts", 0),
             "by_gate": journal.get("check_gate") or {},
         },
+        "attempts": collect_attempts(events),
     }
 
 

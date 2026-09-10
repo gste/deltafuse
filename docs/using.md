@@ -98,10 +98,11 @@ Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/
 
 ## Worker bench
 
-Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `bench score`.
+Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `bench score`. Attempts come from the Core journal, not from the Worker.
 
 ```text
 deltafuse bench init M02-policy-stats <product-dir>
+deltafuse bench journal <product-dir>
 deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```

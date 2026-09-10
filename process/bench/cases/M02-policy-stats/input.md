@@ -1,23 +1,26 @@
 # User request: usage stats and a reject policy on the existing limiter
 
-We already have an in-process token-bucket (`security.ratelimit`). This change must add **two** things that work together. Do not treat this as a single-file tweak.
+We already have an in-process token-bucket (`security.ratelimit`). This change must add **two** capabilities that work together. Do not treat this as a single-file tweak: add `src/ratelimit/stats.py` and `src/ratelimit/policy.py`, and keep `get_stats` on `TokenBucketLimiter` in `src/ratelimit/limiter.py`.
 
 1. New capability `monitoring.usage_stats`
-   For each key, record how `consume` is used:
-   - total calls
-   - successes
-   - rejections
-   - peak load: the highest number of `consume` calls observed in any rolling 1-second window
-   Expose `get_stats(key)` on the limiter. An unknown key returns zeros and must not create usage.
-   Rejections caused by an empty bucket and rejections caused by a policy block MUST be stored as separate counters. Do not collapse them into one number.
+   For each key, `get_stats(key)` MUST return:
+   - `total_calls`
+   - `successful_calls`
+   - `rejected_calls` (equals `token_rejects` + `policy_rejects`)
+   - `token_rejects` — empty-bucket rejects
+   - `policy_rejects` — rejects while the key is policy-blocked
+   - `peak_rate` — highest number of `consume` calls in any rolling 1-second window
+   - `blocked_until` — monotonic deadline, or 0 when not blocked
+   An unknown key returns zeros for those fields and must not create usage state.
 
 2. New capability `security.rate_policy`
-   After a configurable number of **consecutive** failed `consume` calls (default 50), block that key for a configurable duration (default 300 seconds).
+   `TokenBucketLimiter` MUST accept `reject_threshold` (default 50) and `block_seconds` (default 300.0).
+   After `reject_threshold` **consecutive** failed `consume` calls, block that key for `block_seconds`.
    While blocked:
    - `consume` returns `False` immediately
    - tokens MUST NOT be deducted
    - `is_blocked(key)` is `True`
-   Stats MUST still record those blocked calls as policy rejections, and include `blocked_until` (monotonic deadline, or 0 when not blocked).
+   - stats record those calls as `policy_rejects` and expose `blocked_until`
    A successful consume resets the consecutive-failure streak. Non-consecutive failures must not trigger the block.
    After the block expires, normal debit resumes.
 

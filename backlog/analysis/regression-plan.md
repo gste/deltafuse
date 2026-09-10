@@ -70,7 +70,7 @@ R0 `fail` → чинить контракт, не орнита.
 |---|---|---|
 | **S05** Specify | `specified` без `usage_stats.md` / `rate_policy.md` (F-010) | `specified` **fail**, пока нет live файлов; pass только с записанными модулями |
 | **S01** пустой продукт | vacuous specify | то же: нет catalog/live spec → не `specified` |
-| **S02** Target TASK-002 | фиктивный Red / `_private` (F-009) | `already-green` или halt; не `expected-failure` на private |
+| **S02** Declare TASK-002 | фиктивный Red / `_private` (F-009) | `already-green` или halt; не `expected-failure` на private |
 | **S04** Decision | 3/3 `blocked-on-decision` | **сохранить** стоп; агент не auto-accept |
 
 Hidden suite по-прежнему не в prompt. Если свои тесты модели зелёные, а hidden красный — это fail продукта, не skip.
@@ -99,7 +99,7 @@ Code Change (S02/S03) не должен пройти Implement без regression
 
 | Тема | Зачем | Skip если |
 |---|---|---|
-| Verify / Archive S02 или S03 | A09: 0 `converged` | R1 не дошёл до Target |
+| Verify / Archive S02 или S03 | A09: 0 `converged` | R1 не дошёл до Declare |
 | S10 interrupt | PROC-003 на SUT | нет времени на рестарт mid-phase |
 | S11 два Change | F-006 на серии, не только yaml hash | R1 F-006 контракт уже есть |
 | Analog live `:1240` | A11-06 not-tested | **не в этой очереди** (ядро не заменять) |

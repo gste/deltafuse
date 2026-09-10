@@ -120,7 +120,7 @@ Slash-SDD и converge-без-oracle; fluid «no gates»; SSOT только по�
 | Приоритет | Что | Ожидаемый эффект | Цена (грубо) |
 |---|---|---|---|
 | P0 | F-010: `specified` требует live paths из delta | holdout Specify перестаёт быть vacuous | FSM + тесты гейта; не skill-промпт |
-| P0 | F-009: аутентичный Red / запрет private | Target не закрывает overshoot | schema/FSM Target; hidden suite остаётся |
+| P0 | F-009: аутентичный Red / запрет private | Declare не закрывает overshoot | schema/FSM Declare; hidden suite остаётся |
 | P0 | F-004: каноникализация путей | нет чтения вне repo | `integrity.py` + fuzz |
 | P0 | F-006: stale evidence | нет silent Green после смены spec | hash ревизии на evidence |
 | P1 | F-001 `.gitattributes` | bash + lock hash | один файл |

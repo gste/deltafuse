@@ -23,6 +23,8 @@ live_specs:
   - path: docs/spec/monitoring/usage_stats.md
     must_contain:
       - get_stats
+      - successful_calls
+      - rejected_calls
       - peak_rate
       - token_rejects
       - policy_rejects
@@ -69,6 +71,8 @@ check_weights:
   hidden.suite.test_seed_consume_still_works: 2
   live.spec.usage_stats.token_rejects: 3
   live.spec.usage_stats.policy_rejects: 3
+  live.spec.usage_stats.successful_calls: 3
+  live.spec.usage_stats.rejected_calls: 3
   live.spec.rate_policy.consecutive: 3
   routing.capability: 4
   slices.capability: 4

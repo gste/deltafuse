@@ -95,7 +95,7 @@
 - **Слой:** schema `routing` / FSM / task `allowed_paths`
 - **Приоритет-кандидат:** P2; **после** F-010; один пункт roadmap с Q-006
 
-**Вопрос.** Должен ли lifecycle пропускать Target/Implement (или требовать только docs-артефакты), когда `code_change_expected: false` / docs-only, вместо обязательного Red pytest и Green по `src/`?
+**Вопрос.** Должен ли lifecycle пропускать Declare/Implement (или требовать только docs-артефакты), когда `code_change_expected: false` / docs-only, вместо обязательного Red pytest и Green по `src/`?
 
 **Наблюдение.** S08b: harness требовал `limiter.py`; модель ломала код. Нет `type: docs` в routing.
 

@@ -41,7 +41,7 @@ Evidence: [inventory.json](../experiments/A00-02/inventory.json) — 116 пут�
 | `roles.md`, `roles.ru.md` | Authority/human decisions в skills и Decision schema | A01, A02, A06 |
 | `context-model.md`, `context-model.ru.md` | Контекст skills, config, `core/context.py`, context tests | A02-01, A03 |
 | `using.md`, `using.ru.md` | Pin/lock, installer, scripts, layout validators | A02-10, A06 |
-| `testing-strategy.md` | Target/Implement/Verify, evidence и тестовые наборы | A01-03, A07 |
+| `testing-strategy.md` | Declare/Implement/Verify, evidence и тестовые наборы | A01-03, A07 |
 | `README.md`, `README.ru.md` | Индекс canonical docs и граница framework/product | Навигация |
 
 Корневые README представляют назначение и установку; `AGENTS.md` задаёт правила работы в canonical repository. `.github/copilot-instructions.md` отсылает к AGENTS и не является отдельной реализацией lifecycle.
@@ -53,14 +53,14 @@ Evidence: [inventory.json](../experiments/A00-02/inventory.json) — 116 пут�
 | Фаза | Skill | Основные schema / templates | Кандидаты runtime и tests |
 |---|---|---|---|
 | Intake | `intake` | change / change.yaml, request.md | `fsm.validate_change_package/check_gate`; test_fsm, test_golden_workflow |
-| Route and Analyze | `analyze-change` | routing, slice, capability, decision, coverage / routing.yaml, slices/SLICE-01.md, analysis.md, design.md, coverage.yaml | `fsm`, `integrity`, `graph`, `context`; test_integrity, test_graph, test_failure_modes |
-| Specify | `specify-change` | spec-delta, decision / spec-delta.md; product spec/Decision templates | `fsm`, `integrity.validate_spec_ref/validate_decision_ref`; test_fsm, test_integrity, test_noop_workflow |
-| Decompose | `decompose-change` | task, slice / tasks/TASK-001-template.md, slices/SLICE-01.md | `graph.topological_sort`, `fsm`; test_graph, test_fsm |
-| Target | `target-task` | task, evidence / evidence/red/evidence.yaml | `fsm.check_gate`; test_fsm_mutations, test_golden_workflow |
-| Implement | `implement-task` | task, evidence / evidence/green/evidence.yaml | `fsm.check_gate`; test_fsm_mutations, test_golden_workflow |
-| Verify, Converge and Archive | `verify-change` | coverage, change, evidence / coverage.yaml, verification.md | `fsm`, `integrity.validate_coverage_completeness`, `archiver.archive_change`; test_golden_workflow, test_terminal_workflows |
+| Analyze | `analyze` | routing, slice, capability, decision, coverage / routing.yaml, slices/SLICE-01.md, analysis.md, design.md, coverage.yaml | `fsm`, `integrity`, `graph`, `context`; test_integrity, test_graph, test_failure_modes |
+| Specify | `specify` | spec-delta, decision / spec-delta.md; product spec/Decision templates | `fsm`, `integrity.validate_spec_ref/validate_decision_ref`; test_fsm, test_integrity, test_noop_workflow |
+| Decompose | `decompose` | task, slice / tasks/TASK-001-template.md, slices/SLICE-01.md | `graph.topological_sort`, `fsm`; test_graph, test_fsm |
+| Declare | `declare` | task, evidence / evidence/red/evidence.yaml | `fsm.check_gate`; test_fsm_mutations, test_golden_workflow |
+| Implement | `implement` | task, evidence / evidence/green/evidence.yaml | `fsm.check_gate`; test_fsm_mutations, test_golden_workflow |
+| Verify | `verify` | coverage, change, evidence / coverage.yaml, verification.md | `fsm`, `integrity.validate_coverage_completeness`, `archiver.archive_change`; test_golden_workflow, test_terminal_workflows |
 
-Red и Green — evidence states внутри Target и Implement. Наличие семи текстовых skills не доказывает, что CLI самостоятельно исполняет семь агентных фаз; интерфейс CLI перечислен отдельно.
+Red и Green — evidence states внутри Declare и Implement. Наличие семи текстовых skills не доказывает, что CLI самостоятельно исполняет семь агентных фаз; интерфейс CLI перечислен отдельно.
 
 ## Девять схем и шаблоны
 

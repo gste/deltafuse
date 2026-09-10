@@ -64,7 +64,7 @@
 | Analyze coverage | то же | ~13–23 | ~24–45 | 1 | нет |
 | Specify | cal S02/S03 pass; holdout чаще fail | ~16–28 | ~28–91 | до 3 | нет |
 | Decompose | cal S02/S03; holdout S01/S08b/c | ~20–35 | ~54–147 | до 3 | нет |
-| Target | cal S02/S03; S08b r2 already-green | ~20–42 | ~29–63 | 1–2 | нет |
+| Declare | cal S02/S03; S08b r2 already-green | ~20–42 | ~29–63 | 1–2 | нет |
 | Implement | cal S02/S03; S11 r1 CHG-B | ~21–36 | ~33–58 | 1–3 | нет |
 | Verify | почти везде **not-run**; S11 r1 fail | S11 ~39 / 75 | — | 3 | — |
 | Converge / Archive | **not-run** на ornith | — | — | — | — |
@@ -108,7 +108,7 @@ VRAM peaks: калибровка S02 ~5370–5450 MiB; holdout S12 ~4206–4796 
 | Hidden S04 | pass (DEC, без Specify) | — |
 | Hidden holdout | not-run, кроме S08b r2 **fail** и S09 r1 **pass** | S01, S05–S08a, S08c, S10–S12 pytest hidden |
 | Fault injection A07-03 | **not-run** на ornith | весь holdout |
-| TEST-004 Red | S03 authentic `int()`; S02 TASK-002 F-009 | holdout Target редко |
+| TEST-004 Red | S03 authentic `int()`; S02 TASK-002 F-009 | holdout Declare редко |
 | Framework tests | A07-02, не A09 | не смешивать с продуктом |
 
 ## Актуальность spec после следующего Change

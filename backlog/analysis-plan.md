@@ -100,7 +100,7 @@ backlog/
 
 Построить матрицу `инвариант → документ → skill → schema/template → runtime gate → положительный/отрицательный тест`. Для каждой строки различать декларацию, структурную валидацию и семантический контроль.
 
-Проверить полный цикл `Intake → Route and Analyze → Specify → Decompose → Target → Implement → Verify, Converge and Archive`: pre/postconditions, разрешённые чтения/записи, единственность владельца данных, статусы и переходы Change/Slice/Task/Decision/Evidence. Проверить согласованность RU/EN, CLI и инструкций установки.
+Проверить полный цикл `Intake → Analyze → Specify → Decompose → Declare → Implement → Verify`: pre/postconditions, разрешённые чтения/записи, единственность владельца данных, статусы и переходы Change/Slice/Task/Decision/Evidence. Проверить согласованность RU/EN, CLI и инструкций установки.
 
 Особые вопросы: можно ли пропустить gate, подменив status в YAML; кто и чем удостоверяет human approval; что происходит после rejected/superseded Decision; как инвалидируются анализ, задачи и evidence при изменении spec; различаются ли no-op, duplicate, rejected и not-reproduced; возможна ли работа зависимых задач при Change-level требовании Red для всех задач.
 
@@ -156,7 +156,7 @@ backlog/
 
 ### A07. Проверить точность и эффективность тестов
 
-**Зависимости:** A01, A02. **Входы:** Target/Implement/Verify, evidence/task schemas, `docs/testing-strategy.md`, релевантные тесты по одной группе.
+**Зависимости:** A01, A02. **Входы:** Declare/Implement/Verify, evidence/task schemas, `docs/testing-strategy.md`, релевантные тесты по одной группе.
 
 Разделить два предмета: тесты самого DeltaFuse и способность DeltaFuse создавать хорошие тесты продукта. Проверить источник oracle: тест не должен лишь повторять текущий код или ошибочную интерпретацию той же модели.
 

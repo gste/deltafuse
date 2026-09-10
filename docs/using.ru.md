@@ -98,10 +98,11 @@ deltafuse next --step declare --json
 
 ## Бенчмарк воркера
 
-Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`.
+Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
 
 ```text
 deltafuse bench init M02-policy-stats <product-dir>
+deltafuse bench journal <product-dir>
 deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```

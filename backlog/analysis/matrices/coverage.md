@@ -50,7 +50,7 @@
 | SPEC-001 | **pass** цепочка A04-01 | **fail** holdout (F-010: specified без live paths; claims не в `docs/spec`) | F-010 | A04-01; A09-13; A09-02/03 |
 | SPEC-002 | **pass** ANA-02, AB-06 | **pass** S04 3/3 DEC; **fail** S06 ложный DEC; S09 r2/r3 нет terminal | F- нет отдельного; поведение S06 | A09-01c; A09-04; A09-09; [ablation AB-06](ablation.md) |
 | SPEC-003 | **pass** A04-02 RFC 2119 в контракте | **not-tested** Ratio(Normative) на ornith spec | PP-03 сохранить; EARS исследовать | A04-02; A11-05 |
-| SPEC-004 | **pass** A04-02 oracle в TASK | **partial**: cal S02/S03 Red; holdout мало Target; F-009 vacuous | F-009 | A04-02; A09-01; A07-03 |
+| SPEC-004 | **pass** A04-02 oracle в TASK | **partial**: cal S02/S03 Red; holdout мало Declare; F-009 vacuous | F-009 | A04-02; A09-01; A07-03 |
 | SPEC-005 | **pass** DAG A05-02; catalog A02 | **fail** S05 1 slice vs ≥2 (harness extra); S07 Analyze | AB-02; не F | A05-02; A09-03; A10-02 |
 | SPEC-006 | **pass** layout A02-10, A06-02 | **fail** F-010: delta/gate без записи live spec | F-010 | A02-10; A06-02; A09-02+ |
 | SPEC-007 | **pass** A04-03 stale anchors | **not-tested** полная серия S11; F-006 на SUT not-run | F-006 (статика A05-04) | A04-03; A05-04; A09-11 |
@@ -102,7 +102,7 @@
 | Route / Analyze | **pass** A02-03; **fail** F-008 claims | routing измерен; S07 стоп | F-008 |
 | Specify | **pass** A02-04 схема; **fail** F-010 гейт | cal S02/S03 pass (extras); holdout **fail** | главный стоп |
 | Decompose | **pass** A02-05 | cal + часть holdout; schema fails | |
-| Target | **pass** A02-06; **fail** F-009 на cal | holdout редко | |
+| Declare | **pass** A02-06; **fail** F-009 на cal | holdout редко | |
 | Implement | **pass** A02-07 | cal S02/S03; holdout мало | |
 | Verify | **pass** A02-08 схема | почти **not-run**; S11 r1 **fail** | |
 | Converge / Archive | **pass** A02-08; **fail** F-005 vs schema | **not-run** на ornith | 0 `converged` |
@@ -146,7 +146,7 @@ A10-01 SDD vs DF: **не** успех аналога; homemade SDD, тот же 
 | F-006 | defect | stale evidence silent pass | framework | P0; SUT not-run |
 | F-007 | defect | thinking eats 2048 | Studio SUT | **mitigated** на `:1240` |
 | F-008 | defect | analyzed только CR-* | SUT+gate | P1 |
-| F-009 | defect | fake Red / private | SUT Target | P0 TEST-004 |
+| F-009 | defect | fake Red / private | SUT Declare | P0 TEST-004 |
 | F-010 | defect | `specified` без live spec | framework+SUT | P0; AB-01 |
 
 Гипотезы (parking, не findings): Q-001 furrow; Q-002 tokenizer; Q-003 embeddings; Q-004 reject-кандидат; Q-005 docs-only; Q-006 ops files; Q-007 constitution-lock; Q-008 post-Verify spec-delta.
