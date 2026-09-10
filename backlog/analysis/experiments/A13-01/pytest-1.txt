@@ -1,0 +1,11 @@
+........................................................................ [ 44%]
+.....................................s.................................. [ 89%]
+.................                                                        [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] tests/unit/test_spec_style.py:30: no local PBT runner
+collected 161
+passed 160
+skipped 1
+failed 0
+exit 0
+command: python -m pytest tests/unit tests/integration tests/e2e tests/evals -q --tb=short
