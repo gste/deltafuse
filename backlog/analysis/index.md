@@ -2,10 +2,10 @@
 
 Дата обновления: 2026-09-10.
 
-- **Статус:** `planned` — A13-02 `partial`; следующий слой R2 (docs/ops), нужен `:1240`.
+- **Статус:** `done` — A13 закрыта, вердикт очереди `partial`.
 - **Текущая задача аудита:** нет.
-- **Следующая задача:** [A13-03](packets/A13-03.md) маршруты docs/ops и Analyze на ornith.
-- **Счётчики:** всего 88; `planned` 2; `in-progress` 0; `done` 86; `blocked` 0.
+- **Следующая задача:** нет.
+- **Счётчики:** всего 88; `planned` 0; `in-progress` 0; `done` 88; `blocked` 0.
 
 План регресса: [regression-plan.md](regression-plan.md). Не смешивать с `backlog/llm-optimization-v2/`.
 
@@ -177,5 +177,5 @@
 |---|---|---|---|
 | [A13-01 — Контрактный регресс RM-* (без LLM)](packets/A13-01.md) | RM-031 на ветке | done | [pass; pytest 160+skip PBT; PS smoke; bash archive](experiments/A13-01/result.md) |
 | [A13-02 — P0 holdout на ornith](packets/A13-02.md) | A13-01 | done | [partial; F-010 не vacuous; S02/S04 не дошли](experiments/A13-02/result.md) |
-| [A13-03 — Маршруты docs/ops и Analyze на ornith](packets/A13-03.md) | A13-02 | planned | нужен `:1240` |
-| [A13-04 — Неизвестные A12 на SUT](packets/A13-04.md) | A13-02 | planned | optional; не блокер контракта |
+| [A13-03 — Маршруты docs/ops и Analyze на ornith](packets/A13-03.md) | A13-02 | done | [partial; route docs/ops; Specify YAML-fail; 1 slice](experiments/A13-03/result.md) |
+| [A13-04 — Неизвестные A12 на SUT](packets/A13-04.md) | A13-02 | done | [partial; S11 Specify fail; F-006 not-run](experiments/A13-04/result.md) |

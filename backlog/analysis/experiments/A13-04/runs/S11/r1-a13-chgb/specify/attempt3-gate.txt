@@ -1,0 +1,19 @@
+change.yaml: [deltas -> 0] 'slice' is a required property
+change.yaml: [deltas -> 0 -> kind] 'spec' is not one of ['requirements', 'conformance', 'structural', 'operational', 'mixed']
+change.yaml: [deltas -> 0 -> catalog] 'operation' is a required property
+change.yaml: [deltas -> 0 -> decisions] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> tasks] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> tests] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> implementation] 'operation' is a required property
+change.yaml: [deltas -> 0 -> evidence] 'operation' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+SLICE-01.md: Anchor '#req-rl-05' not found in specification file 'docs/spec/security/ratelimit.md'
+SLICE-01.md: Anchor '#req-rl-06' not found in specification file 'docs/spec/security/ratelimit.md'
+SLICE-01.md: Anchor '#req-rl-07' not found in specification file 'docs/spec/security/ratelimit.md'
+SLICE-01.md: Anchor '#req-rl-08' not found in specification file 'docs/spec/security/ratelimit.md'
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+Gate specified: spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+Gate specified: SLICE-01.md: Anchor '#req-rl-05' not found in specification file 'docs/spec/security/ratelimit.md'
+Gate specified: SLICE-01.md: Anchor '#req-rl-06' not found in specification file 'docs/spec/security/ratelimit.md'
+Gate specified: SLICE-01.md: Anchor '#req-rl-07' not found in specification file 'docs/spec/security/ratelimit.md'
+Gate specified: SLICE-01.md: Anchor '#req-rl-08' not found in specification file 'docs/spec/security/ratelimit.md'

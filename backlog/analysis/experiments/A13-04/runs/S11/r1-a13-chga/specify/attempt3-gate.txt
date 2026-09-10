@@ -1,0 +1,13 @@
+change.yaml: [root] 'decisions' is a required property
+change.yaml: [root] 'tasks' is a required property
+change.yaml: [deltas -> 0] 'slice' is a required property
+change.yaml: [deltas -> 0 -> kind] 'additive' is not one of ['requirements', 'conformance', 'structural', 'operational', 'mixed']
+change.yaml: [deltas -> 0 -> specification] 'operation' is a required property
+change.yaml: [deltas -> 0 -> catalog] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> decisions] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> tasks] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> tests] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> implementation] [] is not of type 'object'
+change.yaml: [deltas -> 0 -> evidence] [] is not of type 'object'
+SLICE-01.md: Anchor '#req-rl-05' not found in specification file 'docs/spec/security/ratelimit.md'
+spec-delta.md: Anchor '#req-rl-05' not found in specification file 'docs/spec/security/ratelimit.md'

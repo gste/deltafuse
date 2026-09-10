@@ -1,0 +1,44 @@
+schema_version: 2
+id: CHG-001-burst-allowance
+title: Optional burst_allowance for TokenBucketLimiter
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: feature
+route: code
+risk: medium
+source:
+  request: docs/intake/S11.md
+  intake_refs:
+    - docs/intake/S11.md
+deltas:
+  - id: DELTA-01
+    kind: additive
+    summary: Add optional per-key burst_allowance retry clause to TokenBucketLimiter.consume
+    specification:
+      added:
+        - docs/spec/security/ratelimit.md#req-rl-05
+      modified: []
+      removed: []
+    catalog: []
+    decisions: []
+    tasks: []
+    tests: []
+    implementation: []
+    evidence: []
+slices:
+  - id: SLICE-01
+    title: Optional burst_allowance retry in TokenBucketLimiter.consume
+    status: specified
+    file: docs/changes/CHG-001-burst-allowance/slices/SLICE-01.md
+    primary_capability: ratelimit
+    spec_refs:
+      - docs/spec/security/ratelimit.md#req-rl-05
+    claims:
+      - CR-001
+      - CR-002
+      - CR-003
+      - CR-004
+      - CR-005
+verification: null
