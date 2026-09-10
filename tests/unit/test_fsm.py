@@ -292,6 +292,31 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
     assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
 
 
+def test_specified_rejects_spec_delta_outside_slice_refs(tmp_path: Path, repo_root: Path):
+    """AN-003: spec-delta added/modified must stay inside slice spec_refs."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-076", title="Outside slice spec")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    _write_ratelimit_spec(tmp_path)
+    spec_delta = (
+        "---\n"
+        f"change: {builder.change_id}\n"
+        "status: proposed\n"
+        "slices: [SLICE-01]\n"
+        "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
+        "modified: []\n"
+        "removed: []\n"
+        "---\n\n# Spec Delta\n"
+    )
+    (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("outside slice spec_refs" in e for e in errs)
+
+
 def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Path):
     """S03: requirement_delta none is only valid with exact live spec_refs."""
     install(target_dir=tmp_path, framework_root=repo_root)
@@ -410,6 +435,26 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
         yaml.safe_dump(red, sort_keys=False), encoding="utf-8"
     )
     assert check_gate(builder.change_dir, "targeting") == []
+
+
+def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
+    """TEST-004: ImportError is not authentic Red even if labeled expected-failure."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-026", title="Import red")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+    )
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["failure_category"] = "import-error"
+    red["summary"] = "ModuleNotFoundError"
+    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("behavioral-mismatch" in e for e in errs)
 
 
 def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
@@ -918,6 +963,21 @@ def test_analyzed_ignores_routing_top_level_unknown_keys(tmp_path: Path, repo_ro
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
+def test_analyzed_ignores_coverage_top_level_unknown_keys(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-064", title="Coverage extra keys")
+        .step_intake()
+        .step_analyze()
+    )
+    cov_file = builder.change_dir / "coverage.yaml"
+    cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+    cov["schema_version"] = 2
+    cov["unexpected_key"] = "ok"
+    cov_file.write_text(yaml.safe_dump(cov, sort_keys=False), encoding="utf-8")
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
 def test_analyzed_accepts_two_slice_files(tmp_path: Path, repo_root: Path):
     """RM-022 / AB-02: a two-capability Change writes SLICE-01 and SLICE-02."""
     install(target_dir=tmp_path, framework_root=repo_root)
@@ -985,6 +1045,7 @@ def test_analyze_skill_does_not_freeze_single_slice(repo_root: Path):
         encoding="utf-8"
     )
     assert "Do not collapse a multi-capability Change into a single" in skill
+    assert "analyze_pass" in skill
     assert "пиши только SLICE-01" not in skill
     assert "ONLY one file" not in skill
 

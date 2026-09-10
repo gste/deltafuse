@@ -157,7 +157,7 @@ context:
 |---|---|---|---|
 | **Intake** | Сообщение пользователя, файлы в `docs/intake/**`, шаблоны. | `docs/spec/**`, код, тесты, задачи, decisions. | `change.yaml`, `request.md` |
 | **Route & Analyze** | `request.md`, `_capabilities.yaml`, точечные модули спеки для выбранного слайса, принятые decisions. | Вся кодовая база, несвязанные модули спецификации. | `routing.yaml`, `slices/**`, `coverage.yaml` (опционально `analysis.md`) |
-| **Specify** | Один слайс, точечные файлы спеки, принятые decisions. | Код продукта, несвязанные разделы документации. | `docs/spec/**`, `spec-delta.md` |
+| **Specify** | Один слайс, файлы из `spec_refs` (`next`), принятые decisions. Не всё дерево `docs/spec/**`. | Код продукта, чужие модули спеки. | Файлы `spec_refs` этого среза, `spec-delta.md` |
 | **Decompose** | Один специфицированный слайс, точные требования (`REQ-*`), интерфейсы модулей. | Весь сырой интейк, несвязанный код, чужие Changes. | Задачи `tasks/TASK-NNN-*.md` |
 | **Declare** | Ровно одна задача, ссылки на спеку, тестовые фикстуры, публичные контракты. | Внутренняя реализация продуктового кода. | Новый/изменённый тест, `evidence/red/` |
 | **Implement** | Ровно одна задача, упавший тест, Red evidence, разрешённые файлы кода. | Другие задачи, нерелевантные файлы репозитория. | Минимальный код, `evidence/green/` |
@@ -166,7 +166,7 @@ context:
 ### Политики эскалации
 - **On missing context**: если агенту не хватает данных или спецификация неоднозначна — **Stop-and-Ask** (остановка и оформление вопроса/Decision вместо додумывания).
 - **On budget exceeded**: если контекст слайса превышает установленный лимит — **Split-Slice** (деление слайса на более мелкие изолированные части).
-- `workflow.call_width` (`narrow` | `medium` | `wide`) пакетирует *записи* Analyze; это не второй токен-бюджет и не закрывает `analyzed` без `routing.yaml`, `slices/` и `coverage.yaml`.
+- `workflow.call_width` (`narrow` | `medium` | `wide`) — записанный профиль Analyze. `deltafuse next` всё равно выбирает один pass (routing, затем один срез capability, затем coverage). Это не второй токен-бюджет и не закрывает `analyzed` без `routing.yaml`, срезов на каждую routing primary capability и `coverage.yaml`.
 - `route` Change (`code` по умолчанию, `docs`, `ops`) выбирает write-глобы Declare/Implement. `docs`/`ops` вне `src/**` и `tests/**`; Specify не снимается.
 
 ---

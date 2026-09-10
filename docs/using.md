@@ -55,6 +55,54 @@ Never manually edit generated skills or create a local process fork. Product-spe
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
 
+## Kernel evidence
+
+The Worker writes tests and production files. The Core records proof:
+
+```text
+deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
+```
+
+Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate --gate targeting` still enforces the YAML on disk.
+
+## Kernel coverage
+
+After routing and one slice per primary capability, the Core writes the claim matrix. Workers do not hand-write `coverage.yaml`:
+
+```text
+deltafuse coverage <change-dir>
+```
+
+Then `check-gate --gate analyzed`. Re-running keeps existing `tasks` / `evidence` / `status`.
+
+## Specify one slice
+
+After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: `check-gate --gate specified`. Do not close the Change gate mid-set.
+
+## Next work
+
+Do not pass a Change id unless you mean a specific package. The Core picks the first ready item:
+
+```text
+deltafuse next
+deltafuse next --list
+deltafuse next --human
+deltafuse next --step declare --json
+```
+
+`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
+
+Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
+
+Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.
+
+```text
+deltafuse board <product-root> --json
+deltafuse board <product-root> --json --archive
+```
+
+Stdout is one JSON object. No product files are written. Missing `.deltafuse/lock.yaml` is a hard error, not an empty board.

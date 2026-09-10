@@ -72,14 +72,14 @@ Intake
    - опциональные связанные capabilities и применимые политики (`policies`).
 4. Результат маршрутизации фиксируется в `routing.yaml`.
 
-Маршрутизация — первая запись Analyze. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml`. `narrow` пишет routing, затем slices, затем coverage за отдельные вызовы; `medium` — routing, затем slices и coverage вместе; `wide` может закрыть Analyze одним вызовом. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
+Маршрутизация — первая запись Analyze. `deltafuse next` выбирает один Analyze pass за вызов: `routing`, затем один `slice` на непокрытую primary capability из routing, затем `coverage`. Две capability не попадают в один `next`, в том числе при `call_width: wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml` как профиль; он не склеивает pass. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 1. Связанные claims группируются в изолированные аналитические слайсы (`slices/SLICE-NN.md`). Один файл на primary capability: две capability дают `SLICE-01` и `SLICE-02`, не один `SLICE-01`.
 2. Для каждого слайса загружаются **только** закреплённые за ним модули спецификации, релевантные принятые решения (`docs/decisions/**`) и явно запрошенные диагностические данные.
 3. Формируются артефакты:
    - `slices/SLICE-NN.md` (границы слайса, затронутые требования, контекстный бюджет);
-   - `coverage.yaml` (матрица покрытия claims -> capabilities -> spec -> tasks);
+   - `coverage.yaml` пишет Ядро (`deltafuse coverage`) из routing и frontmatter срезов;
    - типизированные проекции дельты в `change.yaml`;
    - опционально `analysis.md` (общий аналитический отчёт; гейт `analyzed` его не требует).
 
@@ -120,7 +120,7 @@ Analyze — итеративный шаг. Если возникают суще�
 5. Итерация повторяется до тех пор, пока все блокирующие развилки не будут закрыты терминальными решениями.
 
 ### Gate
-Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
+Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` и `coverage.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
 
 ---
 
@@ -130,23 +130,24 @@ Analyze — итеративный шаг. Если возникают суще�
 Сделать спецификацию продукта (`docs/spec/**`) достаточной для однозначной реализации либо строго доказать, что текущая спецификация уже достаточна.
 
 ### Context Contract
-- **Reads**: один анализируемый слайс, точечные файлы спецификации, принятые решения (`docs/decisions/**`), одобренные изменения каталога capabilities.
+- **Reads**: один неспецифицированный слайс, файлы из его `spec_refs`, принятые решения (`docs/decisions/**`), одобренные изменения каталога capabilities. Не всё дерево `docs/spec/**`.
 - **Writes**:
-  - изменения в `docs/spec/**`;
+  - изменения только в файлах `spec_refs` этого среза (и `_capabilities.yaml` при catalog delta);
   - ненормативный журнал изменений `spec-delta.md` внутри пакета Change.
 
 ### Правила
 1. **Спецификация — единственный закон**: только `docs/spec/**` является законом для реализации (Implementation Law). Никакие задачи, чаты или тексты тикетов не могут диктовать поведение коду в обход спеки.
 2. Если `requirement_delta: none`, спецификация остаётся неизменной; достаточность фиксируется ссылками на существующие стабильные требования (`REQ-*`).
-3. Если требуется изменение спецификации:
+3. `deltafuse next` выбирает один Specify pass: один неспецифицированный срез (`spec_refs` только), затем `close` для `check-gate specified`. Пути `added`/`modified` в `spec-delta.md` обязаны оставаться внутри файлов этого среза.
+4. Если требуется изменение спецификации:
    - обновляются только объявленные модули спецификации;
    - сохраняются стабильные идентификаторы требований `REQ-*` и сценариев `SC-*`;
    - принятые архитектурные и продуктовые решения из `docs/decisions/**` зеркалируются в императивный текст `docs/spec/**`.
-4. Нормативные требования пишутся с RFC 2119 (`MUST` / `ДОЛЖЕН`). Предпочтительна форма EARS: WHEN [условие] THE SYSTEM SHALL [наблюдаемое поведение]. EARS — стиль, не новый формат файлов и не гейт Specify.
-5. `spec-delta.md` в пакете Change служит аудиторским журналом и не является источником истины после завершения Change.
+5. Нормативные требования пишутся с RFC 2119 (`MUST` / `ДОЛЖЕН`). Предпочтительна форма EARS: WHEN [условие] THE SYSTEM SHALL [наблюдаемое поведение]. EARS — стиль, не новый формат файлов и не гейт Specify.
+6. `spec-delta.md` в пакете Change служит аудиторским журналом и не является источником истины после завершения Change.
 
 ### Gate
-Изменения в спецификации приняты человеком (Human Gate) либо доказан статус `requirement_delta: none` точными `spec_refs` на существующие якоря. Нормативное поведение зафиксировано в живых файлах `docs/spec/**`. Каталог `_capabilities.yaml` валиден и указывает на эти файлы. Код продукта на этом гейте не требуется. `change.yaml` в статусе `specified` или `specification-proposed`. Формулировка EARS не заменяет live `docs/spec/**` (F-010).
+Изменения в спецификации приняты человеком (Human Gate) либо доказан статус `requirement_delta: none` точными `spec_refs` на существующие якоря. Нормативное поведение зафиксировано в живых файлах `docs/spec/**`. Каталог `_capabilities.yaml` валиден и указывает на эти файлы. Код продукта на этом гейте не требуется. `change.yaml` в статусе `specified` или `specification-proposed`. Формулировка EARS не заменяет live `docs/spec/**` (F-010). `added` / `modified` в `spec-delta.md` должны попадать в `spec_refs` срезов (или catalog `spec:` этих capabilities) либо в `docs/spec/_capabilities.yaml`.
 
 ---
 
@@ -226,9 +227,11 @@ context_budget:
 ### Правила
 1. Фиксируется тестовый оракул (Test Oracle) из задачи и спецификации.
 2. Пишется минимальный тест, проверяющий требуемое поведение.
-3. Тест запускается на **неизменённом** коде продукта.
-4. Тест обязан упасть (**Red**) строго по ожидаемой поведенческой причине (assertion failure / missing contract), а не из-за ошибки компиляции окружения, синтаксиса или инфраструктуры.
-5. Результаты выполнения, санитизированные логи, код возврата и категория падения сохраняются в `evidence/red/<task-id>.yaml`.
+3. Тест запускается на **неизменённом** коде продукта командой ядра:
+   `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
+   YAML evidence вручную не заполняется.
+4. Тест обязан упасть (**Red**) строго по ожидаемой поведенческой причине (`behavioral-mismatch`), а не из-за ошибки компиляции, синтаксиса или инфраструктуры. Authentic Red — exit 0 у CLI.
+5. Runner записывает команду, логи, код возврата и категорию в `evidence/red/<task-id>.yaml`.
 6. Опционально: property-based тесты класса Hypothesis как дополнительные оракулы. Skip, если нет локального runner. PBT не заменяет GWT Red и независимый hidden suite. Не `.kiro` и не Cucumber.
 
 Если тест проходит успешно на исходном коде (`already-satisfied`) или падает по неверной причине (`invalid-target`), изменение продуктового кода запрещено.
@@ -251,8 +254,9 @@ context_budget:
 ### Правила
 1. Разработчик/агент не имеет права ослаблять тестовые ассерты таргета или менять спецификацию.
 2. Вносится минимальный код, переводящий тест в зелёное состояние (**Green**).
-3. Запускается таргетный тест, затем запускается scoped regression suite для проверки неизменности остального поведения (`Unchanged Behavior`).
-4. Команды запуска, санитизированные логи, результат (`result: passed`, `exit_code: 0`) и список изменённых файлов фиксируются в `evidence/green/<task-id>.yaml` и `evidence/regression/<task-id>.yaml`.
+3. Таргет и scoped regression гоняет ядро:
+   `deltafuse evidence <change-dir> --phase green|regression --task <task-id> --changed-path <rel> -- <command>`.
+   YAML evidence вручную не заполняется.
 
 ### Gate
 Таргетный тест стал Green без изменения своего оракула; регрессионные тесты прошли успешно; изменения укладываются в объявленный скоуп; Green/regression evidence несут `base_revision` текущего дерева `docs/spec/**` и `src/**`.
@@ -284,7 +288,7 @@ Raw intent (docs/intake/...)
 - `not-reproduced`: подтверждённое отсутствие воспроизведения с фиксацией диагностического evidence.
 
 ### Архивация
-После подтверждения сходимости:
+После подтверждения сходимости закройте гейт и архивируйте ядром: `deltafuse check-gate <change-dir> --gate converged`, затем `deltafuse archive <change-dir>`.
 1. Активные задачи переводятся в статус `verified`. `cancelled` и `superseded` остаются терминальными, без фальшивого `implemented`.
 2. Фиксируется итоговый статус в `change.yaml` (`converged` -> `archived`).
 3. При необходимости обновляется `CHANGELOG.md`.

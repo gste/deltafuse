@@ -32,10 +32,14 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, lint-context, eval)
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, board, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
+│   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
 │   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
+│   │   ├── evidence.py               # Прогон команды продукта и запись evidence YAML (без LLM)
+│   │   ├── queue.py                  # Производная очередь ready/blocked и deltafuse next
+│   │   ├── steps.py                  # Машинный контракт семи шагов (skill, gate, PHASE_CONTRACTS)
 │   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
 │   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
@@ -64,11 +68,15 @@ delta-fuse/
 │   │   ├── test_fsm.py               # 18 канонических статусов, допустимые переходы, гейты
 │   │   ├── test_fsm_mutations.py     # Семантические мутационные тесты (T1-T8, N10, lock-хэш)
 │   │   ├── test_hasher.py            # Чувствительность sha256 content_hash к изменениям дистрибутива
+│   │   ├── test_evidence.py          # Evidence runner: классификация и YAML
+│   │   ├── test_queue.py             # Производная очередь и deltafuse next
+│   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
+│   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
-│   │   └── test_validator_cli.py     # Тестирование команд CLI (validate, check-gate, validate-layout, lint-context)
+│   │   └── test_validator_cli.py     # CLI: validate, check-gate, validate-layout, evidence, lint-context
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла
 │   │   ├── test_golden_workflow.py   # Эталонный 8-шаговый цикл фичи от intake до archive
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
@@ -142,7 +150,10 @@ delta-fuse/
   - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
   - **PP-06 / KI-07 / targeting**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
-  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; split записи opt-in; routing первым шагом. Specify для feature не снимается.
+  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage), wide не склеивает срезы; routing первым шагом. Specify для feature не снимается.
+  - **AN-001 / analyzed**: каждый distinct `primary_capability` в `routing.yaml` покрыт slice-файлом с тем же полем; один `SLICE-01` на две capability валит `analyzed`.
+  - **AN-002 / analyzed**: `deltafuse coverage` пишет матрицу из routing+slices; unknown top-level keys на `coverage.yaml` не валят гейт; воркер не hand-write YAML.
+  - **AN-003 / specified**: `next` один срез Specify; spec-delta added/modified только в slice `spec_refs`; F-010 live spec не снимается.
   - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.
   - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
   - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
@@ -219,7 +230,17 @@ deltafuse validate-layout .
 # 6. Проверка контекстного бюджета пакета
 deltafuse lint-context docs/changes/CHG-001-test
 
-# 7. Запуск детерминированного бенчмарка LLM Evals
+# 7. Прогон команды и запись evidence YAML (ядро, без LLM)
+deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
+
+# 8. Следующий готовый шаг (очередь, без LLM)
+deltafuse next --list
+deltafuse next --human
+
+# 9. Снимок доски для fuse-map (без записи в продукт)
+deltafuse board . --json
+
+# 10. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
 ```
 

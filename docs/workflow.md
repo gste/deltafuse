@@ -63,7 +63,7 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
-Routing is always the first Analyze write. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) is pinned in `.deltafuse/lock.yaml`. `narrow` writes routing, then slices, then coverage across invocations; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item, including when lock `workflow.call_width` is `wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) remains pinned in `.deltafuse/lock.yaml` as a recorded profile; it does not merge passes. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 For each capability slice:
@@ -79,7 +79,7 @@ For each capability slice:
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
 4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
-5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
+5. The Core writes `coverage.yaml` (`deltafuse coverage`) from routing and slice frontmatter. Workers do not hand-write the matrix.
 
 ### Typed Delta Invariants
 - If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**, and the **Specify** step records formal proof in `spec-delta.md` that existing specification already requires the behavior.
@@ -107,9 +107,9 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
-- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
-- Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
+- Unknown top-level keys on `routing.yaml` and `coverage.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 - `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
 
 ---
@@ -120,13 +120,13 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 Apply analyzed specification deltas to the authoritative product specification in `docs/spec/**`, or verify that the accepted specification is unchanged.
 
 ### Context Contract
-- **Allowed Read Scope**: `request.md`, slices, target spec modules, accepted decisions, and `analysis.md` when present.
-- **Forbidden Read Scope**: Product implementation source code.
+- **Allowed Read Scope**: named slice, `spec_refs` from `next`, accepted decisions, and `analysis.md` when present. Not the whole `docs/spec/**` tree.
+- **Forbidden Read Scope**: Product implementation source code, unrelated specification modules.
 
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
-3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close` for `check-gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
@@ -138,6 +138,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 - `change.yaml` status is `specified` or `specification-proposed`.
 - Product source code is not required at this gate.
 - EARS phrasing does not replace live `docs/spec/**` (F-010).
+- `added` / `modified` in `spec-delta.md` must resolve to files in slice `spec_refs` (or that capability's catalog `spec:`) or `docs/spec/_capabilities.yaml`.
 
 ---
 
@@ -218,9 +219,11 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 
 ### Rules
 1. Implement the minimal test case in the file indicated by `test_target`.
-2. Execute the test target against the unmodified codebase.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures.
-4. Record execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
+2. Execute the test target against the unmodified codebase with the kernel:
+   `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
+   Do not hand-write `evidence/red/*.yaml`.
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
+4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 2
    change: CHG-001-user-auth
@@ -259,10 +262,10 @@ Author the minimal production code necessary to turn the failing test target gre
 
 ### Rules
 1. Author only the production code required to satisfy the test assertions.
-2. Execute the test target and prove it passes:
-   - Record `evidence/green/<task-id>.yaml` with `phase: green`, `result: passed`, and `exit_code: 0`.
-3. Execute the capability/domain regression test suite:
-   - Record `evidence/regression/<task-id>.yaml` with `phase: regression`, `result: passed`, and `exit_code: 0`.
+2. Execute the test target and prove it passes via the kernel:
+   `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
+   Do not hand-write evidence YAML.
+3. Execute the capability/domain regression test suite the same way (`--phase regression`).
 4. Transition task status to `implemented`.
 
 ### Gate
@@ -297,10 +300,11 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
-1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
-2. Update any related intake requests in `docs/intake/` and move them to `docs/archive/intake/`.
-3. Update `change.yaml` status to `archived`.
-4. The archived Change package remains an immutable historical record.
+After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse archive <change-dir>`. That:
+1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
+2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
+3. Updates `change.yaml` status to `archived`.
+4. Leaves the archived Change package as an immutable historical record.
 
 ---
 

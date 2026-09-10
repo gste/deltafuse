@@ -2,7 +2,9 @@
 
 [**English**](roles.md) | [Русский](roles.ru.md)
 
-DeltaFuse separates responsibilities between humans and AI. No role is permitted to conflate "inventing a requirement" and "writing code for it" into a single unconstrained step.
+DeltaFuse separates **Core** from **Worker**. The **Process** is the lifecycle we follow, not a runtime role. See [core-and-worker.md](./core-and-worker.md).
+
+The Core enforces the Process (kernel CLI). The Worker is an LLM or a human who writes the same Change files. Human Gates are stops in the Process, not Worker steps. No role may conflate "inventing a requirement" and "writing code for it" into a single unconstrained step.
 
 ---
 
@@ -34,7 +36,7 @@ The AI is **strictly forbidden** from:
 
 ## Human Gates
 
-Humans remain the final arbiters and make decisions at five key gates:
+A Human Gate is a stop in the Process. Passing it is not Worker work. Humans remain the final arbiters at five key gates:
 
 | Human Gate | Description of Human Responsibility | Artifact |
 |---|---|---|
@@ -47,6 +49,8 @@ Humans remain the final arbiters and make decisions at five key gates:
 ---
 
 ## Process Participant Roles
+
+Analyst, Spec Editor, Planner, Implementer, and Verifier are **Worker** hats (LLM or human). Maintainer is **Human Gate** work.
 
 | Role | Performer | Primary Responsibilities |
 |---|---|---|
@@ -91,6 +95,8 @@ The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/ski
 - `declare` — declare what must become true (Red oracle) before Implement;
 - `implement` — implement code and record Green/Regression evidence;
 - `verify` — verify artifact convergence and archive package.
+
+Those files bind the Worker to an LLM. They are not the Core. The Core (`deltafuse next`, `evidence`, `check-gate`) selects the step and checks gates. Skills do not choose the next step.
 
 ### Execution Profiles
 

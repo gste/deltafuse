@@ -81,8 +81,8 @@ Change может быть переведён в терминальное сос
 | `normalized` | `analyzing` | Начало шага `/analyze`. Маршрутизация claims по capabilities. | Существует каталог capabilities (или создаётся в Bootstrap). |
 | `analyzing` | `blocked-on-decision` | Обнаружена развилка, требующая Decision Record со статусом `proposed`. | Создан документ `docs/decisions/DEC-NNNN-*.md`. |
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
-| `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `workflow.call_width` может разнести записи, но комплект тот же. | На диске есть `routing.yaml`, `slices/` и `coverage.yaml`; все claims покрыты; дельты типизированы. |
-| `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). | Сформирован проект правок в `docs/spec/**` и `spec-delta.md`. |
+| `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `deltafuse next` даёт один Analyze pass за раз; комплект тот же. | На диске есть `routing.yaml`, срезы на каждую routing primary capability и `coverage.yaml`; все claims покрыты; дельты типизированы. |
+| `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). `deltafuse next` даёт один Specify-срез (`spec_refs` только), затем `close`. | Сформирован проект правок в файлах `spec_refs` срезов и `spec-delta.md`. |
 | `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
@@ -193,10 +193,10 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 ```yaml
 schema_version: 2
 framework:
-  version: 2.2.0
+  version: 2.3.0
   content_hash: sha256:...
 ```
 
-`routing.yaml` не требует `schema_version`; неизвестные ключи верхнего уровня там игнорируются.
+`routing.yaml` и `coverage.yaml` не требуют `schema_version`; неизвестные ключи верхнего уровня там игнорируются.
 
 Активный Change обязан завершаться в соответствии с зафиксированной версией фреймворка. Обновление внешнего DeltaFuse фреймворка не меняет семантику активных Changes автоматически; миграция активных процессов требует явной процедуры.

@@ -17,6 +17,8 @@ from deltafuse.core.context import (
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
+from deltafuse.core.analyze import uncovered_primary_capabilities
+from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
@@ -412,6 +414,13 @@ def validate_change_package(
                             f"non-zero exit_code (got 0)"
                         )
                     if result == "expected-failure" and route == "code":
+                        category = ev_data.get("failure_category")
+                        if category != "behavioral-mismatch":
+                            errors.append(
+                                f"{ev_file.relative_to(change_path)}: red expected-failure "
+                                f"must have failure_category 'behavioral-mismatch' "
+                                f"(got '{category}')"
+                            )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
                             errors.extend(
@@ -523,6 +532,8 @@ def _validate_specified_live_spec(
         )
 
     live_ops = added + modified
+    if live_ops:
+        errors.extend(spec_delta_outside_slice_files(change_path, repo_root))
     if not live_ops:
         if not slices:
             errors.append(
@@ -682,6 +693,8 @@ def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
 
     Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
     not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    One slice file does not cover two routing primary capabilities; that is a
+    separate `analyzed` error from `uncovered_primary_capabilities`.
     """
     path = Path(change_path)
     missing: list[str] = []
@@ -737,6 +750,10 @@ def check_gate(
                 errors.append("Gate analyzed: at least one slice file in slices/ is required")
             elif artifact == "coverage.yaml":
                 errors.append("Gate analyzed: coverage.yaml is missing")
+        for cap in uncovered_primary_capabilities(change_path):
+            errors.append(
+                f"Gate analyzed: routing capability '{cap}' has no slice"
+            )
 
         # Check blocking decisions (P3)
         unresolved = find_unresolved_decisions_for_change(change_id, repo_root)

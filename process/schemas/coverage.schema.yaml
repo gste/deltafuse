@@ -2,7 +2,8 @@ $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://deltafuse.dev/schemas/v2/coverage.schema.yaml
 title: DeltaFuse Claim Coverage
 type: object
-additionalProperties: false
+additionalProperties: true
+description: Unknown top-level keys (for example schema_version) are ignored. Nested claim objects stay strict.
 required: [change, claims]
 properties:
   change:

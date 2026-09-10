@@ -55,6 +55,54 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
 
+## Evidence ядра
+
+Воркер пишет тесты и продуктовые файлы. Ядро записывает доказательство:
+
+```text
+deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
+```
+
+Import/syntax и Red с `_` не authentic. `check-gate --gate targeting` по-прежнему проверяет YAML на диске.
+
+## Coverage ядра
+
+После routing и одного среза на primary capability Ядро пишет матрицу claims. Воркер не hand-write `coverage.yaml`:
+
+```text
+deltafuse coverage <change-dir>
+```
+
+Затем `check-gate --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
+
+## Specify по одному срезу
+
+После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `check-gate --gate specified`. Не закрывайте гейт Change на середине набора.
+
+## Следующая работа
+
+Change id не обязателен: Ядро берёт первый ready элемент.
+
+```text
+deltafuse next
+deltafuse next --list
+deltafuse next --human
+deltafuse next --step declare --json
+```
+
+`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
+
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
+
+Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.
+
+```text
+deltafuse board <product-root> --json
+deltafuse board <product-root> --json --archive
+```
+
+Stdout — один JSON. Файлы продукта не пишутся. Нет `.deltafuse/lock.yaml` — ошибка, не пустая доска.

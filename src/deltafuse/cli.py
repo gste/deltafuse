@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 import argparse
+import json
 import sys
 from pathlib import Path
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
+from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
+from deltafuse.core.board import BoardError, build_board_snapshot
+from deltafuse.core.analyze import CoverageError, write_coverage
+from deltafuse.core.queue import (
+    QueueError,
+    build_work_queue,
+    format_human_blocked_queue,
+    format_human_guide,
+    format_item,
+    format_queue,
+    queue_snapshot,
+    select_next,
+)
+from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.evals.dataset import EvalDataset
@@ -26,6 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         pass
     parser = argparse.ArgumentParser(prog="deltafuse", description="DeltaFuse Specification-Driven AI Engineering Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    evidence_argv: list[str] = []
+    if raw and raw[0] == "evidence" and "--" in raw:
+        cut = raw.index("--")
+        evidence_argv = raw[cut + 1 :]
+        raw = raw[:cut]
 
     # init command
     init_parser = subparsers.add_parser("init", help="Initialize DeltaFuse product layout")
@@ -50,6 +72,82 @@ def main(argv: list[str] | None = None) -> int:
     layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
     layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
 
+    # evidence command (WK-002)
+    ev_parser = subparsers.add_parser(
+        "evidence",
+        help="Run a command after '--' and write evidence/red|green|regression YAML",
+    )
+    ev_parser.add_argument("change_path", help="Path to Change package directory")
+    ev_parser.add_argument(
+        "--phase",
+        "-p",
+        required=True,
+        choices=["red", "green", "regression"],
+        help="Evidence phase to record",
+    )
+    ev_parser.add_argument("--task", "-t", required=True, help="Task id (TASK-NNN)")
+    ev_parser.add_argument(
+        "--changed-path",
+        action="append",
+        default=[],
+        dest="changed_paths",
+        help="Relative path written by the Worker (repeatable)",
+    )
+    ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+
+    cov_parser = subparsers.add_parser(
+        "coverage",
+        help="Write coverage.yaml from routing and slices (no LLM)",
+    )
+    cov_parser.add_argument("change_path", help="Path to Change package directory")
+
+    # next / work queue (WK-003)
+    next_parser = subparsers.add_parser(
+        "next",
+        help="Select the next ready lifecycle step (no LLM)",
+    )
+    next_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Product root or Change package directory (default: current dir)",
+    )
+    next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
+    next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
+    next_parser.add_argument(
+        "--human",
+        action="store_true",
+        help="Print a checklist from the step contract (same files, not a second process)",
+    )
+    next_parser.add_argument(
+        "--step",
+        choices=list(step_names()),
+        help="Only select this step",
+    )
+
+    # board snapshot (FM-001)
+    board_parser = subparsers.add_parser(
+        "board",
+        help="Emit a read-only fuse-map board snapshot (no product writes)",
+    )
+    board_parser.add_argument(
+        "product_path",
+        nargs="?",
+        default=".",
+        help="Product repository root (default: current dir)",
+    )
+    board_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=True,
+        help="Write the snapshot JSON to stdout (default; the only stdout on success)",
+    )
+    board_parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="Include archived Change cards",
+    )
+
     # lint-context command (P7.6)
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
@@ -64,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     eval_parser.add_argument("--min-schema-compliance", type=float, default=0.0, help="Minimum required Schema Compliance Rate (0.0 - 100.0)")
     eval_parser.add_argument("--min-gate-pass-rate", type=float, default=0.0, help="Minimum required Gate Pass Rate (0.0 - 100.0)")
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw)
 
     if args.command == "init":
         try:
@@ -123,6 +221,86 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  - {err}", file=sys.stderr)
             return 1
         print(f"DeltaFuse product layout at {target} is valid.")
+        return 0
+
+    elif args.command == "evidence":
+        try:
+            outcome = run_evidence(
+                Path(args.change_path),
+                phase=args.phase,
+                task=args.task,
+                argv=evidence_argv,
+                changed_paths=args.changed_paths,
+                timeout=args.timeout,
+            )
+        except EvidenceRunError as ex:
+            print(f"Evidence run failed: {ex}", file=sys.stderr)
+            return 2
+        print(f"Wrote {outcome.dest}")
+        if outcome.authentic:
+            print("Evidence is authentic.")
+            return 0
+        print("Evidence is not authentic:", file=sys.stderr)
+        for err in outcome.errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 1
+
+    elif args.command == "coverage":
+        try:
+            dest = write_coverage(Path(args.change_path))
+        except CoverageError as ex:
+            print(f"Coverage failed: {ex}", file=sys.stderr)
+            return 1
+        except Exception as ex:
+            print(f"Coverage failed: {ex}", file=sys.stderr)
+            return 2
+        print(f"Wrote {dest}")
+        return 0
+
+    elif args.command == "next":
+        target = Path(args.path)
+        try:
+            only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
+            queue = build_work_queue(target, only_change=only)
+        except QueueError as ex:
+            print(f"Next failed: {ex}", file=sys.stderr)
+            return 2
+        selected = select_next(queue, step=args.step)
+        guide = (
+            format_human_guide(selected)
+            if selected is not None
+            else format_human_blocked_queue(queue)
+        )
+        if args.json:
+            payload = queue_snapshot(queue, selected=selected)
+            if args.human:
+                payload["guide"] = guide
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.human:
+            if selected is not None:
+                print(guide)
+            else:
+                print(guide, file=sys.stderr)
+        elif args.list:
+            print(format_queue(queue))
+        elif selected is not None:
+            print(format_item(selected))
+        else:
+            print("No ready work.", file=sys.stderr)
+            print(format_queue(queue), file=sys.stderr)
+            print("To start a new Change: /intake", file=sys.stderr)
+        return 0 if selected is not None else 1
+
+    elif args.command == "board":
+        try:
+            snapshot = build_board_snapshot(
+                Path(args.product_path),
+                include_archive=args.archive,
+            )
+        except BoardError as ex:
+            print(f"Board failed: {ex}", file=sys.stderr)
+            return 2
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
 
     elif args.command == "lint-context":

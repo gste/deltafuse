@@ -32,11 +32,21 @@ Use these names consistently:
 
 `Red` and `Green` are evidence states inside Declare and Implement, not lifecycle step names.
 
+**Process** — how we work: `Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> Verify`. Described in [docs/workflow.md](docs/workflow.md). Not a runtime role.
+
+**Core** — the machine that enforces the Process (CLI: `next`, `evidence`, `check-gate`, `archive`, `board`). It does not write product prose or code.
+
+**Worker** — LLM or human who writes the same Change artifacts. Skills bind an LLM; `deltafuse next --human` binds a person. Not a CI job, not the work queue, not a Human Gate.
+
+**Human Gate** — a stop in the Process (DEC / spec / merge). Not Worker work.
+
+See [docs/core-and-worker.md](docs/core-and-worker.md).
+
 ## Change rules
 
 - Treat canonical documentation in [docs/](docs/README.md) as the authoritative process specification.
 - Update canonical docs, skills, schemas, templates, installers, validators, and tests together when a contract changes.
-- Keep skills concise and self-contained enough to work as generated snapshots.
+- Keep skills concise and self-contained enough to work as generated snapshots. They bind the Worker to an LLM; the Core (`next`, `evidence`, `check-gate`) selects the step and checks gates.
 - Preserve user intent and do not invent product requirements.
 - Never run `git push`, destructive git commands, or merge into the default branch.
 - Do not commit secrets, credentials, or environment-specific absolute paths.
