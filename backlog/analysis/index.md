@@ -7,7 +7,7 @@
 - **Следующая задача:** нет.
 - **Счётчики:** всего 88; `planned` 0; `in-progress` 0; `done` 88; `blocked` 0.
 
-План регресса: [regression-plan.md](regression-plan.md). Не смешивать с `backlog/llm-optimization-v2/`.
+План регресса: [regression-plan.md](regression-plan.md). Не смешивать с закрытой очередью ornith в соседнем `llm-optimization`.
 
 - **Локальная модель:** `ornith-1.5-35b-a3b` Q4_K_M, голый llama-server `:1240`, `--reasoning off`, `--cpu-moe` — [local-runtime](experiments/local-runtime/README.md). Исторический Studio-снимок: [A03-03](experiments/A03-03/profile.md).
 

@@ -292,4 +292,4 @@ A00–A12 — аудит. Принятые RM-* реализованы на ве
 
 План: [analysis/regression-plan.md](analysis/regression-plan.md). Карточки A13-01…A13-04 в [analysis/index.md](analysis/index.md).
 
-Сначала контрактный pytest (без LLM), затем узкий holdout P0 на том же `:1240`, затем docs/ops и Analyze, затем optional неизвестные (S10/S11/Verify). Очередь `llm-optimization-v2` (префилл llama-server) — другой объект, не A13.
+Сначала контрактный pytest (без LLM), затем узкий holdout P0 на том же `:1240`, затем docs/ops и Analyze, затем optional неизвестные (S10/S11/Verify). Очередь префилла llama-server (закрыта в `llm-optimization`) — другой объект, не A13.
