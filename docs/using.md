@@ -65,6 +65,18 @@ deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests
 
 Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate --gate targeting` still enforces the YAML on disk.
 
+## Next work
+
+Do not pass a Change id unless you mean a specific package. The kernel picks the first ready item:
+
+```text
+deltafuse next
+deltafuse next --list
+deltafuse next --step declare --json
+```
+
+Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.

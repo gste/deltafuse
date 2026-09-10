@@ -9,6 +9,8 @@ Prove that the Delta was fully fused before removing the Change from active cont
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change, run `deltafuse next --step verify` at the product root and use `path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Read Change/slice summaries, coverage, terminal task states, exact spec references, test evidence, code/spec diffs, and Decision statuses. Deepen into source artifacts only for a detected gap.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import argparse
+import json
 import sys
 from pathlib import Path
 from deltafuse.core.installer import install, InstallationError
@@ -9,6 +10,15 @@ from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_ro
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
+from deltafuse.core.queue import (
+    QueueError,
+    build_work_queue,
+    format_item,
+    format_queue,
+    queue_snapshot,
+    select_next,
+)
+from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.evals.dataset import EvalDataset
@@ -80,6 +90,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Relative path written by the worker (repeatable)",
     )
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+
+    # next / work queue (WK-003)
+    next_parser = subparsers.add_parser(
+        "next",
+        help="Select the next ready lifecycle step (no LLM)",
+    )
+    next_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Product root or Change package directory (default: current dir)",
+    )
+    next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
+    next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
+    next_parser.add_argument(
+        "--step",
+        choices=list(step_names()),
+        help="Only select this step",
+    )
 
     # lint-context command (P7.6)
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
@@ -177,6 +206,27 @@ def main(argv: list[str] | None = None) -> int:
         for err in outcome.errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
+
+    elif args.command == "next":
+        target = Path(args.path)
+        try:
+            only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
+            queue = build_work_queue(target, only_change=only)
+        except QueueError as ex:
+            print(f"Next failed: {ex}", file=sys.stderr)
+            return 2
+        selected = select_next(queue, step=args.step)
+        if args.json:
+            print(json.dumps(queue_snapshot(queue, selected=selected), ensure_ascii=False, indent=2))
+        elif args.list:
+            print(format_queue(queue))
+        elif selected is not None:
+            print(format_item(selected))
+        else:
+            print("No ready work.", file=sys.stderr)
+            print(format_queue(queue), file=sys.stderr)
+            print("To start a new Change: /intake", file=sys.stderr)
+        return 0 if selected is not None else 1
 
     elif args.command == "lint-context":
         target = Path(args.change_path)

@@ -9,6 +9,8 @@ Create the provenance root for one logical Change.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller asked to continue existing work without an id, run `deltafuse next` and follow that step instead of creating another Change. Use this skill only to start a new Change.
+
 ## Context
 
 Read only:

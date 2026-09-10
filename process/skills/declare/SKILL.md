@@ -9,6 +9,8 @@ Declare the behavior that must become true. That is the point of writing Red tes
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change or task, run `deltafuse next --step declare` at the product root and use `path` / `task_path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Read one task, exact spec references, reproduction and unchanged behavior, relevant test conventions/fixtures/helpers, and only public product interfaces needed to express the oracle.

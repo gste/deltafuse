@@ -32,11 +32,13 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, lint-context, eval)
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
 │   │   ├── evidence.py               # Прогон команды продукта и запись evidence YAML (без LLM)
+│   │   ├── queue.py                  # Производная очередь ready/blocked и deltafuse next
+│   │   ├── steps.py                  # Машинный контракт семи шагов (skill, gate, PHASE_CONTRACTS)
 │   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
 │   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
@@ -223,7 +225,10 @@ deltafuse lint-context docs/changes/CHG-001-test
 # 7. Прогон команды и запись evidence YAML (ядро, без LLM)
 deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 
-# 8. Запуск детерминированного бенчмарка LLM Evals
+# 8. Следующий готовый шаг (очередь, без LLM)
+deltafuse next --list
+
+# 9. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
 ```
 

@@ -13,6 +13,7 @@ tests/
 │   ├── test_integrity.py         # Claim extraction and specification anchor lookup
 │   ├── test_fsm.py               # FSM canonical states, allowed transitions, gate enforcement
 │   ├── test_evidence.py          # Evidence runner classification and YAML write
+│   ├── test_queue.py             # Derived work queue and deltafuse next
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
 ├── integration/
 │   ├── test_installer.py         # Product initialization and framework upgrade
@@ -53,6 +54,11 @@ deltafuse lint-context docs/changes/CHG-001
 ### Record evidence (kernel)
 ```bash
 deltafuse evidence docs/changes/CHG-001 --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
+```
+
+### Next ready step
+```bash
+deltafuse next --list
 ```
 
 ### Run with Coverage

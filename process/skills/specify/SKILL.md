@@ -9,6 +9,8 @@ Establish the normative state from which tasks may be derived.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change, run `deltafuse next --step specify` at the product root and use `path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Read one analyzed slice, its typed delta, exact affected spec modules, accepted related Decisions/catalog delta, and only necessary neighboring requirements. Do not read the whole codebase or unrelated Changes.

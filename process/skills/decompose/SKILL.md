@@ -9,6 +9,8 @@ Create executable work without creating new product law.
 
 Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change, run `deltafuse next --step decompose` at the product root and use `path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Read one specified slice and typed delta, exact accepted spec references, optional `design.md`, capability dependencies, compact code/test index or narrowly selected files, and existing task IDs/dependencies.

@@ -9,6 +9,8 @@ Make one declared Red oracle Green with the smallest compliant production change
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change or task, run `deltafuse next --step implement` at the product root and use `path` / `task_path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Read one task, exact spec references, frozen target test, Red evidence, allowed production files/symbols, and only required local dependencies.

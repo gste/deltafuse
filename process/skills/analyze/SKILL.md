@@ -9,6 +9,8 @@ Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterat
 
 Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
 
+If the caller did not name a Change, run `deltafuse next --step analyze` at the product root and use `path`. If it exits non-zero, stop and report the output.
+
 ## Context
 
 Start with `request.md`, `docs/spec/_capabilities.yaml`, compact global policy summaries, and the configured context budget. Route before loading detailed specification.

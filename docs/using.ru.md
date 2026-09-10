@@ -65,6 +65,18 @@ deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests
 
 Import/syntax и Red с `_` не authentic. `check-gate --gate targeting` по-прежнему проверяет YAML на диске.
 
+## Следующая работа
+
+Change id не обязателен: ядро берёт первый ready элемент.
+
+```text
+deltafuse next
+deltafuse next --list
+deltafuse next --step declare --json
+```
+
+Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.
