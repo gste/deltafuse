@@ -19,9 +19,11 @@ from deltafuse.core.queue import (
     format_human_guide,
     format_item,
     format_queue,
+    load_product_root,
     queue_snapshot,
     select_next,
 )
+from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -131,6 +133,35 @@ def main(argv: list[str] | None = None) -> int:
         choices=list(step_names()),
         help="Only select this step",
     )
+
+    decide_parser = subparsers.add_parser(
+        "decide",
+        help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)",
+    )
+    decide_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Product root, or Change directory for --spec",
+    )
+    decide_parser.add_argument(
+        "--decision",
+        "-d",
+        default=None,
+        help="DEC id or docs/decisions/*.md path",
+    )
+    decide_parser.add_argument(
+        "--spec",
+        action="store_true",
+        help="Apply the specification Human Gate (spec-delta.md on the Change path)",
+    )
+    decide_parser.add_argument(
+        "--status",
+        required=True,
+        choices=["accepted", "rejected"],
+        help="Recorded human choice",
+    )
+    decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
@@ -368,7 +399,11 @@ def main(argv: list[str] | None = None) -> int:
             else format_human_blocked_queue(queue)
         )
         if args.json:
-            payload = queue_snapshot(queue, selected=selected)
+            payload = queue_snapshot(
+                queue,
+                selected=selected,
+                product_root=load_product_root(target if only is None else only),
+            )
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -386,6 +421,45 @@ def main(argv: list[str] | None = None) -> int:
             print(format_queue(queue), file=sys.stderr)
             print("To start a new Change: /intake", file=sys.stderr)
         return 0 if selected is not None else 1
+
+    elif args.command == "decide":
+        target = Path(args.path)
+        try:
+            result = apply_decision(
+                target,
+                status=args.status,
+                decision=args.decision,
+                spec=args.spec,
+            )
+        except DecideError as ex:
+            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
+            print(f"Decide failed: {ex}", file=sys.stderr)
+            return 1
+        except QueueError as ex:
+            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
+            print(f"Decide failed: {ex}", file=sys.stderr)
+            return 2
+        _journal(
+            target,
+            cmd="decide",
+            ok=True,
+            gate=result.get("gate"),
+            status=result.get("status"),
+            decision=result.get("decision"),
+        )
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"decide: {result.get('gate')} {result.get('status')}")
+            if result.get("decision"):
+                print(f"decision: {result['decision']}")
+            if result.get("change_status"):
+                print(f"change_status: {result['change_status']}")
+            for rel in result.get("written") or []:
+                print(f"wrote: {rel}")
+            for err in result.get("gate_errors") or []:
+                print(f"gate: {err}", file=sys.stderr)
+        return 0
 
     elif args.command == "board":
         target = Path(args.product_path)

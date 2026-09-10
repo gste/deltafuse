@@ -1,2 +1,0 @@
-coverage.yaml: [root] Additional properties are not allowed ('spec_delta' was unexpected)
-Gate specified: spec-delta.md is missing

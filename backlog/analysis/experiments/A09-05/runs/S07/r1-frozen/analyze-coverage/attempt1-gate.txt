@@ -1,2 +1,0 @@
-coverage.yaml: [root] Additional properties are not allowed ('coverage', 'notes', 'routing', 'schema_version', 'slices' were unexpected)
-coverage.yaml: [root] 'claims' is a required property

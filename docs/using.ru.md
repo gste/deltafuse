@@ -88,13 +88,17 @@ deltafuse next
 deltafuse next --list
 deltafuse next --human
 deltafuse next --step declare --json
+deltafuse decide <change-dir> --decision DEC-0001 --status accepted
+deltafuse decide <change-dir> --spec --status accepted
 ```
 
 `--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
 
-Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
+Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста, ждать, затем `deltafuse decide`. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
-Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
+
+Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) и `halt.choices`, либо halt `done`, если нового intake нет.
 
 ## Бенчмарк воркера
 

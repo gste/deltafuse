@@ -187,7 +187,7 @@ if [ -d "$decisions_dir" ]; then
 fi
 
 # 4. Validate skills in configured adapter roots
-skills="intake analyze specify decompose declare implement verify"
+skills="run intake analyze specify decompose declare implement verify"
 for adapter in "${adapter_roots[@]}"; do
   [ -d "$PRODUCT_ROOT/$adapter" ] || { fail "Missing configured adapter root: $adapter"; continue; }
   for skill in $skills; do

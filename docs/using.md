@@ -88,13 +88,17 @@ deltafuse next
 deltafuse next --list
 deltafuse next --human
 deltafuse next --step declare --json
+deltafuse decide <change-dir> --decision DEC-0001 --status accepted
+deltafuse decide <change-dir> --spec --status accepted
 ```
 
 `--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
 
-Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
+Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons, wait, then `deltafuse decide`. Single-step skills restart one step after a problem.
 
-Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
+Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
+
+Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) plus `halt.choices`, or a `done` halt when there is no new intake.
 
 ## Worker bench
 

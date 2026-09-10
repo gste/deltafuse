@@ -1,9 +1,0 @@
-change.yaml: [root] Additional properties are not allowed ('evidence', 'implementation', 'tests' were unexpected)
-change.yaml: [deltas -> 0] 'tasks' is a required property
-change.yaml: [deltas -> 0 -> specification] 'operation' is a required property
-change.yaml: [deltas -> 0 -> catalog] 'operation' is a required property
-change.yaml: [deltas -> 0 -> decisions] 'operation' is a required property
-change.yaml: [deltas -> 0 -> tests] 'operation' is a required property
-change.yaml: [deltas -> 0 -> implementation] 'operation' is a required property
-change.yaml: [deltas -> 0 -> evidence] 'operation' is a required property
-change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'

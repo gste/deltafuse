@@ -51,11 +51,24 @@ def test_verify_archives_via_kernel(repo_root: Path):
     assert "deltafuse archive" in skill
 
 
+def test_run_skill_is_through_mode(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "run" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "deltafuse next --json" in text
+    assert "halt.choices" in text
+    assert "deltafuse decide" in text
+    assert "Do not auto-accept Decisions" in text
+    assert "in this same session" in text
+
+
 def test_product_agents_template_defers_to_core(repo_root: Path):
     text = (repo_root / "process" / "templates" / "AGENTS.md").read_text(encoding="utf-8")
     assert "The Core" in text
     assert "The Worker" in text
     assert "Do not auto-accept Decisions" in text
+    assert "/run" in text
+    assert "halt.choices" in text
 
 
 def test_core_and_worker_glossary(repo_root: Path):
@@ -64,6 +77,8 @@ def test_core_and_worker_glossary(repo_root: Path):
     assert "**Core**" in en and "**Worker**" in en
     assert "**Process** is the lifecycle we follow" in en
     assert "Human Gate is not a Worker" in en
+    assert "## Through-mode" in en
     assert "**Ядро**" in ru and "**Воркер**" in ru
     assert "**Процесс** — lifecycle" in ru
     assert "Human Gate — не воркер" in ru
+    assert "## Сквозной режим" in ru

@@ -248,6 +248,10 @@ deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --chang
 deltafuse next --list
 deltafuse next --human
 
+# 8a. Сквозной режим: halt JSON и запись клика Human Gate (не auto-accept)
+deltafuse next --json
+deltafuse decide docs/changes/CHG-001-test --decision DEC-0001 --status accepted
+
 # 9. Снимок доски для fuse-map (без записи в продукт)
 deltafuse board . --json
 

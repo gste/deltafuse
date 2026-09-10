@@ -1,7 +1,0 @@
-change.yaml: [slices -> 0] 'file' is a required property
-coverage.yaml: [claims -> CR-006 -> tasks -> 0] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-006 -> tasks -> 1] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-002-size-rotation.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-008 -> tasks -> 0] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-002-size-rotation.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-007 -> tasks -> 0] 'docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md' does not match '^TASK-[0-9]{3,}$'

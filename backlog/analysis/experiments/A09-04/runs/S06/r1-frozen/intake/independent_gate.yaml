@@ -1,7 +1,0 @@
-outcome: pass-ids-remap
-independent_gate:
-  intake: CR-NNN present; audit/alert/rotation/noise covered in CR-002..CR-006
-oracle_cr_mapping: fail
-phantom_internal_gc_in_title: false
-note: Oracle CR-001/CR-002 are audit/alert; model used CR-001 as log observation. Fixture input.md is 31 lines with ellipsis, not 200.
-attempts: 1

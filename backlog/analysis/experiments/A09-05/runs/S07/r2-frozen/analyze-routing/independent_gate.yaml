@@ -1,5 +1,0 @@
-outcome: fail
-independent_gate:
-  routing: mixed primaries (config_reload, health_check, distributed_ratelimit)
-must_route_to: fail
-attempts: 1

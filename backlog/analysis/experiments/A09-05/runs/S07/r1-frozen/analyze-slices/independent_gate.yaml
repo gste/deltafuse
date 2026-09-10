@@ -1,6 +1,0 @@
-outcome: pass
-independent_gate:
-  slices: 1 file (oracle allows 1-3)
-related_capabilities: security.ratelimit, infra.config_reload, monitoring.health_check
-harness_attached_unrelated_specs: billing/api.pagination FILE bodies in slices prompt
-attempts: 2

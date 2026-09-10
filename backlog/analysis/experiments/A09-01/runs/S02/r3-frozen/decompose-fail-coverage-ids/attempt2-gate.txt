@@ -1,4 +1,0 @@
-coverage.yaml: [claims -> CR-006 -> tasks -> 0] 'docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-002-block-lift-and-report.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-001-add-penalty-consume.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-001-add-penalty-consume.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-005 -> tasks -> 0] 'docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-002-block-lift-and-report.md' does not match '^TASK-[0-9]{3,}$'

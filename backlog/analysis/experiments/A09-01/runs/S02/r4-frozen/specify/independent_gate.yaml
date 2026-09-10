@@ -1,8 +1,0 @@
-outcome: pass
-independent_gate:
-  specified: []
-penalty_default: folded into REQ-RL-01 (0.0)
-req_ids: [REQ-RL-01, REQ-RL-02, REQ-RL-03, REQ-RL-04, REQ-RL-05, REQ-RL-06]
-elapsed_s: 56.9
-reasoning_chars: 0
-attempts: 1

@@ -16,7 +16,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 1. If no Change was named, run `deltafuse next --step decompose` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).
 3. Close with `deltafuse check-gate <change-dir> --gate decomposed`. Halt if it exits non-zero.
-4. Then run `deltafuse next`. Do not choose the next slash command yourself.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run the matching `deltafuse decide` command, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
 ## Context

@@ -1,4 +1,0 @@
-change.yaml: [slices -> 0] 'file' is a required property
-coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-002-usage-examples.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-001-fix-typo.md' does not match '^TASK-[0-9]{3,}$'
-coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'docs/changes/CHG-001-doc-s08b/tasks/TASK-003-architectural-decisions.md' does not match '^TASK-[0-9]{3,}$'

@@ -35,15 +35,15 @@ flowchart LR
     Implement --> Verify[Verify]
 ```
 
-| Шаг               | Skill               | Основной результат                                           |
-|-------------------|---------------------|--------------------------------------------------------------|
-| Intake            | `/intake`           | Immutable request и корень Change                            |
-| Analyze           | `/analyze`          | Routing, slices, Decisions, typed deltas                     |
-| Specify           | `/specify`          | Принятое нормативное состояние или доказанный unchanged spec |
-| Decompose         | `/decompose`        | Atomic tasks внутри Change                                   |
-| Declare           | `/declare`          | Объявленный Red-оракул: что должно стать правдой, падает на неизменённом коде |
-| Implement         | `/implement`        | Минимальный code и Green evidence                            |
-| Verify            | `/verify`           | Convergence proof и архивированный Change                    |
+| Шаг       | Skill        | Основной результат                                                            |
+|-----------|--------------|-------------------------------------------------------------------------------|
+| Intake    | `/intake`    | Immutable request и корень Change                                             |
+| Analyze   | `/analyze`   | Routing, slices, Decisions, typed deltas                                      |
+| Specify   | `/specify`   | Принятое нормативное состояние или доказанный unchanged spec                  |
+| Decompose | `/decompose` | Atomic tasks внутри Change                                                    |
+| Declare   | `/declare`   | Объявленный Red-оракул: что должно стать правдой, падает на неизменённом коде |
+| Implement | `/implement` | Минимальный code и Green evidence                                             |
+| Verify    | `/verify`    | Convergence proof и архивированный Change                                     |
 
 Analyze повторяется, пока все blocking Decisions не получат terminal status, а global reconciliation не перестанет находить новые существенные вопросы.
 

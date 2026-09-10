@@ -1,8 +1,0 @@
-outcome: pass
-independent_gate:
-  slice_schema: []
-model_status: continue
-decisions_written: false
-elapsed_s: 46.3
-reasoning_chars: 0
-attempts: 1

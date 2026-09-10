@@ -1,1 +1,0 @@
-penalty_seconds in limiter

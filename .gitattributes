@@ -1,5 +1,4 @@
 # Normalize line endings so Windows checkouts keep LF for lock hash and bash scripts.
-# See backlog/findings/F-001.md (RM-001).
 * text=auto eol=lf
 *.sh text eol=lf
 *.ps1 text eol=crlf

@@ -6,7 +6,7 @@ Machine schema: [board-snapshot.schema.yaml](board-snapshot.schema.yaml) (`schem
 
 This is the **producer-canonical** contract. The fuse-map repository pins the same `schema_version` under `docs/contracts/`. Artifact SSOT remains the product git tree. This snapshot is a read-only projection.
 
-Implementation of the CLI/API is [FM-001](../../backlog/product/FM-001.md). Producer command: `deltafuse board`. Python: `deltafuse.core.board.build_board_snapshot`.
+Producer command: `deltafuse board`. Python: `deltafuse.core.board.build_board_snapshot`.
 
 `layout` is required on v1. No producer has shipped yet; this completes v1 rather than bumping to 2. A body without `layout` is not a valid snapshot.
 

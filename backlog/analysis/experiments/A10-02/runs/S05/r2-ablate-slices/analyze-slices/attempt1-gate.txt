@@ -1,2 +1,0 @@
-SLICE-01.md: [root] Additional properties are not allowed ('schema_version' was unexpected)
-SLICE-02.md: [root] Additional properties are not allowed ('schema_version' was unexpected)

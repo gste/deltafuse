@@ -113,8 +113,9 @@ def format_worker_start_prompt(meta: dict[str, Any]) -> str:
         "You are the Worker in this DeltaFuse product. Read BENCH.md. "
         f"Intake is {intake}.\n"
         "\n"
-        "Run `deltafuse next`. Load the skill it names. Write only what that step allows. "
-        "Repeat until `deltafuse next` has nothing ready.\n"
+        "Run `deltafuse next`. Load the skill it names and execute it in this same session. "
+        "Write only what that step allows. Repeat until `deltafuse next` has nothing ready "
+        "or halt.kind is decision/spec/done. Human Gates stay human: present halt.choices and wait.\n"
         "\n"
-        "Stay inside this project. Human Gates stay human."
+        "Stay inside this project. Do not git push."
     )

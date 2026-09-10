@@ -1,9 +1,0 @@
-outcome: pass
-independent_gate:
-  decomposed: []
-tasks:
-  - TASK-001-fix-fractional-refill.md
-kind: bugfix
-change_status: decomposed
-elapsed_s: 66.4
-attempts: 1

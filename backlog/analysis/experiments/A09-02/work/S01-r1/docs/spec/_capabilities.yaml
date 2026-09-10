@@ -1,9 +1,0 @@
-schema_version: 2
-domains:
-  limiter:
-    capabilities:
-      - name: limiter
-        requirements:
-          - docs/spec/limiter/requirements.yaml
-      - name: validation
-        requirements: []

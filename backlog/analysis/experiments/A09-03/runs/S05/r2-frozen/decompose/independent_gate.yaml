@@ -1,7 +1,0 @@
-outcome: fail
-independent_gate:
-  decomposed: coverage.claims.*.tasks used file paths not TASK-NNN; slices list emptied
-change_status_after: decomposed
-oracle_spec_files: fail
-hidden_suite: not-run
-attempts: 3

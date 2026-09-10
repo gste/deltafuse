@@ -1,6 +1,0 @@
-change.yaml: [root] Additional properties are not allowed ('closure' was unexpected)
-change.yaml: [status] 'closed' is not one of ['normalized', 'analyzing', 'blocked-on-decision', 'analyzed', 'specification-proposed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verifying', 'converged', 'archived', 'rejected', 'duplicate', 'not-reproduced', 'superseded']
-change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
-change.yaml: invalid status 'closed'
-coverage.yaml: [root] Additional properties are not allowed ('specification' was unexpected)
-Gate specified: spec-delta.md is missing

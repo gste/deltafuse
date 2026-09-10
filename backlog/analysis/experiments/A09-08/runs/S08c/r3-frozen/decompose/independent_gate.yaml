@@ -1,7 +1,0 @@
-outcome: fail
-independent_gate:
-  decomposed: coverage.claims.*.tasks are file paths not TASK-NNN; change.yaml slices missing file
-  ops_updated: false
-  src_unchanged: true
-hidden_suite: not-run
-attempts: 3

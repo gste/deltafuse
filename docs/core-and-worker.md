@@ -35,3 +35,17 @@ If a sentence is about jobs, queues, or merge, do not say Worker.
 ## Human Gate is not a Worker
 
 A **Human Gate** (DEC / spec accept / merge) is a stop in the Process. Only a human may pass it. Filling `/analyze` or `/declare` as a person is Worker work. Accepting `DEC-*` is Gate work. Same human, different hat. The Core must not auto-accept Gates. The Worker must not pretend a Gate is a step.
+
+## Through-mode
+
+Default LLM Worker entry is `/run`. The Worker calls `deltafuse next`, loads the named skill, and continues in the same session. The human does not paste each slash command.
+
+The loop stops only when:
+
+1. `halt.kind` is `decision` — present `halt.choices`, wait, then `deltafuse decide --decision …`.
+2. `halt.kind` is `spec` — present `halt.choices`, wait, then `deltafuse decide --spec …`.
+3. A gate fails, a task is blocked, or the human chose inspect — stop so they can look, then restart `/run` or the named step.
+
+`deltafuse decide` writes the recorded click. It is not auto-accept. Merge and `git push` stay Human Gates; through-mode must not push.
+
+Single-step slash commands remain for restarting one step after a problem.

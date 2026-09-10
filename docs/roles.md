@@ -109,7 +109,7 @@ High-level operational workflows are orchestrated by invoking these canonical pr
 3. **Bootstrap Profile**:
    Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: accepted` in `.deltafuse/config.yaml` before running the first Change.
 
-Any external automation or end-to-end agent orchestration (composite orchestration) must:
-- Use strictly the 7 canonical framework primitives;
+Any external automation or end-to-end agent orchestration (composite orchestration, including `/run` through-mode) must:
+- Use strictly the 7 canonical framework primitives (`next` selects them);
 - Produce complete sets of normative artifacts at every step;
-- Unconditionally halt at Human Gates. Automation must never blur role responsibilities or bypass human oversight.
+- Unconditionally halt at Human Gates. Present `halt.choices` and wait; `deltafuse decide` records the human click and is not auto-accept. Automation must never blur role responsibilities or bypass human oversight.

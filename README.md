@@ -35,15 +35,15 @@ flowchart LR
     Implement --> Verify[Verify]
 ```
 
-| Step | Skill | Primary result |
-|---|---|---|
-| Intake | `/intake` | Immutable request and Change root |
-| Analyze | `/analyze` | Routing, slices, Decisions, typed deltas |
-| Specify | `/specify` | Accepted normative state or proven unchanged spec |
-| Decompose | `/decompose` | Atomic tasks inside the Change |
-| Declare | `/declare` | Declared Red oracle: what must become true, proven failing on unchanged code |
-| Implement | `/implement` | Minimal code and Green evidence |
-| Verify | `/verify` | Convergence proof and archived Change |
+| Step      | Skill        | Primary result                                                               |
+|-----------|--------------|------------------------------------------------------------------------------|
+| Intake    | `/intake`    | Immutable request and Change root                                            |
+| Analyze   | `/analyze`   | Routing, slices, Decisions, typed deltas                                     |
+| Specify   | `/specify`   | Accepted normative state or proven unchanged spec                            |
+| Decompose | `/decompose` | Atomic tasks inside the Change                                               |
+| Declare   | `/declare`   | Declared Red oracle: what must become true, proven failing on unchanged code |
+| Implement | `/implement` | Minimal code and Green evidence                                              |
+| Verify    | `/verify`    | Convergence proof and archived Change                                        |
 
 Analyze repeats until all blocking Decisions are terminal and global reconciliation finds no new material question.
 

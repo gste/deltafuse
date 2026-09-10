@@ -1,6 +1,0 @@
-copied:
-- docs/spec/security/ratelimit.md
-- docs/spec/_capabilities.yaml
-- src/ratelimit/limiter.py
-- tests/test_limiter.py
-burst_in_b_spec: true

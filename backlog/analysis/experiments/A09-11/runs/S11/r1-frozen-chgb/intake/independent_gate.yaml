@@ -1,8 +1,0 @@
-outcome: pass
-independent_gate:
-  change_id: CHG-001-ratelimit-window-stats
-  claims: window stats get_window_stats
-  json_status: continue
-  burst_allowance_in_prompt: false
-hidden_suite: not-run
-attempts: 1

@@ -1,5 +1,0 @@
-outcome: fail
-independent_gate:
-  slices: missing title; status continue not in enum
-harness_attached_unrelated_specs: billing/api.pagination FILE bodies in slices prompt
-attempts: 3

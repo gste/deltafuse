@@ -1,12 +1,14 @@
 # Backlog
 
-Очереди работ вокруг канонического репозитория DeltaFuse. Это не lifecycle продукта и не замена `docs/**`.
+Очередь работ вокруг канонического репозитория DeltaFuse. Это не lifecycle продукта и не замена `docs/**`.
 
-| Очередь | Роль | Живая доска |
-|---|---|---|
-| [analysis/](analysis/index.md) | Аудит A00–A12 закрыт. Регресс RM-* — A13 | [analysis/index.md](analysis/index.md) |
-| [product/](product/index.md) | Идеи после аудита: контракты для внешних инструментов, не ядро FSM | [product/index.md](product/index.md) |
+**Пусто.** Брать в работу нечего. Закрытые карточки, пакеты анализа, findings, матрицы и снимки экспериментов остаются в git history.
 
-Очереди ornith L00–L09 и W00–W07 закрыты в соседнем репозитории `llm-optimization`. Сводки здесь: [OPTIMIZATION-BRIEFING.md](OPTIMIZATION-BRIEFING.md), [OPTIMIZATION-BRIEFING-BEARS.md](OPTIMIZATION-BRIEFING-BEARS.md).
+Последний коммит с полным деревом экспериментов: `e3e1149`.
 
-Findings аудита: [findings/](findings/). Parking A12: [analysis/parking/design-questions.md](analysis/parking/design-questions.md) — не пополнять новыми продуктовыми идеями; они идут в `product/`.
+```text
+git log -- backlog/
+git show e3e1149:backlog/analysis/experiments/A09-01/result.md
+```
+
+Не восстанавливать `backlog/analysis/experiments/**/work/**` в рабочее дерево: Cursor индексирует вложенные `AGENTS.md` и `.cursor/skills/**` как скиллы воркспейса.

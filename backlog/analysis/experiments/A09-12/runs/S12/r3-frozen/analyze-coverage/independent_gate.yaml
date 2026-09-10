@@ -1,5 +1,0 @@
-outcome: pass
-independent_gate:
-  coverage_schema: ok
-hidden_suite: not-run
-attempts: 1

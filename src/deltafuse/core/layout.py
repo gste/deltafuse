@@ -9,6 +9,7 @@ from deltafuse.core.lock import workflow_alignment_errors
 
 
 CANONICAL_SKILL_NAMES = [
+    "run",
     "intake",
     "analyze",
     "specify",

@@ -1,5 +1,0 @@
-outcome: pass
-independent_gate:
-  slices: a1 extra key task; a2 SLICE-01
-hidden_suite: not-run
-attempts: 2

@@ -1,3 +1,0 @@
-change.yaml: [root] Additional properties are not allowed ('spec_delta' was unexpected)
-change.yaml: [slices -> 0] 'file' is a required property
-change.yaml: [slices -> 1] 'file' is a required property

@@ -12,7 +12,7 @@ from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import find_repo_root
-from deltafuse.core.integrity import find_unresolved_decisions_for_change
+from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.context import PHASE_CONTRACTS
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -51,6 +51,8 @@ class WorkItem:
     spec_refs: list[str] = field(default_factory=list)
     allowed_read: list[str] = field(default_factory=list)
     allowed_write: list[str] = field(default_factory=list)
+    halt_kind: str | None = None
+    intake_pending: bool | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -87,6 +89,8 @@ def _item_for_step(
     spec_refs: list[str] | None = None,
     allowed_read: list[str] | None = None,
     allowed_write: list[str] | None = None,
+    halt_kind: str | None = None,
+    intake_pending: bool | None = None,
 ) -> WorkItem:
     spec = STEP_CONTRACTS[step]
     return WorkItem(
@@ -106,6 +110,8 @@ def _item_for_step(
         spec_refs=list(spec_refs or []),
         allowed_read=list(allowed_read or []),
         allowed_write=list(allowed_write or []),
+        halt_kind=halt_kind,
+        intake_pending=intake_pending,
     )
 
 
@@ -178,6 +184,20 @@ def changes_dir(product_root: Path) -> Path:
     return product_root / rel
 
 
+def intake_sources_pending(product_root: Path) -> bool:
+    """True when docs/intake has a source other than README / .gitkeep."""
+    intake = product_root / "docs" / "intake"
+    if not intake.is_dir():
+        return False
+    skip = {"readme.md", ".gitkeep"}
+    for path in intake.iterdir():
+        if path.name.lower() in skip:
+            continue
+        if path.is_file() or path.is_dir():
+            return True
+    return False
+
+
 def _load_change(change_path: Path) -> dict[str, Any] | None:
     change_file = change_path / "change.yaml"
     if not change_file.is_file():
@@ -222,8 +242,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     rel = _rel(product_root, change_path)
     intent = data.get("intent") if isinstance(data.get("intent"), str) else "unknown"
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
-    if status == "blocked-on-decision" or unresolved:
-        reason = "; ".join(unresolved) if unresolved else f"Change status is '{status}'"
+    if unresolved:
         return [], [
             WorkItem(
                 kind="blocked",
@@ -234,7 +253,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 path=rel,
                 task=None,
                 task_path=None,
-                reason=reason,
+                reason="; ".join(unresolved),
+                halt_kind="decision",
             )
         ]
     if status == "specification-proposed":
@@ -249,6 +269,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 task=None,
                 task_path=None,
                 reason="Human specification gate (status specification-proposed)",
+                halt_kind="spec",
             )
         ]
 
@@ -266,6 +287,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason=f"Task {tid} is blocked",
+                    halt_kind="blocked",
                 )
             ]
         if tstatus in TASK_DECLARE:
@@ -377,12 +399,14 @@ def build_work_queue(
         queue.ready.sort(key=lambda item: (item.change_id or "", item.task or ""))
         queue.blocked.sort(key=lambda item: (item.change_id or "", item.task or ""))
         if not queue.ready and not packages:
+            pending = intake_sources_pending(product_root)
             queue.ready.append(
                 _item_for_step(
                     "intake",
                     change_id=None,
                     path=None,
                     reason="No active Change; start /intake",
+                    intake_pending=pending,
                 )
             )
     return queue
@@ -395,16 +419,116 @@ def select_next(queue: WorkQueue, step: str | None = None) -> WorkItem | None:
     return ready[0] if ready else None
 
 
+def _choice(choice_id: str, label: str, command: str | None) -> dict[str, Any]:
+    return {"id": choice_id, "label": label, "command": command}
+
+
+def build_halt(
+    queue: WorkQueue,
+    selected: WorkItem | None,
+    product_root: Path,
+) -> dict[str, Any] | None:
+    """Structured stop for through-mode. None when the Worker should execute `selected`."""
+    if selected is not None and selected.step != "intake":
+        return None
+    if selected is not None and selected.step == "intake":
+        pending = selected.intake_pending
+        if pending is None:
+            pending = intake_sources_pending(product_root)
+        if pending:
+            return None
+        return {
+            "kind": "done",
+            "prompt": (
+                "No Worker step is ready and no new intake file is waiting. "
+                "Do not start a Change unless the human already stated one in this chat. "
+                "Merge/push is a Human Gate. Do not git push."
+            ),
+            "choices": [
+                _choice("inspect", "Stop", None),
+            ],
+        }
+    kinds = {item.halt_kind for item in queue.blocked if item.halt_kind}
+    if "decision" in kinds:
+        choices: list[dict[str, Any]] = []
+        for item in queue.blocked:
+            if item.halt_kind != "decision" or not item.change_id:
+                continue
+            for row in list_proposed_decisions_for_change(item.change_id, product_root):
+                loc = item.path or "."
+                choices.append(
+                    _choice(
+                        f"accept:{row['id']}",
+                        f"Accept {row['id']}: {row['title']}",
+                        f"deltafuse decide {loc} --decision {row['id']} --status accepted",
+                    )
+                )
+                choices.append(
+                    _choice(
+                        f"reject:{row['id']}",
+                        f"Reject {row['id']}: {row['title']}",
+                        f"deltafuse decide {loc} --decision {row['id']} --status rejected",
+                    )
+                )
+        choices.append(_choice("inspect", "Stop and inspect", None))
+        return {
+            "kind": "decision",
+            "prompt": "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
+            "choices": choices,
+        }
+    if "spec" in kinds:
+        choices = []
+        for item in queue.blocked:
+            if item.halt_kind != "spec" or not item.path:
+                continue
+            choices.append(
+                _choice(
+                    f"accept-spec:{item.change_id}",
+                    f"Accept specification for {item.change_id}",
+                    f"deltafuse decide {item.path} --spec --status accepted",
+                )
+            )
+            choices.append(
+                _choice(
+                    f"reject-spec:{item.change_id}",
+                    f"Reject specification for {item.change_id}",
+                    f"deltafuse decide {item.path} --spec --status rejected",
+                )
+            )
+        choices.append(_choice("inspect", "Stop and inspect", None))
+        return {
+            "kind": "spec",
+            "prompt": "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
+            "choices": choices,
+        }
+    if queue.blocked:
+        return {
+            "kind": "blocked",
+            "prompt": "Work is blocked. Stop and inspect. Do not auto-accept Decisions or merge.",
+            "choices": [_choice("inspect", "Stop and inspect", None)],
+        }
+    return {
+        "kind": "done",
+        "prompt": "No ready work. Merge/push is a Human Gate. Do not git push.",
+        "choices": [_choice("inspect", "Stop", None)],
+    }
+
+
 def queue_snapshot(
     queue: WorkQueue,
     *,
     selected: WorkItem | None,
+    product_root: Path | None = None,
 ) -> dict[str, Any]:
+    halt = None
+    if product_root is not None:
+        halt = build_halt(queue, selected, product_root)
     return {
         "schema_version": 1,
         "selected": selected.as_dict() if selected else None,
         "ready": [item.as_dict() for item in queue.ready],
         "blocked": [item.as_dict() for item in queue.blocked],
+        "halt": halt,
     }
 
 
@@ -554,27 +678,30 @@ def format_human_guide(item: WorkItem) -> str:
 
 def format_human_blocked_item(item: WorkItem) -> str:
     loc = item.path or "-"
-    return "\n".join(
-        [
-            f"# Human gate  {item.change_id or ''}".rstrip(),
-            "",
-            "No Worker step is ready. Do not run an LLM skill.",
-            "Do not auto-accept Decisions.",
-            "",
-            f"change: {item.change_id or '-'}",
-            f"path: {loc}",
-            f"task: {item.task or '-'}",
-            f"reason: {item.reason}",
-            "",
-            "Open docs/decisions/** and/or spec-delta for this Change, decide, then `deltafuse next`.",
-        ]
-    )
+    lines = [
+        f"# Human gate  {item.change_id or ''}".rstrip(),
+        "",
+        "No Worker step is ready. Do not run an LLM skill.",
+        "Do not auto-accept Decisions.",
+        "",
+        f"change: {item.change_id or '-'}",
+        f"path: {loc}",
+        f"task: {item.task or '-'}",
+        f"kind: {item.halt_kind or 'blocked'}",
+        f"reason: {item.reason}",
+        "",
+        "Present halt.choices from `deltafuse next --json` in the host multiple-choice UI and wait.",
+        "After the human answers, run the matching `deltafuse decide` command, then `deltafuse next`.",
+        "If they choose inspect, stop.",
+    ]
+    return "\n".join(lines)
 
 
 def format_human_blocked_queue(queue: WorkQueue) -> str:
     if not queue.blocked:
         return (
             "No ready work and nothing blocked.\n"
+            "Merge/push is a Human Gate. Do not git push.\n"
             "To start a new Change: /intake\n"
             "Then: `deltafuse next`"
         )
@@ -587,11 +714,14 @@ def format_human_blocked_queue(queue: WorkQueue) -> str:
     ]
     for item in queue.blocked:
         extra = f"  {item.task}" if item.task else ""
-        parts.append(f"- {item.change_id or '-'}{extra}  {item.path or '-'}  {item.reason}")
+        kind = item.halt_kind or "blocked"
+        parts.append(f"- {kind}  {item.change_id or '-'}{extra}  {item.path or '-'}  {item.reason}")
     parts.extend(
         [
             "",
-            "Open docs/decisions/** and/or spec-delta, decide, then `deltafuse next`.",
+            "Present halt.choices from `deltafuse next --json` in the host multiple-choice UI and wait.",
+            "After the human answers, run `deltafuse decide`, then `deltafuse next`.",
+            "If they choose inspect, stop.",
             "To start a new Change instead: /intake",
         ]
     )

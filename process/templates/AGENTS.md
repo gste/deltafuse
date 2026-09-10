@@ -10,9 +10,9 @@ This product repository uses the DeltaFuse framework version pinned in `.deltafu
 - Raw input: `docs/intake/**`.
 - Project configuration: `.deltafuse/config.yaml`.
 
-Load the pinned/generated DeltaFuse skill for the requested lifecycle operation (`/intake`, `/analyze`, `/specify`, `/decompose`, `/declare`, `/implement`, `/verify`). Do not implement directly from chat, raw intake, a Decision, a diff, or an unaccepted specification change.
+Load `/run` for through-mode: follow `deltafuse next` in the same session until a Human Gate, a failed gate, or nothing ready. Do not wait for the human to paste `/analyze` … `/verify`. Load a single lifecycle skill (`/intake`, `/analyze`, `/specify`, `/decompose`, `/declare`, `/implement`, `/verify`) only to run that one step.
 
-The Core (`deltafuse next`, `evidence`, `check-gate`) selects the step and checks gates. The Worker (LLM skill or human) writes Change artifacts. Do not pick the next lifecycle step from chat. Do not auto-accept Decisions or merge.
+The Core (`deltafuse next`, `evidence`, `check-gate`, `decide`) selects the step, checks gates, and records a Human Gate click. The Worker (LLM skill or human) writes Change artifacts. Do not pick the next lifecycle step from chat. Do not auto-accept Decisions or merge. When `next` returns `halt.kind` `decision` or `spec`, present `halt.choices` in the host multiple-choice UI and wait; then run the matching `deltafuse decide` command.
 
 Do not edit generated skill snapshots under `.agents/skills/**`, `.cursor/skills/**`, or `.gemini/skills/**`. Regenerate them through the DeltaFuse installer/update command and validate them against `.deltafuse/lock.yaml`.
 

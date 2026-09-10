@@ -1,5 +1,0 @@
-outcome: fail
-independent_gate:
-  slices: schema (slice_id/status continue); JSON parse on attempts 1-2
-harness_attached_unrelated_specs: billing/api.pagination FILE bodies in slices prompt
-attempts: 3

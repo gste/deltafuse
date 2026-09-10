@@ -1,1 +1,0 @@
-routing.yaml: [root] Additional properties are not allowed ('schema_version' was unexpected)

@@ -1,5 +1,0 @@
-change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
-spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
-Gate specified: docs/spec/_capabilities.yaml: [domains -> security] Additional properties are not allowed ('policies' was unexpected)
-Gate specified: spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
-Gate specified: SLICE-01.md spec_ref 'docs/spec/security/ratelimit.md' must include an existing anchor
