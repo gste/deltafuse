@@ -95,6 +95,7 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
 | [roles.md](./roles.md) ([ru](./roles.ru.md)) | AI and human authority boundaries |
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
+| [bench.md](./bench.md) ([ru](./bench.ru.md)) | Agent-agnostic Worker bench (`deltafuse bench`); Core scores the disk |
 | [contracts/board-snapshot.md](./contracts/board-snapshot.md) ([ru](./contracts/board-snapshot.ru.md)) | Read-only board snapshot for fuse-map (`schema_version: 1`) |
 
 Executable Worker (LLM) bindings live in `process/skills/**`; the Core machine contract lives in the kernel. Change/artifact schemas live in `process/schemas/**`. The board snapshot schema is a **tool compatibility** contract under `docs/contracts/`, not a product artifact schema; do not copy it into consuming products.

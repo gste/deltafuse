@@ -1,0 +1,20 @@
+# M01-cooldown oracle (never copy into the product tree)
+
+case_id: M01-cooldown
+ambiguity_expected: false
+expected_decision_needed: false
+target_capability: security.ratelimit
+min_claims: 3
+live_spec: docs/spec/security/ratelimit.md
+spec_must_contain:
+  - penalty_seconds
+hidden_tests:
+  - test_backward_compatibility
+  - test_penalty_lockout_and_expiration
+scope:
+  allowed_write_after_specify:
+    - docs/spec/security/ratelimit.md
+    - docs/spec/_capabilities.yaml
+    - docs/changes/**/spec-delta.md
+  forbidden_until_implement:
+    - src/ratelimit/limiter.py

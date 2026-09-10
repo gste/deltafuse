@@ -96,6 +96,18 @@ deltafuse next --step declare --json
 
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
 
+## Бенчмарк воркера
+
+Ставится product-кейс, любой воркер заполняет дерево, ядро считает диск. Модель из CLI не вызывается:
+
+```text
+deltafuse bench init M01-cooldown <product-dir>
+deltafuse bench score <product-dir> --json --label opus-5
+deltafuse bench compare opus.json flash.json
+```
+
+См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.

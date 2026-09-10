@@ -16,6 +16,7 @@ tests/
 │   ├── test_queue.py             # Derived work queue and deltafuse next
 │   ├── test_board.py             # Read-only fuse-map board snapshot
 │   ├── test_llm_adapter.py       # Skills bind Worker (LLM); Core selects the step
+│   ├── test_bench.py             # Agent-agnostic Worker bench (init / score / compare)
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
 ├── integration/
 │   ├── test_installer.py         # Product initialization and framework upgrade
@@ -72,6 +73,12 @@ deltafuse board . --json
 ### Run with Coverage
 ```bash
 python -m pytest --cov=deltafuse --cov-report=term-missing
+```
+
+### Worker bench (no LLM)
+```bash
+deltafuse bench init M01-cooldown ./m01
+deltafuse bench score ./m01 --json --label smoke
 ```
 
 ### Run LLM Benchmark Evals

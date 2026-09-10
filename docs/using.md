@@ -96,6 +96,18 @@ Generated skills bind the Worker to an LLM. They write Change files, close with 
 
 Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
 
+## Worker bench
+
+Install a product case, let any Worker fill it, then score the disk. The Core does not call a model:
+
+```text
+deltafuse bench init M01-cooldown <product-dir>
+deltafuse bench score <product-dir> --json --label opus-5
+deltafuse bench compare opus.json flash.json
+```
+
+See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.

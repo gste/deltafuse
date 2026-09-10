@@ -25,6 +25,7 @@ from deltafuse.core.queue import (
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.bench.loader import STAGES as BENCH_STAGES
 from deltafuse.evals.dataset import EvalDataset
 from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
 from deltafuse.evals.reporter import export_report
@@ -151,6 +152,25 @@ def main(argv: list[str] | None = None) -> int:
     # lint-context command (P7.6)
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
+
+    bench_parser = subparsers.add_parser(
+        "bench",
+        help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)",
+    )
+    bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
+    bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
+    bench_init.add_argument("case_id", help="Case id (for example M01-cooldown)")
+    bench_init.add_argument("product_dir", help="Empty or new product directory")
+    bench_init.add_argument("--force", "-f", action="store_true", help="Overwrite an existing bench workspace")
+    bench_score = bench_sub.add_parser("score", help="Score a bench product from artifacts on disk")
+    bench_score.add_argument("product_dir", help="Product root created by bench init")
+    bench_score.add_argument("--stage", choices=list(BENCH_STAGES), help="Score one lifecycle step")
+    bench_score.add_argument("--json", action="store_true", help="Write the scorecard as JSON")
+    bench_score.add_argument("--label", default=None, help="Run label (model name) stored in the JSON")
+    bench_score.add_argument("--out-file", default=None, help="Save JSON to this path")
+    bench_cmp = bench_sub.add_parser("compare", help="Compare two bench score JSON files")
+    bench_cmp.add_argument("left", help="First score JSON")
+    bench_cmp.add_argument("right", help="Second score JSON")
 
     # eval command (Stage 5)
     eval_parser = subparsers.add_parser("eval", help="Run LLM Eval benchmark against DeltaFuse dataset and gatekeepers")
@@ -352,6 +372,46 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"Context budget for {target} is within limits.")
         return 0
+
+    elif args.command == "bench":
+        from deltafuse.bench import BenchError
+        from deltafuse.bench.init_product import init_bench_product
+        from deltafuse.bench.score import compare_reports, format_score, score_product
+
+        try:
+            if args.bench_cmd == "init":
+                meta = init_bench_product(
+                    args.case_id,
+                    args.product_dir,
+                    force=args.force,
+                )
+                print(f"Bench {meta['case']} ready in {Path(args.product_dir).resolve()}")
+                print("Oracle and hidden suite are not in this tree. Follow BENCH.md.")
+                return 0
+            if args.bench_cmd == "score":
+                report = score_product(
+                    args.product_dir,
+                    stage=args.stage,
+                    label=args.label,
+                )
+                payload = json.dumps(report, ensure_ascii=False, indent=2)
+                if args.out_file:
+                    Path(args.out_file).write_text(payload + "\n", encoding="utf-8")
+                if args.json:
+                    print(payload)
+                else:
+                    print(format_score(report))
+                return 0 if report.get("pass") else 1
+            left = json.loads(Path(args.left).read_text(encoding="utf-8"))
+            right = json.loads(Path(args.right).read_text(encoding="utf-8"))
+            print(compare_reports(left, right))
+            return 0
+        except BenchError as ex:
+            print(f"Bench failed: {ex}", file=sys.stderr)
+            return 2
+        except Exception as ex:
+            print(f"Bench failed: {ex}", file=sys.stderr)
+            return 2
 
     elif args.command == "eval":
         try:

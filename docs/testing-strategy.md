@@ -32,7 +32,8 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, board, lint-context, eval)
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, board, lint-context, bench, eval)
+│   ├── bench/                        # Агент-агностичный Worker bench: init кейса, score диска, compare (без LLM)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
@@ -72,6 +73,7 @@ delta-fuse/
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
+│   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade
@@ -207,6 +209,15 @@ delta-fuse/
 * **7.3. CLI команда `deltafuse eval`**:
   - Флаги: `--scenario`, `--provider [mock|real]`, `--output [text|json|markdown]`, `--min-schema-compliance`, `--min-gate-pass-rate`.
 
+### Набор 8. Агент-агностичный Worker bench (`tests/unit/test_bench.py`, `src/deltafuse/bench/`)
+
+Отдельный контур от `deltafuse eval --provider mock` (one-shot dump пакета). Ядро **не вызывает** модель.
+
+* **8.1. Init**: `deltafuse bench init M01-cooldown` ставит product + seed spec/code + intake. В дереве нет `oracle.yaml` и hidden `penalty_lockout`.
+* **8.2. Score по шагам**: Intake → Verify; на каждом шаге `check-gate` (если статус текущий) + оракул (capability, live spec keywords, seed hash до Implement, hidden pytest при Implement). Пустой init → все шаги `not-run`, exit 1.
+* **8.3. Compare**: два JSON scorecard; таблица шагов для сравнения моделей (Opus vs Flash) без второго промпта.
+* **8.4. CLI**: `bench init|score|compare`; `--stage`, `--json`, `--label`, `--out-file`.
+
 ---
 
 ## 4. Консольные команды для инженера и агентов
@@ -242,6 +253,11 @@ deltafuse board . --json
 
 # 10. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
+
+# 11. Агент-агностичный Worker bench (диск, без LLM)
+deltafuse bench init M01-cooldown ./m01
+deltafuse bench score ./m01 --json --label opus-5
+deltafuse bench compare opus.json flash.json
 ```
 
 ---

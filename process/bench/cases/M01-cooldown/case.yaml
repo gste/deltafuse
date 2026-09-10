@@ -1,0 +1,23 @@
+id: M01-cooldown
+title: Cool-down penalty on an existing token-bucket limiter
+intent: feature
+target_capability: security.ratelimit
+intake_name: M01-cooldown.md
+ambiguity_expected: false
+min_claims: 3
+min_slices: 1
+live_spec: docs/spec/security/ratelimit.md
+spec_must_contain:
+  - penalty_seconds
+seed_must_stay_until_implement:
+  - src/ratelimit/limiter.py
+  - tests/test_limiter.py
+hidden_suite: hidden_suite/test_acceptance.py
+stages:
+  - intake
+  - analyze
+  - specify
+  - decompose
+  - declare
+  - implement
+  - verify

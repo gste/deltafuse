@@ -95,6 +95,7 @@ product/
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
 | [roles.md](./roles.md) | Границы полномочий ИИ и человека |
 | [using.ru.md](./using.ru.md) | Установка и product integration |
+| [bench.ru.md](./bench.ru.md) ([en](./bench.md)) | Агент-агностичный бенчмарк воркера (`deltafuse bench`); ядро считает диск |
 | [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
 
 Исполняемые привязки воркера (LLM) — `process/skills/**`; машинный контракт Ядра — kernel. Схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.

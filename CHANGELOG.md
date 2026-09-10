@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deltafuse bench` prepares an agent-agnostic Worker case (`M01-cooldown`) and scores each lifecycle step from disk. No LLM call. `bench compare` diffs two score JSON files.
+
 ## [2.3.0] - 2026-09-10
 
 ### Added
