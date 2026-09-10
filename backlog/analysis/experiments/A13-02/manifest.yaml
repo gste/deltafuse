@@ -1,0 +1,30 @@
+task_id: A13-02
+packet: backlog/analysis/packets/A13-02.md
+layer: R1
+date: "2026-09-10"
+framework_revision: 24093c8
+n: 1
+tag: a13
+runtime:
+  model: ornith-1.5-35b-a3b
+  endpoint: http://127.0.0.1:1240/v1
+  reasoning: off
+  cpu_moe: true
+  studio_1234: not-used
+  weights: weights-root/ornith-ai/Ornith-1.5-35B-A3B-GGUF/Ornith-1.5-35B-Q4_K_M.gguf
+skills: process/skills current branch
+harness: backlog/analysis/experiments/A09-01/harness/run_case.py
+extras_s02_slice01: not patched; stock harness still asks one SLICE-01 on Analyze
+hidden_suite: not in prompt
+llm_calls: sequenced phases only; no cloud
+inputs:
+  - backlog/analysis/packets/A13-02.md
+  - backlog/analysis/regression-plan.md
+  - backlog/analysis/experiments/local-runtime/README.md
+  - backlog/analysis/experiments/A13-01/result.md
+outputs:
+  - result.md
+  - run_r1.py
+  - runs/
+  - work/
+verdict: partial

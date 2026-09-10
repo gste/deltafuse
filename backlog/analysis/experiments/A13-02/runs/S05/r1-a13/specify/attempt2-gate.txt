@@ -1,0 +1,2 @@
+change.yaml: [slices -> 0] 'file' is a required property
+Gate specified: docs/spec/_capabilities.yaml: [domains -> security] Additional properties are not allowed ('policies' was unexpected)

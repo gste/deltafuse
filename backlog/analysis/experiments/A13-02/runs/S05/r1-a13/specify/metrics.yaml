@@ -1,0 +1,90 @@
+case: S05
+repeat: 1
+tag: a13
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 15840
+  ttft_s: 20.242381199990632
+  elapsed_s: 108.05828179998207
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/spec-delta.md
+  - docs/spec/security/ratelimit.md
+  - docs/spec/_capabilities.yaml
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/coverage.yaml
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/slices/SLICE-01.md
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/change.yaml
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4849
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  gpu_after:
+    vram_used_mib: 4847
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 19351
+  ttft_s: 21.862412299989955
+  elapsed_s: 103.84206220001215
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/change.yaml
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/coverage.yaml
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/slices/SLICE-01.md
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/spec-delta.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4847
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  gpu_after:
+    vram_used_mib: 4911
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 19305
+  ttft_s: 23.74473350000335
+  elapsed_s: 57.247633500024676
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/change.yaml
+  - docs/spec/security/ratelimit.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4911
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  gpu_after:
+    vram_used_mib: 4910
+    vram_total_mib: 8188
+    gpu_util_pct: 35
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

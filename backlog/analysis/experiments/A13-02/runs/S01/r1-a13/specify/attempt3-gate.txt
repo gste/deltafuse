@@ -1,0 +1,10 @@
+change.yaml: [deltas -> 0 -> specification] 'operation' is a required property
+change.yaml: [deltas -> 0 -> catalog] 'operation' is a required property
+change.yaml: [deltas -> 0 -> decisions] 'operation' is a required property
+change.yaml: [deltas -> 0 -> tasks] 'operation' is a required property
+change.yaml: [deltas -> 0 -> tests] 'operation' is a required property
+change.yaml: [deltas -> 0 -> implementation] None is not of type 'object'
+change.yaml: [deltas -> 0 -> evidence] 'operation' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+Gate specified: docs/spec/_capabilities.yaml: [domains -> token-bucket-limiter -> capabilities -> token-bucket-limiter] Additional properties are not allowed ('code', 'requirements', 'tests' were unexpected)
+Gate specified: docs/spec/_capabilities.yaml: [domains -> token-bucket-limiter -> capabilities -> token-bucket-limiter -> spec] 'docs/spec/specifications/token-bucket-limiter.md' is not of type 'array'

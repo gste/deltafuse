@@ -1,0 +1,1 @@
+change.yaml: [analysis] None is not of type 'object'

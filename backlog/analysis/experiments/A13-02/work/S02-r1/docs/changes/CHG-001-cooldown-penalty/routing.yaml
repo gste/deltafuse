@@ -1,0 +1,45 @@
+change: CHG-001-cooldown-penalty
+route: code
+claims:
+  CR-001:
+    summary: Add optional penalty_seconds parameter to TokenBucketLimiter init
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: Failed consume transitions key into blocked state for penalty_seconds
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Blocked key consume returns False immediately even with accumulated tokens
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Block lifted automatically on next request after penalty elapses
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: is_blocked(key) reports penalty state independently
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: Backward compatibility preserved without penalty_seconds
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-007:
+    summary: Unknowns on penalty/accumulation interaction and is_blocked observability
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: low

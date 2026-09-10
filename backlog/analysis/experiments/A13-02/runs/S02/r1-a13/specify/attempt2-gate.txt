@@ -1,0 +1,2 @@
+spec-delta.md: [root] Additional properties are not allowed ('schema_version' was unexpected)
+Gate specified: change.yaml status must be 'specified' or 'specification-proposed' (got 'normalized')
