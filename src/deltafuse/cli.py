@@ -13,6 +13,8 @@ from deltafuse.core.layout import validate_product_layout
 from deltafuse.core.queue import (
     QueueError,
     build_work_queue,
+    format_human_blocked_queue,
+    format_human_guide,
     format_item,
     format_queue,
     queue_snapshot,
@@ -104,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
     next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
+    next_parser.add_argument(
+        "--human",
+        action="store_true",
+        help="Print a checklist from the step contract (same files, not a second process)",
+    )
     next_parser.add_argument(
         "--step",
         choices=list(step_names()),
@@ -216,8 +223,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Next failed: {ex}", file=sys.stderr)
             return 2
         selected = select_next(queue, step=args.step)
+        guide = (
+            format_human_guide(selected)
+            if selected is not None
+            else format_human_blocked_queue(queue)
+        )
         if args.json:
-            print(json.dumps(queue_snapshot(queue, selected=selected), ensure_ascii=False, indent=2))
+            payload = queue_snapshot(queue, selected=selected)
+            if args.human:
+                payload["guide"] = guide
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.human:
+            if selected is not None:
+                print(guide)
+            else:
+                print(guide, file=sys.stderr)
         elif args.list:
             print(format_queue(queue))
         elif selected is not None:

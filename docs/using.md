@@ -72,8 +72,11 @@ Do not pass a Change id unless you mean a specific package. The kernel picks the
 ```text
 deltafuse next
 deltafuse next --list
+deltafuse next --human
 deltafuse next --step declare --json
 ```
+
+`--human` is the same step for a person: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
 
 Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
 

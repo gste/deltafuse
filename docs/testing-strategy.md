@@ -227,6 +227,7 @@ deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --chang
 
 # 8. Следующий готовый шаг (очередь, без LLM)
 deltafuse next --list
+deltafuse next --human
 
 # 9. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0

@@ -124,3 +124,37 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
     assert selected is not None
     assert selected.skill == "implement"
     assert selected.task == "TASK-001"
+
+
+def test_next_human_declare_checklist(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-038", title="Human declare")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    before = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
+    ret = main(["next", str(tmp_path), "--human", "--step", "declare"])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert "not a second lifecycle" in out
+    assert "docs/changes/*/evidence/red/**" in out
+    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate targeting" in out
+    assert "deltafuse evidence" in out and "--phase red" in out
+    assert "Do not auto-accept Decisions" in out
+    assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
+
+
+def test_next_human_blocked_is_human_gate(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-039", title="Human blocked").step_intake()
+    builder._update_change_yaml({"status": "blocked-on-decision"})
+    ret = main(["next", str(tmp_path), "--human"])
+    _, err = capsys.readouterr()
+    assert ret == 1
+    assert "Human gate" in err
+    assert "Do not auto-accept Decisions" in err
+    assert "Do not run an LLM skill" in err
+    assert "CHG-039" in err

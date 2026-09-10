@@ -72,8 +72,11 @@ Change id не обязателен: ядро берёт первый ready эл
 ```text
 deltafuse next
 deltafuse next --list
+deltafuse next --human
 deltafuse next --step declare --json
 ```
+
+`--human` — тот же шаг для человека: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
 
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
 

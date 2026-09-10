@@ -59,6 +59,7 @@ deltafuse evidence docs/changes/CHG-001 --phase red --task TASK-001 --changed-pa
 ### Next ready step
 ```bash
 deltafuse next --list
+deltafuse next --human
 ```
 
 ### Run with Coverage

@@ -11,6 +11,7 @@ import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import find_repo_root, missing_analyze_artifacts
 from deltafuse.core.integrity import find_unresolved_decisions_for_change
+from deltafuse.core.context import PHASE_CONTRACTS
 from deltafuse.core.steps import STEP_CONTRACTS
 
 TERMINAL_CHANGE = {
@@ -386,3 +387,106 @@ def format_queue(queue: WorkQueue) -> str:
         extra = f"  {item.task}" if item.task else ""
         lines.append(f"  {item.change_id or '-'}{extra}  {item.path or '-'}  {item.reason}")
     return "\n".join(lines)
+
+
+_EVIDENCE_HINTS: dict[str, list[tuple[str, str]]] = {
+    "declare": [("red", "Red oracle against unchanged production code")],
+    "implement": [
+        ("green", "target command until Green"),
+        ("regression", "scoped regression for unchanged behavior"),
+    ],
+}
+
+
+def format_human_guide(item: WorkItem) -> str:
+    """Checklist from the step contract. Same Change files as llm/script; not a second process."""
+    if item.kind != "ready" or not item.step or item.step not in PHASE_CONTRACTS:
+        return format_human_blocked_item(item)
+    phase = PHASE_CONTRACTS[item.step]
+    change_dir = item.path or "<change-dir>"
+    lines = [
+        f"# {item.step}  {item.change_id or ''}  {item.task or ''}".rstrip(),
+        "",
+        "Fill the same Change files a worker would. This is not a second lifecycle.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        f"skill: /{item.skill}",
+        f"gate: {item.gate}",
+        f"change: {item.change_id or '-'}",
+        f"path: {item.path or '-'}",
+        f"task: {item.task or '-'}",
+        f"task_path: {item.task_path or '-'}",
+        f"reason: {item.reason}",
+        "",
+        "## Read",
+    ]
+    for glob in phase.get("allowed_read") or []:
+        lines.append(f"- {glob}")
+    lines.append("")
+    lines.append("## Write")
+    for glob in phase.get("allowed_write") or []:
+        lines.append(f"- {glob}")
+    if item.step in _EVIDENCE_HINTS:
+        lines.append("")
+        lines.append("## Record proof (kernel, do not hand-write YAML)")
+        for ev_phase, label in _EVIDENCE_HINTS[item.step]:
+            task_flag = f"--task {item.task} " if item.task else "--task <TASK-NNN> "
+            lines.append(
+                f"- {label}: `deltafuse evidence {change_dir} --phase {ev_phase} "
+                f"{task_flag}--changed-path <rel> -- <command>`"
+            )
+    lines.append("")
+    lines.append("## Close the gate")
+    if item.path and item.gate:
+        lines.append(f"`deltafuse check-gate {item.path} --gate {item.gate}`")
+    elif item.gate:
+        lines.append(f"`deltafuse check-gate <change-dir> --gate {item.gate}`")
+    lines.append("")
+    lines.append("Then: `deltafuse next`")
+    return "\n".join(lines)
+
+
+def format_human_blocked_item(item: WorkItem) -> str:
+    loc = item.path or "-"
+    return "\n".join(
+        [
+            f"# Human gate  {item.change_id or ''}".rstrip(),
+            "",
+            "No worker step is ready. Do not run an LLM skill.",
+            "Do not auto-accept Decisions.",
+            "",
+            f"change: {item.change_id or '-'}",
+            f"path: {loc}",
+            f"task: {item.task or '-'}",
+            f"reason: {item.reason}",
+            "",
+            "Open docs/decisions/** and/or spec-delta for this Change, decide, then `deltafuse next`.",
+        ]
+    )
+
+
+def format_human_blocked_queue(queue: WorkQueue) -> str:
+    if not queue.blocked:
+        return (
+            "No ready work and nothing blocked.\n"
+            "To start a new Change: /intake\n"
+            "Then: `deltafuse next`"
+        )
+    parts = [
+        "# Human gate",
+        "",
+        "No worker step is ready. Do not run an LLM skill.",
+        "Do not auto-accept Decisions.",
+        "",
+    ]
+    for item in queue.blocked:
+        extra = f"  {item.task}" if item.task else ""
+        parts.append(f"- {item.change_id or '-'}{extra}  {item.path or '-'}  {item.reason}")
+    parts.extend(
+        [
+            "",
+            "Open docs/decisions/** and/or spec-delta, decide, then `deltafuse next`.",
+            "To start a new Change instead: /intake",
+        ]
+    )
+    return "\n".join(parts)
