@@ -8,8 +8,8 @@
 
 ```text
                      ┌───────────────────────────────┐
-                     │          LLM Evals            │  <- Оценка моделей & промптов
-                     │   (Prompt Benchmarks / E2E)   │     (Stage 5: Schema Compliance, Gate Pass)
+                     │         Worker bench          │  <- Оценка воркера с диска
+                     │     (init / score / compare)  │     без LLM; pack у судьи
                      ├───────────────────────────────┤
                      │     E2E Synthetic Flows       │  <- Полный цикл Intake -> Converged -> Archive
                      │    (Deterministic Replays)    │     на синтетических фикстурах без внешних API
@@ -32,9 +32,9 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, next, board, lint-context, bench, eval)
+│   ├── cli.py                        # CLI: init, validate, check-gate, archive, validate-layout, evidence, next, decide, board, lint-context, bench
 │   ├── bench/                        # Агент-агностичный Worker bench: init кейса, score диска, compare (без LLM)
-│   ├── core/
+│   └── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
 │   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
@@ -49,13 +49,6 @@ delta-fuse/
 │   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, claims CR-* / O1/E1
 │   │   ├── layout.py                 # Валидатор эталонной раскладки продукта, lock-файлов и маркеров DO-NOT-EDIT
 │   │   └── schemas.py                # Загрузчик и валидатор 9 схем JSON Schema Draft 2020-12
-│   └── evals/                        # Подсистема бенчмаркинга и оценки LLM (Stage 5)
-│       ├── dataset.py                # Загрузчик датасета и валидация схемы бенчмарков
-│       ├── default_cases.yaml        # Базовый набор синтетических сценариев
-│       ├── metrics.py                # Расчёт Schema Compliance, Gate Pass, Routing Accuracy, Claim F1
-│       ├── providers.py              # Провайдеры: MockLLMProvider (детерминированный CI) и RealLLMProvider (API)
-│       ├── reporter.py               # Экспорт отчётов (text, json, markdown)
-│       └── runner.py                 # Движок выполнения и сбора метрик бенчмарков
 ├── tests/
 │   ├── conftest.py                   # Общие pytest фикстуры (repo_root)
 │   ├── fixtures/
@@ -84,11 +77,6 @@ delta-fuse/
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
 │   │   ├── test_terminal_workflows.py# Невоспроизводимые и отклонённые сценарии
 │   │   └── test_failure_modes.py     # Негативные гейты, циклы задач, потеря/порча request.md
-│   └── evals/                        # Тесты подсистемы LLM Evals
-│       ├── test_dataset.py           # Валидация и загрузка датасета бенчмарков
-│       ├── test_mock_provider.py     # Сценарии MockLLMProvider и RealLLMProvider
-│       ├── test_eval_runner.py       # Движок выполнения и агрегация метрик
-│       └── test_eval_cli.py          # Команда deltafuse eval, CLI аргументы и форматы экспорта
 ├── .github/workflows/test.yml        # CI матрица: Linux, Windows, macOS x Python 3.10-3.14
 ├── pyproject.toml                    # Конфигурация проекта, метаданных и pytest
 └── tests/README.md                   # Руководство по запуску тестов и CLI
@@ -200,24 +188,14 @@ delta-fuse/
 
 ---
 
-### Набор 7. LLM Evals бенчмаркинг (`tests/evals/`, `src/deltafuse/evals/`)
-* **7.1. Датасет и метрики**:
-  - Датасет `default_cases.yaml` с категориями feature, bug, vague, not_reproduced, scope_drift.
-  - Расчёт метрик: Schema Compliance Rate, Gate Pass Rate, Routing Accuracy, Claim Extraction F1.
-* **7.2. Провайдеры**:
-  - `MockLLMProvider`: детерминированная симуляция сценариев (`golden`, `schema_violation`, `fsm_violation`, `routing_mismatch`, `claim_hallucination`) для CI.
-  - `RealLLMProvider`: интеграция с удалёнными LLM через API-ключи окружения (`DELTAFUSE_API_KEY`, `OPENAI_API_KEY`).
-* **7.3. CLI команда `deltafuse eval`**:
-  - Флаги: `--scenario`, `--provider [mock|real]`, `--output [text|json|markdown]`, `--min-schema-compliance`, `--min-gate-pass-rate`.
+### Набор 7. Агент-агностичный Worker bench (`tests/unit/test_bench.py`, `src/deltafuse/bench/`)
 
-### Набор 8. Агент-агностичный Worker bench (`tests/unit/test_bench.py`, `src/deltafuse/bench/`)
+Ядро **не вызывает** модель. Mock `deltafuse eval` (one-shot dump пакета) удалён в 2.4.0.
 
-Отдельный контур от `deltafuse eval --provider mock` (one-shot dump пакета). Ядро **не вызывает** модель.
-
-* **8.1. Init**: `deltafuse bench init M01-cooldown` (пол) или `M02-policy-stats` (фронтир). Worker sandbox + seed spec/code + intake. Публичный API M02 (`peak_rate`, `token_rejects`, `reject_threshold`, `stats.py`) задан во intake. В дереве нет `oracle.yaml` и hidden suite. Непустой существующий каталог — отказ и команда пересоздания; `--force`/`-f` стирает и ставит заново. Успешный init печатает короткий промпт для агента (`deltafuse next`). Промпт не называет `bench score`. `BENCH.md` не велит воркеру запускать `bench score`.
-* **8.2. Score**: только с `--pack` / `DELTAFUSE_BENCH_PACK`. Headline `score` = `0.6 * correctness + 0.4 * process` при журнале retries; без журнала `score=n/a`, не 100. `correctness` — взвешенные oracle points (hidden по тестам; presence / already-past не входят). `process`/`efficiency` из `.deltafuse/bench-journal.jsonl` (ядро пишет все CLI-команды; `check-gate` — с `errors`). `--out-file` внутри песочницы — ошибка. Hidden traceback в JSON только с `--verbose`. Воркер журнал не пишет и не самоотчитывается.
-* **8.3. Compare**: два JSON scorecard; сначала `score`, затем вектор шагов + `first_fail`. `M01` — пол; `M02` — фронтир (два capability / policy / stats).
-* **8.4. CLI**: `bench init|score|compare|journal`; `--stage`, `--json`, `--label`, `--out-file`. `bench journal` — детерминированный rollup попыток (`cycles`), без `--pack` и без LLM.
+* **7.1. Init**: `deltafuse bench init M01-cooldown` (пол) или `M02-policy-stats` (фронтир). Worker sandbox + seed spec/code + intake. Публичный API M02 (`peak_rate`, `token_rejects`, `reject_threshold`, `stats.py`) задан во intake. В дереве нет `oracle.yaml` и hidden suite. Непустой существующий каталог — отказ и команда пересоздания; `--force`/`-f` стирает и ставит заново. Успешный init печатает короткий промпт для агента (`deltafuse next`). Промпт не называет `bench score`. `BENCH.md` не велит воркеру запускать `bench score`.
+* **7.2. Score**: только с `--pack` / `DELTAFUSE_BENCH_PACK`. Headline `score` = `0.6 * correctness + 0.4 * process` при журнале retries; без журнала `score=n/a`, не 100. `correctness` — взвешенные oracle points (hidden по тестам; presence / already-past не входят). `process`/`efficiency` из `.deltafuse/bench-journal.jsonl` (ядро пишет все CLI-команды; `check-gate` — с `errors`). `--out-file` внутри песочницы — ошибка. Hidden traceback в JSON только с `--verbose`. Воркер журнал не пишет и не самоотчитывается.
+* **7.3. Compare**: два JSON scorecard; сначала `score`, затем вектор шагов + `first_fail`. `M01` — пол; `M02` — фронтир (два capability / policy / stats).
+* **7.4. CLI**: `bench init|score|compare|journal`; `--stage`, `--json`, `--label`, `--out-file`. `bench journal` — детерминированный rollup попыток (`cycles`), без `--pack` и без LLM.
 
 ---
 
@@ -256,10 +234,7 @@ deltafuse decide docs/changes/CHG-001-test --decision DEC-0001 --status accepted
 # 9. Снимок доски для fuse-map (без записи в продукт)
 deltafuse board . --json
 
-# 10. Запуск детерминированного бенчмарка LLM Evals
-deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
-
-# 11. Агент-агностичный Worker bench (диск, без LLM)
+# 10. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse bench init M02-policy-stats ./m02
 deltafuse bench journal ./m02
 deltafuse bench score ./m02 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
@@ -274,5 +249,4 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 - **Операционные системы**: `ubuntu-latest`, `windows-latest`, `macos-latest`
 - **Версии Python**: `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
 - **Шаги проверки**:
-  1. `python -m pytest -v` (полный набор unit, integration, e2e, evals)
-  2. `deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0`
+  1. `python -m pytest -v` (полный набор unit, integration, e2e)

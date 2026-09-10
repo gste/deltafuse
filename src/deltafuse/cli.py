@@ -28,10 +28,6 @@ from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
-from deltafuse.evals.dataset import EvalDataset
-from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
-from deltafuse.evals.reporter import export_report
-from deltafuse.evals.runner import run_eval
 
 
 def _journal(start: Path | str, **event: object) -> None:
@@ -233,16 +229,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Judge: collect Core attempts from a sandbox journal (no LLM)",
     )
     bench_journal.add_argument("product_dir", help="Product root created by bench init")
-
-    # eval command (Stage 5)
-    eval_parser = subparsers.add_parser("eval", help="Run LLM Eval benchmark against DeltaFuse dataset and gatekeepers")
-    eval_parser.add_argument("--dataset", "-d", default=None, help="Path to custom eval dataset YAML/JSON file")
-    eval_parser.add_argument("--provider", "-p", default="mock", choices=["mock", "real"], help="LLM Provider to use (mock or real)")
-    eval_parser.add_argument("--scenario", "-s", default="golden",  choices=["golden", "schema_violation", "fsm_violation", "routing_mismatch", "claim_hallucination"], help="Mock LLM simulation scenario")
-    eval_parser.add_argument("--output", "-o", default="text", choices=["text", "json", "markdown"], help="Output format for report")
-    eval_parser.add_argument("--out-file", default=None, help="File path to save the eval report")
-    eval_parser.add_argument("--min-schema-compliance", type=float, default=0.0, help="Minimum required Schema Compliance Rate (0.0 - 100.0)")
-    eval_parser.add_argument("--min-gate-pass-rate", type=float, default=0.0, help="Minimum required Gate Pass Rate (0.0 - 100.0)")
 
     args = parser.parse_args(raw)
 
@@ -586,45 +572,6 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         except Exception as ex:
             print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
-
-    elif args.command == "eval":
-        try:
-            if args.dataset:
-                dataset = EvalDataset.load_from_file(args.dataset)
-            else:
-                dataset = EvalDataset.get_default_dataset()
-
-            if args.provider == "real":
-                provider = RealLLMProvider()
-            else:
-                provider = MockLLMProvider(scenario=args.scenario)
-            report = run_eval(dataset=dataset, provider=provider)
-
-            output_text = export_report(report, format_type=args.output, output_file=args.out_file)
-            print(output_text)
-
-            failed_threshold = False
-            if report.schema_compliance_rate < args.min_schema_compliance:
-                print(
-                    f"Error: Schema Compliance Rate {report.schema_compliance_rate:.1f}% is below required {args.min_schema_compliance:.1f}%",
-                    file=sys.stderr,
-                )
-                failed_threshold = True
-
-            if report.gate_pass_rate < args.min_gate_pass_rate:
-                print(
-                    f"Error: Gate Pass Rate {report.gate_pass_rate:.1f}% is below required {args.min_gate_pass_rate:.1f}%",
-                    file=sys.stderr,
-                )
-                failed_threshold = True
-
-            if failed_threshold:
-                return 1
-
-            return 0 if report.failed_cases == 0 else 1
-        except Exception as ex:
-            print(f"Evaluation failed with error: {ex}", file=sys.stderr)
             return 2
 
     return 0

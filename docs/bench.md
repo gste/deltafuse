@@ -72,4 +72,4 @@ Core appends one JSON object per CLI command in a bench sandbox (`next`, `check-
 
 `M01-cooldown` is a **floor**. Rank frontier workers on `M02-policy-stats` (and on `score` when the retry journal exists). `pass` / `first_fail` remain the binary close-out.
 
-This is not `deltafuse eval --provider mock` (one-shot package dump) and not the A09 ornith `files[]` harness.
+Mock `deltafuse eval` (one-shot package dump) was removed in 2.4.0. Worker scoring is this bench. This is not the A09 ornith `files[]` harness.

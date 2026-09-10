@@ -2,7 +2,16 @@
 
 Очередь работ вокруг канонического репозитория DeltaFuse. Это не lifecycle продукта и не замена `docs/**`.
 
-**Пусто.** Брать в работу нечего. Закрытые карточки, пакеты анализа, findings, матрицы и снимки экспериментов остаются в git history.
+Брать в работу:
+
+| ID | Статус | Слой |
+|---|---|---|
+| [SK-001](product/SK-001.md) | `planned` | schemas / templates / skills — первый `check-gate` |
+| [HS-001](product/HS-001.md) | `planned` | контракт хоста (`halt.choices`, pack isolation, Human Gates) |
+
+Сводка: [product/index.md](product/index.md).
+
+Закрытые карточки, пакеты анализа, findings, матрицы и снимки экспериментов остаются в git history.
 
 Последний коммит с полным деревом экспериментов: `e3e1149`.
 

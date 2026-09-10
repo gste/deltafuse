@@ -56,7 +56,7 @@ delta-fuse/
 ├── docs/             # canonical lifecycle, roles, context model, and rationale
 ├── process/          # executable framework assets
 │   ├── schemas/      # Change, capability, Decision, task, evidence
-│   ├── skills/       # seven operation contracts
+│   ├── skills/       # seven lifecycle skills plus through-mode /run
 │   └── templates/    # product artifacts and Change templates
 ├── scripts/          # installers
 └── tests/            # product layout validators and smoke tests
@@ -78,7 +78,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are generated, version/hash-stamped snapshots and are not editable process sources.
+The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are installer-created copies or links (`adapters.mode`: `auto` | `link` | `copy`), version/hash-stamped, and are not editable process sources.
 
 ## Install
 

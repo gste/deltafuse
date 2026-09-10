@@ -1,6 +1,6 @@
 # Tests and Layout Validators
 
-This directory contains the automated test suites, layout validators, and LLM evaluation benchmarks for the DeltaFuse framework.
+This directory contains the automated test suites and layout validators for the DeltaFuse framework.
 
 ## Structure
 
@@ -26,11 +26,6 @@ tests/
 │   ├── test_golden_workflow.py   # Full 8-step lifecycle flow with archival
 │   ├── test_noop_workflow.py     # Terminal no-op / not-reproduced bug lifecycle
 │   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
-├── evals/
-│   ├── test_dataset.py           # Eval dataset schema validation and loader
-│   ├── test_mock_provider.py     # Deterministic MockLLMProvider scenarios
-│   ├── test_eval_runner.py       # Benchmark evaluation engine and metric aggregations
-│   └── test_eval_cli.py          # deltafuse eval CLI command and reporting
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
 ├── validate-layout.ps1 / .sh     # Legacy shell layout validators (canonical in python `deltafuse validate-layout`)
@@ -79,11 +74,6 @@ python -m pytest --cov=deltafuse --cov-report=term-missing
 ```bash
 deltafuse bench init M02-policy-stats ./m02
 deltafuse bench score ./m02 --pack . --json --label smoke --out-file ../scores/smoke.json
-```
-
-### Run LLM Benchmark Evals
-```bash
-deltafuse eval --scenario golden --threshold 90.0
 ```
 
 ### Continuous Integration (CI)

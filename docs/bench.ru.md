@@ -39,3 +39,5 @@ deltafuse bench compare C:\scores\opus.json C:\scores\flash.json
 Ядро в песочнице пишет одну JSON-строку на каждую CLI-команду (`next`, `check-gate`, `evidence`, …). У `check-gate` — `ok`, `gate`, `errors`. Собрать попытки: `deltafuse bench journal <product-dir>` (циклы: подряд один гейт до успеха). Человек, чужой агент и свой агент одинаковы: журнал им писать не поручают.
 
 `M01-cooldown` — **пол**. Фронтир — `M02-policy-stats`: два capability, два live spec, публичный API (`peak_rate`, `token_rejects`, `reject_threshold`, `block_seconds`, `stats.py` / `policy.py`) задан во intake как `penalty_seconds` на M01. Hidden: раздельные счётчики, окно 1s, lockout только по consecutive, без debit в блоке, без Redis. Сравнивать по `score` (нужен журнал) или по M02. Бинарный `pass` / `first_fail` остаётся закрытием прогона.
+
+Mock `deltafuse eval` (one-shot dump пакета) удалён в 2.4.0. Скоринг воркера — этот bench.

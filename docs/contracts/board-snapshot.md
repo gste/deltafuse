@@ -103,7 +103,7 @@ Values under `layout` are producer-owned. The consumer treats them as data.
   "generated_at": "2026-09-10T06:00:00Z",
   "product": {
     "baseline": "accepted",
-    "framework_version": "2.3.0",
+    "framework_version": "2.4.0",
     "framework_content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "call_width": "wide",
     "changes_path": "docs/changes",

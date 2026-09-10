@@ -56,7 +56,7 @@ delta-fuse/
 ├── docs/             # канонический lifecycle, роли, контекстная модель и rationale
 ├── process/          # исполняемые ресурсы фреймворка
 │   ├── schemas/      # Change, capability, Decision, task, evidence
-│   ├── skills/       # контракты семи операций
+│   ├── skills/       # семь lifecycle skills и сквозной /run
 │   └── templates/    # product artifacts и шаблоны Change
 ├── scripts/          # installers
 └── tests/            # валидаторы разметки и smoke-тесты
@@ -78,7 +78,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills являются generated snapshots с version/hash metadata, а не редактируемым process source.
+Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills — копии или ссылки инсталлера (`adapters.mode`: `auto` | `link` | `copy`) с version/hash, а не редактируемый process source.
 
 ## Установка
 
