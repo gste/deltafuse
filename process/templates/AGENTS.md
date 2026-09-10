@@ -14,7 +14,7 @@ Load `/run` for through-mode: follow `deltafuse next` in the same session until 
 
 The Core (`deltafuse next`, `evidence`, `check-gate`, `decide`) selects the step, checks gates, and records a Human Gate click. The Worker (LLM skill or human) writes Change artifacts. Do not pick the next lifecycle step from chat. Do not auto-accept Decisions or merge. When `next` returns `halt.kind` `decision` or `spec`, present `halt.choices` in the host multiple-choice UI and wait; then run the matching `deltafuse decide` command.
 
-Do not edit generated skill snapshots under `.agents/skills/**`, `.cursor/skills/**`, or `.gemini/skills/**`. Regenerate them through the DeltaFuse installer/update command and validate them against `.deltafuse/lock.yaml`.
+Do not edit adapter skills under `.agents/skills/**`, `.cursor/skills/**`, or `.gemini/skills/**` (copied snapshots or links into the pinned checkout). Recreate them with the DeltaFuse installer and validate them against `.deltafuse/lock.yaml`. After a submodule update, linked skills are already live; re-run the installer with `--force` only to refresh the lock.
 
 Repository-specific build, test, security, and style conventions may be added below. They must not redefine the DeltaFuse lifecycle or product behavior.
 

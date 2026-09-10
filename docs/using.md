@@ -30,7 +30,10 @@ docs/archive/intake/
 docs/archive/changes/
 ```
 
-It also generates tool-specific skill snapshots in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. Each snapshot is marked `DO NOT EDIT` and records the installed framework version, source URI, and content hash.
+It also installs adapter skills in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. `adapters.mode` is `auto` (default), `link`, or `copy`.
+
+- **link** when the framework checkout lives inside the product (git submodule or vendor path): each adapter skill is a relative symlink to `process/skills/<name>`. Cursor sees live skills after `git submodule update`. `init --force` only refreshes `.deltafuse/lock.yaml`. Do not commit the adapter links. On Windows without symlink privilege the installer may create a directory junction instead (absolute, machine-local).
+- **copy** otherwise, and when the OS refuses symlinks: stamped snapshots marked `DO NOT EDIT`, with version, source URI, and content hash.
 
 The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in the product repository.
 
@@ -38,13 +41,13 @@ The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in 
 
 `.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and the Analyze call-width profile. Re-run the installer after changing `call_width` so lock matches config.
 
-Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config, lock, and generated adapters, while preserving product-owned specification, Changes, Decisions, `AGENTS.md`, and any existing templates. Before updating lock:
+Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config and lock. Linked adapters follow the nested checkout; copied adapters are regenerated. Product-owned specification, Changes, Decisions, `AGENTS.md`, and existing templates stay. Before updating lock:
 
 1. Review active Changes and their recorded framework/schema versions.
 2. Complete them on the current version or explicitly close the Change.
-3. Regenerate adapters and validate product layout.
+3. Re-run the installer and validate product layout.
 
-Never manually edit generated skills or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
+Never edit adapter skills (copied snapshots or the canonical files they link to) or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
 
 ## First operation
 

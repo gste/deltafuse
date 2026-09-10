@@ -24,6 +24,7 @@ project:
   capability_catalog: docs/spec/_capabilities.yaml
 
 adapters:
+  mode: auto
   roots:
     - .agents/skills
     - .cursor/skills

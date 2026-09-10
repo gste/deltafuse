@@ -1,6 +1,8 @@
 """Integration tests for DeltaFuse product repository layout validator."""
 
 from pathlib import Path
+import shutil
+import pytest
 import yaml
 from deltafuse.core.installer import install
 from deltafuse.core.layout import validate_product_layout
@@ -37,6 +39,28 @@ def test_missing_generated_skill_detected(tmp_path: Path, repo_root: Path):
 
     errors = validate_product_layout(tmp_path)
     assert any("Missing generated skill: .agents/skills/intake/SKILL.md" in e for e in errors)
+
+
+def test_linked_skill_not_a_symlink_detected(tmp_path: Path, repo_root: Path):
+    product = tmp_path / "product"
+    vendor = product / "vendor" / "delta-fuse"
+    (vendor / "docs").mkdir(parents=True)
+    (vendor / "scripts").mkdir()
+    (vendor / "tests").mkdir()
+    (vendor / "docs" / ".keep").write_text("", encoding="utf-8")
+    (vendor / "scripts" / ".keep").write_text("", encoding="utf-8")
+    (vendor / "tests" / ".keep").write_text("", encoding="utf-8")
+    shutil.copytree(repo_root / "process", vendor / "process")
+    shutil.copyfile(repo_root / "VERSION", vendor / "VERSION")
+    result = install(target_dir=product, framework_root=vendor)
+    if result.adapter_mode != "link":
+        pytest.skip("OS refused skill symlinks")
+    slot = product / ".agents" / "skills" / "intake"
+    slot.unlink()
+    slot.mkdir()
+    (slot / "SKILL.md").write_text("---\nname: intake\n---\n", encoding="utf-8")
+    errors = validate_product_layout(product)
+    assert any("Generated skill is not a symlink: .agents/skills/intake" in e for e in errors)
 
 
 def test_invalid_call_width_detected(tmp_path: Path, repo_root: Path):

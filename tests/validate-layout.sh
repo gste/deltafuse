@@ -190,6 +190,33 @@ fi
 skills="run intake analyze specify decompose declare implement verify"
 for adapter in "${adapter_roots[@]}"; do
   [ -d "$PRODUCT_ROOT/$adapter" ] || { fail "Missing configured adapter root: $adapter"; continue; }
+  adapter_marker="$PRODUCT_ROOT/$adapter/.deltafuse-generated.yaml"
+  if [ -f "$adapter_marker" ] && grep -Eq '^mode:[[:space:]]*link[[:space:]]*$' "$adapter_marker"; then
+    fw_rel="$(awk '/^source:[[:space:]]*/ { sub(/^source:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$adapter_marker")"
+    if [ -z "$fw_rel" ] && [ -n "$lock_source" ] && [[ ! "$lock_source" =~ ^deltafuse ]]; then
+      fw_rel="$lock_source"
+    fi
+    if [ -z "$fw_rel" ]; then
+      fail "Linked adapter $adapter has no nested framework source"
+      continue
+    fi
+    [ -z "$lock_version" ] || grep -Fq "generated_by: deltafuse@$lock_version" "$adapter_marker" || fail "Generated adapter version mismatch: $adapter"
+    [ -z "$lock_hash" ] || grep -Fq "content_hash: $lock_hash" "$adapter_marker" || fail "Generated adapter hash mismatch: $adapter"
+    for skill in $skills; do
+      skill_root="$PRODUCT_ROOT/$adapter/$skill"
+      [ -f "$skill_root/SKILL.md" ] || { fail "Missing generated skill: $adapter/$skill/SKILL.md"; continue; }
+      [ -L "$skill_root" ] || { fail "Generated skill is not a symlink: $adapter/$skill"; continue; }
+      expected="$PRODUCT_ROOT/$fw_rel/process/skills/$skill"
+      if [ ! -d "$expected" ]; then
+        fail "Linked adapter $adapter source '$fw_rel' is not a DeltaFuse checkout"
+        continue
+      fi
+      actual="$(cd "$skill_root" && pwd)"
+      expect_pwd="$(cd "$expected" && pwd)"
+      [ "$actual" = "$expect_pwd" ] || fail "Generated skill symlink does not point at $fw_rel/process/skills/$skill: $adapter/$skill"
+    done
+    continue
+  fi
   for skill in $skills; do
     skill_root="$PRODUCT_ROOT/$adapter/$skill"
     [ -f "$skill_root/SKILL.md" ] || { fail "Missing generated skill: $adapter/$skill/SKILL.md"; continue; }

@@ -14,6 +14,18 @@ function Require-Path {
     }
 }
 
+function Resolve-DirLink {
+    param([string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force
+    $target = $item.Target
+    if ($target -is [array]) { $target = $target[0] }
+    if (-not $target) { return $item.FullName }
+    if (-not [System.IO.Path]::IsPathRooted($target)) {
+        $target = Join-Path (Split-Path -Parent $item.FullName) $target
+    }
+    return [System.IO.Path]::GetFullPath($target)
+}
+
 Require-Path ".deltafuse/config.yaml"
 Require-Path ".deltafuse/lock.yaml"
 
@@ -30,6 +42,8 @@ $paths = @{
     decisions = "docs/decisions"
     archive = "docs/archive"
 }
+$configSource = $null
+$lockSource = $null
 $adapterRoots = @()
 
 if (Test-Path -LiteralPath $configPath) {
@@ -287,6 +301,59 @@ foreach ($adapterRootRelative in $adapterRoots) {
     $adapterRoot = Join-Path $ProductRoot $adapterRootRelative
     if (-not (Test-Path -LiteralPath $adapterRoot)) {
         $Errors.Add("Missing configured adapter root: $adapterRootRelative")
+        continue
+    }
+
+    $adapterMarker = Join-Path $adapterRoot ".deltafuse-generated.yaml"
+    $linkMode = $false
+    $fwRel = $null
+    if (Test-Path -LiteralPath $adapterMarker) {
+        $adapterMeta = Get-Content -LiteralPath $adapterMarker -Raw
+        if ($adapterMeta -match '(?m)^mode:\s*link\s*$') {
+            $linkMode = $true
+            $srcMatch = [regex]::Match($adapterMeta, '(?m)^source:\s*(\S+)\s*$')
+            if ($srcMatch.Success) { $fwRel = $srcMatch.Groups[1].Value }
+            if ($lockVersion -and $adapterMeta -notmatch [regex]::Escape("generated_by: deltafuse@$lockVersion")) {
+                $Errors.Add("Generated adapter version mismatch: $adapterRootRelative")
+            }
+            if ($lockHash -and $adapterMeta -notmatch [regex]::Escape("content_hash: $lockHash")) {
+                $Errors.Add("Generated adapter hash mismatch: $adapterRootRelative")
+            }
+        }
+    }
+    if ($linkMode -and -not $fwRel -and $lockSource -and $lockSource -notmatch '^deltafuse') {
+        $fwRel = $lockSource
+    }
+
+    if ($linkMode) {
+        if (-not $fwRel) {
+            $Errors.Add("Linked adapter $adapterRootRelative has no nested framework source")
+            continue
+        }
+        $fwSkills = Join-Path (Join-Path $ProductRoot $fwRel) "process/skills"
+        foreach ($skillName in $skillNames) {
+            $skillRoot = Join-Path $adapterRoot $skillName
+            $skillFile = Join-Path $skillRoot "SKILL.md"
+            if (-not (Test-Path -LiteralPath $skillFile)) {
+                $Errors.Add("Missing generated skill: $adapterRootRelative/$skillName/SKILL.md")
+                continue
+            }
+            $item = Get-Item -LiteralPath $skillRoot -Force
+            if (-not $item.LinkType) {
+                $Errors.Add("Generated skill is not a symlink: $adapterRootRelative/$skillName")
+                continue
+            }
+            $expected = Join-Path $fwSkills $skillName
+            if (Test-Path -LiteralPath $expected) {
+                $actualResolved = Resolve-DirLink $skillRoot
+                $expectedResolved = [System.IO.Path]::GetFullPath($expected)
+                if ($actualResolved -ne $expectedResolved) {
+                    $Errors.Add("Generated skill symlink does not point at ${fwRel}/process/skills/${skillName}: $adapterRootRelative/$skillName")
+                }
+            } else {
+                $Errors.Add("Linked adapter $adapterRootRelative source '$fwRel' is not a DeltaFuse checkout")
+            }
+        }
         continue
     }
 

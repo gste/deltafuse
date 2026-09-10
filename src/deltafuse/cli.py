@@ -251,6 +251,8 @@ def main(argv: list[str] | None = None) -> int:
             result = install(target_dir=args.target, force=args.force)
             print(f"DeltaFuse {result.version} successfully installed into {result.target_dir}")
             print(f"Content hash: sha256:{result.content_hash}")
+            if result.adapter_mode == "link":
+                print("Adapter skills are relative links into the nested framework checkout.")
             return 0
         except InstallationError as e:
             print(f"Installation Error: {e}", file=sys.stderr)
