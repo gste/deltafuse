@@ -78,6 +78,8 @@ deltafuse next --step declare --json
 
 `--human` is the same step for a person: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
 
+Generated skills are the LLM adapter. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
+
 Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
 
 ## External boards

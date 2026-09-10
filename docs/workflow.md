@@ -299,10 +299,11 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
-1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
-2. Update any related intake requests in `docs/intake/` and move them to `docs/archive/intake/`.
-3. Update `change.yaml` status to `archived`.
-4. The archived Change package remains an immutable historical record.
+After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse archive <change-dir>`. That:
+1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
+2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
+3. Updates `change.yaml` status to `archived`.
+4. Leaves the archived Change package as an immutable historical record.
 
 ---
 

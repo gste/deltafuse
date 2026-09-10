@@ -16,6 +16,13 @@ STEP_CONTRACTS: dict[str, dict[str, str]] = {
 
 STEP_ORDER = tuple(STEP_CONTRACTS.keys())
 
+LLM_ADAPTER_MARKERS = (
+    "LLM adapter, not the orchestrator",
+    "deltafuse next",
+    "Do not auto-accept Decisions",
+    "Do not choose the next slash command yourself",
+)
+
 
 def step_names() -> tuple[str, ...]:
     return STEP_ORDER

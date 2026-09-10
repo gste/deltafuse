@@ -287,7 +287,7 @@ Raw intent (docs/intake/...)
 - `not-reproduced`: подтверждённое отсутствие воспроизведения с фиксацией диагностического evidence.
 
 ### Архивация
-После подтверждения сходимости:
+После подтверждения сходимости закройте гейт и архивируйте ядром: `deltafuse check-gate <change-dir> --gate converged`, затем `deltafuse archive <change-dir>`.
 1. Активные задачи переводятся в статус `verified`. `cancelled` и `superseded` остаются терминальными, без фальшивого `implemented`.
 2. Фиксируется итоговый статус в `change.yaml` (`converged` -> `archived`).
 3. При необходимости обновляется `CHANGELOG.md`.

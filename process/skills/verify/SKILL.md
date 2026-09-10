@@ -9,7 +9,15 @@ Prove that the Delta was fully fused before removing the Change from active cont
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-If the caller did not name a Change, run `deltafuse next --step verify` at the product root and use `path`. If it exits non-zero, stop and report the output.
+## LLM adapter
+
+This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+
+1. If no Change was named, run `deltafuse next --step verify` at the product root and use `path`. Halt if it exits non-zero.
+2. Write only this step's artifacts (see Procedure).
+3. Close with `deltafuse check-gate <change-dir> --gate converged`. Halt if it exits non-zero.
+4. After the gate passes, archive with `deltafuse archive <change-dir>`. Then run `deltafuse next`. Do not choose the next slash command yourself.
+5. Do not auto-accept Decisions or merge.
 
 ## Context
 
@@ -24,8 +32,8 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 5. If automated full-suite verification is executed at the Change level, record execution evidence under `evidence/verification/run.yaml` (`phase: verification`) with `base_revision` matching the current `docs/spec/**` and `src/**` tree.
 6. The `converged` gate checks that `spec-delta.md` `added`/`modified` paths still exist under `docs/spec/**` and that `removed` paths are gone; do not treat archive as a spec merge.
 7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Set implemented tasks to `verified`. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
-8. For a gap, return ownership to the corresponding upstream skill; do not repair it silently.
-9. After convergence, persist terminal task history/evidence, remove the Change from the active index, optionally update `CHANGELOG.md`, and move the complete package to `docs/archive/changes/<date>-<change-id>/`.
+8. For a gap, stop; do not repair it silently.
+9. After `deltafuse check-gate <change-dir> --gate converged` passes, archive with `deltafuse archive <change-dir>`. Do not invent a second archive process.
 
 Archive is provenance, not default implementation context. Do not delete completed task history.
 

@@ -36,7 +36,7 @@ Use these names consistently:
 
 - Treat canonical documentation in [docs/](docs/README.md) as the authoritative process specification.
 - Update canonical docs, skills, schemas, templates, installers, validators, and tests together when a contract changes.
-- Keep skills concise and self-contained enough to work as generated snapshots.
+- Keep skills concise and self-contained enough to work as generated snapshots. They are the LLM adapter; kernel CLI (`next`, `evidence`, `check-gate`) orchestrates.
 - Preserve user intent and do not invent product requirements.
 - Never run `git push`, destructive git commands, or merge into the default branch.
 - Do not commit secrets, credentials, or environment-specific absolute paths.

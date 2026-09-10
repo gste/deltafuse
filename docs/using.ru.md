@@ -78,6 +78,8 @@ deltafuse next --step declare --json
 
 `--human` — тот же шаг для человека: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
 
+Сгенерированные skills — LLM adapter: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
+
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
 
 ## Внешние доски

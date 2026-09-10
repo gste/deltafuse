@@ -9,7 +9,15 @@ Declare the behavior that must become true. That is the point of writing Red tes
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-If the caller did not name a Change or task, run `deltafuse next --step declare` at the product root and use `path` / `task_path`. If it exits non-zero, stop and report the output.
+## LLM adapter
+
+This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+
+1. If no Change or task was named, run `deltafuse next --step declare` at the product root and use `path` / `task_path`. Halt if it exits non-zero.
+2. Write only this step's artifacts (see Procedure). Record Red with `deltafuse evidence`, not by hand-writing YAML.
+3. Close with `deltafuse check-gate <change-dir> --gate targeting`. Halt if it exits non-zero.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself.
+5. Do not auto-accept Decisions or merge.
 
 ## Context
 
@@ -29,8 +37,6 @@ Do not read implementation internals unless the oracle cannot otherwise be expre
 7. Set task/Change state to `target-confirmed` only after valid Red.
 
 If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.
-
-Recommend `/implement <task-path>` only for confirmed Red.
 
 For `route: docs` or `ops`, record a file or schema oracle in `evidence/red/` instead of product pytest; do not list `src/**` or `tests/**`. Hidden code-suite checks do not apply.
 

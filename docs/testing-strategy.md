@@ -67,6 +67,9 @@ delta-fuse/
 │   │   ├── test_fsm.py               # 18 канонических статусов, допустимые переходы, гейты
 │   │   ├── test_fsm_mutations.py     # Семантические мутационные тесты (T1-T8, N10, lock-хэш)
 │   │   ├── test_hasher.py            # Чувствительность sha256 content_hash к изменениям дистрибутива
+│   │   ├── test_evidence.py          # Evidence runner: классификация и YAML
+│   │   ├── test_queue.py             # Производная очередь и deltafuse next
+│   │   ├── test_llm_adapter.py       # Skills — LLM adapter, не оркестратор
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade

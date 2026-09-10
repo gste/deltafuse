@@ -92,6 +92,8 @@ The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/ski
 - `implement` — implement code and record Green/Regression evidence;
 - `verify` — verify artifact convergence and archive package.
 
+Those files are the LLM adapter. The kernel CLI (`deltafuse next`, `evidence`, `check-gate`) orchestrates. Skills do not choose the next step.
+
 ### Execution Profiles
 
 High-level operational workflows are orchestrated by invoking these canonical primitives in sequence:

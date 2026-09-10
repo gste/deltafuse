@@ -9,7 +9,15 @@ Establish the normative state from which tasks may be derived.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-If the caller did not name a Change, run `deltafuse next --step specify` at the product root and use `path`. If it exits non-zero, stop and report the output.
+## LLM adapter
+
+This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+
+1. If no Change was named, run `deltafuse next --step specify` at the product root and use `path`. Halt if it exits non-zero.
+2. Write only this step's artifacts (see Procedure).
+3. Close with `deltafuse check-gate <change-dir> --gate specified`. Halt if it exits non-zero.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself.
+5. Do not auto-accept Decisions or merge.
 
 ## Context
 
@@ -24,13 +32,11 @@ Read one analyzed slice, its typed delta, exact affected spec modules, accepted 
 5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
 6. Update coverage and slice/Change status. Present normative edits for the human specification gate.
 
-Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze`.
+Do not accept Decisions, invent behavior, or implement code. A newly discovered material question: stop; do not continue Specify.
 
 ## Gate
 
 The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
-
-Recommend `/decompose <change-id> [slice-id]`.
 
 Do not write deploy YAML or `docs/ops/**`; those belong to `route: ops` Implement.
 

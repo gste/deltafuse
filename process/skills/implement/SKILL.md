@@ -9,7 +9,15 @@ Make one declared Red oracle Green with the smallest compliant production change
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-If the caller did not name a Change or task, run `deltafuse next --step implement` at the product root and use `path` / `task_path`. If it exits non-zero, stop and report the output.
+## LLM adapter
+
+This file is the LLM adapter, not the orchestrator. The kernel owns `next`, `evidence`, and `check-gate`.
+
+1. If no Change or task was named, run `deltafuse next --step implement` at the product root and use `path` / `task_path`. Halt if it exits non-zero.
+2. Write only this step's artifacts (see Procedure). Record Green and regression with `deltafuse evidence`, not by hand-writing YAML.
+3. Close with `deltafuse check-gate <change-dir> --gate implemented`. Halt if it exits non-zero.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself.
+5. Do not auto-accept Decisions or merge.
 
 ## Context
 
@@ -28,7 +36,5 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 6. Set the task to `implemented`; retain the task file and its history inside the Change.
 
 If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.
-
-Recommend the next ready `/declare`, or `/verify <change-id>` when all tasks are terminal.
 
 For `route: docs` or `ops`, write only the task `allowed_paths` (spec/changelog or ops/deploy files). Do not patch product `src/**`. Do not weaken Implement for `route: code`.
