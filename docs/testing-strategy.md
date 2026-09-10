@@ -213,9 +213,9 @@ delta-fuse/
 
 Отдельный контур от `deltafuse eval --provider mock` (one-shot dump пакета). Ядро **не вызывает** модель.
 
-* **8.1. Init**: `deltafuse bench init M01-cooldown` ставит product + seed spec/code + intake. В дереве нет `oracle.yaml` и hidden `penalty_lockout`.
-* **8.2. Score по шагам**: Intake → Verify; на каждом шаге `check-gate` (если статус текущий) + оракул (capability, live spec keywords, seed hash до Implement, hidden pytest при Implement). Пустой init → все шаги `not-run`, exit 1.
-* **8.3. Compare**: два JSON scorecard; таблица шагов для сравнения моделей (Opus vs Flash) без второго промпта.
+* **8.1. Init**: `deltafuse bench init M01-cooldown` ставит worker sandbox + seed spec/code + intake. В дереве нет `oracle.yaml` и hidden suite. `BENCH.md` не велит воркеру запускать `bench score`.
+* **8.2. Score**: только с `--pack` / `DELTAFUSE_BENCH_PACK`. Oracle и hidden pytest на хосте судьи. Пустой init → все шаги `not-run`, exit 1. `--out-file` внутри песочницы — ошибка. Hidden traceback в JSON только с `--verbose`.
+* **8.3. Compare**: два JSON scorecard; таблица шагов (вектор + `first_fail`), не одно число.
 * **8.4. CLI**: `bench init|score|compare`; `--stage`, `--json`, `--label`, `--out-file`.
 
 ---
@@ -256,8 +256,8 @@ deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-r
 
 # 11. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse bench init M01-cooldown ./m01
-deltafuse bench score ./m01 --json --label opus-5
-deltafuse bench compare opus.json flash.json
+deltafuse bench score ./m01 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```
 
 ---

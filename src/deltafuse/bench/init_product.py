@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError
-from deltafuse.bench.loader import load_case
+from deltafuse.bench.loader import load_case, resolve_cases_root
 from deltafuse.core.hasher import compute_file_sha256
 from deltafuse.core.installer import install
 
@@ -32,14 +32,16 @@ def init_bench_product(
     product_dir: Path | str,
     *,
     framework_root: Path | str | None = None,
+    pack_root: Path | str | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Create a product workspace. Oracle and hidden_suite stay in the framework pack."""
+    """Create a worker sandbox. Oracle and hidden_suite stay in the judge pack."""
     product = Path(product_dir).resolve()
     marker = product / ".deltafuse" / "bench.yaml"
     if marker.is_file() and not force:
         raise BenchError(f"{product} already has a bench workspace (use --force)")
-    case = load_case(case_id)
+    cases = resolve_cases_root(pack_root, default_framework=True)
+    case = load_case(case_id, cases, oracle=False)
     case_dir: Path = case["dir"]
     product.mkdir(parents=True, exist_ok=True)
     install(target_dir=product, framework_root=framework_root, force=True)

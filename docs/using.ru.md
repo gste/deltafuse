@@ -98,12 +98,12 @@ deltafuse next --step declare --json
 
 ## Бенчмарк воркера
 
-Ставится product-кейс, любой воркер заполняет дерево, ядро считает диск. Модель из CLI не вызывается:
+Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`.
 
 ```text
 deltafuse bench init M01-cooldown <product-dir>
-deltafuse bench score <product-dir> --json --label opus-5
-deltafuse bench compare opus.json flash.json
+deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```
 
 См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.

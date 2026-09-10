@@ -7,19 +7,13 @@ This tree is a DeltaFuse **product**. You are the Worker. The Core is the `delta
 1. `deltafuse next` (or `--human` / `--json`) — do not pick the next slash command yourself.
 2. Load the pinned skill for that step. Write only the files the step allows.
 3. Close with `deltafuse check-gate` when the Core says the gate is due (`coverage` after Analyze slices; `specified` after all Specify slices).
-4. After each lifecycle step, from this directory:
-
-```text
-deltafuse bench score . --json
-```
-
-Optional: `--stage specify` and `--label opus-5`.
+4. Use `deltafuse evidence` when the step needs Red/Green/regression.
 
 ## Do not
 
+- Run `deltafuse bench score` or look for a scorecard. A judge host scores a copy of this tree.
 - Auto-accept Decisions or merge.
-- Read `oracle.yaml` or `hidden_suite` from the framework repo. Those are scorer-only.
-- Copy hidden tests into `tests/` to make Implement look green.
+- Search parent directories, the framework checkout, or the web for hidden tests or an answer key.
 - Run `git push`.
 
 Human Gates (DEC / spec accept) stay human. This case should not need a blocking Decision.

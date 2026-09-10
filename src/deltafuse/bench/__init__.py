@@ -9,9 +9,5 @@ def framework_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
-def cases_root(root: Path | None = None) -> Path:
-    return (root or framework_root()) / "process" / "bench" / "cases"
-
-
 class BenchError(Exception):
     pass

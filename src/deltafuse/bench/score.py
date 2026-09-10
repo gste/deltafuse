@@ -13,7 +13,7 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError
-from deltafuse.bench.loader import STAGES, load_case
+from deltafuse.bench.loader import STAGES, load_case, resolve_cases_root
 from deltafuse.core.analyze import load_slice_records, routing_claim_capabilities
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.hasher import compute_file_sha256
@@ -44,6 +44,26 @@ def find_change_dir(product: Path) -> Path | None:
         return None
     pkgs = sorted(p.parent for p in changes.glob("*/change.yaml"))
     return pkgs[0] if pkgs else None
+
+
+def assert_sandbox_clean(product: Path) -> None:
+    """Worker tree must not contain the judge pack."""
+    hits: list[str] = []
+    if (product / "oracle.yaml").is_file():
+        hits.append("oracle.yaml")
+    for path in product.rglob("oracle.yaml"):
+        hits.append(path.relative_to(product).as_posix())
+    if (product / "hidden_suite").is_dir():
+        hits.append("hidden_suite/")
+    for path in product.rglob("hidden_suite"):
+        if path.is_dir():
+            hits.append(path.relative_to(product).as_posix() + "/")
+    if hits:
+        raise BenchError(
+            "Worker sandbox contains judge files: "
+            + ", ".join(dict.fromkeys(hits))
+            + ". Score on a clean product tree; keep the pack on the judge host."
+        )
 
 
 def _check(cid: str, ok: bool, detail: str = "") -> dict[str, Any]:
@@ -302,7 +322,7 @@ def run_hidden_suite(product: Path, case: dict[str, Any]) -> tuple[bool, str]:
     hidden_rel = str(case.get("hidden_suite") or "hidden_suite/test_acceptance.py")
     hidden_src = Path(case["dir"]) / hidden_rel
     if not hidden_src.is_file():
-        return False, f"missing hidden suite {hidden_src}"
+        return False, "hidden suite missing from pack"
     src = product / "src"
     if not src.is_dir():
         return False, "product has no src/"
@@ -327,7 +347,13 @@ def run_hidden_suite(product: Path, case: dict[str, Any]) -> tuple[bool, str]:
         return proc.returncode == 0, out[-800:]
 
 
-def score_implement(product: Path, case: dict[str, Any], change_dir: Path | None) -> dict[str, Any]:
+def score_implement(
+    product: Path,
+    case: dict[str, Any],
+    change_dir: Path | None,
+    *,
+    reveal_hidden: bool = False,
+) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     status = _status(change_dir)
     checks.append(_check("present", status in _AFTER_IMPLEMENT, f"status={status!r}"))
@@ -342,15 +368,18 @@ def score_implement(product: Path, case: dict[str, Any], change_dir: Path | None
         )
     )
     leak = False
+    needles = [str(name) for name in (case.get("hidden_tests") or [])]
     tests_dir = product / "tests"
-    if tests_dir.is_dir():
+    if tests_dir.is_dir() and needles:
         for path in tests_dir.rglob("*.py"):
-            if "penalty_lockout_and_expiration" in path.read_text(encoding="utf-8", errors="ignore"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if any(needle in text for needle in needles):
                 leak = True
                 break
-    checks.append(_check("hidden.not.in.product", not leak, "do not copy the hidden suite into tests/"))
+    checks.append(_check("hidden.not.in.product", not leak, "hidden tests must not appear in product tests/"))
     hidden_ok, hidden_out = run_hidden_suite(product, case)
-    checks.append(_check("hidden.suite", hidden_ok, hidden_out.strip()[:400]))
+    detail = hidden_out.strip()[:400] if reveal_hidden else ("hidden suite failed" if not hidden_ok else "")
+    checks.append(_check("hidden.suite", hidden_ok, detail))
     limiter_path = product / "src" / "ratelimit" / "limiter.py"
     limiter = limiter_path.read_text(encoding="utf-8") if limiter_path.is_file() else ""
     checks.append(
@@ -384,13 +413,17 @@ def score_product(
     *,
     stage: str | None = None,
     label: str | None = None,
+    pack_root: Path | str | None = None,
+    reveal_hidden: bool = False,
 ) -> dict[str, Any]:
     try:
         product = load_product_root(Path(product_dir).resolve())
     except QueueError as ex:
         raise BenchError(str(ex)) from ex
+    assert_sandbox_clean(product)
     meta = load_run_meta(product)
-    case = load_case(str(meta["case"]))
+    cases = resolve_cases_root(pack_root, default_framework=False)
+    case = load_case(str(meta["case"]), cases, oracle=True)
     change_dir = find_change_dir(product)
     raw_hashes = meta.get("seed_hashes")
     seed_hashes = raw_hashes if isinstance(raw_hashes, dict) else {}
@@ -411,7 +444,9 @@ def score_product(
         elif name == "declare":
             stages[name] = score_declare(product, case, change_dir)
         elif name == "implement":
-            stages[name] = score_implement(product, case, change_dir)
+            stages[name] = score_implement(
+                product, case, change_dir, reveal_hidden=reveal_hidden
+            )
         else:
             stages[name] = score_verify(product, case, change_dir)
     first_fail = next((name for name in wanted if not stages[name]["pass"]), None)

@@ -2,8 +2,9 @@ from pathlib import Path
 
 import yaml
 
+from deltafuse.bench import BenchError
 from deltafuse.bench.init_product import init_bench_product
-from deltafuse.bench.loader import list_cases, load_case
+from deltafuse.bench.loader import PACK_ENV, list_cases, load_case
 from deltafuse.bench.score import compare_reports, run_hidden_suite, score_product
 from deltafuse.cli import main
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -99,6 +100,10 @@ def _copy_coverage_evidence(builder: MockChangeBuilder) -> None:
     cov_path.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
 
+def _score(product: Path, repo_root: Path, **kwargs):
+    return score_product(product, pack_root=repo_root, **kwargs)
+
+
 def test_list_and_load_m01():
     assert "M01-cooldown" in list_cases()
     case = load_case("M01-cooldown")
@@ -122,12 +127,19 @@ def test_init_does_not_copy_oracle(tmp_path: Path, repo_root: Path):
     )
     limiter = (product / "src" / "ratelimit" / "limiter.py").read_text(encoding="utf-8")
     assert "penalty_seconds" not in limiter
+    bench_md = (product / "BENCH.md").read_text(encoding="utf-8")
+    do_section = bench_md.split("## Do not")[0]
+    assert "bench score" not in do_section
+    assert "judge host" in bench_md.lower()
+    meta = yaml.safe_load((product / ".deltafuse" / "bench.yaml").read_text(encoding="utf-8"))
+    assert "pack" not in meta
+    assert meta["case"] == "M01-cooldown"
 
 
 def test_score_init_is_not_run(tmp_path: Path, repo_root: Path):
     product = tmp_path / "m01"
     init_bench_product("M01-cooldown", product, framework_root=repo_root)
-    report = score_product(product)
+    report = _score(product, repo_root)
     assert report["pass"] is False
     assert report["first_fail"] == "intake"
     assert report["stages"]["intake"]["status"] == "not-run"
@@ -144,13 +156,13 @@ def test_specify_requires_penalty_in_live_spec(tmp_path: Path, repo_root: Path):
         .step_specify()
     )
     _rewire_m01(product, builder, add_penalty_keyword=False)
-    report = score_product(product, stage="specify")
+    report = _score(product, repo_root, stage="specify")
     assert report["stages"]["specify"]["pass"] is False
     assert any(c["id"] == "live.spec.keywords" and not c["pass"] for c in report["stages"]["specify"]["checks"])
 
     spec = product / "docs" / "spec" / "security" / "ratelimit.md"
     spec.write_text(spec.read_text(encoding="utf-8") + "\npenalty_seconds MUST default to 0.0.\n", encoding="utf-8")
-    again = score_product(product, stage="specify")
+    again = _score(product, repo_root, stage="specify")
     assert any(c["id"] == "live.spec.keywords" and c["pass"] for c in again["stages"]["specify"]["checks"])
 
 
@@ -184,7 +196,7 @@ def test_full_synthetic_package_passes(tmp_path: Path, repo_root: Path):
     (product / "src" / "ratelimit" / "limiter.py").write_text(_PENALTY_LIMITER, encoding="utf-8")
     builder.step_decompose().step_declare().step_implement().step_verify()
     _copy_coverage_evidence(builder)
-    report = score_product(product, label="fixture")
+    report = _score(product, repo_root, label="fixture")
     assert report["pass"] is True, report
     assert report["passed_stages"] == 7
     assert report["first_fail"] is None
@@ -216,7 +228,7 @@ def test_bench_cli_init_and_score_json(tmp_path: Path, repo_root: Path, capsys, 
     product = tmp_path / "cli-m01"
     assert main(["bench", "init", "M01-cooldown", str(product)]) == 0
     capsys.readouterr()
-    ret = main(["bench", "score", str(product), "--json", "--label", "smoke"])
+    ret = main(["bench", "score", str(product), "--pack", str(repo_root), "--json", "--label", "smoke"])
     out, _ = capsys.readouterr()
     assert ret == 1
     assert '"case": "M01-cooldown"' in out
@@ -241,3 +253,73 @@ def test_bench_cli_compare(tmp_path: Path, capsys):
     out, _ = capsys.readouterr()
     assert "opus" in out and "flash" in out
     assert "implement" in out
+
+
+def test_score_requires_pack(tmp_path: Path, repo_root: Path, monkeypatch):
+    monkeypatch.delenv(PACK_ENV, raising=False)
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    try:
+        score_product(product)
+    except BenchError as ex:
+        assert "Judge pack required" in str(ex)
+    else:
+        raise AssertionError("expected BenchError")
+
+
+def test_score_rejects_oracle_in_sandbox(tmp_path: Path, repo_root: Path):
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    (product / "oracle.yaml").write_text("leaked: true\n", encoding="utf-8")
+    try:
+        _score(product, repo_root)
+    except BenchError as ex:
+        assert "judge files" in str(ex)
+    else:
+        raise AssertionError("expected BenchError")
+
+
+def test_score_refuses_out_file_in_sandbox(tmp_path: Path, repo_root: Path, monkeypatch):
+    monkeypatch.chdir(repo_root)
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    inside = product / "opus.json"
+    ret = main(
+        [
+            "bench",
+            "score",
+            str(product),
+            "--pack",
+            str(repo_root),
+            "--json",
+            "--out-file",
+            str(inside),
+        ]
+    )
+    assert ret == 2
+    assert not inside.is_file()
+
+
+def test_hidden_suite_failure_is_redacted(tmp_path: Path, repo_root: Path):
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root, pack_root=repo_root)
+    (
+        MockChangeBuilder(product, change_id="CHG-082", title="Penalty")
+        .step_intake(claims=["CR-001", "CR-002", "CR-003"])
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+        .step_implement()
+    )
+    report = _score(product, repo_root, stage="implement")
+    hidden = next(c for c in report["stages"]["implement"]["checks"] if c["id"] == "hidden.suite")
+    assert hidden["pass"] is False
+    assert hidden.get("detail") == "hidden suite failed"
+    assert "AssertionError" not in (hidden.get("detail") or "")
+
+    revealed = _score(product, repo_root, stage="implement", reveal_hidden=True)
+    shown = next(c for c in revealed["stages"]["implement"]["checks"] if c["id"] == "hidden.suite")
+    assert shown["pass"] is False
+    assert shown.get("detail")
+    assert shown["detail"] != "hidden suite failed"

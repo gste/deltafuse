@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `deltafuse bench` prepares an agent-agnostic Worker case (`M01-cooldown`) and scores each lifecycle step from disk. No LLM call. `bench compare` diffs two score JSON files.
+- `deltafuse bench` prepares an agent-agnostic Worker sandbox (`M01-cooldown`) and scores each lifecycle step from a judge pack. No LLM call. `bench score` requires `--pack` or `DELTAFUSE_BENCH_PACK` and will not write a scorecard into the sandbox.
 
 ## [2.3.0] - 2026-09-10
 

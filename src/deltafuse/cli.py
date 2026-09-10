@@ -25,7 +25,7 @@ from deltafuse.core.queue import (
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.bench.loader import STAGES as BENCH_STAGES
+from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 from deltafuse.evals.dataset import EvalDataset
 from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
 from deltafuse.evals.reporter import export_report
@@ -160,14 +160,29 @@ def main(argv: list[str] | None = None) -> int:
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
     bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
     bench_init.add_argument("case_id", help="Case id (for example M01-cooldown)")
-    bench_init.add_argument("product_dir", help="Empty or new product directory")
+    bench_init.add_argument("product_dir", help="Empty or new worker sandbox directory")
     bench_init.add_argument("--force", "-f", action="store_true", help="Overwrite an existing bench workspace")
-    bench_score = bench_sub.add_parser("score", help="Score a bench product from artifacts on disk")
+    bench_init.add_argument(
+        "--pack",
+        default=None,
+        help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
+    )
+    bench_score = bench_sub.add_parser("score", help="Judge: score a sandbox from the pack (not for the Worker)")
     bench_score.add_argument("product_dir", help="Product root created by bench init")
     bench_score.add_argument("--stage", choices=list(BENCH_STAGES), help="Score one lifecycle step")
     bench_score.add_argument("--json", action="store_true", help="Write the scorecard as JSON")
-    bench_score.add_argument("--label", default=None, help="Run label (model name) stored in the JSON")
-    bench_score.add_argument("--out-file", default=None, help="Save JSON to this path")
+    bench_score.add_argument("--label", default=None, help="Run label (agent+model) stored in the JSON")
+    bench_score.add_argument("--out-file", default=None, help="Save JSON outside the sandbox")
+    bench_score.add_argument(
+        "--pack",
+        default=None,
+        help=f"Judge pack required unless {BENCH_PACK_ENV} is set",
+    )
+    bench_score.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include hidden-suite pytest output (judge-only; do not share with the Worker)",
+    )
     bench_cmp = bench_sub.add_parser("compare", help="Compare two bench score JSON files")
     bench_cmp.add_argument("left", help="First score JSON")
     bench_cmp.add_argument("right", help="Second score JSON")
@@ -383,16 +398,24 @@ def main(argv: list[str] | None = None) -> int:
                 meta = init_bench_product(
                     args.case_id,
                     args.product_dir,
+                    pack_root=args.pack,
                     force=args.force,
                 )
                 print(f"Bench {meta['case']} ready in {Path(args.product_dir).resolve()}")
-                print("Oracle and hidden suite are not in this tree. Follow BENCH.md.")
+                print("Worker sandbox: next / check-gate / evidence only. Do not run bench score here.")
                 return 0
             if args.bench_cmd == "score":
+                from deltafuse.bench.loader import assert_scorecard_outside_sandbox
+
+                product = Path(args.product_dir)
+                if args.out_file:
+                    assert_scorecard_outside_sandbox(args.out_file, product)
                 report = score_product(
                     args.product_dir,
                     stage=args.stage,
                     label=args.label,
+                    pack_root=args.pack,
+                    reveal_hidden=args.verbose,
                 )
                 payload = json.dumps(report, ensure_ascii=False, indent=2)
                 if args.out_file:

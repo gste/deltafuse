@@ -98,12 +98,12 @@ Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/
 
 ## Worker bench
 
-Install a product case, let any Worker fill it, then score the disk. The Core does not call a model:
+Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `bench score`.
 
 ```text
 deltafuse bench init M01-cooldown <product-dir>
-deltafuse bench score <product-dir> --json --label opus-5
-deltafuse bench compare opus.json flash.json
+deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```
 
 See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.

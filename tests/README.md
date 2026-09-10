@@ -78,7 +78,7 @@ python -m pytest --cov=deltafuse --cov-report=term-missing
 ### Worker bench (no LLM)
 ```bash
 deltafuse bench init M01-cooldown ./m01
-deltafuse bench score ./m01 --json --label smoke
+deltafuse bench score ./m01 --pack . --json --label smoke --out-file ../scores/smoke.json
 ```
 
 ### Run LLM Benchmark Evals
