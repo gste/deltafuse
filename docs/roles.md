@@ -54,7 +54,7 @@ Humans remain the final arbiters and make decisions at five key gates:
 | **Analyst** | AI agent | Route claims to capabilities, compute typed deltas, draft decision proposals (`DEC-*`). |
 | **Spec Editor** | AI drafts, **human approves** | Update `docs/spec/**`, mirror accepted Decisions into imperative requirement text. |
 | **Task Planner** | AI agent | Decompose accepted specification into dependency-ordered atomic tasks with an explicit Test Oracle. |
-| **Implementer** | AI agent | Author minimal test target (Target / Red) and minimal product code (Implement / Green). |
+| **Implementer** | AI agent | Author the declared Red oracle (Declare) and minimal product code (Implement / Green). |
 | **Verifier** | AI agent | Verify end-to-end traceability, cross-layer convergence, and archive completed package. |
 | **Maintainer** | **Human only** | Baseline approval, specification and code merge, release management and publishing. |
 
@@ -65,15 +65,15 @@ Humans remain the final arbiters and make decisions at five key gates:
 | Stage / Activity | AI Analyst / Planner | AI Implementer | AI Verifier | Human (Maintainer) |
 |---|:---:|:---:|:---:|:---:|
 | Raw intake normalization (`intake`) | **R** | — | — | **A** |
-| Routing and deltas (`analyze-change`) | **R** | — | — | **A** |
+| Routing and deltas (`/analyze`) | **R** | — | — | **A** |
 | Decision drafting (`DEC-NNNN proposed`) | **R** | — | — | C |
 | **Decision acceptance (`status: accepted`)** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
-| Spec drafting (`specify-change`) | **R** | — | — | C |
+| Spec drafting (`/specify`) | **R** | — | — | C |
 | **Specification acceptance (`docs/spec/`)** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
-| Task decomposition (`decompose-change`) | **R** | C | — | **A** |
-| Test writing & Red evidence (`target-task`) | — | **R** | — | C |
-| Code writing & Green evidence (`implement-task`) | — | **R** | — | C |
-| Convergence check & archive (`verify-change`) | — | — | **R** | **A** |
+| Task decomposition (`/decompose`) | **R** | C | — | **A** |
+| Declare Red oracle (`/declare`) | — | **R** | — | C |
+| Code writing & Green evidence (`/implement`) | — | **R** | — | C |
+| Convergence check & archive (`/verify`) | — | — | **R** | **A** |
 | **Code Review and Merge into main** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
 | **Git Push to remote repository** | ❌ Forbidden | ❌ Forbidden | ❌ Forbidden | **Human only (A)** |
 
@@ -85,21 +85,21 @@ Humans remain the final arbiters and make decisions at five key gates:
 
 The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/skills/*`):
 - `intake` — normalize raw request into `CHG-NNN`;
-- `analyze-change` — route claims to capabilities and compute deltas;
-- `specify-change` — apply deltas to normative specification;
-- `decompose-change` — decompose into atomic implementation tasks;
-- `target-task` — prepare executable test target and record Red evidence;
-- `implement-task` — implement code and record Green/Regression evidence;
-- `verify-change` — verify artifact convergence and archive package.
+- `analyze` — route claims to capabilities and compute deltas;
+- `specify` — apply deltas to normative specification;
+- `decompose` — decompose into atomic implementation tasks;
+- `declare` — declare what must become true (Red oracle) before Implement;
+- `implement` — implement code and record Green/Regression evidence;
+- `verify` — verify artifact convergence and archive package.
 
 ### Execution Profiles
 
 High-level operational workflows are orchestrated by invoking these canonical primitives in sequence:
 
 1. **Standard Change (Feature / Specification Change)**:
-   `intake` → `analyze-change` → *(Human Gate: Decisions)* → `specify-change` → *(Human Gate: Spec)* → `decompose-change` → task loop (`target-task` → `implement-task`) → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → task loop (`declare` → `implement`) → `verify` → *(Human Gate: Merge)*.
 2. **Implementation Bug**:
-   `intake` → `analyze-change` *(delta specification.operation: none)* → `specify-change` *(proof of unchanged spec in spec-delta.md)* → `decompose-change` *(bugfix task)* → `target-task` *(Red evidence)* → `implement-task` *(Green evidence)* → `verify-change` → *(Human Gate: Merge)*.
+   `intake` → `analyze` *(delta specification.operation: none)* → `specify` *(proof of unchanged spec in spec-delta.md)* → `decompose` *(bugfix task)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Bootstrap Profile**:
    Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: accepted` in `.deltafuse/config.yaml` before running the first Change.
 

@@ -1,9 +1,9 @@
 ---
-name: specify-change
+name: specify
 description: Apply one analyzed DeltaFuse slice to the normative product specification, or prove the accepted specification is unchanged. Use after analysis and Decision convergence, before task decomposition.
 ---
 
-# Specify Change
+# Specify
 
 Establish the normative state from which tasks may be derived.
 
@@ -22,13 +22,13 @@ Read one analyzed slice, its typed delta, exact affected spec modules, accepted 
 5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
 6. Update coverage and slice/Change status. Present normative edits for the human specification gate.
 
-Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze-change`.
+Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze`.
 
 ## Gate
 
 The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
 
-Recommend `/decompose-change <change-id> [slice-id]`.
+Recommend `/decompose <change-id> [slice-id]`.
 
 Do not write deploy YAML or `docs/ops/**`; those belong to `route: ops` Implement.
 

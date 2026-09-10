@@ -26,27 +26,26 @@ Request -> Analyze -> Delta -> Fuse -> Converge
 ```mermaid
 flowchart LR
     Raw[Сырой запрос] --> Intake[Intake]
-    Intake --> Analyze[Route and Analyze]
+    Intake --> Analyze[Analyze]
     Analyze <-->|Decision convergence| Decision{Human Decision gate}
     Analyze --> Specify[Specify]
     Specify --> Decompose[Decompose]
-    Decompose --> Target[Target / Red]
-    Target --> Implement[Implement / Green]
-    Implement --> Verify[Verify and Converge]
-    Verify --> Archive[Archive Change]
+    Decompose --> Declare[Declare]
+    Declare --> Implement[Implement]
+    Implement --> Verify[Verify]
 ```
 
 | Шаг               | Skill               | Основной результат                                           |
 |-------------------|---------------------|--------------------------------------------------------------|
 | Intake            | `/intake`           | Immutable request и корень Change                            |
-| Route and Analyze | `/analyze-change`   | Routing, slices, Decisions, typed deltas                     |
-| Specify           | `/specify-change`   | Принятое нормативное состояние или доказанный unchanged spec |
-| Decompose         | `/decompose-change` | Atomic tasks внутри Change                                   |
-| Target            | `/target-task`      | Падающий executable target и Red evidence                    |
-| Implement         | `/implement-task`   | Минимальный code и Green evidence                            |
-| Verify            | `/verify-change`    | Convergence proof и архивированный Change                    |
+| Analyze           | `/analyze`          | Routing, slices, Decisions, typed deltas                     |
+| Specify           | `/specify`          | Принятое нормативное состояние или доказанный unchanged spec |
+| Decompose         | `/decompose`        | Atomic tasks внутри Change                                   |
+| Declare           | `/declare`          | Объявленный Red-оракул: что должно стать правдой, падает на неизменённом коде |
+| Implement         | `/implement`        | Минимальный code и Green evidence                            |
+| Verify            | `/verify`           | Convergence proof и архивированный Change                    |
 
-Route and Analyze повторяется, пока все blocking Decisions не получат terminal status, а global reconciliation не перестанет находить новые существенные вопросы.
+Analyze повторяется, пока все blocking Decisions не получат terminal status, а global reconciliation не перестанет находить новые существенные вопросы.
 
 ## Граница framework и product
 

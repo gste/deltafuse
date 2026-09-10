@@ -2,7 +2,7 @@
 
 Дата: 2026-09-09. Реализация: ветка `feature/2026-09-06-review`, последний пункт `RM-031` (`e82bc17`). Очередь: [A13](index.md). Карточки: [A13-01](packets/A13-01.md) … [A13-04](packets/A13-04.md).
 
-Это **проверка уже принятых фиксов**, не новый аудит и не очередь `llm-optimization-v2`.
+Это **проверка уже принятых фиксов**, не новый аудит и не очередь ornith в `llm-optimization`.
 
 SUT живого слоя — тот же, что A09: ornith `:1240`, `--reasoning off`, `--cpu-moe`. Контрактный слой — pytest без модели. Нет процесса на `:1240` → живые карточки `blocked`, R0 всё равно гонять.
 
@@ -108,7 +108,7 @@ Code Change (S02/S03) не должен пройти Implement без regression
 
 - Повтор полного A09 11/11 до закрытия R1.
 - Патч A09 extras / `run_ablate.py` «чтобы модель прошла».
-- `llm-optimization-v2` кролики и префилл — другой объект (runtime llama-server, не гейты DF).
+- Кролики и префилл ornith — другой объект (runtime llama-server в `llm-optimization`, не гейты DF).
 - Новые RM «заодно». Finding только если регресс воспроизводим.
 - `git push`. Облако вместо ornith. Снятие Human Gate / hidden suite.
 

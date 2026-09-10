@@ -10,12 +10,12 @@ from deltafuse.core.lock import workflow_alignment_errors
 
 CANONICAL_SKILL_NAMES = [
     "intake",
-    "analyze-change",
-    "specify-change",
-    "decompose-change",
-    "target-task",
-    "implement-task",
-    "verify-change",
+    "analyze",
+    "specify",
+    "decompose",
+    "declare",
+    "implement",
+    "verify",
 ]
 
 LEGACY_FORBIDDEN_PATHS = ["docs/process", "docs/init", "docs/todo"]

@@ -1,11 +1,11 @@
 ---
-name: implement-task
-description: Implement one DeltaFuse task against accepted specification and a frozen failing target, then record Green evidence. Use only after target-task has confirmed Red.
+name: implement
+description: Implement one DeltaFuse task against accepted specification and a frozen declared Red oracle, then record Green evidence. Use only after /declare has confirmed Red.
 ---
 
-# Implement Task
+# Implement
 
-Make one frozen target Green with the smallest compliant production change.
+Make one declared Red oracle Green with the smallest compliant production change.
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
@@ -26,6 +26,6 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 
 If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.
 
-Recommend the next ready `/target-task`, or `/verify-change <change-id>` when all tasks are terminal.
+Recommend the next ready `/declare`, or `/verify <change-id>` when all tasks are terminal.
 
 For `route: docs` or `ops`, write only the task `allowed_paths` (spec/changelog or ops/deploy files). Do not patch product `src/**`. Do not weaken Implement for `route: code`.

@@ -36,7 +36,7 @@ def test_golden_lifecycle_flow(tmp_path: Path, repo_root: Path):
     assert len(check_gate(builder.change_dir, "targeting")) > 0
 
     # Gate 5: Targeting (TDD Red)
-    builder.step_target("TASK-001")
+    builder.step_declare("TASK-001")
     assert check_gate(builder.change_dir, "targeting") == []
     assert len(check_gate(builder.change_dir, "implemented")) > 0
 

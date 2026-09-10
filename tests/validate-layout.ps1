@@ -282,7 +282,7 @@ if (Test-Path -LiteralPath $decisionsRoot) {
 }
 
 # 4. Validate generated skills for each configured adapter root
-$skillNames = @("intake", "analyze-change", "specify-change", "decompose-change", "target-task", "implement-task", "verify-change")
+$skillNames = @("intake", "analyze", "specify", "decompose", "declare", "implement", "verify")
 foreach ($adapterRootRelative in $adapterRoots) {
     $adapterRoot = Join-Path $ProductRoot $adapterRootRelative
     if (-not (Test-Path -LiteralPath $adapterRoot)) {

@@ -37,5 +37,5 @@ Leave unresolved while `status: proposed`. The human owner records the chosen ou
 
 ## Consequences
 
-- Normative effects requiring `/specify-change`:
+- Normative effects requiring `/specify`:
 - Operational or migration effects:

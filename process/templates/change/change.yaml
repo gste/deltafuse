@@ -4,7 +4,7 @@ title: Change title
 status: normalized
 
 framework:
-  version: 2.0.0
+  version: 2.2.0
   content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 intent: unknown

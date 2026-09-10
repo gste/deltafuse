@@ -250,7 +250,7 @@ class MockChangeBuilder:
         })
         return self
 
-    def step_target(self, task_id: str = "TASK-001") -> MockChangeBuilder:
+    def step_declare(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         red_dir = self.change_dir / "evidence" / "red"
         red_dir.mkdir(parents=True, exist_ok=True)
         if self.route == "docs":

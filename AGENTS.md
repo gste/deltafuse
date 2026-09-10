@@ -28,9 +28,9 @@ Product behavior belongs only in a consuming repository's `docs/spec/**`. Never 
 
 Use these names consistently:
 
-`Intake -> Route and Analyze -> Specify -> Decompose -> Target -> Implement -> Verify, Converge and Archive`
+`Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> Verify`
 
-`Red` and `Green` are evidence states inside Target and Implement, not lifecycle step names.
+`Red` and `Green` are evidence states inside Declare and Implement, not lifecycle step names.
 
 ## Change rules
 

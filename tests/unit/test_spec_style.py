@@ -1,4 +1,4 @@
-"""RM-031: EARS is spec style; PBT is optional Target and skippable without a runner."""
+"""RM-031: EARS is spec style; PBT is optional Declare and skippable without a runner."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ import pytest
 
 
 def test_specify_skill_ears_does_not_replace_live_spec(repo_root: Path):
-    skill = (repo_root / "process" / "skills" / "specify-change" / "SKILL.md").read_text(
+    skill = (repo_root / "process" / "skills" / "specify" / "SKILL.md").read_text(
         encoding="utf-8"
     )
     assert "RFC 2119" in skill
@@ -15,14 +15,14 @@ def test_specify_skill_ears_does_not_replace_live_spec(repo_root: Path):
     assert ".kiro" not in skill
 
 
-def test_target_skill_pbt_is_optional_not_hidden_replacement(repo_root: Path):
-    skill = (repo_root / "process" / "skills" / "target-task" / "SKILL.md").read_text(
+def test_declare_skill_pbt_is_optional_not_hidden_replacement(repo_root: Path):
+    skill = (repo_root / "process" / "skills" / "declare" / "SKILL.md").read_text(
         encoding="utf-8"
     )
     assert "Skip if no local runner" in skill
     assert "does not replace the GWT example Red test" in skill
     assert "independent hidden suite" in skill
-    assert "Do not add `.kiro` or Cucumber as Target" in skill
+    assert "Do not add `.kiro` or Cucumber as Declare" in skill
 
 
 def test_optional_pbt_skips_without_local_runner():

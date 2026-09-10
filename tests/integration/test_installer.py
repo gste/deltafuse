@@ -40,7 +40,7 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     # Check generated skills
     agents_skills = tmp_path / ".agents" / "skills"
     assert (agents_skills / "intake" / "SKILL.md").is_file()
-    assert (agents_skills / "analyze-change" / ".deltafuse-generated.yaml").is_file()
+    assert (agents_skills / "analyze" / ".deltafuse-generated.yaml").is_file()
 
 def test_idempotent_upgrade_preserves_custom_files(tmp_path: Path, repo_root: Path):
     # Step 1: initial install

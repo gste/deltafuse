@@ -65,7 +65,7 @@ PHASE_CONTRACTS: dict[str, dict[str, list[str]]] = {
             "docs/changes/*/change.yaml",
         ],
     },
-    "target": {
+    "declare": {
         "allowed_read": [
             "docs/changes/*/tasks/*",
             "docs/spec/**",
@@ -362,14 +362,14 @@ def phase_allowed_paths(phase: str, kind: str) -> list[str]:
 
 
 def phase_write_globs(phase: str, route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
-    """Write globs for Target/Implement evidence and task allowed_paths (RM-021)."""
+    """Write globs for Declare/Implement evidence and task allowed_paths (RM-021)."""
     resolved = normalize_change_route(route) or DEFAULT_CHANGE_ROUTE
-    if phase == "target":
+    if phase == "declare":
         if resolved == "docs":
             return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
         if resolved == "ops":
             return list(_OPS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
-        return phase_allowed_paths("target", "write")
+        return phase_allowed_paths("declare", "write")
     if phase == "implement":
         if resolved == "docs":
             return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
@@ -381,7 +381,7 @@ def phase_write_globs(phase: str, route: str = DEFAULT_CHANGE_ROUTE) -> list[str
 
 def task_write_globs(route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
     """Declared task allowed_paths follow the Change route (code default)."""
-    return phase_write_globs("target", route) + phase_write_globs("implement", route)
+    return phase_write_globs("declare", route) + phase_write_globs("implement", route)
 
 
 def validate_paths_against_globs(

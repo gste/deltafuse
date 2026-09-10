@@ -301,7 +301,7 @@ def validate_change_package(
                     if not context_budget or not isinstance(context_budget, dict):
                         errors.append(
                             f"{task_file.name}: context_budget is required "
-                            "(max_tokens/max_files) for Target and Implement"
+                            "(max_tokens/max_files) for Declare and Implement"
                         )
                     else:
                         b_errs = validate_task_context_budget(
@@ -776,7 +776,7 @@ def check_gate(
             errors.append("Gate targeting: Red evidence in evidence/red/ is required")
         errors.extend(
             _validate_evidence_changed_paths_contract(
-                change_path, "red", "target", gate="targeting", route=route
+                change_path, "red", "declare", gate="targeting", route=route
             )
         )
 

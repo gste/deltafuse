@@ -37,7 +37,7 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
     cdata["status"] = "targeting"
     cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
 
-    # Target evidence: not-reproduced
+    # Declare evidence: not-reproduced
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
     ev_not_rep = {

@@ -177,7 +177,7 @@ delta-fuse/
 
 ### Набор 6. E2E Сквозные сценарии (`tests/e2e/`)
 * **6.1. Golden Workflow (`test_golden_workflow.py`)**:
-  - 8-шаговый цикл: `intake -> analyze -> specify -> decompose -> target -> implement -> verify -> archive`.
+  - 8-шаговый цикл: `intake -> analyze -> specify -> decompose -> declare -> implement -> verify -> archive`.
 * **6.2. No-op & Not-reproduced (`test_noop_workflow.py`)**:
   - Исследование багов, генерация `not-reproduced` evidence, переход Change в `not-reproduced`, архивация терминального пакета.
 * **6.3. Failure Modes (`test_failure_modes.py`)**:

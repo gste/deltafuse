@@ -1,9 +1,9 @@
 ---
-name: verify-change
+name: verify
 description: Verify traceability and cross-artifact convergence for a DeltaFuse Change, then archive its complete package. Use after all tasks are implemented or for an explicit no-op/not-reproduced closure.
 ---
 
-# Verify Change
+# Verify
 
 Prove that the Delta was fully fused before removing the Change from active context.
 

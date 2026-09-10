@@ -57,4 +57,4 @@ Initial capability catalog предлагается ИИ и принимаетс
 
 ## Внешние доски
 
-Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md), а не свой разбор `docs/changes/**`. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.
+Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.

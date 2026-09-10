@@ -5,6 +5,24 @@ All notable changes to the DeltaFuse framework will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-09-10
+
+### Changed
+
+- Lifecycle skills and slash commands are one word: `/intake`, `/analyze`, `/specify`, `/decompose`, `/declare`, `/implement`, `/verify`.
+- Renamed the Target step to **Declare**: freeze a Red oracle that states what must become true before Implement. Re-run the installer to regenerate product skill snapshots.
+
+### Added
+
+- Read-only board snapshot contract for fuse-map (`docs/contracts/board-snapshot.md`), including required `layout`.
+- Change `route` values `docs` and `ops` (file or schema oracles instead of product pytest).
+- Analyze `workflow.call_width` (`narrow` | `medium` | `wide`).
+
+### Fixed
+
+- Specify requires live `docs/spec/**`; `spec-delta.md` alone does not close the gate.
+- Task `context_budget` and `PHASE_CONTRACTS` write globs are enforced at FSM gates.
+
 ## [2.0.0] - 2026-09-04
 
 ### Breaking

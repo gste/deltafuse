@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                     else:
                         errors.append(
                             f"{tf.name}: context_budget is required "
-                            "(max_tokens/max_files) for Target and Implement"
+                            "(max_tokens/max_files) for Declare and Implement"
                         )
                 except Exception as ex:
                     errors.append(f"{tf.name}: {ex}")

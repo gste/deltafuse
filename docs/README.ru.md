@@ -44,15 +44,15 @@ Installer может генерировать repository-local skills для к�
 
 ```text
 Intake
-  -> Route and Analyze
+  -> Analyze
   -> Specify
   -> Decompose
-  -> Target
+  -> Declare
   -> Implement
-  -> Verify, Converge and Archive
+  -> Verify
 ```
 
-`Red` и `Green` являются состояниями evidence внутри Target и Implement, а не шагами верхнего уровня.
+`Red` и `Green` являются состояниями evidence внутри Declare и Implement, а не шагами верхнего уровня.
 
 ## Product artifact layout
 
