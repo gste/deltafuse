@@ -137,6 +137,11 @@ def test_coverage_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("coverage", valid_coverage) == []
 
+    with_schema_version = dict(valid_coverage, schema_version=2)
+    assert registry.validate("coverage", with_schema_version) == []
+    with_unknown = dict(valid_coverage, unexpected_key="ok")
+    assert registry.validate("coverage", with_unknown) == []
+
 def test_evidence_schema_validation(registry: SchemaRegistry):
     valid_evidence = {
         "schema_version": 2,

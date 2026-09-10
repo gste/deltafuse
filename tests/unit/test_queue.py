@@ -211,3 +211,33 @@ def test_next_human_analyze_routing_skips_analyzed_gate(tmp_path: Path, repo_roo
     assert "Do not run `check-gate --gate analyzed` yet" in out
     assert "docs/spec/**" not in out
     assert "docs/spec/_capabilities.yaml" in out
+
+
+def test_next_human_analyze_coverage_uses_kernel(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-063", title="Human coverage").step_intake()
+    routing = {
+        "change": builder.change_id,
+        "claims": {"CR-001": {"primary_capability": "system.core", "confidence": "high"}},
+    }
+    (builder.change_dir / "routing.yaml").write_text(yaml.safe_dump(routing), encoding="utf-8")
+    slices = builder.change_dir / "slices"
+    slices.mkdir()
+    (slices / "SLICE-01.md").write_text(
+        "---\n"
+        "id: SLICE-01\n"
+        f"change: {builder.change_id}\n"
+        "title: Core\n"
+        "status: draft\n"
+        "primary_capability: system.core\n"
+        "spec_refs: [docs/spec/core.md#REQ-01]\n"
+        "claims: [CR-001]\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    ret = main(["next", str(tmp_path), "--human", "--step", "analyze"])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert "analyze_pass: coverage" in out
+    assert "deltafuse coverage" in out
+    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate analyzed" in out

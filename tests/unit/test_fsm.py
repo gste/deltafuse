@@ -938,6 +938,21 @@ def test_analyzed_ignores_routing_top_level_unknown_keys(tmp_path: Path, repo_ro
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
+def test_analyzed_ignores_coverage_top_level_unknown_keys(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-064", title="Coverage extra keys")
+        .step_intake()
+        .step_analyze()
+    )
+    cov_file = builder.change_dir / "coverage.yaml"
+    cov = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+    cov["schema_version"] = 2
+    cov["unexpected_key"] = "ok"
+    cov_file.write_text(yaml.safe_dump(cov, sort_keys=False), encoding="utf-8")
+    assert check_gate(builder.change_dir, "analyzed") == []
+
+
 def test_analyzed_accepts_two_slice_files(tmp_path: Path, repo_root: Path):
     """RM-022 / AB-02: a two-capability Change writes SLICE-01 and SLICE-02."""
     install(target_dir=tmp_path, framework_root=repo_root)

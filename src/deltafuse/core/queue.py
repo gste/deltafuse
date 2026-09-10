@@ -496,6 +496,10 @@ def format_human_guide(item: WorkItem) -> str:
                 f"- {label}: `deltafuse evidence {change_dir} --phase {ev_phase} "
                 f"{task_flag}--changed-path <rel> -- <command>`"
             )
+    if item.analyze_pass == "coverage":
+        lines.append("")
+        lines.append("## Record coverage (kernel, do not hand-write YAML)")
+        lines.append(f"- `deltafuse coverage {change_dir}`")
     lines.append("")
     lines.append("## Close the gate")
     if item.analyze_pass in {"routing", "slice"}:

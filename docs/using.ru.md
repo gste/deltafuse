@@ -65,6 +65,16 @@ deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests
 
 Import/syntax и Red с `_` не authentic. `check-gate --gate targeting` по-прежнему проверяет YAML на диске.
 
+## Coverage ядра
+
+После routing и одного среза на primary capability Ядро пишет матрицу claims. Воркер не hand-write `coverage.yaml`:
+
+```text
+deltafuse coverage <change-dir>
+```
+
+Затем `check-gate --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
+
 ## Следующая работа
 
 Change id не обязателен: Ядро берёт первый ready элемент.

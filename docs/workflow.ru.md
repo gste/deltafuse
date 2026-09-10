@@ -79,7 +79,7 @@ Intake
 2. Для каждого слайса загружаются **только** закреплённые за ним модули спецификации, релевантные принятые решения (`docs/decisions/**`) и явно запрошенные диагностические данные.
 3. Формируются артефакты:
    - `slices/SLICE-NN.md` (границы слайса, затронутые требования, контекстный бюджет);
-   - `coverage.yaml` (матрица покрытия claims -> capabilities -> spec -> tasks);
+   - `coverage.yaml` пишет Ядро (`deltafuse coverage`) из routing и frontmatter срезов;
    - типизированные проекции дельты в `change.yaml`;
    - опционально `analysis.md` (общий аналитический отчёт; гейт `analyzed` его не требует).
 
@@ -120,7 +120,7 @@ Analyze — итеративный шаг. Если возникают суще�
 5. Итерация повторяется до тех пор, пока все блокирующие развилки не будут закрыты терминальными решениями.
 
 ### Gate
-Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
+Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` и `coverage.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
 
 ---
 

@@ -65,6 +65,16 @@ deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests
 
 Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate --gate targeting` still enforces the YAML on disk.
 
+## Kernel coverage
+
+After routing and one slice per primary capability, the Core writes the claim matrix. Workers do not hand-write `coverage.yaml`:
+
+```text
+deltafuse coverage <change-dir>
+```
+
+Then `check-gate --gate analyzed`. Re-running keeps existing `tasks` / `evidence` / `status`.
+
 ## Next work
 
 Do not pass a Change id unless you mean a specific package. The Core picks the first ready item:

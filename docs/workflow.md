@@ -79,7 +79,7 @@ For each capability slice:
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
 4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
-5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
+5. The Core writes `coverage.yaml` (`deltafuse coverage`) from routing and slice frontmatter. Workers do not hand-write the matrix.
 
 ### Typed Delta Invariants
 - If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**, and the **Specify** step records formal proof in `spec-delta.md` that existing specification already requires the behavior.
@@ -109,7 +109,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - Zero unresolved blocking decisions.
 - The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
-- Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
+- Unknown top-level keys on `routing.yaml` and `coverage.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 - `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
 
 ---

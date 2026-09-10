@@ -11,6 +11,7 @@ from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
 from deltafuse.core.board import BoardError, build_board_snapshot
+from deltafuse.core.analyze import CoverageError, write_coverage
 from deltafuse.core.queue import (
     QueueError,
     build_work_queue,
@@ -93,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Relative path written by the Worker (repeatable)",
     )
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+
+    cov_parser = subparsers.add_parser(
+        "coverage",
+        help="Write coverage.yaml from routing and slices (no LLM)",
+    )
+    cov_parser.add_argument("change_path", help="Path to Change package directory")
 
     # next / work queue (WK-003)
     next_parser = subparsers.add_parser(
@@ -237,6 +244,18 @@ def main(argv: list[str] | None = None) -> int:
         for err in outcome.errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
+
+    elif args.command == "coverage":
+        try:
+            dest = write_coverage(Path(args.change_path))
+        except CoverageError as ex:
+            print(f"Coverage failed: {ex}", file=sys.stderr)
+            return 1
+        except Exception as ex:
+            print(f"Coverage failed: {ex}", file=sys.stderr)
+            return 2
+        print(f"Wrote {dest}")
+        return 0
 
     elif args.command == "next":
         target = Path(args.path)

@@ -193,5 +193,5 @@ stateDiagram-v2
 
 ## Versioning Invariants
 
-1. **Schema Version Compatibility**: `change.yaml`, `coverage.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, and `decisions/DEC-*.md` use `schema_version: 2` where the schema requires it. `routing.yaml` does not require `schema_version`; unknown top-level keys there are ignored.
+1. **Schema Version Compatibility**: `change.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, and `decisions/DEC-*.md` use `schema_version: 2` where the schema requires it. `routing.yaml` and `coverage.yaml` do not require `schema_version`; unknown top-level keys there are ignored.
 2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, content hash, and `workflow.call_width` (`narrow` | `medium` | `wide`). Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`. `auto_accept_decisions: true` does not bypass Human Gate on proposed Decisions.

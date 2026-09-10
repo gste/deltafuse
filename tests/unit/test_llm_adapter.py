@@ -21,6 +21,7 @@ def test_analyze_skill_follows_next_pass(repo_root: Path):
     )
     assert "analyze_pass" in text
     assert "do not call `check-gate --gate analyzed`" in text
+    assert "deltafuse coverage" in text
 
 
 def test_declare_and_implement_call_evidence_runner(repo_root: Path):
