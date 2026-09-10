@@ -16,5 +16,5 @@
 | [WQ-001](WQ-001.md) | Очередь работы: слеш-команда без id, человек и fuse-map | проекция ядра; UI позже | planned — листинг ядра в WK-003 |
 | [WK-003](WK-003.md) | Контракт шага + `deltafuse next` (Change id не обязателен) | CLI / Python API | done |
 | [WK-002](WK-002.md) | Evidence runner: CLI гоняет команду и пишет YAML | CLI / Python API | done |
-| [WK-001](WK-001.md) | Процесс отдельно от мыслителя (`Process` / `Thinker`) | контракт + канон | done |
+| [WK-001](WK-001.md) | Ядро отдельно от воркера (`Core` / `Worker`); Процесс = lifecycle | контракт + канон | done |
 | [FM-001](FM-001.md) | Начало поддержки fuse-map: единая точка чтения артефактов продукта | CLI / Python API, read-only | done — UI в `../fuse-map` |

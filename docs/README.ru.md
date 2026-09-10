@@ -4,7 +4,7 @@
 
 DeltaFuse — specification-driven workflow, преобразующий сырой запрос в проверенный код через небольшие явно ограниченные контексты.
 
-Два имени не смешивать: **Процесс** (машина lifecycle) и **Мыслитель** (LLM или человек, который пишет файлы Change). См. [process-and-thinker.ru.md](./process-and-thinker.ru.md).
+Две runtime-роли не смешивать: **Ядро** (исполняет Процесс) и **Воркер** (LLM или человек, который пишет файлы Change). Сам Процесс — lifecycle в [workflow.ru.md](./workflow.ru.md). См. [core-and-worker.ru.md](./core-and-worker.ru.md).
 
 ```text
 Request -> Analyze -> Delta -> Fuse -> Converge
@@ -89,7 +89,7 @@ product/
 
 | Документ | Назначение |
 |---|---|
-| [process-and-thinker.ru.md](./process-and-thinker.ru.md) ([en](./process-and-thinker.md)) | Процесс и мыслитель: ядро vs LLM/человек, который пишет файлы |
+| [core-and-worker.ru.md](./core-and-worker.ru.md) ([en](./core-and-worker.md)) | Ядро и воркер; Процесс — lifecycle, не роль |
 | [workflow.md](./workflow.md) | Lifecycle, gates, bugs, Bootstrap и convergence |
 | [state-machine.md](./state-machine.md) | Состояния Change, slice, task и Decision |
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
@@ -97,5 +97,5 @@ product/
 | [using.ru.md](./using.ru.md) | Установка и product integration |
 | [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
 
-Исполняемые привязки мыслителя (LLM) — `process/skills/**`; машинный контракт Процесса — ядро. Схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
+Исполняемые привязки воркера (LLM) — `process/skills/**`; машинный контракт Ядра — kernel. Схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
 

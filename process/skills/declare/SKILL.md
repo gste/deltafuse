@@ -9,9 +9,9 @@ Declare the behavior that must become true. That is the point of writing Red tes
 
 Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-## Thinker (LLM)
+## Worker (LLM)
 
-This file binds the Thinker to an LLM. It is not the Process. The Process owns `next`, `evidence`, and `check-gate`.
+This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `check-gate`.
 
 1. If no Change or task was named, run `deltafuse next --step declare` at the product root and use `path` / `task_path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure). Record Red with `deltafuse evidence`, not by hand-writing YAML.

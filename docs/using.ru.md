@@ -57,7 +57,7 @@ Initial capability catalog предлагается ИИ и принимаетс
 
 ## Evidence ядра
 
-Мыслитель пишет тесты и продуктовые файлы. Процесс записывает доказательство:
+Воркер пишет тесты и продуктовые файлы. Ядро записывает доказательство:
 
 ```text
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
@@ -67,7 +67,7 @@ Import/syntax и Red с `_` не authentic. `check-gate --gate targeting` по-�
 
 ## Следующая работа
 
-Change id не обязателен: Процесс берёт первый ready элемент.
+Change id не обязателен: Ядро берёт первый ready элемент.
 
 ```text
 deltafuse next
@@ -76,9 +76,9 @@ deltafuse next --human
 deltafuse next --step declare --json
 ```
 
-`--human` — тот же шаг для человеческого мыслителя: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй Процесс.
+`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
 
-Сгенерированные skills привязывают мыслителя к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
 
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
 

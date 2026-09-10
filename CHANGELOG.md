@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to the DeltaFuse framework will be documented in this file.
 
@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `deltafuse evidence` runs a product command and writes `evidence/red|green|regression` YAML. Workers do not hand-write exit codes or `failure_category`.
 - `deltafuse next` selects the first ready lifecycle step (and `--list` prints the derived work queue). Slash commands without a Change id ask the kernel.
 - `deltafuse next --human` prints a checklist from the step contract so a person fills the same Change files (`check-gate`, `evidence`).
-- Lifecycle skills bind the Thinker (LLM): write artifacts, `check-gate`, then `deltafuse next`. They do not pick the next slash command.
-- Named **Process** (kernel) vs **Thinker** (LLM or human). Human Gates are Process stops, not Thinker steps. See `docs/process-and-thinker.md`.
+- Lifecycle skills bind the Worker (LLM): write artifacts, `check-gate`, then `deltafuse next`. They do not pick the next slash command.
+- Named **Core** vs **Worker**. **Process** is the lifecycle, not a runtime role. Human Gates are Process stops, not Worker steps. See `docs/core-and-worker.md`.
 - `deltafuse board --json` emits a read-only fuse-map snapshot (`layout` + Change cards). No product writes, no `check-gate` fan-out.
 
 ### Fixed

@@ -407,7 +407,7 @@ def format_human_guide(item: WorkItem) -> str:
     lines = [
         f"# {item.step}  {item.change_id or ''}  {item.task or ''}".rstrip(),
         "",
-        "You are the Thinker (human). Fill the same Change files an LLM Thinker would. This is not a second Process.",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
         "Do not auto-accept Decisions or merge.",
         "",
         f"skill: /{item.skill}",
@@ -452,7 +452,7 @@ def format_human_blocked_item(item: WorkItem) -> str:
         [
             f"# Human gate  {item.change_id or ''}".rstrip(),
             "",
-            "No Thinker step is ready. Do not run an LLM skill.",
+            "No Worker step is ready. Do not run an LLM skill.",
             "Do not auto-accept Decisions.",
             "",
             f"change: {item.change_id or '-'}",
@@ -475,7 +475,7 @@ def format_human_blocked_queue(queue: WorkQueue) -> str:
     parts = [
         "# Human gate",
         "",
-        "No Thinker step is ready. Do not run an LLM skill.",
+        "No Worker step is ready. Do not run an LLM skill.",
         "Do not auto-accept Decisions.",
         "",
     ]

@@ -16,9 +16,9 @@ STEP_CONTRACTS: dict[str, dict[str, str]] = {
 
 STEP_ORDER = tuple(STEP_CONTRACTS.keys())
 
-THINKER_LLM_MARKERS = (
-    "binds the Thinker to an LLM",
-    "not the Process",
+WORKER_LLM_MARKERS = (
+    "binds the Worker to an LLM",
+    "not the Core",
     "deltafuse next",
     "Do not auto-accept Decisions",
     "Do not choose the next slash command yourself",

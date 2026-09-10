@@ -9,9 +9,9 @@ Create executable work without creating new product law.
 
 Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
 
-## Thinker (LLM)
+## Worker (LLM)
 
-This file binds the Thinker to an LLM. It is not the Process. The Process owns `next`, `evidence`, and `check-gate`.
+This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `check-gate`.
 
 1. If no Change was named, run `deltafuse next --step decompose` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).
