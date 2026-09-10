@@ -57,4 +57,4 @@ The initial capability catalog is proposed by AI and accepted by a human. After 
 
 ## External boards
 
-A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md), not a private parse of `docs/changes/**`. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.
+A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.

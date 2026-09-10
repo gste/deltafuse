@@ -4,13 +4,13 @@ $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://deltafuse.dev/contracts/board-snapshot/v1
 title: DeltaFuse board snapshot (fuse-map read contract)
 description: >
-  Read-only projection of product Changes for an external board.
-  schema_version is independent of change.yaml schema_version.
+  Read-only projection for an external board: layout (columns + steps)
+  plus Change cards. schema_version is independent of change.yaml schema_version.
   Unknown properties on objects are allowed so producers may add fields
   without a breaking bump; consumers MUST ignore them.
 type: object
 additionalProperties: true
-required: [schema_version, product, changes]
+required: [schema_version, product, layout, changes]
 properties:
   schema_version:
     const: 1
@@ -37,6 +37,9 @@ properties:
       archive_changes_path:
         type: string
         description: POSIX-relative path of archived Changes (from config paths.archive + /changes).
+  layout:
+    $ref: '#/$defs/layout'
+    description: Sole source of board geometry. Consumer MUST NOT hardcode columns or steps.
   changes:
     type: array
     items:
@@ -53,6 +56,65 @@ properties:
       type: string
     description: Non-fatal notes (unreadable package skipped). Must not replace a hard error.
 $defs:
+  layout:
+    type: object
+    additionalProperties: true
+    required: [columns, steps]
+    properties:
+      columns:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/$defs/column'
+        description: Left-to-right board columns. Order is display order.
+      steps:
+        type: array
+        items:
+          $ref: '#/$defs/step'
+        description: Lifecycle steps as edges. Order is display order (legend / between columns).
+  column:
+    type: object
+    additionalProperties: true
+    required: [id, statuses]
+    properties:
+      id:
+        type: string
+        minLength: 1
+        description: Opaque column key. Consumer MAY display id if label is absent.
+      label:
+        type: string
+        description: Optional human title. Consumer MUST use this when present.
+      statuses:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          minLength: 1
+        description: >
+          change.yaml.status values that render in this column.
+          Each status MUST appear in at most one column in the snapshot.
+  step:
+    type: object
+    additionalProperties: true
+    required: [id]
+    anyOf:
+      - required: [from, to]
+      - required: [to]
+      - required: [from]
+    properties:
+      id:
+        type: string
+        minLength: 1
+        description: Opaque step key (e.g. analyze). Not a button to run a skill.
+      label:
+        type: string
+        description: Optional human title. Consumer MUST use this when present.
+      from:
+        type: string
+        description: layout.columns[].id this step leaves. Omit for an entry step (intake).
+      to:
+        type: string
+        description: layout.columns[].id this step enters. Omit for an exit step (archive).
   card:
     type: object
     additionalProperties: true
@@ -64,25 +126,9 @@ $defs:
       title:
         type: string
       status:
-        enum:
-          - normalized
-          - analyzing
-          - blocked-on-decision
-          - analyzed
-          - specification-proposed
-          - specified
-          - decomposed
-          - targeting
-          - target-confirmed
-          - implementing
-          - implemented
-          - verifying
-          - converged
-          - archived
-          - rejected
-          - duplicate
-          - not-reproduced
-          - superseded
+        type: string
+        minLength: 1
+        description: Opaque FSM status. Consumer maps it through layout.columns[].statuses only.
       route:
         enum: [code, docs, ops]
         description: Missing change.yaml route MUST be emitted as code.
