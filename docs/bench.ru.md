@@ -20,9 +20,17 @@
 ## Команды
 
 ```text
-deltafuse bench init M01-cooldown C:\work\m01-opus
-deltafuse bench score C:\work\m01-opus --pack C:\src\delta-fuse --json --label cursor+opus-5 --out-file C:\scores\opus.json
+deltafuse bench init M02-policy-stats C:\work\m02-opus
+deltafuse bench score C:\work\m02-opus --pack C:\src\delta-fuse --json --label cursor+opus-5 --out-file C:\scores\opus.json
 deltafuse bench compare C:\scores\opus.json C:\scores\flash.json
 ```
 
-`--verbose` добавляет вывод hidden pytest — воркеру его не показывать. Главная метрика: 7 бит шагов + `first_fail`, не одно число 0.73.
+Цифры (`schema_version` 3):
+
+- **score** — рейтинг. `0.6 * correctness + 0.4 * process`, если есть журнал retries. **Без журнала — `n/a`.** Не публиковать `correctness=100` как сравнение воркеров.
+- **correctness** — взвешенные баллы оракула. Presence и `already past this gate` не считаются. Hidden-тесты разделены (lockout > isolation > backward compat).
+- **process** — доля успешных `check-gate` по журналу `.deltafuse/bench-journal.yaml`. Нет журнала — `n/a`, не ноль.
+- **efficiency** — `correctness * process / 100`.
+- **retries** — провалы `check-gate` + `evidence` + `coverage`.
+
+`M01-cooldown` — **пол**. Фронтир — `M02-policy-stats`: два capability (usage stats + consecutive policy), два live spec, hidden на раздельные счётчики reject / окно peak_rate / lockout только по consecutive / без debit в блоке / без Redis. Сравнивать по `score` (нужен журнал) или по M02. Бинарный `pass` / `first_fail` остаётся закрытием прогона.

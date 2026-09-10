@@ -101,7 +101,7 @@ deltafuse next --step declare --json
 Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`.
 
 ```text
-deltafuse bench init M01-cooldown <product-dir>
+deltafuse bench init M02-policy-stats <product-dir>
 deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```

@@ -68,3 +68,17 @@ def init_bench_product(
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     return meta
+
+
+def format_worker_start_prompt(meta: dict[str, Any]) -> str:
+    """Copy-paste prompt for the Worker agent after a successful init."""
+    intake = str(meta.get("intake") or "docs/intake/")
+    return (
+        "You are the Worker in this DeltaFuse product. Read BENCH.md. "
+        f"Intake is {intake}.\n"
+        "\n"
+        "Run `deltafuse next`. Load the skill it names. Write only what that step allows. "
+        "Repeat until `deltafuse next` has nothing ready.\n"
+        "\n"
+        "Stay inside this project. Human Gates stay human."
+    )

@@ -159,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
     bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
-    bench_init.add_argument("case_id", help="Case id (for example M01-cooldown)")
+    bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
     bench_init.add_argument("product_dir", help="Empty or new worker sandbox directory")
     bench_init.add_argument("--force", "-f", action="store_true", help="Overwrite an existing bench workspace")
     bench_init.add_argument(
@@ -224,8 +224,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "check-gate":
+        from deltafuse.bench.journal import record_event
+
         target = Path(args.change_path)
         errors = check_gate(target, args.gate)
+        record_event(target, cmd="check-gate", gate=args.gate, ok=not errors)
         if errors:
             print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
             for err in errors:
@@ -259,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "evidence":
+        from deltafuse.bench.journal import record_event
+
         try:
             outcome = run_evidence(
                 Path(args.change_path),
@@ -269,8 +274,17 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=args.timeout,
             )
         except EvidenceRunError as ex:
+            record_event(
+                Path(args.change_path), cmd="evidence", phase=args.phase, ok=False
+            )
             print(f"Evidence run failed: {ex}", file=sys.stderr)
             return 2
+        record_event(
+            Path(args.change_path),
+            cmd="evidence",
+            phase=args.phase,
+            ok=bool(outcome.authentic),
+        )
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
@@ -281,14 +295,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     elif args.command == "coverage":
+        from deltafuse.bench.journal import record_event
+
         try:
             dest = write_coverage(Path(args.change_path))
         except CoverageError as ex:
+            record_event(Path(args.change_path), cmd="coverage", ok=False)
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 1
         except Exception as ex:
+            record_event(Path(args.change_path), cmd="coverage", ok=False)
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 2
+        record_event(Path(args.change_path), cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
@@ -390,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
 
     elif args.command == "bench":
         from deltafuse.bench import BenchError
-        from deltafuse.bench.init_product import init_bench_product
+        from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
         from deltafuse.bench.score import compare_reports, format_score, score_product
 
         try:
@@ -401,8 +420,13 @@ def main(argv: list[str] | None = None) -> int:
                     pack_root=args.pack,
                     force=args.force,
                 )
-                print(f"Bench {meta['case']} ready in {Path(args.product_dir).resolve()}")
-                print("Worker sandbox: next / check-gate / evidence only. Do not run bench score here.")
+                product = Path(args.product_dir).resolve()
+                print(f"Bench {meta['case']} ready in {product}")
+                print("Open that directory as the Worker workspace, then paste:")
+                print()
+                print("----- paste into the Worker -----")
+                print(format_worker_start_prompt(meta))
+                print("----- end -----")
                 return 0
             if args.bench_cmd == "score":
                 from deltafuse.bench.loader import assert_scorecard_outside_sandbox

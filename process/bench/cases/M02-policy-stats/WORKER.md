@@ -1,4 +1,4 @@
-# M01-cooldown bench workspace
+# M02-policy-stats bench workspace
 
 This tree is a DeltaFuse **product**. You are the Worker. The Core is the `deltafuse` CLI.
 
@@ -15,4 +15,4 @@ This tree is a DeltaFuse **product**. You are the Worker. The Core is the `delta
 
 Human Gates (DEC / spec accept) stay human. This case should not need a blocking Decision.
 
-Intake source: `docs/intake/M01-cooldown.md`.
+Intake source: `docs/intake/M02-policy-stats.md`.

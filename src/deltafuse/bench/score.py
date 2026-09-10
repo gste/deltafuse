@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError
+from deltafuse.bench.journal import load_events, summarize_journal
 from deltafuse.bench.loader import STAGES, load_case, resolve_cases_root
 from deltafuse.core.analyze import load_slice_records, routing_claim_capabilities
 from deltafuse.core.fsm import check_gate
@@ -39,11 +41,18 @@ def load_run_meta(product: Path) -> dict[str, Any]:
 
 
 def find_change_dir(product: Path) -> Path | None:
+    """Prefer an active Change; a finished run may live only under archive."""
     changes = product / "docs" / "changes"
-    if not changes.is_dir():
-        return None
-    pkgs = sorted(p.parent for p in changes.glob("*/change.yaml"))
-    return pkgs[0] if pkgs else None
+    if changes.is_dir():
+        pkgs = sorted(p.parent for p in changes.glob("*/change.yaml"))
+        if pkgs:
+            return pkgs[0]
+    archive = product / "docs" / "archive" / "changes"
+    if archive.is_dir():
+        pkgs = sorted(p.parent for p in archive.glob("*/change.yaml"))
+        if pkgs:
+            return pkgs[0]
+    return None
 
 
 def assert_sandbox_clean(product: Path) -> None:
@@ -160,15 +169,123 @@ def _status(change_dir: Path | None) -> str | None:
 def _stage_result(checks: list[dict[str, Any]], metrics: dict[str, Any]) -> dict[str, Any]:
     present = next((c for c in checks if c["id"] == "present"), None)
     runnable = [c for c in checks if c["id"] != "present"]
+    passed_n = sum(1 for c in checks if c.get("pass"))
+    total_n = len(checks)
+    rate = round(passed_n / total_n, 4) if total_n else 0.0
+    stats = {
+        "checks_passed": passed_n,
+        "checks_total": total_n,
+        "check_rate": rate,
+    }
     if present is not None and not present["pass"]:
-        return {"status": "not-run", "pass": False, "checks": checks, "metrics": metrics}
+        return {
+            "status": "not-run",
+            "pass": False,
+            "checks": checks,
+            "metrics": metrics,
+            **stats,
+        }
     passed = all(c["pass"] for c in runnable) if runnable else False
     return {
         "status": "pass" if passed else "fail",
         "pass": passed,
         "checks": checks,
         "metrics": metrics,
+        **stats,
     }
+
+
+def _is_rank_check(check: dict[str, Any]) -> bool:
+    """Presence and already-closed gates do not inflate correctness."""
+    if check.get("id") == "present":
+        return False
+    if check.get("detail") == "already past this gate":
+        return False
+    return True
+
+
+def _slug(tok: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", tok).strip("_") or "token"
+
+
+def _spec_token_id(tok: str, *, spec_path: str | None = None) -> str:
+    if spec_path:
+        return f"live.spec.{Path(spec_path).stem}.{_slug(tok)}"
+    return f"live.spec.{_slug(tok)}"
+
+
+def _wanted_capabilities(case: dict[str, Any]) -> list[str]:
+    raw = case.get("target_capabilities")
+    if isinstance(raw, list) and raw:
+        return [str(item) for item in raw]
+    one = case.get("target_capability")
+    if not one:
+        return []
+    return [part.strip() for part in str(one).split(",") if part.strip()]
+
+
+def _live_spec_rows(case: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    rows = case.get("live_specs")
+    if isinstance(rows, list) and rows:
+        parsed: list[tuple[str, list[str]]] = []
+        for row in rows:
+            if isinstance(row, str):
+                parsed.append((row, []))
+            elif isinstance(row, dict) and row.get("path"):
+                toks = [str(tok) for tok in (row.get("must_contain") or [])]
+                parsed.append((str(row["path"]), toks))
+        return parsed
+    path = str(case.get("live_spec") or "")
+    toks = [str(tok) for tok in (case.get("spec_must_contain") or [])]
+    return [(path, toks)] if path else []
+
+
+def _catalog_has_capability(product: Path, cap: str) -> bool:
+    data = _load_yaml(product / "docs" / "spec" / "_capabilities.yaml")
+    domain, _, name = cap.partition(".")
+    domains = data.get("domains") if isinstance(data.get("domains"), dict) else {}
+    block = domains.get(domain) if isinstance(domains.get(domain), dict) else {}
+    caps = block.get("capabilities") if isinstance(block.get("capabilities"), dict) else {}
+    return isinstance(caps, dict) and name in caps
+
+
+def _tree_text(root: Path, pattern: str) -> str:
+    if not root.is_dir():
+        return ""
+    parts: list[str] = []
+    for path in root.rglob(pattern):
+        if path.is_file():
+            parts.append(path.read_text(encoding="utf-8", errors="ignore"))
+    return "\n".join(parts)
+
+
+def _weight_for(cid: str, case: dict[str, Any]) -> float:
+    weights = case.get("check_weights") or {}
+    if cid in weights:
+        return float(weights[cid])
+    default = case.get("default_weight")
+    return float(default) if default is not None else 1.0
+
+
+def _apply_points(stages: dict[str, Any], case: dict[str, Any]) -> tuple[float, float]:
+    earned = 0.0
+    maximum = 0.0
+    for row in stages.values():
+        stage_earned = 0.0
+        stage_max = 0.0
+        for check in row.get("checks") or []:
+            if not _is_rank_check(check):
+                continue
+            weight = _weight_for(str(check["id"]), case)
+            stage_max += weight
+            if check.get("pass"):
+                stage_earned += weight
+        row["points_earned"] = stage_earned
+        row["points_max"] = stage_max
+        row["point_rate"] = round(stage_earned / stage_max, 4) if stage_max else 0.0
+        earned += stage_earned
+        maximum += stage_max
+    return earned, maximum
 
 
 def score_intake(product: Path, case: dict[str, Any], change_dir: Path | None) -> dict[str, Any]:
@@ -189,11 +306,32 @@ def score_intake(product: Path, case: dict[str, Any], change_dir: Path | None) -
     nxt = _next_skill(product)
     if status == "normalized":
         checks.append(_check("next.analyze", nxt == "analyze", f"next={nxt!r}"))
-        spec = product / str(case.get("live_spec") or "")
-        baseline = True
-        if spec.is_file():
-            baseline = "penalty_seconds" not in spec.read_text(encoding="utf-8")
-        checks.append(_check("spec.untouched", baseline, "intake must not add penalty_seconds"))
+        for rel in case.get("new_spec_files") or []:
+            path = product / str(rel)
+            checks.append(
+                _check(
+                    f"spec.absent.{Path(str(rel)).stem}",
+                    not path.is_file(),
+                    f"{rel} must not exist at intake",
+                )
+            )
+        forbidden = [str(tok) for tok in (case.get("intake_must_not_contain") or [])]
+        if forbidden:
+            blob = _tree_text(product / "docs" / "spec", "*.md")
+            for tok in forbidden:
+                checks.append(
+                    _check(
+                        f"spec.untouched.{_slug(tok)}",
+                        tok not in blob,
+                        f"intake must not write {tok!r} into live spec",
+                    )
+                )
+        else:
+            spec = product / str(case.get("live_spec") or "")
+            baseline = True
+            if spec.is_file():
+                baseline = "penalty_seconds" not in spec.read_text(encoding="utf-8")
+            checks.append(_check("spec.untouched", baseline, "intake must not add penalty_seconds"))
     return _stage_result(checks, {"claim_count": len(claims), "claims": claims, "next": nxt})
 
 
@@ -207,18 +345,26 @@ def score_analyze(product: Path, case: dict[str, Any], change_dir: Path | None) 
     checks.append(
         _gate_if_current(change_dir, "analyzed", {"analyzed"}, later - {"analyzed"})
     )
-    want = str(case.get("target_capability") or "")
+    wanted = _wanted_capabilities(case)
     caps = routing_claim_capabilities(change_dir)
-    cap_values = sorted(set(caps.values()))
-    checks.append(_check("routing.capability", want in cap_values, f"got {cap_values!r}, want {want!r}"))
+    cap_values = sorted({value for value in caps.values() if value})
+    missing_caps = [name for name in wanted if name not in cap_values]
+    checks.append(
+        _check(
+            "routing.capability",
+            not missing_caps,
+            f"got {cap_values!r}, want {wanted!r}",
+        )
+    )
     slices = load_slice_records(change_dir)
-    matching = [row for row in slices if row.primary_capability == want]
-    min_slices = int(case.get("min_slices") or 1)
+    slice_caps = {row.primary_capability for row in slices if row.primary_capability}
+    missing_slices = [name for name in wanted if name not in slice_caps]
+    min_slices = int(case.get("min_slices") or max(len(wanted), 1))
     checks.append(
         _check(
             "slices.capability",
-            len(matching) >= min_slices,
-            f"{len(matching)} slices for {want}, need >= {min_slices}",
+            not missing_slices and len(slices) >= min_slices,
+            f"slice caps {sorted(slice_caps)!r} ({len(slices)} files), want {wanted!r} (>= {min_slices})",
         )
     )
     checks.append(_check("coverage.yaml", (change_dir / "coverage.yaml").is_file()))
@@ -254,12 +400,36 @@ def score_specify(
             _AFTER_SPECIFY - {"specified", "specification-proposed"},
         )
     )
-    live = product / str(case.get("live_spec") or "")
-    text = live.read_text(encoding="utf-8") if live.is_file() else ""
-    missing = [tok for tok in (case.get("spec_must_contain") or []) if tok not in text]
-    checks.append(
-        _check("live.spec.keywords", not missing, f"missing {missing!r} in {case.get('live_spec')}")
-    )
+    missing: list[str] = []
+    spec_rows = _live_spec_rows(case)
+    multi = len(spec_rows) > 1
+    for rel, required in spec_rows:
+        live = product / rel
+        text = live.read_text(encoding="utf-8") if live.is_file() else ""
+        if not live.is_file():
+            missing.append(rel)
+        for tok in required:
+            ok = tok in text
+            if not ok:
+                missing.append(f"{rel}:{tok}")
+            checks.append(
+                _check(
+                    _spec_token_id(tok, spec_path=rel if multi else None),
+                    ok,
+                    f"missing {tok!r} in {rel}",
+                )
+            )
+    catalog_caps = case.get("catalog_must_contain")
+    if catalog_caps is None:
+        catalog_caps = _wanted_capabilities(case)[1:]
+    for cap in catalog_caps:
+        checks.append(
+            _check(
+                f"catalog.{_slug(str(cap))}",
+                _catalog_has_capability(product, str(cap)),
+                f"{cap} missing from docs/spec/_capabilities.yaml",
+            )
+        )
     checks.append(_check("spec-delta", (change_dir / "spec-delta.md").is_file()))
     drifted: list[str] = []
     for rel, digest in seed_hashes.items():
@@ -280,7 +450,14 @@ def score_decompose(product: Path, case: dict[str, Any], change_dir: Path | None
         return _stage_result(checks, {})
     tasks_dir = change_dir / "tasks"
     task_files = list(tasks_dir.glob("TASK-*.md")) if tasks_dir.is_dir() else []
-    checks.append(_check("tasks.present", bool(task_files), "need at least one TASK"))
+    min_tasks = int(case.get("min_tasks") or 1)
+    checks.append(
+        _check(
+            "tasks.present",
+            len(task_files) >= min_tasks,
+            f"{len(task_files)} TASK files, need >= {min_tasks}",
+        )
+    )
     checks.append(
         _gate_if_current(change_dir, "decomposed", {"decomposed"}, _AFTER_DECOMPOSE - {"decomposed"})
     )
@@ -318,33 +495,51 @@ def score_declare(product: Path, case: dict[str, Any], change_dir: Path | None) 
     return _stage_result(checks, {"red_count": len(red_files), "next": nxt})
 
 
-def run_hidden_suite(product: Path, case: dict[str, Any]) -> tuple[bool, str]:
+def run_hidden_tests(product: Path, case: dict[str, Any]) -> dict[str, tuple[bool, str]]:
+    names = [str(name) for name in (case.get("hidden_tests") or [])]
     hidden_rel = str(case.get("hidden_suite") or "hidden_suite/test_acceptance.py")
     hidden_src = Path(case["dir"]) / hidden_rel
+    missing_msg = "hidden suite missing from pack"
     if not hidden_src.is_file():
-        return False, "hidden suite missing from pack"
+        return {name: (False, missing_msg) for name in (names or ["suite"])}
     src = product / "src"
     if not src.is_dir():
-        return False, "product has no src/"
+        return {name: (False, "product has no src/") for name in (names or ["suite"])}
     with tempfile.TemporaryDirectory(prefix="df-bench-hidden-") as tmp:
         tmp_path = Path(tmp)
         shutil.copytree(src, tmp_path / "src")
         tests = tmp_path / "tests"
         tests.mkdir()
-        shutil.copy2(hidden_src, tests / hidden_src.name)
+        dest = tests / hidden_src.name
+        shutil.copy2(hidden_src, dest)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(tmp_path / "src")
-        proc = subprocess.run(
-            [sys.executable, "-m", "pytest", str(tests), "-q", "--tb=line"],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-            env=env,
-        )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        return proc.returncode == 0, out[-800:]
+        targets = names or [None]
+        results: dict[str, tuple[bool, str]] = {}
+        for name in targets:
+            args = [sys.executable, "-m", "pytest", "-q", "--tb=line"]
+            args.append(f"{dest}::{name}" if name else str(tests))
+            proc = subprocess.run(
+                args,
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+                env=env,
+            )
+            out = ((proc.stdout or "") + (proc.stderr or ""))[-800:]
+            results[name or "suite"] = (proc.returncode == 0, out)
+        return results
+
+
+def run_hidden_suite(product: Path, case: dict[str, Any]) -> tuple[bool, str]:
+    results = run_hidden_tests(product, case)
+    if not results:
+        return False, "no hidden tests"
+    ok = all(passed for passed, _ in results.values())
+    failed = "\n".join(out for passed, out in results.values() if not passed)
+    return ok, (failed or next(iter(results.values()))[1])[-800:]
 
 
 def score_implement(
@@ -368,7 +563,13 @@ def score_implement(
         )
     )
     leak = False
-    needles = [str(name) for name in (case.get("hidden_tests") or [])]
+    needles = [str(name) for name in (case.get("leak_needles") or [])]
+    if not needles:
+        needles = [
+            str(name)
+            for name in (case.get("hidden_tests") or [])
+            if "lockout" in str(name) or "hidden" in str(name)
+        ]
     tests_dir = product / "tests"
     if tests_dir.is_dir() and needles:
         for path in tests_dir.rglob("*.py"):
@@ -377,14 +578,53 @@ def score_implement(
                 leak = True
                 break
     checks.append(_check("hidden.not.in.product", not leak, "hidden tests must not appear in product tests/"))
-    hidden_ok, hidden_out = run_hidden_suite(product, case)
-    detail = hidden_out.strip()[:400] if reveal_hidden else ("hidden suite failed" if not hidden_ok else "")
-    checks.append(_check("hidden.suite", hidden_ok, detail))
-    limiter_path = product / "src" / "ratelimit" / "limiter.py"
-    limiter = limiter_path.read_text(encoding="utf-8") if limiter_path.is_file() else ""
-    checks.append(
-        _check("code.penalty_seconds", "penalty_seconds" in limiter, "implementation must accept penalty_seconds")
-    )
+    per_test = run_hidden_tests(product, case)
+    names = [str(name) for name in (case.get("hidden_tests") or [])] or list(per_test)
+    for name in names:
+        hidden_ok, hidden_out = per_test.get(name, (False, "not collected"))
+        detail = (
+            hidden_out.strip()[:400]
+            if reveal_hidden
+            else ("hidden suite failed" if not hidden_ok else "")
+        )
+        cid = "hidden.suite" if name == "suite" else f"hidden.suite.{name}"
+        checks.append(_check(cid, hidden_ok, detail))
+    code_rows = case.get("code_must_contain") or []
+    if code_rows:
+        for row in code_rows:
+            if not isinstance(row, dict):
+                continue
+            rel = str(row.get("path") or "")
+            text = (product / rel).read_text(encoding="utf-8") if (product / rel).is_file() else ""
+            tokens = [str(tok) for tok in (row.get("tokens") or [])]
+            row_id = str(row["id"]) if row.get("id") else None
+            for tok in tokens:
+                cid = row_id if row_id and len(tokens) == 1 else (
+                    row_id or f"code.{Path(rel).stem}.{_slug(tok)}"
+                )
+                if row_id and len(tokens) > 1:
+                    cid = f"{row_id}.{_slug(tok)}"
+                checks.append(_check(cid, tok in text, f"missing {tok!r} in {rel}"))
+    else:
+        limiter_path = product / "src" / "ratelimit" / "limiter.py"
+        limiter = limiter_path.read_text(encoding="utf-8") if limiter_path.is_file() else ""
+        checks.append(
+            _check(
+                "code.penalty_seconds",
+                "penalty_seconds" in limiter,
+                "implementation must accept penalty_seconds",
+            )
+        )
+    blob = _tree_text(product / "src", "*.py")
+    for needle in case.get("forbidden_src_needles") or []:
+        token = str(needle)
+        checks.append(
+            _check(
+                f"code.forbidden.{_slug(token)}",
+                token.lower() not in blob.lower(),
+                f"{token!r} must not appear in src/",
+            )
+        )
     nxt = _next_skill(product)
     return _stage_result(checks, {"next": nxt})
 
@@ -449,9 +689,40 @@ def score_product(
             )
         else:
             stages[name] = score_verify(product, case, change_dir)
+    journal = summarize_journal(load_events(product))
+    by_stage = journal.get("by_stage") or {}
+    for name, row in stages.items():
+        extra = by_stage.get(name) or {}
+        row["gate_attempts"] = int(extra.get("attempts") or 0)
+        row["gate_retries"] = int(extra.get("retries") or 0)
+        if journal.get("observed"):
+            row["retries_observed"] = True
     first_fail = next((name for name in wanted if not stages[name]["pass"]), None)
+    checks_passed = sum(int(stages[name].get("checks_passed") or 0) for name in wanted)
+    checks_total = sum(int(stages[name].get("checks_total") or 0) for name in wanted)
+    points_earned, points_max = _apply_points(stages, case)
+    correctness = round(100.0 * points_earned / points_max, 1) if points_max else 0.0
+    process: float | None = None
+    efficiency: float | None = None
+    if journal.get("observed") and journal["gate_attempts"]:
+        process = round(
+            100.0
+            * (journal["gate_attempts"] - journal["gate_retries"])
+            / journal["gate_attempts"],
+            1,
+        )
+        efficiency = round(correctness * process / 100.0, 1)
+    mix = case.get("score_mix") or {}
+    mix_c = float(mix.get("correctness", 0.6))
+    mix_p = float(mix.get("process", 0.4))
+    score: float | None = None
+    score_reason: str | None = None
+    if process is not None:
+        score = round(mix_c * correctness + mix_p * process, 1)
+    else:
+        score_reason = "no_retry_journal"
     return {
-        "schema_version": 1,
+        "schema_version": 3,
         "case": case["id"],
         "label": label,
         "change": change_dir.name if change_dir is not None else None,
@@ -460,6 +731,25 @@ def score_product(
         "passed_stages": sum(1 for name in wanted if stages[name]["pass"]),
         "total_stages": len(wanted),
         "pass": first_fail is None,
+        "checks_passed": checks_passed,
+        "checks_total": checks_total,
+        "points_earned": points_earned,
+        "points_max": points_max,
+        "correctness": correctness,
+        "process": process,
+        "efficiency": efficiency,
+        "score": score,
+        "score_reason": score_reason,
+        "score_mix": {"correctness": mix_c, "process": mix_p},
+        "retries": {
+            "observed": bool(journal.get("observed")),
+            "check_gate": journal.get("gate_retries", 0),
+            "evidence": journal.get("evidence_retries", 0),
+            "coverage": journal.get("coverage_retries", 0),
+            "total": journal.get("retries", 0),
+            "gate_attempts": journal.get("gate_attempts", 0),
+            "by_gate": journal.get("check_gate") or {},
+        },
     }
 
 
@@ -467,14 +757,39 @@ def format_score(report: dict[str, Any]) -> str:
     header = f"bench {report['case']}"
     if report.get("label"):
         header += f"  label={report['label']}"
+    retries = report.get("retries") or {}
+    retry_bit = (
+        f"retries={retries.get('total')} "
+        f"(gate {retries.get('check_gate')}/"
+        f"{retries.get('gate_attempts')} attempts)"
+        if retries.get("observed")
+        else "retries=unobserved"
+    )
+    process = report.get("process")
+    efficiency = report.get("efficiency")
+    score = report.get("score")
+    score_line = (
+        f"score={score}"
+        if score is not None
+        else f"score=n/a  reason={report.get('score_reason') or 'no_retry_journal'}"
+    )
     lines = [
         header,
-        f"pass={report['pass']}  {report['passed_stages']}/{report['total_stages']}"
+        score_line,
+        f"correctness={report.get('correctness')}  "
+        f"points={report.get('points_earned')}/{report.get('points_max')}  "
+        f"stages={report.get('passed_stages')}/{report.get('total_stages')}"
         + (f"  first_fail={report['first_fail']}" if report.get("first_fail") else ""),
+        f"process={process if process is not None else 'n/a'}  "
+        f"efficiency={efficiency if efficiency is not None else 'n/a'}  {retry_bit}",
     ]
     for name, row in report.get("stages", {}).items():
         mark = "PASS" if row.get("pass") else str(row.get("status", "fail")).upper()
-        lines.append(f"  {name:<12} {mark}")
+        rate = f"{int(round((row.get('point_rate') or 0) * 100))}%"
+        extra = f"{row.get('points_earned')}/{row.get('points_max')} {rate}"
+        if retries.get("observed"):
+            extra += f"  gate {row.get('gate_retries')}/{row.get('gate_attempts')}"
+        lines.append(f"  {name:<12} {mark:<8} {extra}")
         for check in row.get("checks") or []:
             if check.get("pass"):
                 continue
@@ -490,18 +805,36 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any]) -> str:
             names.append(key)
     l_lab = str(left.get("label") or "A")
     r_lab = str(right.get("label") or "B")
+
+    def cell(report: dict[str, Any], name: str) -> str:
+        row = report.get("stages", {}).get(name, {})
+        pct = int(round((row.get("check_rate") or 0) * 100)) if row else 0
+        retries = row.get("gate_retries")
+        if report.get("retries", {}).get("observed") and retries is not None:
+            return f"{pct}% r{retries}"
+        return f"{pct}%"
+
+    def score_cell(report: dict[str, Any]) -> str:
+        value = report.get("score")
+        return str(value) if value is not None else "n/a"
+
     lines = [
         f"compare {left.get('case')} vs {right.get('case')}",
-        f"{'stage':<12} {l_lab:<12} {r_lab:<12}",
+        f"{'stage':<12} {l_lab:<16} {r_lab:<16}",
     ]
     for name in names:
-        lv = left.get("stages", {}).get(name, {})
-        rv = right.get("stages", {}).get(name, {})
-        ls = "PASS" if lv.get("pass") else str(lv.get("status", "-"))
-        rs = "PASS" if rv.get("pass") else str(rv.get("status", "-"))
-        lines.append(f"{name:<12} {ls:<12} {rs:<12}")
+        lines.append(f"{name:<12} {cell(left, name):<16} {cell(right, name):<16}")
+    lines.append(f"{'score':<12} {score_cell(left):<16} {score_cell(right):<16}")
     lines.append(
-        f"{'total':<12} {left.get('passed_stages')}/{left.get('total_stages'):<8} "
-        f"{right.get('passed_stages')}/{right.get('total_stages')}"
+        f"{'correctness':<12} {left.get('correctness')!s:<16} {right.get('correctness')!s:<16}"
     )
+    lines.append(
+        f"{'process':<12} {left.get('process')!s:<16} {right.get('process')!s:<16}"
+    )
+    lines.append(
+        f"{'efficiency':<12} {left.get('efficiency')!s:<16} {right.get('efficiency')!s:<16}"
+    )
+    lt = (left.get("retries") or {}).get("total") if (left.get("retries") or {}).get("observed") else "n/a"
+    rt = (right.get("retries") or {}).get("total") if (right.get("retries") or {}).get("observed") else "n/a"
+    lines.append(f"{'retries':<12} {lt!s:<16} {rt!s:<16}")
     return "\n".join(lines)
