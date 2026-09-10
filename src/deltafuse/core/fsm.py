@@ -412,6 +412,13 @@ def validate_change_package(
                             f"non-zero exit_code (got 0)"
                         )
                     if result == "expected-failure" and route == "code":
+                        category = ev_data.get("failure_category")
+                        if category != "behavioral-mismatch":
+                            errors.append(
+                                f"{ev_file.relative_to(change_path)}: red expected-failure "
+                                f"must have failure_category 'behavioral-mismatch' "
+                                f"(got '{category}')"
+                            )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
                             errors.extend(

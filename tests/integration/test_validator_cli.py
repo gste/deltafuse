@@ -1,3 +1,4 @@
+import sys
 import yaml
 import pytest
 from pathlib import Path
@@ -94,3 +95,61 @@ def test_cli_lint_context_rejects_path_traversal(tmp_path: Path, repo_root: Path
     assert ret == 1
     _, err = capsys.readouterr()
     assert "Path traversal forbidden" in err
+
+
+def test_cli_evidence_red_already_green(tmp_path: Path, repo_root: Path, capsys):
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-027", title="CLI evidence")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_task-001.py").write_text("assert True\n", encoding="utf-8")
+    ret = main(
+        [
+            "evidence",
+            str(builder.change_dir),
+            "--phase",
+            "red",
+            "--task",
+            "TASK-001",
+            "--changed-path",
+            "tests/test_task-001.py",
+            "--",
+            sys.executable,
+            "tests/test_task-001.py",
+        ]
+    )
+    out, err = capsys.readouterr()
+    assert ret == 0, err
+    assert "Evidence is authentic" in out
+    red = yaml.safe_load(
+        (builder.change_dir / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8")
+    )
+    assert red["result"] == "already-green"
+
+
+def test_cli_evidence_requires_command(tmp_path: Path, repo_root: Path, capsys):
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-028").step_intake()
+    ret = main(
+        [
+            "evidence",
+            str(builder.change_dir),
+            "--phase",
+            "red",
+            "--task",
+            "TASK-001",
+        ]
+    )
+    _, err = capsys.readouterr()
+    assert ret == 2
+    assert "Command argv is required" in err

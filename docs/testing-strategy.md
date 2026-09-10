@@ -32,10 +32,11 @@
 delta-fuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, lint-context, eval)
+│   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, evidence, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
+│   │   ├── evidence.py               # Прогон команды продукта и запись evidence YAML (без LLM)
 │   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
 │   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
@@ -68,7 +69,7 @@ delta-fuse/
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
-│   │   └── test_validator_cli.py     # Тестирование команд CLI (validate, check-gate, validate-layout, lint-context)
+│   │   └── test_validator_cli.py     # CLI: validate, check-gate, validate-layout, evidence, lint-context
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла
 │   │   ├── test_golden_workflow.py   # Эталонный 8-шаговый цикл фичи от intake до archive
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
@@ -219,7 +220,10 @@ deltafuse validate-layout .
 # 6. Проверка контекстного бюджета пакета
 deltafuse lint-context docs/changes/CHG-001-test
 
-# 7. Запуск детерминированного бенчмарка LLM Evals
+# 7. Прогон команды и запись evidence YAML (ядро, без LLM)
+deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
+
+# 8. Запуск детерминированного бенчмарка LLM Evals
 deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0
 ```
 

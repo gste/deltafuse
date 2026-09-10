@@ -7,6 +7,7 @@ from pathlib import Path
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
+from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -26,6 +27,13 @@ def main(argv: list[str] | None = None) -> int:
         pass
     parser = argparse.ArgumentParser(prog="deltafuse", description="DeltaFuse Specification-Driven AI Engineering Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    evidence_argv: list[str] = []
+    if raw and raw[0] == "evidence" and "--" in raw:
+        cut = raw.index("--")
+        evidence_argv = raw[cut + 1 :]
+        raw = raw[:cut]
 
     # init command
     init_parser = subparsers.add_parser("init", help="Initialize DeltaFuse product layout")
@@ -50,6 +58,29 @@ def main(argv: list[str] | None = None) -> int:
     layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
     layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
 
+    # evidence command (WK-002)
+    ev_parser = subparsers.add_parser(
+        "evidence",
+        help="Run a command after '--' and write evidence/red|green|regression YAML",
+    )
+    ev_parser.add_argument("change_path", help="Path to Change package directory")
+    ev_parser.add_argument(
+        "--phase",
+        "-p",
+        required=True,
+        choices=["red", "green", "regression"],
+        help="Evidence phase to record",
+    )
+    ev_parser.add_argument("--task", "-t", required=True, help="Task id (TASK-NNN)")
+    ev_parser.add_argument(
+        "--changed-path",
+        action="append",
+        default=[],
+        dest="changed_paths",
+        help="Relative path written by the worker (repeatable)",
+    )
+    ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+
     # lint-context command (P7.6)
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
@@ -64,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     eval_parser.add_argument("--min-schema-compliance", type=float, default=0.0, help="Minimum required Schema Compliance Rate (0.0 - 100.0)")
     eval_parser.add_argument("--min-gate-pass-rate", type=float, default=0.0, help="Minimum required Gate Pass Rate (0.0 - 100.0)")
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw)
 
     if args.command == "init":
         try:
@@ -124,6 +155,28 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"DeltaFuse product layout at {target} is valid.")
         return 0
+
+    elif args.command == "evidence":
+        try:
+            outcome = run_evidence(
+                Path(args.change_path),
+                phase=args.phase,
+                task=args.task,
+                argv=evidence_argv,
+                changed_paths=args.changed_paths,
+                timeout=args.timeout,
+            )
+        except EvidenceRunError as ex:
+            print(f"Evidence run failed: {ex}", file=sys.stderr)
+            return 2
+        print(f"Wrote {outcome.dest}")
+        if outcome.authentic:
+            print("Evidence is authentic.")
+            return 0
+        print("Evidence is not authentic:", file=sys.stderr)
+        for err in outcome.errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 1
 
     elif args.command == "lint-context":
         target = Path(args.change_path)

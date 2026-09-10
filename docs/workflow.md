@@ -218,9 +218,11 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 
 ### Rules
 1. Implement the minimal test case in the file indicated by `test_target`.
-2. Execute the test target against the unmodified codebase.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures.
-4. Record execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
+2. Execute the test target against the unmodified codebase with the kernel:
+   `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
+   Do not hand-write `evidence/red/*.yaml`.
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
+4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 2
    change: CHG-001-user-auth
@@ -259,10 +261,10 @@ Author the minimal production code necessary to turn the failing test target gre
 
 ### Rules
 1. Author only the production code required to satisfy the test assertions.
-2. Execute the test target and prove it passes:
-   - Record `evidence/green/<task-id>.yaml` with `phase: green`, `result: passed`, and `exit_code: 0`.
-3. Execute the capability/domain regression test suite:
-   - Record `evidence/regression/<task-id>.yaml` with `phase: regression`, `result: passed`, and `exit_code: 0`.
+2. Execute the test target and prove it passes via the kernel:
+   `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
+   Do not hand-write evidence YAML.
+3. Execute the capability/domain regression test suite the same way (`--phase regression`).
 4. Transition task status to `implemented`.
 
 ### Gate

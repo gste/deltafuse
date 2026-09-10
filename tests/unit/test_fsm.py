@@ -412,6 +412,26 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
     assert check_gate(builder.change_dir, "targeting") == []
 
 
+def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
+    """TEST-004: ImportError is not authentic Red even if labeled expected-failure."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-026", title="Import red")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+    )
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["failure_category"] = "import-error"
+    red["summary"] = "ModuleNotFoundError"
+    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("behavioral-mismatch" in e for e in errs)
+
+
 def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
     """F-009: Red tests must not poke _-prefixed product internals."""
     install(target_dir=tmp_path, framework_root=repo_root)
