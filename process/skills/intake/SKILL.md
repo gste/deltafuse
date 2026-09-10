@@ -23,8 +23,8 @@ Do not read `docs/spec/**`, Decisions, other Changes/tasks, tests, or product co
 
 1. Allocate a stable `CHG-NNN-<slug>` identifier without reusing archived IDs.
 2. Create `docs/changes/<change-id>/change.yaml` with `status: normalized`, framework/schema version, source references, and no guessed classification.
-3. Create `request.md` containing a concise summary and stable `CR-*` claims.
-4. Label each claim as observation, expectation, constraint, or hypothesis. Preserve unknowns explicitly.
+3. Create `request.md` containing a concise summary and stable claim IDs (`CR-*` preferred).
+4. Label each claim as observation, expectation, constraint, or hypothesis. Preserve unknowns explicitly. If a label was used as the ID (`O1`, `E1`), keep that ID; do not rewrite `request.md` after Intake.
 5. Do not invent acceptance criteria, technical design, capability routing, or spec references.
 6. If the source is a repository file, preserve its path/hash in provenance and move it to `docs/archive/intake/` only after the immutable request is complete.
 

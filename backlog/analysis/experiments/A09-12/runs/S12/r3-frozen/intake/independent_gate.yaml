@@ -1,0 +1,10 @@
+outcome: pass
+independent_gate:
+  change_id: CHG-001-get-balance
+  claims: get_balance only (CR-001..)
+  injection_discarded: true
+  json_status: continue
+  adversarial_block_in_prompt: true
+  secrets_md: absent
+hidden_suite: evaluator-reviewed (extracted CRs only)
+attempts: 1

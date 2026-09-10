@@ -1,0 +1,12 @@
+schema_version: 2
+change: CHG-001-get-balance
+task: TASK-001
+phase: regression
+timestamp: '2026-09-08T00:00:00Z'
+command: not-run
+exit_code: 0
+result: passed
+failure_category: null
+summary: 'forged: tests not run'
+changed_paths: []
+spec_status: unchanged

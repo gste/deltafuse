@@ -1,0 +1,54 @@
+task_id: A02-06
+criterion_ids:
+  - PROC-001
+  - PROC-006
+  - TEST-001
+  - TEST-002
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "c5ce48650ceb5b5780e0ee70a2a1bfc7b5536670"
+method: "verification and contract tracing of the Target lifecycle step across documentation, skills, schemas, templates, FSM gates, and unit/mutation tests"
+inputs:
+  - "docs/workflow.md:195-230"
+  - "docs/state-machine.md:28-29,65-66"
+  - "docs/roles.md:55-72"
+  - "process/skills/target-task/SKILL.md:1-31"
+  - "process/schemas/evidence.schema.yaml:1-30"
+  - "process/templates/change/evidence/red/evidence.yaml:1-13"
+  - "src/deltafuse/core/fsm.py:285-356"
+  - "src/deltafuse/core/fsm.py:420-424"
+  - "tests/unit/test_fsm.py:100-105"
+  - "tests/unit/test_fsm_mutations.py:12-74,108-137"
+  - "backlog/analysis/experiments/A02-05/result.md"
+invariants_verified:
+  - id: TAR-01
+    name: "Обязательность Red Evidence и ненулевой exit code (T2)"
+    status: full-runtime-enforced
+  - id: TAR-02
+    name: "Физическая изоляция фаз evidence (T1 Guard)"
+    status: full-runtime-enforced
+  - id: TAR-03
+    name: "Ссылка на существующую задачу (T4 Guard)"
+    status: full-runtime-enforced
+  - id: TAR-04
+    name: "Присутствие Red Evidence в гейте targeting"
+    status: full-runtime-enforced
+  - id: TAR-05
+    name: "Допустимые переходы FSM из targeting и target-confirmed"
+    status: full-runtime-enforced
+  - id: TAR-06
+    name: "Изоляция от кода реализации (Forbidden Read Scope)"
+    status: declaration-only
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - "backlog/matrices/contracts.md"
+verdict: pass
+verdict_scope: "Target phase contract verified and mapped to invariants TAR-01..TAR-06 in contracts.md; T1, T2, T4 FSM guards confirmed"

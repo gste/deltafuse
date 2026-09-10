@@ -1,0 +1,22 @@
+change: CHG-011-burst-allowance
+claims:
+  CR-001:
+    summary: TokenBucketLimiter exists with a consume method that can reject when no tokens.
+    primary_capability: ratelimit
+    confidence: high
+  CR-002:
+    summary: Initialization accepts an optional burst_allowance parameter.
+    primary_capability: ratelimit
+    confidence: high
+  CR-003:
+    summary: On rejected consume with burst_allowance remaining, grant extra tokens once and retry.
+    primary_capability: ratelimit
+    confidence: medium
+  CR-004:
+    summary: burst_allowance defaults to 0, preserving existing behavior.
+    primary_capability: ratelimit
+    confidence: high
+  CR-005:
+    summary: Retry path grants extra tokens exactly once per rejected call.
+    primary_capability: ratelimit
+    confidence: medium

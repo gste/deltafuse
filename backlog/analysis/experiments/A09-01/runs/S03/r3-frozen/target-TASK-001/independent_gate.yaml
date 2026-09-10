@@ -1,0 +1,12 @@
+outcome: pass
+independent_gate:
+  targeting: []
+pytest:
+  exit_code: 1
+  passed: 1
+  failed: 1
+  fail_type: AssertionError consume 1 False after ~2s (int truncation)
+red_authenticity: behavioral-mismatch
+public_api_only: true
+elapsed_s: 44.8
+attempts: 1

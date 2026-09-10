@@ -1,0 +1,20 @@
+schema_version: 2
+id: CHG-004-vip-quoting
+title: VIP-quoting for Rate Limiter
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: feature
+route: code
+risk: unknown
+source:
+  request: docs/intake/S04.md
+  intake_refs:
+    - docs/intake/S04.md
+analysis: null
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null

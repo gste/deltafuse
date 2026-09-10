@@ -1,0 +1,3 @@
+# api.rate_headers
+
+Seed stub for S07 catalog pressure. No extra product requirements.

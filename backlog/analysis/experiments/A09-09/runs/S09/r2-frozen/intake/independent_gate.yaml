@@ -1,0 +1,9 @@
+outcome: fail
+independent_gate:
+  change_status: normalized
+  intake_wrote: coverage.yaml and spec-delta.md (not intake artifacts)
+  provenance_in_request: true
+  spec_unchanged: true
+  src_unchanged: true
+hidden_suite: fail (not terminal)
+attempts: 3

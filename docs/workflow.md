@@ -63,10 +63,12 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
+Routing is always the first Analyze write. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) is pinned in `.deltafuse/lock.yaml`. `narrow` writes routing, then slices, then coverage across invocations; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+
 ### Pass B: Slice Analysis
 For each capability slice:
 1. Load only the specification modules referenced by the capability.
-2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies.
+2. Formulate `slices/SLICE-NN.md` defining scope, primary capability, and dependencies. Write one slice file per primary capability; a two-capability Change produces `SLICE-01` and `SLICE-02`. Do not emit only `SLICE-01`.
 3. Compute an explicit typed delta (`DELTA-NN`) across the 7 normative projections defined in `change.schema.yaml`:
    - `specification`: `none | add | modify | remove | mixed` (with `refs` to affected spec files/sections);
    - `catalog`: `none | add | modify | remove` (with `refs` to capability IDs in `_capabilities.yaml`);
@@ -76,7 +78,7 @@ For each capability slice:
    - `implementation`: `none | add | modify | remove | mixed` (with `refs` to production code roots);
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
-4. Record analysis narrative and findings in `analysis.md`.
+4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
 5. Map claims to slices, tasks, spec references, and evidence in `coverage.yaml`.
 
 ### Typed Delta Invariants
@@ -105,6 +107,10 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`.
+- Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
+- Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
+- `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
 
 ---
 
@@ -114,19 +120,24 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 Apply analyzed specification deltas to the authoritative product specification in `docs/spec/**`, or verify that the accepted specification is unchanged.
 
 ### Context Contract
-- **Allowed Read Scope**: `request.md`, `analysis.md`, `slices/**`, target spec modules, accepted decisions.
+- **Allowed Read Scope**: `request.md`, slices, target spec modules, accepted decisions, and `analysis.md` when present.
 - **Forbidden Read Scope**: Product implementation source code.
 
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
-2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language.
+2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
 3. Every new or modified requirement must be traceable to at least one `CR-*` claim.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
-- `spec-delta.md` validates against `spec-delta.schema.yaml`.
+- `spec-delta.md` validates against `spec-delta.schema.yaml` (`added`, `modified`, and `removed` required).
+- Added or modified paths exist under `docs/spec/**` with their anchors.
+- `docs/spec/_capabilities.yaml` validates against the capability schema and lists each slice `primary_capability` with live spec files.
+- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing `#REQ-*` / `#SC-*` anchor.
 - Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
-- `change.yaml` status transitioned to `specified`.
+- `change.yaml` status is `specified` or `specification-proposed`.
+- Product source code is not required at this gate.
+- EARS phrasing does not replace live `docs/spec/**` (F-010).
 
 ---
 
@@ -158,6 +169,9 @@ allowed_paths:
   - tests/identity/auth/**
 forbidden_paths:
   - src/identity/session/**
+context_budget:
+  max_tokens: 16000
+  max_files: 24
 ---
 ```
 
@@ -185,7 +199,8 @@ Validate credentials and issue an initial access token.
 ```
 
 ### Gate
-- All tasks validate against `task.schema.yaml`.
+- All tasks validate against `task.schema.yaml` and declare `context_budget`.
+- Declared `allowed_paths` and evidence `changed_paths` stay inside `PHASE_CONTRACTS` write globs for Target/Implement.
 - Task dependencies form an acyclic directed graph (DAG).
 - All claims in `coverage.yaml` mapped to at least one task.
 - `change.yaml` status transitioned to `decomposed`.
@@ -221,11 +236,15 @@ Create or update an executable test target for a single atomic task and verify t
    spec_status: unchanged
    ```
 5. Transition task status to `target-confirmed`.
+6. Optional: add Hypothesis-class property tests as extra oracles. Skip if no local runner. PBT does not replace the GWT example Red test or the independent hidden suite. Do not add `.kiro` or Cucumber.
 
 ### Gate
-- Executable test fails with the expected failure signature.
+- Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
+- Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `target-confirmed`.
+- Hidden / independent suites are not replaced by the agent's tests.
+- Property-based tests are optional Target extras; missing a local runner is skip, not a gate fail.
 
 ---
 
@@ -249,7 +268,7 @@ Author the minimal production code necessary to turn the failing test target gre
 ### Gate
 - Test target passes cleanly.
 - Full regression suite passes without failures.
-- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid.
+- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
 - Task status transitioned to `implemented`.
 
 ---
@@ -261,21 +280,21 @@ Verify cross-artifact consistency across all layers of the Change package, verif
 
 ### Traceability Verification
 The Verifier checks that:
-1. Every normalized claim `CR-*` in `request.md` traces to a slice in `routing.yaml`.
+1. Every normalized claim in `request.md` (`CR-*` or stable labels such as `O1`/`E1`) traces to a slice in `routing.yaml`.
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
 4. Every task has verified `red`, `green`, and `regression` evidence artifacts.
-5. All tasks in the Change are transitioned to `verified`.
+5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses.
 
 ### Convergence Analysis
 1. Execute full project verification suite.
-2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`).
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
    - Traceability matrix;
    - Evidence audit;
    - Delta verification;
    - Residual risks and verification sign-off.
-4. Transition `change.yaml` status to `converged`.
+4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
 1. Move the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.

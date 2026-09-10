@@ -1,0 +1,41 @@
+schema_version: 2
+id: CHG-001-token-bucket-limiter
+title: Token Bucket Rate Limiter service
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S01.md
+  intake_refs:
+    - docs/intake/S01.md
+deltas:
+  - id: DELTA-01
+    slice: SLICE-01
+    kind: requirements
+    summary: >-
+      Add `rate-limiter` capability with CR-001..CR-004 to the capability catalog
+      and a new `docs/spec/rate-limiter/requirements.yaml` module.
+    specification:
+      kind: add
+      summary: >-
+        New capability module `rate-limiter` (capability `token-bucket`) with
+        requirements CR-001..CR-004 and scenarios SC-001..SC-006.
+    catalog:
+      kind: add
+      summary: >-
+        Register `token-bucket` capability under the `rate-limiter` domain with
+        requirement and test references CR-001..CR-004.
+    decisions: {}
+    tests: {}
+    implementation: {}
+    evidence: {}
+slices:
+  - SLICE-01
+decisions: []
+tasks: []
+tests: []
+implementation: []
+evidence: []

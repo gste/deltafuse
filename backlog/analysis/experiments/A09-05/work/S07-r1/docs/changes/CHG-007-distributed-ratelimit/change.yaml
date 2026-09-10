@@ -1,0 +1,22 @@
+schema_version: 2
+id: CHG-007-distributed-ratelimit
+title: Add distributed Rate Limiter with Redis backend (infra.distributed_ratelimit)
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: high
+source:
+  request: docs/intake/S07.md
+  intake_refs:
+    - docs/intake/S07.md
+    - .deltafuse/config.yaml
+analysis:
+  routing: null
+  summary: New capability infra.distributed_ratelimit — distributed rate limiter with Redis backend, atomic Lua operations, in-memory/distributed switching, TTL, graceful degradation, and health check integration. Supersedes/extends existing security.ratelimit operations.
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null

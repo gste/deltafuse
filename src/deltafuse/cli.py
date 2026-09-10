@@ -8,7 +8,7 @@ from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.layout import validate_product_layout
-from deltafuse.core.context import validate_context_budget
+from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.evals.dataset import EvalDataset
 from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
@@ -139,13 +139,34 @@ def main(argv: list[str] | None = None) -> int:
                         ref_files: list[Path] = []
                         for sref in meta.get("spec_refs", []):
                             sp_rel = sref.split("#")[0]
-                            sp_path = (repo_root / sp_rel).resolve()
-                            if sp_path.is_file():
-                                ref_files.append(sp_path)
-                        b_errs = validate_context_budget(budget, ref_files)
+                            ref_files.append(repo_root / sp_rel)
+                        b_errs = validate_context_budget(
+                            budget, ref_files, repo_root=repo_root
+                        )
                         errors.extend(f"{sf.name}: {e}" for e in b_errs)
                 except Exception as ex:
                     errors.append(f"{sf.name}: {ex}")
+        tasks_dir = target / "tasks"
+        if tasks_dir.is_dir():
+            for tf in tasks_dir.glob("*.md"):
+                try:
+                    meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+                    budget = meta.get("context_budget")
+                    if budget and isinstance(budget, dict):
+                        b_errs = validate_task_context_budget(
+                            budget,
+                            meta.get("spec_refs") or [],
+                            meta.get("allowed_paths") or [],
+                            repo_root,
+                        )
+                        errors.extend(f"{tf.name}: {e}" for e in b_errs)
+                    else:
+                        errors.append(
+                            f"{tf.name}: context_budget is required "
+                            "(max_tokens/max_files) for Target and Implement"
+                        )
+                except Exception as ex:
+                    errors.append(f"{tf.name}: {ex}")
         if errors:
             print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:

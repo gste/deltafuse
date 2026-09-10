@@ -1,0 +1,74 @@
+task_id: A13-01
+packet: backlog/analysis/packets/A13-01.md
+layer: R0
+date: "2026-09-10"
+framework_revision: f38fd17588d6ae7e9e04d656a2863c131e2b4cb8
+branch: feature/2026-09-06-review
+dirty:
+  - M backlog/analysis/index.md
+  - "?? backlog/analysis/experiments/A13-01/"
+  - "?? backlog/llm-optimization-v2/ (out of scope; not read)"
+rm_031_commit: e82bc17
+inputs:
+  - path: backlog/analysis/packets/A13-01.md
+    sha256_12: 2eeeb5e1b8f1
+  - path: backlog/analysis/regression-plan.md
+    ranges: "R0 33-63; order 20-31"
+    sha256_12: 3f34b5b7a154
+  - path: backlog/analysis/README.md
+    sha256_12: 9b68145f6a4d
+  - path: .gitattributes
+    sha256_12: 624ec0e163e7
+extra_reads:
+  - path: tests/unit/test_fsm.py
+    reason: RM test-anchor names
+  - path: tests/unit/test_context.py
+    reason: RM-002 PHASE_CONTRACTS; RM-003 upper bound
+  - path: tests/unit/test_spec_style.py
+    reason: RM-031 skip
+  - path: tests/unit/test_integrity.py
+    reason: RM-004 path traversal
+  - path: backlog/findings/F-001.md
+    reason: residual CRLF vs RM-001
+  - path: backlog/analysis/packets/A13-02.md
+    reason: handoff
+method: pytest unit/integration/e2e/evals; PowerShell smoke; WSL bash smoke on Windows working tree and on git-archive LF source
+environment:
+  os: Windows 11 10.0.26200
+  python: CPython 3.14.3
+  pytest: "9.1.1"
+  wsl: Ubuntu via wsl.exe
+  hypothesis: absent
+commands:
+  pytest:
+    cmd: python -m pytest tests/unit tests/integration tests/e2e tests/evals -q --tb=short
+    exit: 0
+    collected: 161
+    passed: 160
+    skipped: 1
+    failed: 0
+    skip: tests/unit/test_spec_style.py::test_optional_pbt_skips_without_local_runner
+  smoke_ps:
+    cmd: powershell -NoProfile -File tests/smoke-test.ps1
+    exit: 0
+  smoke_sh_working_tree:
+    cmd: wsl bash tests/smoke-test.sh from Windows checkout
+    exit: 127
+  smoke_sh_archive:
+    cmd: git archive HEAD; bash tests/smoke-test.sh in WSL /tmp
+    exit: 0
+llm:
+  invoked: false
+  endpoint_1240: not-contacted
+budget:
+  llm_calls: 0
+  actual_tokens: null
+outputs:
+  - result.md
+  - pytest-1.txt
+  - smoke-ps-1.txt
+  - smoke-sh-working-tree-1.txt
+  - smoke-sh-archive-1.txt
+  - run-bash-archive.sh
+verdict: pass
+verdict_scope: R0 disk gates and pytest; not ornith live spec

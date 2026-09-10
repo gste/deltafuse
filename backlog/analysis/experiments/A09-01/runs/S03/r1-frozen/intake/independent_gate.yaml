@@ -1,0 +1,8 @@
+outcome: pass
+change: CHG-001-fractional-token-refill
+independent_gate:
+  intake: []
+extracted_CR: [CR-001, CR-002, CR-003, CR-004, CR-005, CR-006]
+attempt1: missing title; leftover CHG-001-ratelimit-fractional dir
+elapsed_s: 34.5
+attempts: 2

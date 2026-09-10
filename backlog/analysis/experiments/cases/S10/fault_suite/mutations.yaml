@@ -1,0 +1,19 @@
+mutations:
+  - id: M1_NEW_CHANGE_ON_RESUME
+    description: "Agent starts a second Change instead of resuming the interrupted package"
+    expected_caught_by: test_same_change_after_resume
+  - id: M2_DUPLICATE_TASKS
+    description: "Agent re-runs Decompose and creates a second TASK-001 with the same claim"
+    expected_caught_by: test_no_duplicate_tasks
+  - id: M3_LOST_RED_EVIDENCE
+    description: "Agent deletes or regenerates TASK-001 Red evidence on resume"
+    expected_caught_by: test_red_evidence_preserved
+  - id: M4_DELETE_CANCELLED_TASKS
+    description: "Agent deletes superseded task files instead of marking cancelled/superseded"
+    expected_caught_by: test_reslice_keeps_cancelled_on_disk
+  - id: M5_DROP_IMPLEMENTED_WORK
+    description: "Re-slice resets or discards already implemented TASK-001 code"
+    expected_caught_by: test_implemented_work_retained
+  - id: M6_CANCELLED_BLOCKS_CONVERGE
+    description: "Converged gate rejects cancelled/superseded tasks (F-005 regression)"
+    expected_caught_by: test_converge_with_cancelled_tasks

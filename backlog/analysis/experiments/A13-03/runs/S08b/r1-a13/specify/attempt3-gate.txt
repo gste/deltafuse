@@ -1,0 +1,5 @@
+SLICE-01.md: Anchor '#usage-examples' not found in specification file 'docs/spec/security/ratelimit.md'
+SLICE-01.md: Anchor '#architectural-decisions' not found in specification file 'docs/spec/security/ratelimit.md'
+spec-delta.md: Anchor '#usage-examples' not found in specification file 'docs/spec/security/ratelimit.md'
+spec-delta.md: Anchor '#architectural-decisions' not found in specification file 'docs/spec/security/ratelimit.md'
+spec-delta.md: Anchor '#req-rl-01-capacity-and-refill' not found in specification file 'docs/spec/security/ratelimit.md'

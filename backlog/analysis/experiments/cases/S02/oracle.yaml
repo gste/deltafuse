@@ -1,0 +1,33 @@
+case_id: S02
+intent_claims:
+  - id: CR-001
+    title: "Penalty Parameter and Backward Compatibility"
+    description: "Support optional penalty_seconds default 0.0 without breaking existing callers."
+    normative_rules:
+      - "MUST accept penalty_seconds >= 0.0"
+      - "MUST default penalty_seconds to 0.0"
+  - id: CR-002
+    title: "Penalty Lockout Behavior"
+    description: "Lock key on failed consume and reject calls during penalty period."
+    normative_rules:
+      - "MUST block key for penalty_seconds when consume fails due to insufficient tokens"
+      - "MUST return False on consume during penalty period regardless of token balance"
+  - id: CR-003
+    title: "Auto-unblock and Status Query"
+    description: "Automatic unblock after penalty expiry and is_blocked query."
+    normative_rules:
+      - "MUST unblock key after penalty_seconds have elapsed"
+      - "MUST provide is_blocked(key) returning boolean"
+
+ambiguity_expected: false
+expected_decision_needed: false
+
+scope_boundary_rules:
+  allowed_paths:
+    - "docs/changes/CHG-*/spec-delta.md"
+    - "docs/spec/security/ratelimit.md"
+    - "src/ratelimit/limiter.py"
+    - "tests/test_limiter.py"
+  forbidden_paths:
+    - "docs/spec/auth/**"
+    - "src/auth/**"

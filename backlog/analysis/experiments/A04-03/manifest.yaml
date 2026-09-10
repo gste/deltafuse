@@ -1,0 +1,22 @@
+revision: "9cad7fb8064b18df88494ff41f6c4066046e7f22"
+task_id: "A04-03"
+packet: "backlog/analysis/packets/A04-03.md"
+criterion_ids:
+  - "SPEC-005"
+  - "SPEC-007"
+  - "PROC-001"
+inputs:
+  - "src/deltafuse/core/integrity.py:L23-56"
+  - "process/templates/docs/spec/_capabilities.yaml:L1-3"
+  - "docs/workflow.md:L111-131"
+  - "docs/workflow.md:L250-285"
+method: "Simulation of 4-step specification evolution cycle: Creation -> Modification -> Deletion -> New Module; detection of stale anchors, module rename tracking, and verification that current behavior is discoverable without replaying history."
+commands:
+  - "python test_lifecycle_spec.py"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A04-03/result.md"
+verdict: "pass"

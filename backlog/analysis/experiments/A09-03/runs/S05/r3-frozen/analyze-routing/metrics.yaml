@@ -1,0 +1,37 @@
+case: S05
+repeat: 3
+tag: frozen
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 2048
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: routing
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 9141
+  ttft_s: 12.586006900004577
+  elapsed_s: 43.503122699970845
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/routing.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5028
+    vram_total_mib: 8188
+    gpu_util_pct: 1
+  gpu_after:
+    vram_used_mib: 5026
+    vram_total_mib: 8188
+    gpu_util_pct: 31
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

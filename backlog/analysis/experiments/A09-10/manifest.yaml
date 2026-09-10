@@ -1,0 +1,34 @@
+revision: "5b96f51"
+task_id: "A09-10"
+packet: "backlog/analysis/packets/A09-10.md"
+criterion_ids:
+  - "PROC-002"
+  - "PROC-003"
+  - "PROC-005"
+status: "done"
+notes:
+  - "Do not retune prompts from S10 outcomes"
+  - "Oracle/hidden_suite/fault_suite not in ornith prompt"
+  - "S10 seed is live security.ratelimit; no S02/S03/S04 extras"
+  - "Interrupt/resume/re-slice are evaluator actions: stop after TASK-001 Red, resume same Change, then inject follow-up from cases/S10/manifest.yaml (not CR-003 id)"
+  - "F-005 remains a known converge blocker; do not weaken the S10 oracle"
+  - "A09-10 closed 2026-09-07: verdict fail; 0/3 stopped at Specify; interrupt not reached"
+inputs:
+  - "backlog/analysis/packets/A09-10.md"
+  - "backlog/analysis/experiments/protocol.md:holdout"
+  - "backlog/analysis/experiments/cases/S10/manifest.yaml"
+  - "backlog/analysis/experiments/A08-14/result.md"
+  - "backlog/analysis/experiments/A09-09/result.md"
+  - "backlog/analysis/experiments/local-runtime/README.md"
+  - "backlog/findings/F-005.md"
+method: "Holdout S10 on frozen A09-01 harness (WRAPPER, routing-first Analyze, CR-NNN). No S02/S03/S04 case extras. Oracle/hidden_suite not in ornith prompt. Seed: live ratelimit spec+code. Sequencer stops after Target (Red), resumes Implement on the same workdir, then injects follow-up persistence text into intake/request.md and re-runs Analyze/Specify/Decompose under tag frozen-reslice. Expected: one Change, preserved Red, no duplicate tasks, cancelled/superseded stay on disk, converge accepts them (F-005 is a known fail)."
+profile:
+  model: "ornith-1.5-35b-a3b"
+  endpoint: "http://127.0.0.1:1240/v1/chat/completions"
+  temperature: 0.1
+  top_p: 0.9
+  max_output_tokens: 2048
+  runtime_doc: "backlog/analysis/experiments/local-runtime/README.md"
+outputs:
+  runs: "backlog/analysis/experiments/A09-10/runs/"
+  result: "backlog/analysis/experiments/A09-10/result.md"

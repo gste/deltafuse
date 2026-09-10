@@ -5,18 +5,61 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.hasher import compute_product_baseline_revision
 
 
 class MockChangeBuilder:
-    def __init__(self, root_dir: Path, change_id: str = "CHG-001", title: str = "Mock Change"): 
+    def __init__(
+        self,
+        root_dir: Path,
+        change_id: str = "CHG-001",
+        title: str = "Mock Change",
+        route: str = "code",
+    ): 
         self.root_dir = root_dir
         self.change_dir = root_dir / "docs" / "changes" / f"{change_id}-test"
         self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
         self.title = title
-        spec_core = self.root_dir / "docs" / "spec" / "core.md"
-        if (self.root_dir / "docs" / "spec").is_dir() and not spec_core.exists():
+        self.route = route
+        spec_dir = self.root_dir / "docs" / "spec"
+        spec_core = spec_dir / "core.md"
+        if spec_dir.is_dir() and not spec_core.exists():
             spec_core.write_text("# Core Spec\n## REQ-01\nCore requirement.\n", encoding="utf-8")
+        if spec_dir.is_dir() and spec_core.is_file():
+            self._ensure_core_capability()
+
+    def _ensure_core_capability(self) -> None:
+        catalog_path = self.root_dir / "docs" / "spec" / "_capabilities.yaml"
+        data: dict[str, Any] = {"schema_version": 2, "domains": {}}
+        if catalog_path.is_file():
+            loaded = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        domains = data.setdefault("domains", {})
+        if not isinstance(domains, dict):
+            domains = {}
+            data["domains"] = domains
+        system = domains.setdefault("system", {})
+        if not isinstance(system, dict):
+            system = {}
+            domains["system"] = system
+        system.setdefault("summary", "Core system")
+        caps = system.setdefault("capabilities", {})
+        if not isinstance(caps, dict):
+            caps = {}
+            system["capabilities"] = caps
+        caps.setdefault(
+            "core",
+            {
+                "summary": "Core capability",
+                "spec": ["docs/spec/core.md"],
+            },
+        )
+        catalog_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    def _baseline_revision(self) -> str:
+        return compute_product_baseline_revision(self.root_dir)
 
     def _update_change_yaml(self, updates: dict[str, Any]) -> None:
         cfile = self.change_dir / "change.yaml"
@@ -30,7 +73,8 @@ class MockChangeBuilder:
     def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
         if claims is None:
             claims = ["CR-001"]
-        claims_text = "\n".join(f"- {c}: Description for {c}" for c in claims)
+        self.claims = list(claims)
+        claims_text = "\n".join(f"- {c}: Description for {c}" for c in self.claims)
         (self.change_dir / "request.md").write_text(f"# Request\n{claims_text}\n", encoding="utf-8")
         lock_file = self.root_dir / ".deltafuse" / "lock.yaml"
         fw_hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -59,29 +103,37 @@ class MockChangeBuilder:
             "tasks": [],
             "verification": None,
         }
+        if self.route != "code":
+            change_yaml["route"] = self.route
         (self.change_dir / "change.yaml").write_text(yaml.safe_dump(change_yaml, sort_keys=False), encoding="utf-8")
         return self
 
     def step_analyze(self, slices: list[str] | None = None) -> MockChangeBuilder:
         if slices is None:
             slices = ["SLICE-01"]
+        claims = list(getattr(self, "claims", ["CR-001"]))
+        routing_claims = {
+            cid: {
+                "summary": f"Claim {cid}",
+                "primary_capability": "system.core",
+                "related_capabilities": [],
+                "policies": [],
+                "confidence": "high",
+            }
+            for cid in claims
+        }
         routing = {
             "change": self.change_id,
-            "claims": {
-                "CR-001": {
-                    "summary": "Claim 1",
-                    "primary_capability": "system.core",
-                    "related_capabilities": [],
-                    "policies": [],
-                    "confidence": "high",
-                }
-            },
+            "claims": routing_claims,
         }
+        if self.route != "code":
+            routing["route"] = self.route
         (self.change_dir / "routing.yaml").write_text(yaml.safe_dump(routing), encoding="utf-8")
         (self.change_dir / "analysis.md").write_text("# Analysis\nAnalysis summary.", encoding="utf-8")
         slices_dir = self.change_dir / "slices"
         slices_dir.mkdir(parents=True, exist_ok=True)
         slice_objs = []
+        claims_yaml = "[" + ", ".join(claims) + "]"
         for sl in slices:
             slice_objs.append({
                 "id": sl,
@@ -98,23 +150,25 @@ class MockChangeBuilder:
                 f"related_capabilities: []\n"
                 f"policies: []\n"
                 f"spec_refs: [docs/spec/core.md#REQ-01]\n"
-                f"claims: [CR-001]\n"
+                f"claims: {claims_yaml}\n"
                 f"depends_on: []\n"
                 f"context_budget: {{max_tokens: 16000, max_files: 20}}\n"
                 f"---\n\n# {sl}\nDetails\n"
             )
             (slices_dir / f"{sl}.md").write_text(slice_md, encoding="utf-8")
+        cov_claims = {
+            cid: {
+                "slice": "SLICE-01",
+                "tasks": [],
+                "spec_refs": ["docs/spec/core.md#REQ-01"],
+                "evidence": {},
+                "status": "pending",
+            }
+            for cid in claims
+        }
         cov = {
             "change": self.change_id,
-            "claims": {
-                "CR-001": {
-                    "slice": "SLICE-01",
-                    "tasks": [],
-                    "spec_refs": ["docs/spec/core.md#REQ-01"],
-                    "evidence": {},
-                    "status": "pending",
-                }
-            },
+            "claims": cov_claims,
         }
         (self.change_dir / "coverage.yaml").write_text(yaml.safe_dump(cov), encoding="utf-8")
         self._update_change_yaml({
@@ -155,6 +209,15 @@ class MockChangeBuilder:
             slice_id = t.get("slice", "SLICE-01")
             deps = t.get("depends_on", [])
             deps_str = str(deps).replace("'", "")
+            if "allowed_paths" in t:
+                allowed = t["allowed_paths"]
+            elif self.route == "docs":
+                allowed = ["docs/spec/core.md"]
+            elif self.route == "ops":
+                allowed = ["docs/ops/runbook.md"]
+            else:
+                allowed = ["src/core.py"]
+            allowed_str = "[" + ", ".join(allowed) + "]"
             task_md = (
                 f"---\n"
                 f"id: {tid}\n"
@@ -166,8 +229,9 @@ class MockChangeBuilder:
                 f"requirement_delta: added\n"
                 f"spec_refs: [docs/spec/core.md#REQ-01]\n"
                 f"design_ref: null\n"
-                f"allowed_paths: [src/core.py]\n"
+                f"allowed_paths: {allowed_str}\n"
                 f"forbidden_paths: [src/secret.py]\n"
+                f"context_budget: {{max_tokens: 16000, max_files: 24}}\n"
                 f"---\n\n# {tid}\nImplementation details\n"
             )
             (tasks_dir / f"{tid}.md").write_text(task_md, encoding="utf-8")
@@ -189,20 +253,50 @@ class MockChangeBuilder:
     def step_target(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         red_dir = self.change_dir / "evidence" / "red"
         red_dir.mkdir(parents=True, exist_ok=True)
-        ev = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "red",
-            "timestamp": "2026-09-05T12:00:00Z",
-            "command": f"pytest tests/test_{task_id.lower()}.py",
-            "exit_code": 1,
-            "result": "expected-failure",
-            "failure_category": "behavioral-mismatch",
-            "summary": "Test failed as expected",
-            "changed_paths": [f"tests/test_{task_id.lower()}.py"],
-            "spec_status": "unchanged",
-        }
+        if self.route == "docs":
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/spec/core.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "already-green",
+                "summary": "Spec file oracle already on disk",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+            }
+        elif self.route == "ops":
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/ops/runbook.md').is_file() else 1)\"",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "missing-artifact",
+                "summary": "Ops file not yet written",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+            }
+        else:
+            ev = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": "2026-09-05T12:00:00Z",
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "behavioral-mismatch",
+                "summary": "Test failed as expected",
+                "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+                "spec_status": "unchanged",
+            }
         (red_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev), encoding="utf-8")
 
         cov_file = self.change_dir / "coverage.yaml"
@@ -217,37 +311,106 @@ class MockChangeBuilder:
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         green_dir = self.change_dir / "evidence" / "green"
-        reg_dir = self.change_dir / "evidence" / "regression"
         green_dir.mkdir(parents=True, exist_ok=True)
-        reg_dir.mkdir(parents=True, exist_ok=True)
-        ev_green = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "green",
-            "timestamp": "2026-09-05T12:10:00Z",
-            "command": f"pytest tests/test_{task_id.lower()}.py",
-            "exit_code": 0,
-            "result": "passed",
-            "summary": "Test passed after implementation",
-            "changed_paths": ["src/core.py"],
-            "spec_status": "unchanged",
-        }
-        (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
-        ev_reg = {
-            "schema_version": 2,
-            "change": self.change_id,
-            "task": task_id,
-            "phase": "regression",
-            "timestamp": "2026-09-05T12:15:00Z",
-            "command": "pytest tests/",
-            "exit_code": 0,
-            "result": "passed",
-            "summary": "Full test suite passed",
-            "changed_paths": ["src/core.py"],
-            "spec_status": "unchanged",
-        }
-        (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        if self.route == "docs":
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/spec/core.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Docs file oracle passed",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "python -c \"print('docs-route: no product pytest')\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "No src regression for docs route",
+                "changed_paths": ["docs/spec/core.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        elif self.route == "ops":
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": "python -c \"from pathlib import Path; raise SystemExit(0 if Path('docs/ops/runbook.md').is_file() else 1)\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Ops file oracle passed",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "python -c \"print('ops-route: no product pytest')\"",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "No src regression for ops route",
+                "changed_paths": ["docs/ops/runbook.md"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+        else:
+            reg_dir = self.change_dir / "evidence" / "regression"
+            reg_dir.mkdir(parents=True, exist_ok=True)
+            ev_green = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "green",
+                "timestamp": "2026-09-05T12:10:00Z",
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Test passed after implementation",
+                "changed_paths": ["src/core.py"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            ev_reg = {
+                "schema_version": 2,
+                "change": self.change_id,
+                "task": task_id,
+                "phase": "regression",
+                "timestamp": "2026-09-05T12:15:00Z",
+                "command": "pytest tests/",
+                "exit_code": 0,
+                "result": "passed",
+                "summary": "Full test suite passed",
+                "changed_paths": ["src/core.py"],
+                "spec_status": "unchanged",
+                "base_revision": self._baseline_revision(),
+            }
+            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
 
         task_file = self.change_dir / "tasks" / f"{task_id}.md"
         if task_file.is_file():
@@ -276,12 +439,17 @@ class MockChangeBuilder:
             "change": self.change_id,
             "phase": "verification",
             "timestamp": "2026-09-05T12:20:00Z",
-            "command": "pytest tests/",
+            "command": (
+                "pytest tests/"
+                if self.route == "code"
+                else "python -c \"print('verify: file and traceability oracle')\""
+            ),
             "exit_code": 0,
             "result": "passed",
             "summary": "Verification pass passed",
             "changed_paths": [],
             "spec_status": "unchanged",
+            "base_revision": self._baseline_revision(),
         }
         (ver_dir / "run.yaml").write_text(yaml.safe_dump(ev_ver), encoding="utf-8")
 

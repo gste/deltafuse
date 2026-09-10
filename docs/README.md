@@ -69,7 +69,7 @@ product/
     │       ├── change.yaml
     │       ├── request.md
     │       ├── routing.yaml
-    │       ├── analysis.md
+    │       ├── analysis.md          # optional
     │       ├── slices/
     │       ├── tasks/
     │       ├── evidence/
@@ -92,6 +92,7 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
 | [roles.md](./roles.md) ([ru](./roles.ru.md)) | AI and human authority boundaries |
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
+| [contracts/board-snapshot.md](./contracts/board-snapshot.md) ([ru](./contracts/board-snapshot.ru.md)) | Read-only board snapshot for fuse-map (`schema_version: 1`) |
 
-Executable step contracts live in `process/skills/**`; structural schemas live in `process/schemas/**`.
+Executable step contracts live in `process/skills/**`; Change/artifact schemas live in `process/schemas/**`. The board snapshot schema is a **tool compatibility** contract under `docs/contracts/`, not a product artifact schema; do not copy it into consuming products.
 

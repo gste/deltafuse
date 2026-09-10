@@ -1,0 +1,15 @@
+outcome: pass
+focus: coverage
+change: CHG-001-ratelimit-cooldown
+note: >
+  coverage.yaml schema-valid. Full analyzed gate fails F-008: extract_claims_from_request
+  finds no CR-* in request.md, so O1..U3 coverage keys are orphans.
+independent_gate:
+  coverage_schema: []
+  extracted_CR: []
+  completeness_orphans: 12
+  analyzed: fail
+elapsed_s: 38.3
+reasoning_chars: 0
+status: continue
+finding: F-008

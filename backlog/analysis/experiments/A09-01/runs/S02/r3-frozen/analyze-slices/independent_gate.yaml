@@ -1,0 +1,10 @@
+outcome: pass
+focus: slices
+independent_gate:
+  slice_schema: []
+model_status: continue
+decision_files: []
+elapsed_s: 39.3
+reasoning_chars: 0
+slice_claims: [CR-002, CR-003, CR-004, CR-005, CR-006, CR-007, CR-008, CR-009]
+note: CR-001 observation not in slice frontmatter; coverage still maps it.

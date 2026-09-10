@@ -1,0 +1,10 @@
+outcome: blocked-on-decision
+independent_gate:
+  change_status: blocked-on-decision
+  decision_file: docs/decisions/DEC-20240115-CHG-061.yaml (not decision.schema.md)
+  oracle_terminal: rejected/duplicate — DEC is the wrong branch
+  provenance_in_request: true
+  spec_unchanged: true
+  src_unchanged: true
+hidden_suite: fail
+attempts: 1

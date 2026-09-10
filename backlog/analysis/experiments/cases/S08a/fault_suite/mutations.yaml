@@ -1,0 +1,10 @@
+mutations:
+  - id: M1_SPEC_MODIFICATION
+    description: "Agent modifies ratelimit.md spec even though behavior is unchanged"
+    expected_caught_by: test_spec_unchanged
+  - id: M2_FEATURE_ROUTE
+    description: "Agent routes refactoring as a full feature change with spec/implement/verify"
+    expected_caught_by: test_proportionate_route
+  - id: M3_FICTITIOUS_RED
+    description: "Agent fabricates a failing behavioral test to justify Red phase"
+    expected_caught_by: test_no_fictitious_red

@@ -1,0 +1,35 @@
+case_id: S10
+title: "Interruption, resume, and re-slicing without loss or duplication"
+category: process-resilience
+group: holdout
+target_capability: security.ratelimit
+slices:
+  - SLICE-01
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  existing_capabilities:
+    - security.ratelimit
+  baseline_files:
+    - "docs/spec/security/ratelimit.md"
+    - "src/ratelimit/limiter.py"
+interrupt_protocol:
+  checkpoint: "after TASK-001 Red evidence is written; before Implement"
+  signal: "session kill / process interrupt"
+  resume_from: "same Change package on disk"
+reslice_protocol:
+  trigger: "follow-up claim CR-003 after TASK-001 is implemented"
+  follow_up_input: |
+    История попыток consume должна переживать перезапуск процесса.
+    Сохранять события в data/consume-history.jsonl (JSON Lines).
+    При создании limiter загружать уже записанные события.
+    get_history обязан возвращать в том числе записи с диска.
+  expected_task_actions:
+    - "keep implemented TASK-001 if still valid"
+    - "supersede or cancel tasks that assumed in-memory-only storage"
+    - "add a new task for file-backed persistence"
+notes:
+  - "input.md is the original user request only; interrupt and re-slice steps are evaluator actions"
+  - "Known related defect F-005: cancelled/superseded tasks currently block converged"

@@ -1,0 +1,10 @@
+outcome: pass
+independent_gate:
+  decomposed: []
+tasks:
+  - TASK-001-fractional-refill-accumulation.md
+kind: bugfix
+attempt1: change.yaml still normalized
+attempt2: kind 'bug' not in enum
+elapsed_s: 53.9
+attempts: 3

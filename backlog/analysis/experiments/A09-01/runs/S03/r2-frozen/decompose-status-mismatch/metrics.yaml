@@ -1,0 +1,80 @@
+case: S03
+repeat: 2
+tag: frozen
+phase: decompose
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 14450
+  ttft_s: 20.525084600027185
+  elapsed_s: 46.281528200022876
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-fractional-token-refill/tasks/TASK-001-fix-fractional-refill.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5588
+    vram_total_mib: 8188
+    gpu_util_pct: 7
+  gpu_after:
+    vram_used_mib: 5338
+    vram_total_mib: 8188
+    gpu_util_pct: 39
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 16675
+  ttft_s: 19.743453600036446
+  elapsed_s: 42.620573099993635
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-fractional-token-refill/tasks/TASK-001-fix-fractional-refill.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5338
+    vram_total_mib: 8188
+    gpu_util_pct: 39
+  gpu_after:
+    vram_used_mib: 5330
+    vram_total_mib: 8188
+    gpu_util_pct: 41
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 16675
+  ttft_s: 0.15502800000831485
+  elapsed_s: 46.96650280000176
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: 'Extra data: line 1 column 2291 (char 2290)'
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5330
+    vram_total_mib: 8188
+    gpu_util_pct: 6
+  gpu_after:
+    vram_used_mib: 5330
+    vram_total_mib: 8188
+    gpu_util_pct: 42
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

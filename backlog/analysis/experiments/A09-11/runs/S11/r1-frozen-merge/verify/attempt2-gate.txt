@@ -1,0 +1,14 @@
+change.yaml: [status] 'verified' is not one of ['normalized', 'analyzing', 'blocked-on-decision', 'analyzed', 'specification-proposed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verifying', 'converged', 'archived', 'rejected', 'duplicate', 'not-reproduced', 'superseded']
+change.yaml: [verification] {'status': 'converged', 'verified_tasks': ['TASK-001', 'TASK-002', 'TASK-003', 'TASK-004'], 'evidence': ['docs/changes/CHG-001-ratelimit-window-stats/evidence/green/TASK-001.yaml', 'docs/changes/CHG-001-ratelimit-window-stats/evidence/green/TASK-003.yaml', 'docs/changes/CHG-001-ratelimit-window-stats/evidence/regression/TASK-001.yaml', 'docs/changes/CHG-001-ratelimit-window-stats/evidence/regression/TASK-003.yaml']} is not of type 'string', 'null'
+change.yaml: invalid status 'verified'
+Gate converged: evidence/verification/run.yaml is missing
+Gate converged: task 'TASK-001-read-window-logic.md' has non-terminal status 'pending' (must be 'implemented' or 'verified')
+Gate converged: task 'TASK-002-add-spec-delta.md' has non-terminal status 'pending' (must be 'implemented' or 'verified')
+Gate converged: task 'TASK-003-implement-get_window_stats.md' has non-terminal status 'pending' (must be 'implemented' or 'verified')
+Gate converged: task 'TASK-004-verify-window-stats.md' has non-terminal status 'pending' (must be 'implemented' or 'verified')
+Gate converged: claim 'CR-001' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-002' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-003' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-004' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-005' in coverage.yaml is missing green or regression evidence mapping
+Gate converged: claim 'CR-006' in coverage.yaml is missing green or regression evidence mapping

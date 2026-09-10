@@ -1,0 +1,5 @@
+command: wsl -e bash -lc 'cd <repo> && tests/smoke-test.sh'
+exit 127
+/usr/bin/env: ‘bash\r’: No such file or directory
+/usr/bin/env: use -[v]S to pass options in shebang lines
+note: Windows working tree tests/smoke-test.sh and tests/validate-layout.sh are w/crlf while index is i/lf (attr text eol=lf). System core.autocrlf=true (Git for Windows etc/gitconfig). scripts/init.sh remained w/lf.

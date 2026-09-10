@@ -1,0 +1,12 @@
+outcome: blocked-on-decision
+independent_gate:
+  change_status: blocked-on-decision
+  decisions:
+    - docs/decisions/DEC-0001-vip-quoting-mechanism.md
+  specify_run: false
+  spec_edited: false
+  src_edited: false
+  hidden_suite: pass
+note: DEC id DEC-0001-vip-quoting-mechanism fails decision.schema pattern DEC-[0-9]{4,}; file exists and is proposed
+elapsed_s: 71.6
+attempts: 1

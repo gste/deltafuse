@@ -1,0 +1,11 @@
+outcome: pass
+change: CHG-001-ratelimit-cooldown
+note: Independent check_gate(intake) and validate_change_package after frozen r2 attempt 2.
+independent_gate:
+  validate: []
+  intake: []
+attempts_harness: 2
+attempt1_gate: "missing required deltas/slices/decisions/tasks"
+attempt2_gate: ok
+reasoning_chars: 0
+overflow: false

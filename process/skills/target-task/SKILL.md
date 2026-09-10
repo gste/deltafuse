@@ -22,9 +22,13 @@ Do not read implementation internals unless the target cannot otherwise be expre
 3. Add or modify the smallest automated test that demonstrates the missing behavior or defect.
 4. Run the narrow target against unchanged production code.
 5. Require a failure caused by the expected behavior, not compilation, fixture, environment, or unrelated failures.
-6. Record sanitized command, exit status, failure category, and concise result under the Change's `evidence/red/`.
+6. Record sanitized command, exit status, failure category, and concise result under the Change's `evidence/red/`. `changed_paths` must stay inside `PHASE_CONTRACTS` Target write scope (`tests/**`, Red evidence); do not list production `src/**`.
 7. Set task/Change state to `target-confirmed` only after valid Red.
 
-If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Do not weaken assertions to manufacture Red.
+If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.
 
 Recommend `/implement-task <task-path>` only for confirmed Red.
+
+For `route: docs` or `ops`, record a file or schema oracle in `evidence/red/` instead of product pytest; do not list `src/**` or `tests/**`. Hidden code-suite checks do not apply.
+
+Optional: add Hypothesis-class property tests as extra oracles for an invariant. Skip if no local runner. PBT does not replace the GWT example Red test or the independent hidden suite. Do not add `.kiro` or Cucumber as Target.

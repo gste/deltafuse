@@ -1,0 +1,10 @@
+coverage.yaml: [root] Additional properties are not allowed ('routing', 'schema_version', 'slices' were unexpected)
+coverage.yaml: [claims -> CR-007] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-001] Additional properties are not allowed ('confidence', 'note' were unexpected)
+coverage.yaml: [claims -> CR-001 -> status] 'routed' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
+coverage.yaml: [claims -> CR-002] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-005] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-004] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-003] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-006] Additional properties are not allowed ('confidence' was unexpected)
+coverage.yaml: [claims -> CR-008] Additional properties are not allowed ('confidence' was unexpected)

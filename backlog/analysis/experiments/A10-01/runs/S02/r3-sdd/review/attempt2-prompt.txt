@@ -1,0 +1,267 @@
+/no_think
+You execute exactly one workflow step on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content.
+Write only paths listed under allowed_write. Do not git push.
+
+
+# Minimal SDD (A10-01). Not a DeltaFuse skill. Do not copy into process/skills.
+
+You run one step of spec → task → test/code → review on a small Python product.
+Do not invent a Change package, routing.yaml, coverage.yaml, FSM statuses, or Decision files.
+Do not git push. Do not accept Decisions. Do not read or write secrets.
+
+Return ONLY a JSON object, no markdown fences:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+
+Each files[] item has path and content. Write complete files, not patches.
+status: continue | halt.
+
+## spec
+Read the user request. Update `docs/spec/**` so the request is normative (MUST). Keep unrelated baseline requirements. Update `docs/spec/_capabilities.yaml` if you add a capability.
+
+## task
+Write `TASK.md` with a short checklist: files to change, tests to add, out of scope.
+
+## implement
+Write failing-then-passing tests if you can, and the production code they need. Stay in allowed_write. Do not rewrite the whole product.
+
+## review
+Fix code/tests so pytest on the product tests passes. If already passing, write nothing or a tiny clarification in spec/TASK.md.
+
+
+step: review
+case: S02
+allowed_write:
+- src/ratelimit/limiter.py
+- src/ratelimit/__init__.py
+- tests/test_limiter.py
+- docs/spec/security/ratelimit.md
+- TASK.md
+Previous attempt errors:
+
+                               [100%]
+================================== FAILURES ===================================
+___________________________ test_consume_and_reject ___________________________
+tests\test_limiter.py:9: in test_consume_and_reject
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+_________________________ test_baseline_never_blocks __________________________
+tests\test_limiter.py:16: in test_baseline_never_blocks
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+______________________ test_penalty_clears_after_window _______________________
+tests\test_limiter.py:52: in test_penalty_clears_after_window
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_consume_and_reject - ValueError: too many ...
+FAILED tests/test_limiter.py::test_baseline_never_blocks - ValueError: too ma...
+FAILED tests/test_limiter.py::test_penalty_clears_after_window - ValueError: ...
+3 failed, 2 passed in 0.34s
+
+### docs/request.md
+# Запрос пользователя на малое изменение существующей capability (S02)
+
+В сервисе Rate Limiter (`security.ratelimit`) необходимо добавить поддержку временной блокировки ключа при превышении лимита (Cool-down penalty).
+
+Требования:
+1. Добавить опциональный параметр `penalty_seconds` (по умолчанию 0.0) при инициализации `TokenBucketLimiter`.
+2. Если `penalty_seconds > 0`:
+   - При неудачной попытке `consume` (когда токенов недостаточно), ключ переходит в состояние блокировки на `penalty_seconds`.
+   - Любые вызовы `consume` для заблокированного ключа в течение периода штрафа ДОЛЖНЫ возвращать `False` немедленно, даже если за это время накопились токены.
+3. По истечении `penalty_seconds` блокировка снимается автоматически при следующем запросе, и возобновляется обычная логика списания.
+4. Метод `is_blocked(key)` ДОЛЖЕН возвращать `True`, если ключ сейчас находится под действием штрафа, и `False` в противном случае.
+5. Не ломать обратную совместимость: существующий код без `penalty_seconds` должен работать по прежним правилам.
+
+### docs/spec/_capabilities.yaml
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+### docs/spec/security/ratelimit.md
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+## REQ-RL-05 Penalty cooldown
+When initialized without penalty_seconds (default 0.0), is_blocked(key) MUST always return False. When initialized with penalty_seconds > 0, a failed consume(key) MUST place key into a blocked state for penalty_seconds. During the blocked state, consume(key) MUST return False immediately regardless of accumulated tokens. After penalty_seconds elapses, the block MUST clear automatically on the next consume call and normal token logic MUST resume.
+
+### src/ratelimit/limiter.py
+from __future__ import annotations
+import time
+
+
+class TokenBucketLimiter:
+    def __init__(
+        self,
+        capacity: float,
+        refill_rate: float,
+        penalty_seconds: float = 0.0,
+    ) -> None:
+        if capacity <= 0 or refill_rate < 0:
+            raise ValueError('invalid limiter parameters')
+        self.capacity = float(capacity)
+        self.refill_rate = float(refill_rate)
+        self.penalty_seconds = float(penalty_seconds)
+        # Each bucket stores (tokens, last_refill_timestamp, block_until).
+        # block_until is 0.0 when the key is not blocked.
+        self._buckets: dict[str, tuple[float, float, float]] = {}
+
+    def _refill(self, key: str) -> tuple[float, float]:
+        now = time.monotonic()
+        tokens, last = self._buckets.get(key, (self.capacity, now))
+        block_until = self._buckets.get(key, (0.0, 0.0, 0.0))[2]
+        tokens = min(self.capacity, tokens + (now - last) * self.refill_rate)
+        self._buckets[key] = (tokens, now, block_until)
+        return self._buckets[key][0], self._buckets[key][1]
+
+    def consume(self, key: str, tokens: float) -> bool:
+        now = time.monotonic()
+        stored = self._buckets.get(key)
+        if stored is not None and self.penalty_seconds > 0 and stored[2] > 0:
+            if now < stored[2]:
+                # Still within the penalty window: reject immediately.
+                return False
+            # Penalty window elapsed: clear the block and resume normal logic.
+            self._buckets[key] = (stored[0], now, 0.0)
+
+        current, ts = self._refill(key)
+        if current >= tokens:
+            block_until = 0.0
+            if self.penalty_seconds > 0:
+                block_until = now + self.penalty_seconds
+            self._buckets[key] = (current - tokens, ts, block_until)
+            return True
+        return False
+
+    def is_blocked(self, key: str) -> bool:
+        if self.penalty_seconds <= 0:
+            return False
+        stored = self._buckets.get(key)
+        if stored is None:
+            return False
+        now = time.monotonic()
+        if stored[2] > 0 and now < stored[2]:
+            return True
+        return False
+
+### tests/test_limiter.py
+import time
+
+from ratelimit.limiter import TokenBucketLimiter
+
+
+def test_consume_and_reject():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is False
+
+
+def test_baseline_never_blocks():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is False
+    assert limiter.is_blocked('unknown') is False
+
+
+def test_penalty_blocks_after_failed_consume():
+    limiter = TokenBucketLimiter(
+        capacity=5, refill_rate=0.0, penalty_seconds=1.0
+    )
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is True
+
+
+def test_penalty_rejects_even_with_accumulated_tokens():
+    # High refill rate would normally restore tokens, but the block must win.
+    limiter = TokenBucketLimiter(
+        capacity=5, refill_rate=1000.0, penalty_seconds=1.0
+    )
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is True
+
+
+def test_penalty_clears_after_window():
+    limiter = TokenBucketLimiter(
+        capacity=5, refill_rate=0.0, penalty_seconds=0.2
+    )
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is True
+    time.sleep(0.25)
+    assert limiter.is_blocked('u') is False
+    # Normal token logic resumes: bucket is empty, so this fails again.
+    assert limiter.consume('u', 1) is False
+    # But a fresh key can consume.
+    assert limiter.consume('v', 1) is True
+
+### TASK.md
+# TASK.md: Cool-down penalty for TokenBucketLimiter
+
+## Files to change
+- `src/ratelimit/limiter.py` — add optional `penalty_seconds` param, implement blocked-state logic and `is_blocked`.
+- `tests/test_limiter.py` — add tests for penalty behavior.
+- `docs/spec/security/ratelimit.md` — REQ-RL-05 is already normative; keep as-is.
+
+## Tests to add
+- Failed consume with `penalty_seconds > 0` makes `is_blocked(key)` True.
+- `consume` returns False immediately during block even if tokens accumulated.
+- Block clears after `penalty_seconds` elapses; normal token logic resumes.
+- Baseline limiter (no penalty) keeps `is_blocked` always False (existing test).
+- Backward compatibility: existing behavior unchanged when `penalty_seconds=0.0`.
+
+## Out of scope
+- Persistence across process restarts.
+- Per-key penalty durations.
+- Any routing/Change package files.

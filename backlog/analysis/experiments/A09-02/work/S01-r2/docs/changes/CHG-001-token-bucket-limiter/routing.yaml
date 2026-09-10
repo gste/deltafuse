@@ -1,0 +1,30 @@
+change: CHG-001-token-bucket-limiter
+claims:
+  CR-001:
+    summary: >-
+      Limiter initialization for a key with capacity and refill_rate parameters.
+    primary_capability: rate-limiter
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-002:
+    summary: >-
+      consume(key, tokens=1) deducts tokens when available and returns a boolean.
+    primary_capability: rate-limiter
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-003:
+    summary: >-
+      Time-based proportional token refill capped at capacity.
+    primary_capability: rate-limiter
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-004:
+    summary: >-
+      Strict argument validation raising ValueError on invalid inputs.
+    primary_capability: rate-limiter
+    related_capabilities: []
+    policies: []
+    confidence: medium

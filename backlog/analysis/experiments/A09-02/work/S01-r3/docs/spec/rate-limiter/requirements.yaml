@@ -1,0 +1,51 @@
+schema_version: 2
+capability: token-bucket
+domain: rate-limiter
+---
+CR-001:
+  title: Limiter initialization with capacity and refill_rate
+  text: >-
+    A limiter MUST be initializable for a given key with two parameters:
+    `capacity` (maximum token capacity) and `refill_rate` (tokens refilled per
+    second).
+  scenarios:
+    - SC-001: >-
+      Given a key with a positive `capacity` and a positive `refill_rate`,
+      initialization succeeds and the bucket starts full at `capacity` tokens.
+
+CR-002:
+  title: consume deducts tokens when available
+  text: >-
+    `consume(key, tokens=1)` MUST deduct the requested amount from the balance
+    and return `True` when enough tokens are available; when not enough tokens
+    are available it MUST leave the balance unchanged and return `False`.
+  scenarios:
+    - SC-002: >-
+      Given a bucket with at least `tokens` available, `consume(key, tokens)`
+      deducts `tokens` and returns `True`.
+    - SC-003: >-
+      Given a bucket with fewer than `tokens` available, `consume(key, tokens)`
+      leaves the balance unchanged and returns `False`.
+
+CR-003:
+  title: Time-proportional refill capped at capacity
+  text: >-
+    Elapsed time MUST be accounted for correctly: tokens are restored
+    proportionally to the elapsed time between calls, but the balance MUST NEVER
+    exceed `capacity`.
+  scenarios:
+    - SC-004: >-
+      Given elapsed time `t` between calls, the balance increases by
+      `t * refill_rate` tokens, capped at `capacity`.
+
+CR-004:
+  title: Strict argument validation
+  text: >-
+    A negative or zero `capacity` or `refill_rate`, and a `consume` call with
+    `tokens <= 0`, MUST raise `ValueError`.
+  scenarios:
+    - SC-005: >-
+      A non-positive `capacity` or `refill_rate` at initialization MUST raise
+      `ValueError`.
+    - SC-006: >-
+      A `consume` call with `tokens <= 0` MUST raise `ValueError`.

@@ -1,0 +1,21 @@
+outcome: pass
+attempts:
+- attempt: 1
+  prompt_chars: 5487
+  ttft_s: 6.064903699996648
+  elapsed_s: 84.24233749999257
+  finish_reason: length
+  parse_error: 'Expecting '','' delimiter: line 2 column 1 (char 3475)'
+  written: []
+  ok: false
+  note: TASK.md missing or too short
+- attempt: 2
+  prompt_chars: 5595
+  ttft_s: 5.4786403000034625
+  elapsed_s: 17.54017720000411
+  finish_reason: stop
+  parse_error: null
+  written:
+  - TASK.md
+  ok: true
+  note: TASK.md present

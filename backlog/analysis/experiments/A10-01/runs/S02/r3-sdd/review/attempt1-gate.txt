@@ -1,0 +1,40 @@
+                               [100%]
+================================== FAILURES ===================================
+___________________________ test_consume_and_reject ___________________________
+tests\test_limiter.py:9: in test_consume_and_reject
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+_________________________ test_baseline_never_blocks __________________________
+tests\test_limiter.py:16: in test_baseline_never_blocks
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+______________________ test_penalty_clears_after_window _______________________
+tests\test_limiter.py:52: in test_penalty_clears_after_window
+    assert limiter.consume('u', 1) is False
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:39: in consume
+    current, ts = self._refill(key)
+                  ^^^^^^^^^^^^^^^^^
+src\ratelimit\limiter.py:23: in _refill
+    tokens, last = self._buckets.get(key, (self.capacity, now))
+    ^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 2, got 3)
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_consume_and_reject - ValueError: too many ...
+FAILED tests/test_limiter.py::test_baseline_never_blocks - ValueError: too ma...
+FAILED tests/test_limiter.py::test_penalty_clears_after_window - ValueError: ...
+3 failed, 2 passed in 0.34s

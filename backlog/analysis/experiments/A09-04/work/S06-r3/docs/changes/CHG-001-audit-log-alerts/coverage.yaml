@@ -1,0 +1,90 @@
+change: CHG-001-audit-log-alerts
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-002:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md#REQ-RL-05
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: decomposed
+  CR-003:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-002-size-rotation.md
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: decomposed
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: analyzing
+  CR-006:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-002-size-rotation.md
+    spec_refs:
+      - docs/spec/security/ratelimit.md#REQ-RL-05
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: decomposed
+  CR-007:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: decomposed
+  CR-008:
+    slice: SLICE-01
+    tasks:
+      - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md
+    spec_refs: []
+    evidence:
+      red: ""
+      green: ""
+      regression: ""
+      verification: ""
+    status: decomposed

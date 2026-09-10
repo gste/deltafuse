@@ -1,0 +1,39 @@
+revision: "6117e14"
+task_id: "A12-04"
+packet: "backlog/analysis/packets/A12-04.md"
+criterion_ids:
+  - "PROC-004"
+  - "PROC-007"
+  - "SPEC-006"
+  - "SPEC-007"
+  - "SPEC-002"
+status: "done"
+notes:
+  - "All Q-001..Q-008 left parked=false; no code/skills patches"
+  - "Q-004 reject as planned; Q-002 is F-003 method not a second defect"
+  - "Q-005 and Q-006 merged as one A12-03 candidate"
+  - "A12-04 closed 2026-09-08: verdict pass"
+inputs:
+  - "backlog/analysis/packets/A12-04.md"
+  - "backlog/analysis/parking/design-questions.md"
+  - "backlog/analysis/experiments/A12-02/result.md"
+  - "backlog/analysis/summary.md:148-156"
+  - "backlog/findings/F-002.md"
+  - "backlog/findings/F-003.md"
+  - "backlog/findings/F-009.md"
+  - "backlog/findings/F-010.md"
+  - "backlog/analysis/experiments/A03-01/result.md:15-20"
+  - "backlog/analysis/experiments/A09-01/result.md"
+method: "Assign accept/defer/reject per parked Q. Bind to A01 criteria. Fold tokenizer work into F-003 and post-Verify disk check into F-010. Reject nested LLM token counting. Defer embeddings and Spec Kit constitution.md. Do not implement."
+profile:
+  model: null
+  endpoint: null
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+  llm_calls: 0
+outputs:
+  parking: "backlog/analysis/parking/design-questions.md"
+  result: "backlog/analysis/experiments/A12-04/result.md"
+verdict: "pass"

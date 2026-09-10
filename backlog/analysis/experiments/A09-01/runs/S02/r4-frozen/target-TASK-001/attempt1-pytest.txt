@@ -1,0 +1,16 @@
+.FF                                                                      [100%]
+================================== FAILURES ===================================
+______________________ test_penalty_seconds_default_zero ______________________
+tests\test_limiter.py:12: in test_penalty_seconds_default_zero
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0, penalty_seconds=0.0)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: TokenBucketLimiter.__init__() got an unexpected keyword argument 'penalty_seconds'
+___________________ test_penalty_lock_blocks_and_is_blocked ___________________
+tests\test_limiter.py:17: in test_penalty_lock_blocks_and_is_blocked
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0, penalty_seconds=60.0)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: TokenBucketLimiter.__init__() got an unexpected keyword argument 'penalty_seconds'
+=========================== short test summary info ===========================
+FAILED tests/test_limiter.py::test_penalty_seconds_default_zero - TypeError: ...
+FAILED tests/test_limiter.py::test_penalty_lock_blocks_and_is_blocked - TypeE...
+2 failed, 1 passed in 0.07s

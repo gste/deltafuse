@@ -1,0 +1,7 @@
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+change.yaml: [tasks -> 0] {'id': 'TASK-001-token-bucket-core', 'slice': 'SLICE-01', 'depends_on': [], 'requirement_delta': 'none'} is not of type 'string'
+change.yaml: [tasks -> 1] {'id': 'TASK-002-coverage-and-metadata', 'slice': 'SLICE-01', 'depends_on': ['TASK-001-token-bucket-core'], 'requirement_delta': 'none'} is not of type 'string'
+coverage.yaml: [claims -> CR-004 -> tasks -> 0] 'TASK-001-token-bucket-core' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-003 -> tasks -> 0] 'TASK-001-token-bucket-core' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-002 -> tasks -> 0] 'TASK-001-token-bucket-core' does not match '^TASK-[0-9]{3,}$'
+coverage.yaml: [claims -> CR-001 -> tasks -> 0] 'TASK-001-token-bucket-core' does not match '^TASK-[0-9]{3,}$'

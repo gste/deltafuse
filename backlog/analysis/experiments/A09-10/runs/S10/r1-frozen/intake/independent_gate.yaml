@@ -1,0 +1,9 @@
+outcome: pass
+independent_gate:
+  change_id: CHG-001-ratelimit-consume-history
+  change_status: continue-or-normalized (later specified)
+  claims: CR-001..CR-006 from original input (model CR-003 is get_history, not oracle persistence)
+  json_status: continue
+hidden_suite: not-run
+interrupt_reached: false
+attempts: 1

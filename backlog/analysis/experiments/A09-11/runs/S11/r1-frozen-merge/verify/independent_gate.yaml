@@ -1,0 +1,8 @@
+outcome: fail
+independent_gate:
+  merged_spec_has_burst: true
+  merged_code_wiped_window_stats: true
+  note: evaluator copied CHG-A seed limiter.py over CHG-B get_window_stats (A never implemented burst)
+  stale_green: Green files still on CHG-B; converged still fail (pending tasks / missing run.yaml), F-006 silent-pass not observed
+hidden_suite: not-run
+attempts: 3

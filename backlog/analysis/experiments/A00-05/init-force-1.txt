@@ -1,0 +1,15 @@
+Installing DeltaFuse 2.0.0 into <isolated-product>...
+Preserving existing AGENTS.md
+Preserving existing .deltafuse/config.yaml
+Preserving existing docs/intake/README.md
+Preserving existing docs/changes/README.md
+Preserving existing docs/spec/README.md
+Preserving existing docs/spec/context.md
+Preserving existing docs/spec/_capabilities.yaml
+Preserving existing docs/decisions/README.md
+Preserving existing docs/decisions/DEC-0000-template.md
+Preserving existing docs/archive/README.md
+Preserving existing docs/archive/intake/README.md
+Preserving existing docs/archive/changes/README.md
+Preserving existing CHANGELOG.md
+DeltaFuse installed. Canonical process remains external; product state is under docs/.

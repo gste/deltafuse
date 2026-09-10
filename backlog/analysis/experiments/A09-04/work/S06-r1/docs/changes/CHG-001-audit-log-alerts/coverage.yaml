@@ -1,0 +1,46 @@
+change: CHG-001-audit-log-alerts
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/intake/S06.md
+    status: analyzed
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: blocked-on-decision
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: blocked-on-decision
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-007:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: analyzed
+  CR-008:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: blocked-on-decision

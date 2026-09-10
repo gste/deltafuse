@@ -1,0 +1,27 @@
+revision: "0ed6630a911eb31a89b09a96e8380e2f5b4cbfa4"
+task_id: "A03-03"
+packet: "backlog/analysis/packets/A03-03.md"
+criterion_ids:
+  - "PROC-004"
+  - "PROC-007"
+inputs:
+  - "backlog/analysis-plan.md:L115-125"
+  - "backlog/analysis/baseline.md:L30-44"
+  - "backlog/criteria.md:L54-67"
+  - "http://127.0.0.1:1234/api/v0/models"
+  - "http://127.0.0.1:1234/v1/chat/completions"
+method: "Direct local runtime inventory, process inspection, file hashing, and live probe invocation."
+commands:
+  - "curl -s http://127.0.0.1:1234/v1/models"
+  - "curl -s http://127.0.0.1:1234/api/v0/models"
+  - "nvidia-smi"
+  - "Get-CimInstance Win32_Process"
+  - "Get-FileHash"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  profile: "backlog/analysis/experiments/A03-03/profile.md"
+  result: "backlog/analysis/experiments/A03-03/result.md"
+verdict: "pass"

@@ -1,0 +1,15 @@
+schema_version: 2
+domains:
+  rate-limiter:
+    capabilities:
+      - name: token-bucket
+        requirements:
+          - CR-001
+          - CR-002
+          - CR-003
+          - CR-004
+        tests:
+          - CR-001
+          - CR-002
+          - CR-003
+          - CR-004

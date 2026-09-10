@@ -1,0 +1,2 @@
+coverage.yaml: [root] Additional properties are not allowed ('spec_delta' was unexpected)
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

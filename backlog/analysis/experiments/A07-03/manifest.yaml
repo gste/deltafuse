@@ -1,0 +1,24 @@
+revision: "2dd4f67"
+task_id: "A07-03"
+packet: "backlog/analysis/packets/A07-03.md"
+criterion_ids:
+  - "TEST-001"
+  - "TEST-002"
+  - "TEST-003"
+  - "TEST-004"
+  - "TEST-006"
+inputs:
+  - "docs/testing-strategy.md:L1-221"
+  - "process/skills/target-task/SKILL.md:L1-31"
+  - "process/skills/implement-task/SKILL.md:L1-30"
+  - "process/skills/verify-change/SKILL.md:L1-28"
+method: "Design of independent evaluation protocol and test oracle for product-level tests generated during Target/Implement/Verify lifecycle: specification fault injection, refactoring invariance, contract boundary enforcement, and regression bounding."
+commands:
+  - "pytest tests/unit/test_schemas.py -k \"evidence\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A07-03/result.md"
+verdict: "pass"

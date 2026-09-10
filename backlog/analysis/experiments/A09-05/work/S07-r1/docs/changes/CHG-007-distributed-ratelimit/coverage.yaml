@@ -1,0 +1,63 @@
+change: CHG-007-distributed-ratelimit
+routing:
+  CR-001:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities: []
+  CR-002:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities:
+      - security.ratelimit
+  CR-003:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities: []
+  CR-004:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities:
+      - infra.config_reload
+  CR-005:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities: []
+  CR-006:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities: []
+  CR-007:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities:
+      - monitoring.health_check
+  CR-008:
+    primary_capability: infra.distributed_ratelimit
+    related_capabilities: []
+claims:
+  CR-001:
+    status: analyzed
+    slice: SLICE-01
+  CR-002:
+    status: analyzed
+    slice: SLICE-01
+  CR-003:
+    status: analyzed
+    slice: SLICE-01
+  CR-004:
+    status: analyzed
+    slice: SLICE-01
+  CR-005:
+    status: analyzed
+    slice: SLICE-01
+  CR-006:
+    status: analyzed
+    slice: SLICE-01
+  CR-007:
+    status: analyzed
+    slice: SLICE-01
+  CR-008:
+    status: analyzed
+    slice: SLICE-01
+slices:
+  SLICE-01:
+    claims:
+      - CR-002
+      - CR-003
+      - CR-004
+      - CR-005
+      - CR-006
+      - CR-007

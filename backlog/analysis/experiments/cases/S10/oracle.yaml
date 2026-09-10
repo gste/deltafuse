@@ -1,0 +1,54 @@
+case_id: S10
+intent_claims:
+  - id: CR-001
+    title: "Record consume attempts"
+    description: "Every consume call appends key, timestamp, requested tokens, and accepted/rejected outcome."
+    normative_rules:
+      - "MUST record one event per consume invocation"
+      - "MUST include key, timestamp, tokens, and outcome"
+      - "MUST NOT change consume accept/reject semantics"
+  - id: CR-002
+    title: "Query recent history"
+    description: "get_history(key, n=10) returns the newest n events for that key."
+    normative_rules:
+      - "MUST return events newest first"
+      - "MUST default n to 10"
+      - "MUST reject n < 1"
+      - "MUST NOT mix events from different keys"
+  - id: CR-003
+    title: "Persist history across restart"
+    description: "Follow-up after resume: history is file-backed and reloaded on init."
+    phase: reslice
+    normative_rules:
+      - "MUST persist events to data/consume-history.jsonl"
+      - "MUST reload persisted events on limiter init"
+      - "MUST expose persisted events through get_history"
+
+ambiguity_expected: false
+expected_decision_needed: false
+
+process_oracle:
+  resume:
+    same_change_id: true
+    must_not_create_second_change: true
+    must_preserve_red_evidence: true
+    must_not_duplicate_tasks: true
+    must_not_rerun_completed_intake: true
+  reslice:
+    cancelled_or_superseded_allowed: true
+    cancelled_tasks_must_remain_on_disk: true
+    implemented_work_must_be_kept: true
+    coverage_must_reassign_claims: true
+    converge_must_accept_cancelled_and_superseded: true
+  related_findings:
+    - F-005
+
+acceptance_criteria:
+  spec_files:
+    - "docs/spec/security/ratelimit.md"
+  code_files:
+    - "src/ratelimit/limiter.py"
+  test_files:
+    - "tests/test_limiter.py"
+  persistence_file: "data/consume-history.jsonl"
+  change_count: 1

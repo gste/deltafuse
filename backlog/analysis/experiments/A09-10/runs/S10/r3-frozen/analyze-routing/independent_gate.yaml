@@ -1,0 +1,6 @@
+outcome: pass
+independent_gate:
+  routing_file: routing.yaml
+  primary_capability: ratelimit
+hidden_suite: not-run
+attempts: 1

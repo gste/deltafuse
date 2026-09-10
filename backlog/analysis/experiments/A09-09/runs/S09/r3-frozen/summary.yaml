@@ -1,0 +1,19 @@
+case: S09
+repeat: 3
+tag: frozen
+phases:
+- phase: intake
+  outcome: blocked-on-decision
+  attempts: 1
+- phase: analyze-routing
+  outcome: pass
+  attempts: 1
+- phase: analyze-slices
+  outcome: pass
+  attempts: 1
+- phase: analyze-coverage
+  outcome: pass
+  attempts: 1
+- phase: specify
+  outcome: pass
+  attempts: 2

@@ -35,13 +35,13 @@ delta-fuse/
 │   ├── cli.py                        # Единая точка входа CLI (init, validate, check-gate, archive, validate-layout, lint-context, eval)
 │   ├── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
-│   │   ├── context.py                # Оценка токенов (~1.3x) и линтер контекстных бюджетов/контрактов
+│   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
 │   │   ├── frontmatter.py            # Парсер Markdown + YAML frontmatter (strict extraction)
 │   │   ├── fsm.py                    # Движок состояний (18 статусов), таблица переходов и валидация гейтов
 │   │   ├── graph.py                  # DAG анализатор задач: топологическая сортировка и поиск циклов
 │   │   ├── hasher.py                 # Вычисление sha256 framework content hash (исключение .git, __pycache__)
 │   │   ├── installer.py              # Кроссплатформенная установка, генерация адаптеров (.agents, .cursor, .gemini)
-│   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, требования CR-*
+│   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, claims CR-* / O1/E1
 │   │   ├── layout.py                 # Валидатор эталонной раскладки продукта, lock-файлов и маркеров DO-NOT-EDIT
 │   │   └── schemas.py                # Загрузчик и валидатор 9 схем JSON Schema Draft 2020-12
 │   └── evals/                        # Подсистема бенчмаркинга и оценки LLM (Stage 5)
@@ -102,6 +102,7 @@ delta-fuse/
   - `spec-delta.md` (frontmatter) -> `spec-delta.schema.yaml`
 * **1.3. Strict-режим (`unevaluatedProperties: false` / `additionalProperties: false`)**:
   - Подача лишних полей в корневые документы или frontmatter приводит к гарантированной ошибке валидации.
+  - **Исключение (AB-05 / RM-022):** у `routing.yaml` неизвестные ключи верхнего уровня (в том числе `schema_version`) игнорируются; объекты claims остаются строгими.
 
 ---
 
@@ -112,6 +113,7 @@ delta-fuse/
 * **2.2. Спецификационные якоря (`spec_refs`)**:
   - Парсинг заголовков спецификаций (`# REQ-...`, `# SC-...`).
   - Проверка существования целевых якорей.
+  - Path containment: `spec_refs` / `design_ref` after `resolve()` must stay inside the product repository root (`../` is rejected).
   - Spec-root guard (N10): если `docs/spec` отсутствует при наличии `spec_refs`, генерируется ошибка валидации, а не тихий пропуск.
 * **2.3. Decision Anchors**:
   - Ссылка `design_ref: docs/decisions/DEC-...` требует статус решения `accepted`. Статусы `proposed` и `rejected` блокируют прохождение гейта `analyzed`/`specified`.
@@ -128,13 +130,24 @@ delta-fuse/
   - Терминальные ветви: `rejected`, `duplicate`, `superseded`, `not-reproduced`.
 * **3.2. Семантические мутационные инварианты (T1–T8, N10)**:
   - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
-  - **T2**: Red evidence с `result: passed` или `exit_code: 0` отвергается.
-  - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `targeting` и т.д.).
+  - **T2**: Red evidence с `result: passed` или `exit_code: 0` (кроме `not-reproduced` и `already-green`) отвергается.
+  - **F-009 / targeting**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
+  - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `targeting` и т.д.). `cancelled` и `superseded` — терминалы (F-005 / RM-005); Verify не снимается.
   - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
   - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.
   - **T7**: Битая ссылка на якорь в спецификации отклоняется.
   - **T8**: Повторная архивация при наличии существующего архива запрещена (неизменяемость архива, отказ от `rmtree`).
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
+  - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
+  - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
+  - **PP-06 / KI-07 / targeting**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
+  - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
+  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; split записи opt-in; routing первым шагом. Specify для feature не снимается.
+  - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.
+  - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
+  - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
+  - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
+  - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
 
 ---
@@ -147,15 +160,17 @@ delta-fuse/
   - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
   - Флаг `--force` обновляет только управляемые фреймворком файлы.
 * **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
-  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
+  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.call_width`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
 
 ### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context.py`)
 * **5.1. Token Estimator**:
-  - Эвристика `1 word ≈ 1.3 tokens`, проверка лимитов `max_tokens` и `max_files`.
+  - Upper-bound estimator: EN prose `words * 1.3`; code ×2.7; YAML/JSON ×4.5; logs ×4.8; Cyrillic ×2.2. Optional `DELTAFUSE_TOKENIZE_URL` (`POST /tokenize`); never chat completions (Q-004).
+  - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
+  - **F-002 / decomposed, targeting, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact). `deltafuse lint-context` проверяет и `tasks/`.
   - Команда `deltafuse lint-context <change_dir>`.
 
 ---

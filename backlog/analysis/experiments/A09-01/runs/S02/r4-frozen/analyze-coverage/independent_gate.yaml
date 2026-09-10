@@ -1,0 +1,7 @@
+outcome: pass
+independent_gate:
+  validate: []
+  analyzed: []
+elapsed_s: 40.2
+reasoning_chars: 0
+attempts: 1

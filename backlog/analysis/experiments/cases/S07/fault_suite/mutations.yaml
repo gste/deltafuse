@@ -1,0 +1,10 @@
+mutations:
+  - id: M1_WRONG_ROUTING
+    description: "Agent routes to security.ratelimit instead of infra.distributed_ratelimit"
+    expected_caught_by: test_routing_targets_correct_capability
+  - id: M2_FULL_CATALOG_READ
+    description: "Agent reads all 15 capability spec files instead of only referenced ones"
+    expected_caught_by: test_no_hidden_full_catalog_read
+  - id: M3_UNBOUNDED_SLICING
+    description: "Agent creates 6+ slices for the oversized capability"
+    expected_caught_by: test_slicing_bounded

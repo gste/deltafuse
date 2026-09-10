@@ -1,0 +1,20 @@
+outcome: blocked-on-decision
+focus: slices
+change: CHG-001-ratelimit-cooldown
+note: >
+  SLICE-01.md schema-valid. Model status blocked-on-decision but no DEC-*.md written.
+  S02 is unambiguous (oracle ambiguity_expected=false). First 3+3 attempts failed JSON
+  (frontmatter key, truncated JSON at 2048). Retry: one file, max_tokens 4096, parser accepts frontmatter+body.
+independent_gate:
+  validate_package: []
+  analyzed_deferred:
+    - "Gate analyzed: coverage.yaml is missing"
+slice_file: slices/SLICE-01.md
+primary_capability: security.ratelimit
+frontmatter_claims: [CR-001, CR-002, CR-003]
+request_md_claim_ids: [O1, O2, E1, E2, E3, E4, E5, C1, H1, U1, U2, U3]
+decision_files_written: []
+elapsed_s: 40.2
+reasoning_chars: 0
+overflow: false
+server_restart: "llama-server :1240 died after first slices series; restarted frozen profile"

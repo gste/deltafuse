@@ -23,6 +23,9 @@ properties:
       content_hash: {type: string, pattern: '^sha256:[a-fA-F0-9]{64}$'}
   intent:
     enum: [feature, bugfix, refactor, maintenance, documentation, unknown]
+  route:
+    enum: [code, docs, ops]
+    description: Execution route. Missing means code (S02/S03). docs/ops do not take product pytest or src.
   risk:
     enum: [low, medium, high, critical, unknown]
   source:
@@ -35,9 +38,12 @@ properties:
         items: {type: string}
   analysis:
     type: object
+    description: Optional pointers. analysis.md / summary is not required for analyzed.
     properties:
       routing: {type: [string, 'null']}
-      summary: {type: [string, 'null']}
+      summary:
+        type: [string, 'null']
+        description: Optional path to analysis.md. Null or omitted is valid.
   deltas:
     type: array
     items: {$ref: '#/$defs/delta'}

@@ -1,0 +1,9 @@
+outcome: fsm-pass-vacuous
+independent_gate:
+  specified: spec-delta.md exists
+live_spec_ratelimit: false
+catalog_valid: false
+change_status: normalized
+oracle_spec_files: fail
+note: F-010 — gate specified does not require live spec
+attempts: 3

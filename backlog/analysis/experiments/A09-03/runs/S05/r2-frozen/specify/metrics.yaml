@@ -1,0 +1,82 @@
+case: S05
+repeat: 2
+tag: frozen
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 14149
+  ttft_s: 18.6303515000036
+  elapsed_s: 37.973784500034526
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/spec-delta.md
+  model_status: blocked-on-decision
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4855
+    vram_total_mib: 8188
+    gpu_util_pct: 14
+  gpu_after:
+    vram_used_mib: 4853
+    vram_total_mib: 8188
+    gpu_util_pct: 30
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 15741
+  ttft_s: 17.46721339999931
+  elapsed_s: 41.614092400006484
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/spec/security/ratelimit.md
+  - docs/spec/_capabilities.yaml
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 4853
+    vram_total_mib: 8188
+    gpu_util_pct: 30
+  gpu_after:
+    vram_used_mib: 4912
+    vram_total_mib: 8188
+    gpu_util_pct: 34
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 17385
+  ttft_s: 18.604666500003077
+  elapsed_s: 35.90998439997202
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-usage-stats-and-rate-policy/spec-delta.md
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 4912
+    vram_total_mib: 8188
+    gpu_util_pct: 31
+  gpu_after:
+    vram_used_mib: 4911
+    vram_total_mib: 8188
+    gpu_util_pct: 30
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

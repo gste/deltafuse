@@ -1,0 +1,23 @@
+revision: "16166fa"
+task_id: "A07-01"
+packet: "backlog/analysis/packets/A07-01.md"
+criterion_ids:
+  - "TEST-001"
+  - "TEST-004"
+  - "PROC-002"
+inputs:
+  - "process/schemas/evidence.schema.yaml:L1-30"
+  - "src/deltafuse/core/fsm.py:L284-356"
+  - "src/deltafuse/core/fsm.py:L420-445"
+  - "tests/unit/test_fsm_mutations.py:L12-75"
+  - "docs/testing-strategy.md:L129-140"
+method: "Contract comparison and counterexample analysis of Red/Green evidence validity: differentiation of behavioral vs syntax/import failures, zero-test/skipped/xfail masking, exit code verification, and assertion relaxing."
+commands:
+  - "pytest tests/unit/test_fsm_mutations.py -k \"t1 or t2 or t4\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A07-01/result.md"
+verdict: "pass"

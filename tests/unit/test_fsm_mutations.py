@@ -6,6 +6,7 @@ import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.installer import install
+from deltafuse.core.hasher import compute_product_baseline_revision
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -32,6 +33,7 @@ def test_mutation_t1_green_evidence_in_red_folder_rejected(tmp_path: Path):
         "summary": "Faked green evidence in red folder",
         "changed_paths": ["src/core.py"],
         "spec_status": "unchanged",
+        "base_revision": compute_product_baseline_revision(tmp_path),
     }
     (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(green_fake), encoding="utf-8")
 
@@ -98,11 +100,38 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     (ver_dir / "run.yaml").write_text(yaml.safe_dump({
         "schema_version": 2, "change": "CHG-203", "phase": "verification",
         "timestamp": "2026-09-05T12:00:00Z", "command": "pytest", "exit_code": 0,
-        "result": "passed", "summary": "Passed", "changed_paths": [], "spec_status": "unchanged"
+        "result": "passed", "summary": "Passed", "changed_paths": [], "spec_status": "unchanged",
+        "base_revision": compute_product_baseline_revision(tmp_path),
     }), encoding="utf-8")
 
     gate_errs = check_gate(builder.change_dir, "converged")
     assert any("has non-terminal status 'pending'" in e for e in gate_errs)
+
+
+def test_mutation_t3_converged_accepts_cancelled_task(tmp_path: Path, repo_root: Path):
+    """F-005: cancelled is terminal on converged; pending still fails via T3."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-213", title="T3 cancelled")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose(
+            tasks=[
+                {"id": "TASK-001", "slice": "SLICE-01", "depends_on": []},
+                {"id": "TASK-002", "slice": "SLICE-01", "depends_on": []},
+            ]
+        )
+        .step_target()
+        .step_implement()
+        .step_verify()
+    )
+    from deltafuse.core.frontmatter import parse_frontmatter
+    task_file = builder.change_dir / "tasks" / "TASK-002.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["status"] = "cancelled"
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    assert check_gate(builder.change_dir, "converged") == []
 
 
 def test_mutation_t4_evidence_for_nonexistent_task_rejected(tmp_path: Path):
@@ -178,6 +207,30 @@ def test_mutation_t7_broken_spec_anchor_rejected(tmp_path: Path):
 
     errs = validate_change_package(builder.change_dir)
     assert any("Anchor '#REQ-GHOST-999' not found in specification file" in e for e in errs)
+
+
+def test_mutation_f004_path_traversal_rejected(tmp_path: Path):
+    """F-004 / RM-004: spec_refs that resolve outside repo_root must fail the package gate."""
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside_spec.md"
+    outside.write_text("# leaked\n## REQ-LEAK\n", encoding="utf-8")
+    spec_dir = repo / "docs" / "spec"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "core.md").write_text("# Spec\n## REQ-01\nValid requirement\n", encoding="utf-8")
+
+    builder = (
+        MockChangeBuilder(repo, change_id="CHG-204", title="F-004 Traversal")
+        .step_intake()
+        .step_analyze()
+    )
+    from deltafuse.core.frontmatter import parse_frontmatter
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+    meta["spec_refs"] = ["../outside_spec.md"]
+    slice_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+    errs = validate_change_package(builder.change_dir)
+    assert any("Path traversal forbidden" in e for e in errs)
 
 
 def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):

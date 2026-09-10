@@ -1,0 +1,13 @@
+outcome: pass
+attempts:
+- attempt: 1
+  prompt_chars: 4982
+  ttft_s: 0.5209513000008883
+  elapsed_s: 17.760672399992472
+  finish_reason: stop
+  parse_error: null
+  written:
+  - docs/spec/security/ratelimit.md
+  - docs/spec/_capabilities.yaml
+  ok: true
+  note: spec mentions penalty

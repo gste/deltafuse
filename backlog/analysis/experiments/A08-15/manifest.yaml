@@ -1,0 +1,31 @@
+revision: "ca3cd73"
+task_id: "A08-15"
+packet: "backlog/analysis/packets/A08-15.md"
+criterion_ids:
+  - "SPEC-005"
+  - "SPEC-007"
+  - "TEST-005"
+  - "PROC-002"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+  - "tests/fixtures/change_builder.py:L1-80"
+  - "backlog/analysis/experiments/A08-02/result.md:L1-38"
+  - "backlog/findings/F-006.md:L1-38"
+method: "Independent design of Scenario S11 (two concurrent Changes on shared spec, then feature deletion) in holdout split, with stale-evidence and deletion oracles. Base size is 2 Changes / 1 shared spec; geometric ladder deferred to A09-11."
+artifacts:
+  - "backlog/analysis/experiments/cases/S11/input.md"
+  - "backlog/analysis/experiments/cases/S11/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S11/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S11/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S11/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-15/result.md"
+verdict: "pass"
+notes:
+  - "CHG-B raw input is cases/S11/input.md; CHG-A and CHG-C texts are evaluator-only in manifest.yaml"
+  - "F-006 is a known stale-evidence gap; S11 oracle treats silent pass after merge as fail for A09-11"

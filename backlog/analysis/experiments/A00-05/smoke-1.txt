@@ -1,0 +1,24 @@
+[1/4] Running fresh installation into temporary directory...
+Installing DeltaFuse 2.0.0 into <temp-dir>/df-smoke-<uuid>...
+DeltaFuse installed. Canonical process remains external; product state is under docs/.
+[2/4] Validating installed product layout...
+DeltaFuse product layout is valid.
+[3/4] Testing idempotent upgrade with --force...
+Installing DeltaFuse 2.0.0 into <temp-dir>/df-smoke-<uuid>...
+Preserving existing AGENTS.md
+Preserving existing .deltafuse/config.yaml
+Preserving existing docs/intake/README.md
+Preserving existing docs/changes/README.md
+Preserving existing docs/spec/README.md
+Preserving existing docs/spec/context.md
+Preserving existing docs/spec/_capabilities.yaml
+Preserving existing docs/decisions/README.md
+Preserving existing docs/decisions/DEC-0000-template.md
+Preserving existing docs/archive/README.md
+Preserving existing docs/archive/intake/README.md
+Preserving existing docs/archive/changes/README.md
+Preserving existing CHANGELOG.md
+DeltaFuse installed. Canonical process remains external; product state is under docs/.
+[4/4] Re-validating product layout after upgrade...
+DeltaFuse product layout is valid.
+Smoke test passed successfully!

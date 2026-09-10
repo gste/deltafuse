@@ -175,12 +175,58 @@ if [ -f "$config_file" ] && { [ "$config_existed" -eq 0 ] || [ "$FORCE" -eq 1 ];
   mv "$temporary" "$config_file"
 fi
 
+call_width="wide"
+auto_accept="false"
+if [ -f "$config_file" ]; then
+  extracted_width="$(awk '
+    /^workflow:[[:space:]]*$/ { in_wf=1; next }
+    in_wf && /^[^[:space:]]/ { in_wf=0 }
+    in_wf && /^[[:space:]]+call_width:[[:space:]]+/ {
+      sub(/^[[:space:]]+call_width:[[:space:]]+/, "")
+      sub(/[[:space:]]+$/, "")
+      print
+      exit
+    }
+  ' "$config_file")"
+  if [ -n "$extracted_width" ]; then
+    case "$extracted_width" in
+      narrow|medium|wide) call_width="$extracted_width" ;;
+      *)
+        printf 'Invalid .deltafuse/config.yaml workflow.call_width: %s\n' "$extracted_width" >&2
+        exit 1
+        ;;
+    esac
+  fi
+  extracted_auto="$(awk '
+    /^workflow:[[:space:]]*$/ { in_wf=1; next }
+    in_wf && /^[^[:space:]]/ { in_wf=0 }
+    in_wf && /^[[:space:]]+auto_accept_decisions:[[:space:]]+/ {
+      sub(/^[[:space:]]+auto_accept_decisions:[[:space:]]+/, "")
+      sub(/[[:space:]]+$/, "")
+      print
+      exit
+    }
+  ' "$config_file")"
+  if [ -n "$extracted_auto" ]; then
+    case "$extracted_auto" in
+      true|false) auto_accept="$extracted_auto" ;;
+      *)
+        printf 'Invalid .deltafuse/config.yaml workflow.auto_accept_decisions: %s\n' "$extracted_auto" >&2
+        exit 1
+        ;;
+    esac
+  fi
+fi
+
 cat > "$LOCK_PATH" <<EOF
 schema_version: $SCHEMA_VERSION
 framework:
   version: $FRAMEWORK_VERSION
   source: $effective_source
   content_hash: sha256:$FRAMEWORK_HASH
+workflow:
+  call_width: $call_width
+  auto_accept_decisions: $auto_accept
 EOF
 
 adapter_roots=()

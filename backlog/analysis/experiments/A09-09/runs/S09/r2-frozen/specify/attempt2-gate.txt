@@ -1,0 +1,3 @@
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+coverage.yaml: [root] Additional properties are not allowed ('specification' was unexpected)
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

@@ -1,0 +1,8 @@
+outcome: fail
+independent_gate:
+  converged: fail
+  missing: evidence/verification/run.yaml
+  tasks_on_disk: pending TASK-001..004
+  change.yaml_status: verified with verification.converged (gate still fail)
+hidden_suite: not-run
+attempts: 3

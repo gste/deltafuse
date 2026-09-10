@@ -12,13 +12,17 @@ properties:
   timestamp: {type: string, format: date-time}
   command: {type: string}
   exit_code: {type: integer}
-  result: {enum: [expected-failure, passed, failed, blocked, not-reproduced]}
+  result: {enum: [expected-failure, passed, failed, blocked, not-reproduced, already-green]}
   failure_category: {type: [string, 'null']}
   summary: {type: string}
   changed_paths:
     type: array
     items: {type: string}
   spec_status: {enum: [unchanged, changed, not-applicable]}
+  base_revision:
+    type: string
+    pattern: '^sha256:[a-fA-F0-9]{64}$'
+    description: Content hash of docs/spec/** and src/** when the evidence was recorded.
 allOf:
   - if:
       properties:
@@ -27,3 +31,8 @@ allOf:
       required: [task]
       properties:
         task: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  - if:
+      properties:
+        phase: {enum: [green, regression, verification]}
+    then:
+      required: [base_revision]

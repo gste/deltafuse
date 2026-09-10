@@ -1,0 +1,39 @@
+revision: "a449ff7"
+task_id: "A12-03"
+packet: "backlog/analysis/packets/A12-03.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-006"
+  - "PROC-002"
+  - "PROC-004"
+  - "TEST-004"
+  - "CODE-006"
+status: "done"
+notes:
+  - "Roadmap only; did not patch fsm/skills/integrity"
+  - "P0 not averaged with P3; Q-002 under F-003; Q-008 after F-010; Q-005+Q-006 one P2 item"
+  - "Q-003/Q-004/Q-007 constitution excluded per A12-04"
+  - "A12-03 closed 2026-09-08: verdict pass; analysis queue complete"
+inputs:
+  - "backlog/analysis/packets/A12-03.md"
+  - "backlog/analysis-plan.md:245-262"
+  - "backlog/analysis/summary.md"
+  - "backlog/analysis/experiments/A12-04/result.md"
+  - "backlog/analysis/parking/design-questions.md"
+  - "backlog/analysis/matrices/ablation.md"
+  - "backlog/findings/F-010.md"
+  - "backlog/findings/F-009.md"
+  - "backlog/findings/F-006.md"
+method: "Turn findings and accepted Qs into independently verifiable RM-* items with P0-P3, acceptance, regression, layers, and dependencies. Explicitly exclude analog core replacement and rejected/deferred parking. Do not implement."
+profile:
+  model: null
+  endpoint: null
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+  llm_calls: 0
+outputs:
+  roadmap: "backlog/analysis/roadmap.md"
+  result: "backlog/analysis/experiments/A12-03/result.md"
+verdict: "pass"

@@ -1,0 +1,25 @@
+revision: "1fe789a42f5ebfaecf1c713b194fb8cf223bc7c6"
+task_id: "A04-02"
+packet: "backlog/analysis/packets/A04-02.md"
+criterion_ids:
+  - "SPEC-003"
+  - "SPEC-004"
+  - "PROC-006"
+inputs:
+  - "process/templates/docs/spec/README.md:L1-22"
+  - "process/schemas/spec-delta.schema.yaml:L1-30"
+  - "process/schemas/decision.schema.yaml:L1-33"
+  - "docs/workflow.md:L80-130"
+  - "src/deltafuse/core/integrity.py:L57-98"
+  - "src/deltafuse/core/fsm.py:L250-283"
+  - "src/deltafuse/core/fsm.py:L399-415"
+method: "Contract and schema validation of capability specification sufficiency (terms, behavior, errors, NFR, integrations, acceptance) and verification of Decision blocking and synchronization into live spec."
+commands:
+  - "python test_dec_sync.py"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A04-02/result.md"
+verdict: "pass"

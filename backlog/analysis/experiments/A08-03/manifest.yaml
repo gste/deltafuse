@@ -1,0 +1,29 @@
+revision: "941aadc"
+task_id: "A08-03"
+packet: "backlog/analysis/packets/A08-03.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-004"
+  - "SPEC-005"
+  - "CODE-001"
+  - "TEST-001"
+  - "TEST-004"
+  - "PROC-001"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+  - "tests/fixtures/change_builder.py:L1-60"
+method: "Independent design and generation of Scenario S01 (Bootstrap empty product with new rate limiter capability) with external intent claims, hidden acceptance test suite, and fault injection mutation cases."
+artifacts:
+  - "backlog/analysis/experiments/cases/S01/input.md"
+  - "backlog/analysis/experiments/cases/S01/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S01/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S01/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S01/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-03/result.md"
+verdict: "pass"

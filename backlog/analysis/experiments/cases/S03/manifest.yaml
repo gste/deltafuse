@@ -1,0 +1,13 @@
+case_id: S03
+title: "Bug fix with unchanged spec: fractional refill precision"
+category: bug
+group: calibration
+target_capability: security.ratelimit
+slices:
+  - SLICE-01
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  spec_modification_expected: false

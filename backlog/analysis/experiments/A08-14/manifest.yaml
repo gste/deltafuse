@@ -1,0 +1,31 @@
+revision: "ca3cd73"
+task_id: "A08-14"
+packet: "backlog/analysis/packets/A08-14.md"
+criterion_ids:
+  - "PROC-002"
+  - "PROC-003"
+  - "PROC-005"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+  - "tests/fixtures/change_builder.py:L1-80"
+  - "backlog/analysis/experiments/A08-02/result.md:L1-38"
+  - "backlog/analysis/experiments/A05-03/result.md:L32-34"
+  - "backlog/findings/F-005.md:L1-45"
+method: "Independent design of Scenario S10 (interruption, resume, re-slicing) in holdout split, with process oracles for same-change resume, preserved Red evidence, cancelled/superseded tasks on disk, and converge after re-slice."
+artifacts:
+  - "backlog/analysis/experiments/cases/S10/input.md"
+  - "backlog/analysis/experiments/cases/S10/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S10/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S10/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S10/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-14/result.md"
+verdict: "pass"
+notes:
+  - "change_builder.py exposes step_intake..step_verify for a single Change; S10 resume/re-slice protocol is evaluator-owned and not a builder method"
+  - "F-005 is a known converge blocker for cancelled/superseded tasks; S10 oracle treats that as a fail condition for A09-10"

@@ -36,7 +36,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 ## Pinning and upgrades
 
-`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings. `.deltafuse/lock.yaml` фиксирует resolved version, schema version и framework content hash.
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 
 Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
 
@@ -54,3 +54,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 | Accepted specification существует | Установить `project.baseline: accepted`, создавать Changes через `/intake` |
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
+
+## Внешние доски
+
+Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md), а не свой разбор `docs/changes/**`. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.

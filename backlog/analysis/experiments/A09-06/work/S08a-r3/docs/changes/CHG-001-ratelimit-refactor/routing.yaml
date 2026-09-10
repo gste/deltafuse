@@ -1,0 +1,52 @@
+change: CHG-001-ratelimit-refactor
+claims:
+  CR-001:
+    summary: Current RateLimiter backed by in-memory implementation
+    primary_capability: ratelimit
+    confidence: low
+  CR-002:
+    summary: Extract RateLimiterBackend abstract interface
+    primary_capability: ratelimit
+    confidence: medium
+  CR-003:
+    summary: Move in-memory implementation into InMemoryBackend
+    primary_capability: ratelimit
+    confidence: medium
+  CR-004:
+    summary: RateLimiter accepts backend via dependency injection
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    confidence: medium
+  CR-005:
+    summary: Move argument validation into RateLimiter
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    confidence: medium
+  CR-006:
+    summary: Existing tests must pass unchanged except import paths
+    primary_capability: ratelimit
+    related_capabilities:
+      - testing
+    confidence: medium
+  CR-007:
+    summary: No new functionality to be added
+    primary_capability: ratelimit
+    related_capabilities:
+      - architecture
+    confidence: medium
+  CR-008:
+    summary: Specification docs/spec/security/ratelimit.md must not be modified
+    primary_capability: ratelimit
+    related_capabilities:
+      - specification
+    confidence: high
+  CR-009:
+    summary: Refactor expected to be behavior-preserving, to be confirmed
+    primary_capability: ratelimit
+    confidence: low
+  CR-010:
+    summary: Current structure, test location, and validation logic unknown
+    primary_capability: ratelimit
+    confidence: unknown

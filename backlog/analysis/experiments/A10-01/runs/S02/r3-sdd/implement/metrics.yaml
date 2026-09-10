@@ -1,0 +1,13 @@
+outcome: pass
+attempts:
+- attempt: 1
+  prompt_chars: 6333
+  ttft_s: 6.872769800000242
+  elapsed_s: 54.494318900004146
+  finish_reason: stop
+  parse_error: null
+  written:
+  - src/ratelimit/limiter.py
+  - tests/test_limiter.py
+  ok: true
+  note: penalty_seconds in limiter

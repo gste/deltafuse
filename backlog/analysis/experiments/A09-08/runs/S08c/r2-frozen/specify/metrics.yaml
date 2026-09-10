@@ -1,0 +1,81 @@
+case: S08c
+repeat: 2
+tag: frozen
+phase: specify
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 11988
+  ttft_s: 17.798245599959046
+  elapsed_s: 66.04547029995592
+  usage: {}
+  finish_reason: null
+  overflow: false
+  parse_error: 'Expecting '','' delimiter: line 1 column 3789 (char 3788)'
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5407
+    vram_total_mib: 8188
+    gpu_util_pct: 4
+  gpu_after:
+    vram_used_mib: 5463
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 12080
+  ttft_s: 15.00693339999998
+  elapsed_s: 59.76522850000765
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-008-ratelimiter-migration/change.yaml
+  - docs/changes/CHG-008-ratelimiter-migration/slices/SLICE-01.md
+  - docs/changes/CHG-008-ratelimiter-migration/coverage.yaml
+  model_status: blocked-on-decision
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5463
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  gpu_after:
+    vram_used_mib: 5463
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 12272
+  ttft_s: 14.650429000030272
+  elapsed_s: 41.95711430005031
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: 'Expecting '','' delimiter: line 1 column 1965 (char 1964)'
+  written: []
+  model_status: halt
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5463
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  gpu_after:
+    vram_used_mib: 5492
+    vram_total_mib: 8188
+    gpu_util_pct: 36
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

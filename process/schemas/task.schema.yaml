@@ -3,7 +3,7 @@ $id: https://deltafuse.dev/schemas/v2/task.schema.yaml
 title: DeltaFuse Task frontmatter
 type: object
 additionalProperties: false
-required: [id, change, slice, kind, status, depends_on, requirement_delta, spec_refs, allowed_paths, forbidden_paths]
+required: [id, change, slice, kind, status, depends_on, requirement_delta, spec_refs, allowed_paths, forbidden_paths, context_budget]
 properties:
   id: {type: string, pattern: '^TASK-[0-9]{3,}$'}
   change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
@@ -26,3 +26,15 @@ properties:
   forbidden_paths:
     type: array
     items: {type: string}
+  context_budget:
+    type: object
+    required: [max_tokens, max_files]
+    additionalProperties: false
+    properties:
+      max_tokens:
+        type: integer
+        minimum: 1
+      max_files:
+        type: integer
+        minimum: 1
+

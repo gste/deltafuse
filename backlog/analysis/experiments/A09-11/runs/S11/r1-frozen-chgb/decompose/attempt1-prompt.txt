@@ -1,0 +1,438 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: decompose-change
+description: Decompose one specified DeltaFuse slice into dependency-ordered atomic task files inside its Change package. Use after the specification gate; do not use to discover requirements.
+---
+
+# Decompose Change
+
+Create executable work without creating new product law.
+
+Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one specified slice and typed delta, exact accepted spec references, optional `design.md`, capability dependencies, compact code/test index or narrowly selected files, and existing task IDs/dependencies.
+
+Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks.
+
+## Procedure
+
+1. Create `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md` files.
+2. Give each task one verifiable outcome that fits one implementation context.
+3. Include Change/slice IDs, exact requirement/scenario refs, dependencies, test oracle, unchanged behavior, allowed/forbidden paths or symbols, and verification commands.
+4. Order dependencies and update `coverage.yaml` plus task metadata in `change.yaml`.
+5. For an implementation bug, derive tasks from observation, reproduction, exact existing spec refs, oracle, unchanged behavior, and scope with `requirement_delta: none`.
+
+Do not copy normative spec text, hide a design choice inside a task, estimate primarily by lines of code, or modify production code.
+
+## Gate
+
+Every slice requirement is covered by a resolvable task, every task has a test oracle, spec and blocking Decisions are accepted, and scope has not expanded.
+
+Recommend `/target-task <task-path>` for the first ready task.
+
+
+----- USER -----
+
+Phase: decompose
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'decompose'
+Gate to satisfy after this call: decomposed
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/change.yaml ===
+schema_version: 2
+id: CHG-001-ratelimit-window-stats
+title: Burst-window statistics for Rate Limiter (security.ratelimit)
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: unknown
+source:
+  request: docs/intake/S11.md
+  intake_refs:
+    - docs/intake/S11.md
+analysis:
+  routing: null
+  summary: Add get_window_stats(key) to security.ratelimit returning accepted/rejected/remaining_tokens without consuming tokens or changing limits; unknown keys return zero counters and current remainder per key-init rules.
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/coverage.yaml ===
+change: CHG-001-ratelimit-window-stats
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: specified
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/request.md ===
+# Request: Burst-window statistics for Rate Limiter (S11-B)
+
+## Summary
+
+The Rate Limiter service (`security.ratelimit`) needs a way to sample statistics for a key over the current burst window. A new method `get_window_stats(key)` must return a dictionary with fields `accepted`, `rejected`, and `remaining_tokens` for the key. Reading statistics must not consume tokens or change limits. For an unknown key, zero counters and the current remainder per key-initialization rules must be returned.
+
+## Claims
+
+### CR-001 — observation
+The service `security.ratelimit` currently has window logic and token replenishment, but no documented method to read per-key statistics for the current window.
+
+### CR-002 — expectation
+`get_window_stats(key)` must return a dict with exactly the fields `accepted`, `rejected`, and `remaining_tokens` for the requested key.
+
+### CR-003 — expectation
+Window counters (`accepted`, `rejected`) are reset together with the token-replenishment logic of the existing limiter.
+
+### CR-004 — constraint
+Calling the statistics method must not consume tokens and must not modify limits.
+
+### CR-005 — expectation
+For an unknown key, the method returns zero counters (`accepted: 0`, `rejected: 0`) and the current remainder computed per the key-initialization rules.
+
+### CR-006 — hypothesis
+The remainder for an unknown key follows the same key-initialization rules already used by the limiter; the exact rule is not specified in the source and must be confirmed against the existing implementation.
+
+## Unknowns
+
+- Exact key-initialization rule for `remaining_tokens` (CR-006).
+- Whether `accepted`/`rejected` are cumulative since last window reset or scoped to the current window only.
+- Whether the method must exist on a specific class/interface and its expected signature/return type contract.
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/routing.yaml ===
+change: CHG-001-ratelimit-window-stats
+claims:
+  CR-001:
+    summary: Existing rate limiter lacks a documented method to read per-key window statistics.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-002:
+    summary: get_window_stats(key) returns a dict with exactly accepted, rejected, remaining_tokens.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-003:
+    summary: Window counters reset together with existing token-replenishment logic.
+    primary_capability: security.ratelimit
+    confidence: medium
+  CR-004:
+    summary: Reading statistics must not consume tokens or modify limits.
+    primary_capability: security.ratelimit
+    confidence: high
+  CR-005:
+    summary: Unknown key returns zero counters and current remainder per key-initialization rules.
+    primary_capability: security.ratelimit
+    confidence: medium
+  CR-006:
+    summary: Remainder for unknown key follows existing key-initialization rule; must be confirmed against implementation.
+    primary_capability: security.ratelimit
+    confidence: low
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-ratelimit-window-stats
+title: Add get_window_stats(key) to security.ratelimit
+status: analyzing
+primary_capability: security.ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+depends_on: []
+context_budget:
+  max_tokens: 4000
+  max_files: 6
+---
+
+## Scope
+
+In scope: add `get_window_stats(key)` returning `{accepted, rejected, remaining_tokens}`; counters reset with existing replenishment; unknown keys return zero counters and current remainder per key-init rules; read-only (no token consumption, no limit change).
+
+Out of scope: changing `consume`, `is_blocked`, capacity/refill behavior, or any persistence format.
+
+## Slice analysis
+
+- **intent**: feature (additive read-only method).
+- **delta_kind**: spec + implementation + tests.
+- **requirement_delta**: new REQ-RL-05 documenting `get_window_stats` contract and read-only guarantee.
+- **design_impact**: none beyond a new method on the existing limiter; no new class/interface required unless one already exposes the API.
+- **risk**: low; behavior is additive and isolated.
+- **size**: small.
+
+## Dependencies
+
+None. Self-contained within `security.ratelimit`.
+
+## Risks
+
+- CR-006: exact key-initialization rule for `remaining_tokens` must be confirmed against `src/ratelimit` before finalizing REQ-RL-05.
+- CR-003: confirm whether `accepted`/`rejected` are cumulative-since-reset or current-window-scoped by inspecting existing reset logic.
+
+## Context budget
+
+~4000 tokens / 6 files: spec module, limiter source, replenishment/reset logic, test roots.
+
+
+=== FILE docs/changes/CHG-001-ratelimit-window-stats/spec-delta.md ===
+---
+change: CHG-001-ratelimit-window-stats
+status: proposed
+slices:
+  - SLICE-01
+---
+
+# Spec Delta — CHG-001-ratelimit-window-stats
+
+## Added
+
+- REQ-RL-05 Window statistics — `get_window_stats(key)` contract and read-only guarantee.
+- REQ-RL-06 Window counter reset — counters reset with replenishment logic.
+- REQ-RL-07 Unknown key statistics — zero counters and current remainder for unknown keys.
+
+## Modified
+
+- `docs/spec/security/ratelimit.md` — appended REQ-RL-05, REQ-RL-06, REQ-RL-07 to the existing module.
+
+## Removed
+
+- (none)
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+## REQ-RL-05 Window statistics
+get_window_stats(key) MUST return a dict with exactly the fields `accepted`, `rejected`, and `remaining_tokens` for the requested key. Reading statistics MUST NOT consume tokens or modify limits.
+
+## REQ-RL-06 Window counter reset
+Window counters `accepted` and `rejected` MUST reset together with the token-replenishment logic of the limiter.
+
+## REQ-RL-07 Unknown key statistics
+For an unknown key, get_window_stats MUST return zero counters (`accepted: 0`, `rejected: 0`) and the current remainder computed per the key-initialization rules of REQ-RL-01.
+
+
+=== FILE process/schemas/task.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/task.schema.yaml
+title: DeltaFuse Task frontmatter
+type: object
+additionalProperties: false
+required: [id, change, slice, kind, status, depends_on, requirement_delta, spec_refs, allowed_paths, forbidden_paths]
+properties:
+  id: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
+  slice: {type: string, pattern: '^SLICE-[0-9]{2,}$'}
+  kind: {enum: [feature, bugfix, refactor, maintenance, documentation]}
+  status: {enum: [pending, targeting, target-confirmed, implementing, implemented, verified, blocked, cancelled, superseded]}
+  depends_on:
+    type: array
+    items: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  requirement_delta: {enum: [none, added, modified, removed, mixed]}
+  spec_refs:
+    type: array
+    minItems: 1
+    items: {type: string}
+  design_ref:
+    type: [string, 'null']
+  allowed_paths:
+    type: array
+    items: {type: string}
+  forbidden_paths:
+    type: array
+    items: {type: string}

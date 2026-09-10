@@ -1,0 +1,28 @@
+schema_version: 2
+id: CHG-001-audit-log-alerts
+title: Audit log and alerting on rejection thresholds
+status: decomposed
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: medium
+source:
+  request: docs/intake/S06.md
+  intake_refs:
+    - docs/intake/S06.md
+deltas: []
+slices:
+  - id: SLICE-01
+    title: Audit log of consume events with size-based rotation
+    status: decomposed
+    claims:
+      - CR-002
+      - CR-003
+      - CR-006
+      - CR-007
+      - CR-008
+decisions: []
+tasks:
+  - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-001-audit-log-structure.md
+  - docs/changes/CHG-001-audit-log-alerts/tasks/TASK-002-size-rotation.md

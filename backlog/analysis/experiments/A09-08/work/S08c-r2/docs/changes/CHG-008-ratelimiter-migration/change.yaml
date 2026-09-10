@@ -1,0 +1,22 @@
+schema_version: 2
+id: CHG-008-ratelimiter-migration
+title: Migrate Rate Limiter service to new server limiter-prod-02 and update configuration
+status: analyze
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: maintenance
+risk: medium
+source:
+  request: docs/intake/S08c.md
+  intake_refs:
+    - docs/intake/S08c.md
+analysis:
+  routing: docs/changes/CHG-008-ratelimiter-migration/routing.yaml
+  summary: Operational migration of the Rate Limiter service from limiter-prod-01 to limiter-prod-02, including deployment config, health check URL, and runbook updates. No code, spec, or test changes required.
+deltas: []
+slices:
+  - docs/changes/CHG-008-ratelimiter-migration/slices/SLICE-01.md
+decisions: []
+tasks: []
+verification: null

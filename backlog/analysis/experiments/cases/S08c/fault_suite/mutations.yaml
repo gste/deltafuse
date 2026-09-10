@@ -1,0 +1,10 @@
+mutations:
+  - id: M1_CODE_CHANGE
+    description: "Agent modifies source code for an operational change"
+    expected_caught_by: test_no_code_changes
+  - id: M2_SPEC_CHANGE
+    description: "Agent modifies spec for an operational change"
+    expected_caught_by: test_no_spec_changes
+  - id: M3_FEATURE_ROUTE
+    description: "Agent routes operational change as feature with full lifecycle"
+    expected_caught_by: test_operational_route

@@ -1,0 +1,6 @@
+change.yaml: [deltas -> 0] 'docs/changes/CHG-001-ratelimit-window-stats/spec-delta.md' is not of type 'object'
+change.yaml: [slices -> 0] 'docs/changes/CHG-001-ratelimit-window-stats/slices/SLICE-01.md' is not of type 'object'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-05'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-06'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-07'
+spec-delta.md: Referenced specification file does not exist: 'REQ-RL-08'

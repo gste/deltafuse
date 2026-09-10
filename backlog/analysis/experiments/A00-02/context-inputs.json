@@ -1,0 +1,65 @@
+[
+  {
+    "path": "backlog/analysis/packets/A00-02.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "6a273f8abd7394a720c0bcda126337cc4a696d48",
+    "requested_lines": "1-47",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "backlog/analysis/experiments/A00-01/result.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "38f9887045c8432b789c34dfdb25f0097fec6e38",
+    "requested_lines": "1-26",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "backlog/analysis/baseline.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "fe1d27ccbb21fd3439da955026e444e32c5e8d30",
+    "requested_lines": "1-59",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "backlog/analysis/README.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "3dba365cf0ce3db0b5f682514c10e370dc323e0f",
+    "requested_lines": "1-47",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "docs/README.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "751b44be3165232f39c0a7c46a61d0fe54b70615",
+    "requested_lines": "1-97",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "tests/README.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "614d03dc5d08d1c4aefd33bcf1aa8d2bb9549eef",
+    "requested_lines": "1-65",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "README.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "fed4ecaac1c6b961b1384c8209244b6b163e9a46",
+    "requested_lines": "1-98",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "README.ru.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "233024573d50d24a197ffad2c4cef11825f00da5",
+    "requested_lines": "1-98",
+    "note": "Initial full-text tool request; combined output was truncated. Subsequent focused definition reads are recorded separately in manifest."
+  },
+  {
+    "path": "backlog/analysis-plan.md",
+    "revision": "cd536a75ee499d92a7dc467627725b53e841a22e",
+    "git_blob": "f0367208867e628f6c37b02cb62a1ea2c73d80ff",
+    "requested_lines": "72-80",
+    "note": "A00 package scope"
+  }
+]

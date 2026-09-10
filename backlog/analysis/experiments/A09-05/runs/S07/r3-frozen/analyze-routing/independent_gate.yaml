@@ -1,0 +1,4 @@
+outcome: pass
+independent_gate:
+  routing: all CR-* primary_capability infra.distributed_ratelimit
+attempts: 1

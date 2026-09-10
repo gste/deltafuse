@@ -1,0 +1,5 @@
+SLICE-01.md: Referenced specification file does not exist: 'docs/CHANGELOG.md'
+Gate specified: spec-delta.md is missing
+Gate specified: SLICE-01.md spec_ref 'docs/spec/security/ratelimit.md' must include an existing anchor
+Gate specified: SLICE-01.md spec_ref 'docs/spec/README.md' must include an existing anchor
+Gate specified: SLICE-01.md spec_ref 'docs/CHANGELOG.md' must include an existing anchor

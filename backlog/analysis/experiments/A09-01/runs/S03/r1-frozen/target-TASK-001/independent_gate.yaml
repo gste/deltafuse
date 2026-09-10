@@ -1,0 +1,12 @@
+outcome: pass
+independent_gate:
+  targeting: []
+pytest:
+  exit_code: 1
+  passed: 1
+  failed: 1
+  fail_type: AssertionError consume 1 False after 2s (int truncation)
+red_authenticity: behavioral-mismatch
+prior: target-TASK-001-wrong-oracle (first consume(capacity) asserted False)
+elapsed_s: 29.4
+attempts: 1

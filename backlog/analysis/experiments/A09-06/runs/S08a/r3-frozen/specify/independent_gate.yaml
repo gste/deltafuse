@@ -1,0 +1,7 @@
+outcome: fail
+independent_gate:
+  specified: JSON parse x2; then blocked-on-decision without DEC
+spec_change: false
+expected_decision_needed: false
+hidden_suite: not-run
+attempts: 3

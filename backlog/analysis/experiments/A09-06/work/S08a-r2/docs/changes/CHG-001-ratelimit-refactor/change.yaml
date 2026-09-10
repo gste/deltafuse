@@ -1,0 +1,18 @@
+schema_version: 2
+id: CHG-001-ratelimit-refactor
+title: Refactor security.ratelimit module with backend abstraction and dependency injection
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: refactor
+risk: medium
+source:
+  request: docs/intake/S08a.md
+  intake_refs:
+    - docs/intake/S08a.md
+deltas: []
+slices:
+  - SLICE-01
+decisions: []
+tasks: []

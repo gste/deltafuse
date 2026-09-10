@@ -1,0 +1,8 @@
+outcome: pass
+independent_gate:
+  specified: []
+penalty_default: missing from live REQ-RL-01 (oracle CR-001)
+prior_fail: specify-req-as-path-fail (frontmatter added/modified as REQ ids)
+elapsed_s: 54.3
+reasoning_chars: 0
+attempts: 1

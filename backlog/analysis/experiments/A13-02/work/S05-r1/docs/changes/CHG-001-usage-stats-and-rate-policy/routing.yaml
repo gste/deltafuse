@@ -1,0 +1,51 @@
+change: CHG-001-usage-stats-and-rate-policy
+route: code
+claims:
+  CR-001:
+    summary: Add new monitoring.usage_stats capability to the Rate Limiter product.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: Track per-key total/successful/rejected consume counts and peak load.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Expose tracked values via a get_stats(key) method returning a dict.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Add security.rate_policy that blocks a key after a rejection threshold.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: Blocked keys return False without spending tokens and carry blocked_until in stats.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: Stats must reflect rejections from both token shortage and policy blocking.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-007:
+    summary: Integration tests verifying interaction of both changes are required.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-008:
+    summary: Source is a user request note; spec and code were not read during intake.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high

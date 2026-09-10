@@ -1,0 +1,54 @@
+task_id: A02-05
+criterion_ids:
+  - PROC-001
+  - PROC-006
+  - SPEC-006
+framework_revision: "60ea40438b0142797848356c660ab88286565e7d"
+working_head_at_start: "06ee2c73c88a303cf4d7a481081a92cca4d4898f"
+method: "verification and contract tracing of the Decompose lifecycle step across documentation, skills, schemas, templates, FSM gates, DAG sorting, and unit/mutation tests"
+inputs:
+  - "docs/workflow.md:133-191"
+  - "docs/state-machine.md:25-28"
+  - "docs/roles.md:55-72"
+  - "process/skills/decompose-change/SKILL.md:1-33"
+  - "process/schemas/task.schema.yaml:1-35"
+  - "process/templates/change/tasks/TASK-001-template.md:1-24"
+  - "src/deltafuse/core/graph.py:1-41"
+  - "src/deltafuse/core/fsm.py:228-262"
+  - "src/deltafuse/core/fsm.py:417-422"
+  - "tests/unit/test_graph.py:1-39"
+  - "tests/unit/test_fsm_mutations.py:145-160"
+  - "backlog/analysis/experiments/A02-04/result.md"
+invariants_verified:
+  - id: DEC-01
+    name: "Ацикличность графа задач (Task DAG Acyclicity)"
+    status: full-runtime-enforced
+  - id: DEC-02
+    name: "Атомарный контракт задачи и оракул (Task Contract & Oracle)"
+    status: structural-runtime
+  - id: DEC-03
+    name: "Валидность ссылок на спецификации и решения (T7 & P3)"
+    status: full-runtime-enforced
+  - id: DEC-04
+    name: "Согласованность статуса FSM и наличия задач (T5)"
+    status: full-runtime-enforced
+  - id: DEC-05
+    name: "Допустимый переход FSM из decomposed"
+    status: full-runtime-enforced
+  - id: DEC-06
+    name: "Контроль контекстного бюджета задачи"
+    status: gap-unvalidated
+budgets:
+  provisional_full_input_tokens: 6000
+  reserved_output_tokens: 2000
+  actual_tokens: null
+  verdict: not-tested
+  reason: "No local-model call or tokenizer telemetry."
+model:
+  selected: "ornith-1.5-35b-a3b via LM Studio"
+  invoked: false
+outputs:
+  - result.md
+  - "backlog/matrices/contracts.md"
+verdict: pass
+verdict_scope: "Decompose phase contract verified and mapped to invariants DEC-01..DEC-06 in contracts.md; Kahn algorithm DAG acyclicity, task schemas, and T5 guard confirmed"

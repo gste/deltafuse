@@ -36,7 +36,7 @@ The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in 
 
 ## Pinning and upgrades
 
-`.deltafuse/config.yaml` specifies the requested framework version and repository settings. `.deltafuse/lock.yaml` pins the resolved version, schema version, and framework content hash.
+`.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and the Analyze call-width profile. Re-run the installer after changing `call_width` so lock matches config.
 
 Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config, lock, and generated adapters, while preserving product-owned specification, Changes, Decisions, `AGENTS.md`, and any existing templates. Before updating lock:
 
@@ -54,3 +54,7 @@ Never manually edit generated skills or create a local process fork. Product-spe
 | Accepted specification exists | Set `project.baseline: accepted`, create Changes via `/intake` |
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
+
+## External boards
+
+A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md), not a private parse of `docs/changes/**`. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.

@@ -3,7 +3,7 @@ $id: https://deltafuse.dev/schemas/v2/spec-delta.schema.yaml
 title: DeltaFuse Specification Delta frontmatter
 type: object
 additionalProperties: false
-required: [change, status]
+required: [change, status, added, modified, removed]
 properties:
   change:
     type: string

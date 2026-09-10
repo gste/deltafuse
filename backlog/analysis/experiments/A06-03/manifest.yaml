@@ -1,0 +1,21 @@
+revision: "50a0635"
+task_id: "A06-03"
+packet: "backlog/analysis/packets/A06-03.md"
+criterion_ids:
+  - "SPEC-006"
+  - "PROC-001"
+  - "PROC-003"
+inputs:
+  - "src/deltafuse/core/installer.py:L1-220"
+  - "tests/integration/test_installer.py:L40-76"
+method: "Simulation and contract evaluation of idempotent reinstall, forced upgrade with lock mutation, preservation of user customizations (AGENTS.md, _capabilities.yaml, custom skills), isolation of active Changes, and crash-resilience / recovery during file writes."
+commands:
+  - "pytest tests/integration/test_installer.py"
+  - "python -c \"from deltafuse.core.installer import install; ...\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A06-03/result.md"
+verdict: "pass"

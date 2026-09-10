@@ -1,0 +1,13 @@
+schema_version: 2
+change: CHG-001-ratelimit-window-stats
+task: TASK-003
+phase: regression
+timestamp: '2026-09-07T23:45:00Z'
+command: python -m pytest tests/test_limiter.py -q --tb=short
+exit_code: 0
+result: passed
+failure_category: null
+summary: '1 passed in 0.01s'
+changed_paths:
+- src/ratelimit/limiter.py
+spec_status: unchanged

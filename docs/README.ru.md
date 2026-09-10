@@ -69,7 +69,7 @@ product/
     │       ├── change.yaml
     │       ├── request.md
     │       ├── routing.yaml
-    │       ├── analysis.md
+    │       ├── analysis.md          # необязателен
     │       ├── slices/
     │       ├── tasks/
     │       ├── evidence/
@@ -92,6 +92,7 @@ product/
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
 | [roles.md](./roles.md) | Границы полномочий ИИ и человека |
 | [using.ru.md](./using.ru.md) | Установка и product integration |
+| [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
 
-Исполнимые контракты шагов находятся в `process/skills/**`, структурные контракты — в `process/schemas/**`.
+Исполнимые контракты шагов находятся в `process/skills/**`, схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
 

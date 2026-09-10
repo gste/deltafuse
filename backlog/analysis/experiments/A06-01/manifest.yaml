@@ -1,0 +1,23 @@
+revision: "615fd4c94025a176ce5b14fca75a5e3ecde30932"
+task_id: "A06-01"
+packet: "backlog/analysis/packets/A06-01.md"
+criterion_ids:
+  - "CODE-005"
+  - "CODE-006"
+  - "PROC-002"
+inputs:
+  - "src/deltafuse/core/schemas.py:L1-95"
+  - "src/deltafuse/core/frontmatter.py:L1-39"
+  - "src/deltafuse/cli.py:L1-201"
+  - "src/deltafuse/core/layout.py:L1-141"
+method: "Contract comparison, architectural boundary inspection, single source of truth analysis for schemas/statuses/versions, and diagnostic quality verification."
+commands:
+  - "python -c \"from deltafuse.core.fsm import VALID_CHANGE_STATUSES; from deltafuse.core.schemas import default_registry; schema_statuses = set(default_registry.get_schema('change')['properties']['status']['enum']); diff = VALID_CHANGE_STATUSES.symmetric_difference(schema_statuses); assert len(diff) == 0\""
+  - "python -c \"from deltafuse.core.schemas import default_registry; print(default_registry.validate('change', {'schema_version': 2}))\""
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A06-01/result.md"
+verdict: "pass"

@@ -6,7 +6,7 @@ This repository is the canonical source of the DeltaFuse framework. It is not a 
 
 Keep the framework internally consistent across:
 
-- `docs/**` — canonical workflow, state machine, roles, context model, and integration guidance;
+- `docs/**` — canonical workflow, state machine, roles, context model, integration guidance, and external-tool contracts (`docs/contracts/**`);
 - `process/skills/**` — executable agent contracts;
 - `process/schemas/**` — artifact schemas;
 - `process/templates/**` — product-owned files created by the installer;

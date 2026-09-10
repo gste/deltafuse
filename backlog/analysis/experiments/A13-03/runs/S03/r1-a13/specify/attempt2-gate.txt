@@ -1,0 +1,5 @@
+spec-delta.md: [root] 'added' is a required property
+spec-delta.md: [root] 'modified' is a required property
+spec-delta.md: [root] 'removed' is a required property
+Gate specified: change.yaml status must be 'specified' or 'specification-proposed' (got 'normalized')
+Gate specified: SLICE-01.md spec_ref 'docs/spec/security/ratelimit.md' must include an existing anchor

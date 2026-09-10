@@ -56,20 +56,20 @@ stateDiagram-v2
 | Status | Description | Allowed Next Statuses | Transition Gate / Precondition |
 |---|---|---|---|
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
-| `analyzing` | Routing and slice analysis in progress. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
+| `analyzing` | Routing and slice analysis in progress. `workflow.call_width` may split writes; `analyzed` still needs routing+slices+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
 | `analyzed` | Routing, deltas, and slices computed; coverage mapped. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
-| `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Specification changes merged into product spec (or proof recorded in spec-delta.md). |
+| `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
-| `targeting` | Preparing failing test targets for tasks. | `target-confirmed`, `not-reproduced` | Test target executed; fails with Red evidence (or proves unreproducible). |
+| `targeting` | Preparing failing test targets for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `target-confirmed`, `not-reproduced` | Test target fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
 | `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
-| `implementing` | Authoring minimal code to turn tests green. | `implemented` | Tests pass; Green and Regression evidence recorded. |
-| `implemented` | All tasks implemented and verified locally. | `verifying` | All task targets green; no regression failures. |
+| `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression. `docs`/`ops`: allowed files exist; no `src/**`. |
+| `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
 | `verifying` | End-to-end traceability and convergence check. | `converged`, `analyzing`, `not-reproduced` | All claims mapped to green tests and spec (or no-op closure). |
-| `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded in `verification/run.yaml`. |
+| `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded; tasks are `implemented`, `verified`, `cancelled`, or `superseded`; spec-delta still matches `docs/spec/**`. Archive is not a spec merge. |
 | `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |
-| `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented in `analysis.md`. |
+| `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented (optional `analysis.md` or Change notes). |
 | `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
 | `not-reproduced` | Defect not reproduced during analysis, targeting, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
 | `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
@@ -193,5 +193,5 @@ stateDiagram-v2
 
 ## Versioning Invariants
 
-1. **Schema Version Compatibility**: All product artifacts (`change.yaml`, `routing.yaml`, `coverage.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, `decisions/DEC-*.md`) must strictly match `schema_version: 2`.
-2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, and content hash. Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`.
+1. **Schema Version Compatibility**: `change.yaml`, `coverage.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, and `decisions/DEC-*.md` use `schema_version: 2` where the schema requires it. `routing.yaml` does not require `schema_version`; unknown top-level keys there are ignored.
+2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, content hash, and `workflow.call_width` (`narrow` | `medium` | `wide`). Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`. `auto_accept_decisions: true` does not bypass Human Gate on proposed Decisions.

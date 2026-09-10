@@ -1,0 +1,10 @@
+outcome: pass
+independent_gate:
+  implemented: []
+pytest: 3 passed
+tests_unchanged: true
+spec_unchanged: true
+limiter: float gain, no int()
+hidden_suite: pass
+elapsed_s: 32.8
+attempts: 1

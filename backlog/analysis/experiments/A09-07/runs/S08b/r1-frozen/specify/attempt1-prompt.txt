@@ -1,0 +1,474 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: specify-change
+description: Apply one analyzed DeltaFuse slice to the normative product specification, or prove the accepted specification is unchanged. Use after analysis and Decision convergence, before task decomposition.
+---
+
+# Specify Change
+
+Establish the normative state from which tasks may be derived.
+
+Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Read one analyzed slice, its typed delta, exact affected spec modules, accepted related Decisions/catalog delta, and only necessary neighboring requirements. Do not read the whole codebase or unrelated Changes.
+
+## Procedure
+
+1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md` using `ADDED`, `MODIFIED`, and `REMOVED` with stable requirement/scenario IDs.
+2. Edit only declared specification files and requirements. Keep the live spec imperative and free of change-log prose.
+3. Apply an accepted capability catalog delta when required.
+4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into `docs/spec/**`.
+5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
+6. Update coverage and slice/Change status. Present normative edits for the human specification gate.
+
+Do not accept Decisions, invent behavior, or implement code. A newly discovered material question returns the Change to `/analyze-change`.
+
+## Gate
+
+The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
+
+Recommend `/decompose-change <change-id> [slice-id]`.
+
+
+----- USER -----
+
+Phase: specify
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'specify'
+Gate to satisfy after this call: specified
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/change.yaml ===
+schema_version: 2
+id: CHG-001-doc-s08b
+title: Update Rate Limiter (S08b) documentation
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: documentation
+risk: low
+source:
+  request: docs/intake/S08b.md
+  intake_refs:
+    - docs/intake/S08b.md
+analysis:
+  routing: null
+  summary: Documentation-only update to security.ratelimit module docs. Add usage examples, architectural decisions section, fix a typo in refill_rate parameter description, and update CHANGELOG.md. No code or test changes; system behavior unchanged.
+deltas: []
+slices: []
+decisions: []
+tasks: []
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/coverage.yaml ===
+change: CHG-001-doc-s08b
+claims:
+  CR-001:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-002:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-003:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-004:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-005:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+    status: analyzed
+  CR-006:
+    slice: SLICE-01
+    tasks: []
+    spec_refs:
+      - CHANGELOG.md
+    status: analyzed
+  CR-007:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: analyzed
+  CR-008:
+    slice: SLICE-01
+    tasks: []
+    spec_refs: []
+    status: analyzed
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/request.md ===
+# Request: Update Rate Limiter (S08b) Documentation
+
+## Summary
+
+Update the documentation for the `security.ratelimit` module. The change is
+documentation-only: code and tests are not modified and system behavior is not
+changed.
+
+Specifically:
+
+1. Add a «Примеры использования» (Usage Examples) section to
+   `docs/spec/security/ratelimit.md` with 3 typical scenarios (initialization,
+   consume with verification, ValueError handling).
+2. Add an «Архитектурные решения» (Architectural Decisions) section describing
+   the choice of the Token Bucket algorithm with justification (reference to
+   RFC 2697, comparison with Leaky Bucket).
+3. Fix a typo in the `refill_rate` parameter description: «скокрость» →
+   «скорость».
+4. Update `CHANGELOG.md` with an entry about the documentation change.
+
+## Claims
+
+### CR-001 — observation
+The module `security.ratelimit` is documented under `docs/spec/security/ratelimit.md`.
+
+### CR-002 — expectation
+`docs/spec/security/ratelimit.md` should contain a «Примеры использования» section with 3 typical scenarios: initialization, consume with verification, and ValueError handling.
+
+### CR-003 — expectation
+`docs/spec/security/ratelimit.md` should contain an «Архитектурные решения» section describing the Token Bucket algorithm choice, referencing RFC 2697 and comparing it with Leaky Bucket.
+
+### CR-004 — observation
+The `refill_rate` parameter description currently contains the typo «скокрость».
+
+### CR-005 — expectation
+The typo «скокрость» in the `refill_rate` parameter description should be corrected to «скорость».
+
+### CR-006 — expectation
+`CHANGELOG.md` should contain an entry documenting this documentation change.
+
+### CR-007 — constraint
+Code and tests are not modified; system behavior is not changed.
+
+### CR-008 — constraint
+This is a documentation-only change; no product code, tests, or behavior are affected.
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/routing.yaml ===
+change: CHG-001-doc-s08b
+claims:
+  CR-001:
+    summary: |-
+      Observation that security.ratelimit is documented under docs/spec/security/ratelimit.md.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: |-
+      Add a Usage Examples section with 3 typical scenarios to ratelimit.md.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: |-
+      Add an Architectural Decisions section describing the Token Bucket algorithm choice.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: |-
+      Observation of a typo in the refill_rate parameter description.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: |-
+      Correct the typo in the refill_rate parameter description.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: |-
+      Update CHANGELOG.md with an entry documenting this documentation change.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-007:
+    summary: |-
+      Constraint that code and tests are not modified and system behavior is unchanged.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-008:
+    summary: |-
+      Constraint that this is a documentation-only change affecting no product code, tests, or behavior.
+    primary_capability: ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-doc-s08b/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-doc-s08b
+title: Update security.ratelimit module documentation
+status: analyzing
+primary_capability: ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+  - CHANGELOG.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+depends_on: []
+context_budget:
+  max_tokens: 4000
+  max_files: 6
+---
+
+## Scope
+
+In scope: documentation edits to `docs/spec/security/ratelimit.md` and `CHANGELOG.md`.
+
+- Add «Примеры использования» section with 3 scenarios (initialization, consume with verification, ValueError handling).
+- Add «Архитектурные решения» section describing Token Bucket choice, referencing RFC 2697 and comparing with Leaky Bucket.
+- Fix typo «скокрость» → «скорость» in `refill_rate` description.
+- Add CHANGELOG.md entry.
+
+Out of scope: any code, tests, or behavioral change. System behavior is unchanged (CR-007, CR-008).
+
+## Dependencies
+
+- None. Self-contained documentation change.
+
+## Spec references
+
+- `docs/spec/security/ratelimit.md` — target doc; REQ-RL-01 through REQ-RL-04 unchanged.
+- `CHANGELOG.md` — add entry.
+
+## Unchanged behavior
+
+- No code in `src/ratelimit` or tests in `tests` is modified.
+- All REQ-RL-* requirements remain normative and identical.
+
+## Risks
+
+- Low: ensure new sections do not contradict accepted spec requirements; keep normative REQ-* text untouched.
+
+## Delta projection
+
+- specification: edit (add sections, fix typo) — surgical, additive.
+- catalog: none.
+- Decisions: none (no product/architecture/policy choice).
+- tasks: none.
+- tests: none.
+- implementation: none.
+- evidence: none.
+
+## Context budget
+
+Small, single-capability slice; well within configured limits.
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior.
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0 (скокрость пополнения).
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/spec-delta.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/spec-delta.schema.yaml
+title: DeltaFuse Specification Delta frontmatter
+type: object
+additionalProperties: false
+required: [change, status]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  status:
+    enum: [proposed, accepted, rejected, superseded]
+  slices:
+    type: array
+    items:
+      type: string
+      pattern: '^SLICE-[0-9]{2,}$'
+  added:
+    type: array
+    items:
+      type: string
+  modified:
+    type: array
+    items:
+      type: string
+  removed:
+    type: array
+    items:
+      type: string

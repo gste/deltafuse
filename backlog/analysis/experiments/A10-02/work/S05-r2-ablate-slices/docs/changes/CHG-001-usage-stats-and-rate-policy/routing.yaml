@@ -1,0 +1,62 @@
+change: CHG-001-usage-stats-and-rate-policy
+claims:
+  CR-001:
+    summary: Rate Limiter product with consume() returning boolean and consuming tokens
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: medium
+  CR-002:
+    summary: New monitoring.usage_stats capability tracking per-key consume counts and peak load
+    primary_capability: monitoring.usage_stats
+    related_capabilities: [security.ratelimit]
+    policies: []
+    confidence: medium
+  CR-003:
+    summary: get_stats(key) method returning a dict of usage statistics
+    primary_capability: monitoring.usage_stats
+    related_capabilities: [security.ratelimit]
+    policies: []
+    confidence: medium
+  CR-004:
+    summary: security.rate_policy auto-blocking a key after decline threshold exceeded
+    primary_capability: security.rate_policy
+    related_capabilities: [security.ratelimit]
+    policies: [security.rate_policy]
+    confidence: medium
+  CR-005:
+    summary: Blocked key returns False without consuming tokens and exposes blocked_until
+    primary_capability: security.rate_policy
+    related_capabilities: [security.ratelimit, monitoring.usage_stats]
+    policies: [security.rate_policy]
+    confidence: medium
+  CR-006:
+    summary: Stats must reflect declines from both token exhaustion and policy blocking
+    primary_capability: monitoring.usage_stats
+    related_capabilities: [security.rate_policy, security.ratelimit]
+    policies: [security.rate_policy]
+    confidence: medium
+  CR-007:
+    summary: Integration tests verifying interaction of usage-stats and rate-policy
+    primary_capability: monitoring.usage_stats
+    related_capabilities: [security.rate_policy, security.ratelimit]
+    policies: []
+    confidence: medium
+  CR-008:
+    summary: Example threshold and default durations are illustrative, not fixed
+    primary_capability: security.rate_policy
+    related_capabilities: [security.ratelimit]
+    policies: [security.rate_policy]
+    confidence: low
+  CR-009:
+    summary: Implementation language, data structures, and API surface not specified
+    primary_capability: security.ratelimit
+    related_capabilities: [monitoring.usage_stats, security.rate_policy]
+    policies: []
+    confidence: low
+  CR-010:
+    summary: Whether get_stats(key) exists or must be created is not stated
+    primary_capability: monitoring.usage_stats
+    related_capabilities: [security.ratelimit]
+    policies: []
+    confidence: low

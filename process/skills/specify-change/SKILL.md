@@ -29,3 +29,7 @@ Do not accept Decisions, invent behavior, or implement code. A newly discovered 
 The specification change is accepted, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
 
 Recommend `/decompose-change <change-id> [slice-id]`.
+
+Do not write deploy YAML or `docs/ops/**`; those belong to `route: ops` Implement.
+
+Write requirements with RFC 2119 `MUST` / `SHALL` (or `ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new artifact and not a substitute for live `docs/spec/**`.

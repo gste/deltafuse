@@ -1,0 +1,29 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: <run-root>\source
+configfile: pyproject.toml
+testpaths: tests
+collected 91 items
+
+tests\e2e\test_failure_modes.py ....                                     [  4%]
+tests\e2e\test_golden_workflow.py .                                      [  5%]
+tests\e2e\test_noop_workflow.py ..                                       [  7%]
+tests\e2e\test_terminal_workflows.py ..                                  [  9%]
+tests\evals\test_dataset.py ...                                          [ 13%]
+tests\evals\test_eval_cli.py ....                                        [ 17%]
+tests\evals\test_eval_runner.py ....                                     [ 21%]
+tests\evals\test_mock_provider.py ....                                   [ 26%]
+tests\integration\test_installer.py ....                                 [ 30%]
+tests\integration\test_layout.py ....                                    [ 35%]
+tests\integration\test_validator_cli.py ...                              [ 38%]
+tests\unit\test_context.py ...                                           [ 41%]
+tests\unit\test_frontmatter.py ....                                      [ 46%]
+tests\unit\test_fsm.py ......                                            [ 52%]
+tests\unit\test_fsm_mutations.py ..........                              [ 63%]
+tests\unit\test_graph.py .....                                           [ 69%]
+tests\unit\test_hasher.py ....                                           [ 73%]
+tests\unit\test_integrity.py ....                                        [ 78%]
+tests\unit\test_schemas.py ...........                                   [ 90%]
+tests\unit\test_templates.py .........                                   [100%]
+
+============================= 91 passed in 10.96s =============================

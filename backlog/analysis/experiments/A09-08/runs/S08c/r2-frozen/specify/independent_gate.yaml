@@ -1,0 +1,9 @@
+outcome: fail
+independent_gate:
+  specified: JSON parse; false blocked-on-decision rejected by frozen extra (no DEC file)
+  ops_updated: false
+  spec_unchanged: true
+  src_unchanged: true
+  tests_unchanged: true
+hidden_suite: not-run
+attempts: 3

@@ -1,0 +1,23 @@
+schema_version: 2
+change: CHG-001-ratelimit-cooldown
+task: TASK-001
+phase: red
+timestamp: '2026-09-06T14:45:17Z'
+command: python -m pytest tests/test_limiter.py -q --tb=short
+exit_code: 1
+result: expected-failure
+failure_category: behavioral-mismatch
+summary: ".py:469: PytestCacheWarning: could not create cache path C:\\Users\\ghost\\\
+  workspace\\gste\\delta-fuse\\backlog\\analysis\\experiments\\A09-01\\work\\S02-r5\\\
+  .pytest_cache\\v\\cache\\nodeids: [WinError 5] \u041E\u0442\u043A\u0430\u0437\u0430\
+  \u043D\u043E \u0432 \u0434\u043E\u0441\u0442\u0443\u043F\u0435: 'C:\\\\Users\\\\\
+  ghost\\\\workspace\\\\gste\\\\delta-fuse\\\\backlog\\\\analysis\\\\experiments\\\
+  \\A09-01\\\\work\\\\S02-r5\\\\pytest-cache-files-6spiy9l2' -> 'C:\\\\Users\\\\ghost\\\
+  \\workspace\\\\gste\\\\delta-fuse\\\\backlog\\\\analysis\\\\experiments\\\\A09-01\\\
+  \\work\\\\S02-r5\\\\.pytest_cache'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\
+  \n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n===========================\
+  \ short test summary info ===========================\nFAILED tests/test_limiter.py::test_penalty_blocks_after_failed_consume\
+  \ - Type...\n1 failed, 1 passed, 1 warning in 0.08s"
+changed_paths:
+- tests/test_limiter.py
+spec_status: unchanged

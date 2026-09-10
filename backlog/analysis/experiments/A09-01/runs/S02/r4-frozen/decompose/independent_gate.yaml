@@ -1,0 +1,11 @@
+outcome: pass
+independent_gate:
+  decomposed: []
+tasks:
+  - TASK-001-add-penalty-param-and-baseline.md
+  - TASK-002-penalty-lock-and-is_blocked.md
+attempt1: Status mismatch change.yaml still normalized
+CR-007_tasks: empty
+elapsed_s: 132.3
+reasoning_chars: 0
+attempts: 2

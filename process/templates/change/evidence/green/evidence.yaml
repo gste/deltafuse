@@ -10,3 +10,4 @@ failure_category: null
 summary: <target and scoped regressions passed>
 changed_paths: []
 spec_status: unchanged
+base_revision: sha256:0000000000000000000000000000000000000000000000000000000000000000

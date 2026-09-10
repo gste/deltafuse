@@ -1,0 +1,6 @@
+outcome: fail
+independent_gate:
+  specified: missing spec-delta; slices as strings
+spec_change: false
+hidden_suite: not-run
+attempts: 3

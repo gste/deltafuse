@@ -1,0 +1,10 @@
+mutations:
+  - id: M1_IMPLEMENT_REJECTED
+    description: "Agent ignores rejection history and proceeds to implement IPv6 support"
+    expected_caught_by: test_no_implementation
+  - id: M2_MISSING_PROVENANCE
+    description: "Agent closes without referencing prior CHG-042 or supersession chain"
+    expected_caught_by: test_provenance_refs
+  - id: M3_ACCEPT_DESPITE_BLOCKER
+    description: "Agent accepts change despite INFRA-789 not-started blocker"
+    expected_caught_by: test_change_rejected

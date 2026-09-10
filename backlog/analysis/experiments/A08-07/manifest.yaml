@@ -1,0 +1,27 @@
+revision: "334629a"
+task_id: "A08-07"
+packet: "backlog/analysis/packets/A08-07.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-005"
+  - "CODE-002"
+  - "CODE-003"
+  - "TEST-001"
+inputs:
+  - "backlog/analysis-plan.md:L178-197"
+  - "backlog/analysis/experiments/protocol.md:L1-100"
+  - "tests/fixtures/change_builder.py:L1-60"
+method: "Independent design and generation of Scenario S05 (Multiple capabilities and policy with cross-boundary integration) in holdout split, with multi-slice verification oracle, integration test presence checks, and stats-policy coupling fault mutations."
+artifacts:
+  - "backlog/analysis/experiments/cases/S05/input.md"
+  - "backlog/analysis/experiments/cases/S05/manifest.yaml"
+  - "backlog/analysis/experiments/cases/S05/oracle.yaml"
+  - "backlog/analysis/experiments/cases/S05/hidden_suite/test_acceptance.py"
+  - "backlog/analysis/experiments/cases/S05/fault_suite/mutations.yaml"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A08-07/result.md"
+verdict: "pass"

@@ -1,0 +1,21 @@
+schema_version: 2
+domains:
+  token-bucket-limiter:
+    summary: >-
+      Token Bucket Rate Limiter service with per-key initialization, consume
+      token-balance semantics, time-based proportional refill accounting, and
+      strict argument validation.
+    capabilities:
+      token-bucket-limiter:
+        summary: >-
+          Per-key token bucket limiter with capacity, refill_rate, consume,
+          and refill accounting.
+        spec: docs/spec/specifications/token-bucket-limiter.md
+        requirements:
+          - docs/spec/specifications/token-bucket-limiter.md#cr-001-initialization
+          - docs/spec/specifications/token-bucket-limiter.md#cr-002-consume
+          - docs/spec/specifications/token-bucket-limiter.md#cr-003-refill-accounting
+          - docs/spec/specifications/token-bucket-limiter.md#cr-004-argument-validation
+        policies: []
+        code: []
+        tests: []

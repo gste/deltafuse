@@ -48,6 +48,13 @@ def test_change_schema_valid_and_invalid(registry: SchemaRegistry):
     }
     assert registry.validate("change", valid_change) == []
 
+    no_summary = dict(valid_change)
+    no_summary["analysis"] = {"routing": "routing.yaml", "summary": None}
+    assert registry.validate("change", no_summary) == []
+    omit_analysis = dict(valid_change)
+    del omit_analysis["analysis"]
+    assert registry.validate("change", omit_analysis) == []
+
     # Invalid ID format
     invalid_change = dict(valid_change, id="INVALID-ID")
     errors = registry.validate("change", invalid_change)
@@ -70,7 +77,8 @@ def test_task_schema_validation(registry: SchemaRegistry):
         "spec_refs": ["docs/spec/auth.md#REQ-01"],
         "design_ref": None,
         "allowed_paths": ["src/auth.py"],
-        "forbidden_paths": ["src/billing.py"]
+        "forbidden_paths": ["src/billing.py"],
+        "context_budget": {"max_tokens": 16000, "max_files": 24},
     }
     assert registry.validate("task", valid_task) == []
 
@@ -82,6 +90,10 @@ def test_task_schema_validation(registry: SchemaRegistry):
     missing_allowed = dict(valid_task)
     del missing_allowed["allowed_paths"]
     assert len(registry.validate("task", missing_allowed)) > 0
+
+    missing_budget = dict(valid_task)
+    del missing_budget["context_budget"]
+    assert len(registry.validate("task", missing_budget)) > 0
 
 def test_slice_schema_validation(registry: SchemaRegistry):
     valid_slice = {
@@ -99,7 +111,9 @@ def test_slice_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("slice", valid_slice) == []
 
-    # Claim pattern requires CR-001 (3+ digits)
+    assert registry.validate("slice", dict(valid_slice, claims=["O1", "E1"])) == []
+
+    # Claim pattern requires CR-001 (3+ digits) or short labels like O1
     invalid_claim_slice = dict(valid_slice, claims=["CR-1"])
     assert len(registry.validate("slice", invalid_claim_slice)) > 0
 
@@ -140,6 +154,12 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("evidence", valid_evidence) == []
 
+    already_green = dict(valid_evidence)
+    already_green["exit_code"] = 0
+    already_green["result"] = "already-green"
+    already_green["summary"] = "Public oracle already passes"
+    assert registry.validate("evidence", already_green) == []
+
     # Regression phase requires task
     valid_regression = {
         "schema_version": 2,
@@ -152,9 +172,14 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
         "result": "passed",
         "summary": "Regression suite passed",
         "changed_paths": ["src/auth.py"],
-        "spec_status": "unchanged"
+        "spec_status": "unchanged",
+        "base_revision": "sha256:" + ("0" * 64),
     }
     assert registry.validate("evidence", valid_regression) == []
+
+    missing_revision = dict(valid_regression)
+    del missing_revision["base_revision"]
+    assert len(registry.validate("evidence", missing_revision)) > 0
 
 def test_decision_schema_validation(registry: SchemaRegistry):
     valid_decision = {
@@ -225,6 +250,30 @@ def test_routing_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("routing", valid_routing) == []
 
+    # AB-05 / RM-022: extra top-level keys (models copy schema_version) are ignored
+    with_schema_version = dict(valid_routing, schema_version=2)
+    assert registry.validate("routing", with_schema_version) == []
+    with_unknown = dict(valid_routing, unexpected_key="ok")
+    assert registry.validate("routing", with_unknown) == []
+
+    missing_change = dict(valid_routing)
+    del missing_change["change"]
+    assert len(registry.validate("routing", missing_change)) > 0
+
+    extra_claim_field = {
+        "change": "CHG-001",
+        "claims": {
+            "CR-001": {
+                "primary_capability": "identity.auth",
+                "not_a_field": True,
+            }
+        },
+    }
+    assert any(
+        "not_a_field" in e or "Additional properties" in e
+        for e in registry.validate("routing", extra_claim_field)
+    )
+
 def test_spec_delta_schema_validation(registry: SchemaRegistry):
     valid_spec_delta = {
         "change": "CHG-001",
@@ -235,6 +284,14 @@ def test_spec_delta_schema_validation(registry: SchemaRegistry):
         "removed": []
     }
     assert registry.validate("spec-delta", valid_spec_delta) == []
+
+    missing_ops = {
+        "change": "CHG-001",
+        "status": "proposed",
+        "slices": ["SLICE-01"],
+    }
+    missing_errs = registry.validate("spec-delta", missing_ops)
+    assert any("added" in err or "modified" in err or "removed" in err for err in missing_errs)
 
 
 def test_bootstrap_decision_schema_validation(registry: SchemaRegistry):

@@ -1,0 +1,23 @@
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+      ip_filter:
+        summary: IP allow/deny filter
+        spec:
+        - docs/spec/security/ip_filter.md
+        code_roots: []
+        test_roots: []
+        status: active
+        type: supporting

@@ -1,0 +1,22 @@
+schema_version: 2
+id: CHG-008-ops-rate-limiter-migration
+title: Migrate Rate Limiter to new server limiter-prod-02 with config/healthcheck/runbook updates
+status: specification-proposed
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: maintenance
+route: ops
+risk: medium
+source:
+  request: docs/intake/S08c.md
+  intake_refs:
+    - docs/intake/S08c.md
+analysis:
+  routing: null
+  summary: null
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null

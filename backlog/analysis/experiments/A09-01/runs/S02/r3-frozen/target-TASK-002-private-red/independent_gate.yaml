@@ -1,0 +1,23 @@
+outcome: pass-schema-fail-authenticity
+independent_gate:
+  validate: []
+  targeting: []
+pytest:
+  command: python -m pytest tests/test_limiter.py -q --tb=short
+  exit_code: 1
+  passed: 2
+  failed: 1
+  fail_type: AssertionError consume False after poking _blocked_until; empty bucket refill_rate=0
+red_authenticity: inauthentic
+test_002: FAIL (private field)
+test_004: FAIL (failure is empty bucket, not missing lift)
+note: >
+  Gate targeting is green because red YAML exists and pytest exited 1.
+  Production already lifts the block (TASK-001 implement overshoot).
+  Test mutates limiter._blocked_until then asserts consume True with no tokens.
+  Do not Implement TASK-002 against this Red. Finding F-009.
+  Run archived here; live retry uses public-API harness hint.
+elapsed_s: 46.2
+reasoning_chars: 0
+attempts: 1
+finding: F-009

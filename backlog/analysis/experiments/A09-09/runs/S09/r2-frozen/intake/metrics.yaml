@@ -1,0 +1,85 @@
+case: S09
+repeat: 2
+tag: frozen
+phase: intake
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 2048
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 7505
+  ttft_s: 0.24682910001138225
+  elapsed_s: 102.76988340000389
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-061-ipv6-ip-filter/change.yaml
+  - docs/changes/CHG-061-ipv6-ip-filter/request.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5404
+    vram_total_mib: 8188
+    gpu_util_pct: 40
+  gpu_after:
+    vram_used_mib: 5410
+    vram_total_mib: 8188
+    gpu_util_pct: 33
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 7821
+  ttft_s: 8.860065500019118
+  elapsed_s: 108.59437850001268
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-061-ipv6-ip-filter/change.yaml
+  - docs/changes/CHG-061-ipv6-ip-filter/request.md
+  - docs/changes/CHG-061-ipv6-ip-filter/decision.yaml
+  model_status: blocked-on-decision
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5410
+    vram_total_mib: 8188
+    gpu_util_pct: 33
+  gpu_after:
+    vram_used_mib: 5401
+    vram_total_mib: 8188
+    gpu_util_pct: 30
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 3
+  prompt_chars: 7677
+  ttft_s: 7.885835900029633
+  elapsed_s: 64.79776980000315
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-061-ipv6-ip-filter/change.yaml
+  - docs/changes/CHG-061-ipv6-ip-filter/request.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5401
+    vram_total_mib: 8188
+    gpu_util_pct: 30
+  gpu_after:
+    vram_used_mib: 5410
+    vram_total_mib: 8188
+    gpu_util_pct: 18
+  content_empty: false
+  reasoning_chars: 0
+outcome: fail

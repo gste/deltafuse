@@ -1,0 +1,42 @@
+case_id: S05
+intent_claims:
+  - id: CR-001
+    title: "Usage Statistics Collection"
+    description: "Track total, successful, rejected consume calls and peak rate per key."
+    normative_rules:
+      - "MUST increment total_calls on every consume invocation"
+      - "MUST increment successful_calls when consume returns True"
+      - "MUST increment rejected_calls when consume returns False"
+      - "MUST track peak_rate as max calls-per-second observed"
+      - "MUST return stats dict via get_stats(key)"
+  - id: CR-002
+    title: "Automatic Key Blocking Policy"
+    description: "Block key after threshold consecutive rejections for configurable cooldown."
+    normative_rules:
+      - "MUST block key after N consecutive rejections (configurable threshold)"
+      - "MUST return False from consume while blocked without token deduction"
+      - "MUST include blocked_until timestamp in stats"
+      - "MUST auto-unblock after cooldown period expires"
+  - id: CR-003
+    title: "Cross-Capability Integration"
+    description: "Stats must accurately reflect rejections from both token exhaustion and policy blocking."
+    normative_rules:
+      - "MUST count policy-block rejections in rejected_calls"
+      - "MUST distinguish token-exhaustion and policy-block in stats if feasible"
+      - "MUST have integration tests covering both capabilities together"
+
+ambiguity_expected: false
+expected_decision_needed: false
+
+acceptance_criteria:
+  spec_files:
+    - "docs/spec/monitoring/usage_stats.md"
+    - "docs/spec/security/rate_policy.md"
+    - "docs/spec/_capabilities.yaml"
+  code_files:
+    - "src/ratelimit/stats.py"
+    - "src/ratelimit/policy.py"
+  test_files:
+    - "tests/test_stats.py"
+    - "tests/test_policy.py"
+    - "tests/test_integration_stats_policy.py"

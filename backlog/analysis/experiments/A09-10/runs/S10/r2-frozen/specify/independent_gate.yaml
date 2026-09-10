@@ -1,0 +1,12 @@
+outcome: fail
+independent_gate:
+  specified: fail
+  attempt1: spec-delta.md missing; change.yaml slices as strings then objects without file
+  attempt2: spec-delta.md missing YAML --- frontmatter; coverage extra slices
+  attempt3: spec-delta still no frontmatter; coverage extra slice_status
+  live_spec_has_REQ_RL_05_07: true
+  src_unchanged: true
+  interrupt_reached: false
+hidden_suite: not-run
+note: Follow-up persistence not injected; stop before Target.
+attempts: 3

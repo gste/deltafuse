@@ -1,0 +1,14 @@
+change.yaml: [deltas -> 0] Additional properties are not allowed ('delta', 'spec_refs', 'type' were unexpected)
+change.yaml: [deltas -> 0] 'id' is a required property
+change.yaml: [deltas -> 0] 'slice' is a required property
+change.yaml: [deltas -> 0] 'kind' is a required property
+change.yaml: [deltas -> 0] 'summary' is a required property
+change.yaml: [deltas -> 0] 'specification' is a required property
+change.yaml: [deltas -> 0] 'catalog' is a required property
+change.yaml: [deltas -> 0] 'decisions' is a required property
+change.yaml: [deltas -> 0] 'tasks' is a required property
+change.yaml: [deltas -> 0] 'tests' is a required property
+change.yaml: [deltas -> 0] 'implementation' is a required property
+change.yaml: [deltas -> 0] 'evidence' is a required property
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+Gate specified: spec-delta.md is missing

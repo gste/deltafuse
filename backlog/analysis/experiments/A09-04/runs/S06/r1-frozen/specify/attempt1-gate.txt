@@ -1,0 +1,6 @@
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+coverage.yaml: [claims -> CR-004 -> status] 'blocked-on-decision' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
+coverage.yaml: [claims -> CR-008 -> status] 'blocked-on-decision' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
+coverage.yaml: [claims -> CR-005 -> status] 'blocked-on-decision' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
+Gate specified: spec-delta.md is missing
+Gate specified: Change 'CHG-001-audit-log-alerts' is blocked-on-decision: Decision 'DEC-001-monitoring-runtime.md' for Change 'CHG-001-audit-log-alerts' is in 'proposed' status

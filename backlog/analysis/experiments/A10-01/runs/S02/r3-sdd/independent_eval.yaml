@@ -1,0 +1,6 @@
+outcome: fail
+hidden_suite: 1 passed, 1 failed (consume after penalty still False)
+product_pytest: pass
+penalty_seconds: present
+llm_calls: 5
+notes: Product tests green, hidden expiration fails — false confidence without independent suite.

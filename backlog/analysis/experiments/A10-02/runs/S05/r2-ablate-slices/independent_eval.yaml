@@ -1,0 +1,11 @@
+outcome: partial
+factor: AB-02 frozen single-slice extra OFF
+slices_on_disk: [SLICE-01.md, SLICE-02.md]
+oracle_spec_files:
+  usage_stats.md: false
+  rate_policy.md: false
+specified_fsm: pass
+specified_independent: fail (F-010; extras folded into ratelimit.md)
+hidden_suite: not-run
+attempts_slices: 2
+attempts_specify: 3

@@ -1,0 +1,568 @@
+/no_think
+You execute exactly one workflow step on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content.
+Write only paths listed under allowed_write. Do not git push.
+
+
+# Minimal SDD (A10-01). Not a DeltaFuse skill. Do not copy into process/skills.
+
+You run one step of spec → task → test/code → review on a small Python product.
+Do not invent a Change package, routing.yaml, coverage.yaml, FSM statuses, or Decision files.
+Do not git push. Do not accept Decisions. Do not read or write secrets.
+
+Return ONLY a JSON object, no markdown fences:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+
+Each files[] item has path and content. Write complete files, not patches.
+status: continue | halt.
+
+## spec
+Read the user request. Update `docs/spec/**` so the request is normative (MUST). Keep unrelated baseline requirements. Update `docs/spec/_capabilities.yaml` if you add a capability.
+
+## task
+Write `TASK.md` with a short checklist: files to change, tests to add, out of scope.
+
+## implement
+Write failing-then-passing tests if you can, and the production code they need. Stay in allowed_write. Do not rewrite the whole product.
+
+## review
+Fix code/tests so pytest on the product tests passes. If already passing, write nothing or a tiny clarification in spec/TASK.md.
+
+
+step: review
+case: S05
+allowed_write:
+- src/ratelimit/limiter.py
+- src/ratelimit/stats.py
+- src/ratelimit/policy.py
+- src/ratelimit/__init__.py
+- tests/test_limiter.py
+- tests/test_stats.py
+- tests/test_policy.py
+- tests/test_integration_stats_policy.py
+- docs/spec/monitoring/usage_stats.md
+- docs/spec/security/rate_policy.md
+- TASK.md
+Previous attempt errors:
+
+F.F.F....F.....                                                          [100%]
+================================== FAILURES ===================================
+________________ test_stats_reflect_token_and_block_rejections ________________
+tests\test_integration_stats_policy.py:16: in test_stats_reflect_token_and_block_rejections
+    assert stats['total'] == 3
+E   assert 6 == 3
+_________________ test_block_expiry_allows_consumption_again __________________
+tests\test_integration_stats_policy.py:49: in test_block_expiry_allows_consumption_again
+    assert limiter.consume('u', 1) is True
+E   AssertionError: assert False is True
+E    +  where False = consume('u', 1)
+E    +    where consume = <ratelimit.limiter.TokenBucketLimiter object at 0x000001F90B71A210>.consume
+___________ test_stats_invariant_total_equals_success_plus_rejected ___________
+tests\test_limiter.py:18: in test_stats_invariant_total_equals_success_plus_rejected
+    assert stats['total'] == 3
+E   assert 6 == 3
+__________________________ test_policy_block_expiry ___________________________
+tests\test_policy.py:19: in test_policy_block_expiry
+    assert policy.is_blocked('u') is True
+E   AssertionError: assert False is True
+E    +  where False = is_blocked('u')
+E    +    where is_blocked = <ratelimit.policy.RatePolicy object at 0x000001F90B71B750>.is_blocked
+=========================== short test summary info ===========================
+FAILED tests/test_integration_stats_policy.py::test_stats_reflect_token_and_block_rejections
+FAILED tests/test_integration_stats_policy.py::test_block_expiry_allows_consumption_again
+FAILED tests/test_limiter.py::test_stats_invariant_total_equals_success_plus_rejected
+FAILED tests/test_policy.py::test_policy_block_expiry - AssertionError: asser...
+4 failed, 11 passed in 0.22s
+
+### docs/request.md
+# Запрос пользователя: Расширить Rate Limiter и добавить Usage Policy (S05)
+
+Необходимо одновременно выполнить два изменения в продукте Rate Limiter:
+
+1. **Новая capability `monitoring.usage_stats`:** добавить сбор статистики использования — для каждого ключа отслеживать общее количество вызовов consume, количество успешных и отклонённых запросов, а также пиковую нагрузку (максимальное число вызовов за секунду). Метод `get_stats(key)` должен возвращать словарь с этими значениями.
+
+2. **Policy `security.rate_policy`:** добавить правило политики, которое при превышении порога отклонений (например, 50 отклонённых consume подряд) автоматически блокирует ключ на конфигурируемый период (по умолчанию 300 секунд). Заблокированный ключ должен возвращать `False` из consume без расхода токенов и содержать метку `blocked_until` в stats.
+
+Оба изменения должны быть совместимы друг с другом: stats должны корректно отражать отклонения, вызванные как нехваткой токенов, так и блокировкой по policy. Необходимы интеграционные тесты, проверяющие взаимодействие обоих изменений.
+
+### docs/spec/_capabilities.yaml
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+  monitoring:
+    summary: Usage monitoring and statistics
+    capabilities:
+      usage_stats:
+        summary: Per-key usage statistics collection
+        spec:
+        - docs/spec/monitoring/usage_stats.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+### docs/spec/security/ratelimit.md
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+## REQ-RL-05 Policy integration
+When a RatePolicy is attached, is_blocked(key) MUST reflect the policy block state, and consume() on a blocked key MUST return False without consuming tokens.
+
+### src/ratelimit/limiter.py
+from __future__ import annotations
+import time
+
+from .stats import UsageStats
+from .policy import RatePolicy
+
+
+class TokenBucketLimiter:
+    def __init__(self, capacity: float, refill_rate: float) -> None:
+        if capacity <= 0 or refill_rate < 0:
+            raise ValueError('invalid limiter parameters')
+        self.capacity = float(capacity)
+        self.refill_rate = float(refill_rate)
+        self._buckets: dict[str, tuple[float, float]] = {}
+        self._stats = UsageStats()
+        self._rejections: dict[str, int] = {}
+        self._policy = None
+
+    def attach_policy(self, policy) -> None:
+        self._policy = policy
+
+    def _refill(self, key: str) -> tuple[float, float]:
+        now = time.monotonic()
+        tokens, last = self._buckets.get(key, (self.capacity, now))
+        tokens = min(self.capacity, tokens + (now - last) * self.refill_rate)
+        self._buckets[key] = (tokens, now)
+        return self._buckets[key]
+
+    def consume(self, key: str, tokens: float) -> bool:
+        self._stats.record(key, success=False)  # placeholder, corrected below
+        if self._policy is not None and self._policy.is_blocked(key):
+            return False
+
+        current, ts = self._refill(key)
+        if current >= tokens:
+            self._buckets[key] = (current - tokens, ts)
+            self._stats.record(key, success=True)
+            if self._policy is not None:
+                self._policy.reset_counter(key)
+            return True
+
+        self._stats.record(key, success=False)
+        if self._policy is not None:
+            count = self._rejections.get(key, 0) + 1
+            self._rejections[key] = count
+            self._policy.note_rejection(key, count)
+        return False
+
+    def is_blocked(self, key: str) -> bool:
+        if self._policy is not None:
+            return self._policy.is_blocked(key)
+        return False
+
+    def get_stats(self, key: str) -> dict:
+        stats = self._stats.snapshot(key)
+        if self._policy is not None:
+            blocked_until = self._policy.blocked_until(key)
+            if blocked_until is not None:
+                stats['blocked_until'] = blocked_until
+        return stats
+
+
+class RatePolicy:
+    def __init__(self, block_threshold: int = 50, block_duration: float = 300.0) -> None:
+        if block_threshold <= 0:
+            raise ValueError('block_threshold must be > 0')
+        if block_duration < 0:
+            raise ValueError('block_duration must be >= 0')
+        self.block_threshold = block_threshold
+        self.block_duration = float(block_duration)
+        self._blocked_until: dict[str, float] = {}
+        self._counters: dict[str, int] = {}
+
+    def note_rejection(self, key: str, count: int) -> None:
+        if count >= self.block_threshold:
+            self._blocked_until[key] = time.monotonic() + self.block_duration
+
+    def is_blocked(self, key: str) -> bool:
+        self._clear_expired(key)
+        return key in self._blocked_until
+
+    def blocked_until(self, key: str):
+        self._clear_expired(key)
+        return self._blocked_until.get(key)
+
+    def reset_counter(self, key: str) -> None:
+        self._counters[key] = 0
+
+    def _clear_expired(self, key: str) -> None:
+        until = self._blocked_until.get(key)
+        if until is not None and time.monotonic() >= until:
+            del self._blocked_until[key]
+            self._counters[key] = 0
+
+### tests/test_limiter.py
+from ratelimit.limiter import TokenBucketLimiter
+
+
+def test_consume_and_reject():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    assert limiter.consume('u', 5) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.is_blocked('u') is False
+
+
+def test_stats_invariant_total_equals_success_plus_rejected():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    limiter.consume('u', 5)
+    limiter.consume('u', 1)
+    limiter.consume('u', 1)
+    stats = limiter.get_stats('u')
+    assert stats['total'] == stats['success'] + stats['rejected']
+    assert stats['total'] == 3
+    assert stats['success'] == 1
+    assert stats['rejected'] == 2
+
+
+def test_stats_unknown_key_is_zero():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    stats = limiter.get_stats('nobody')
+    assert stats['total'] == 0
+    assert stats['success'] == 0
+    assert stats['rejected'] == 0
+    assert stats['peak_per_sec'] == 0
+
+
+def test_stats_peak_per_sec():
+    limiter = TokenBucketLimiter(capacity=100, refill_rate=0.0)
+    for _ in range(7):
+        limiter.consume('u', 1)
+    stats = limiter.get_stats('u')
+    assert stats['peak_per_sec'] >= 1
+
+
+def test_stats_blocked_until_none_without_policy():
+    limiter = TokenBucketLimiter(capacity=5, refill_rate=0.0)
+    limiter.consume('u', 5)
+    stats = limiter.get_stats('u')
+    assert stats.get('blocked_until') is None
+
+### TASK.md
+# TASK.md — S05: Usage Stats + Rate Policy
+
+## Goal
+Implement two capabilities for the TokenBucketLimiter product:
+1. `monitoring.usage_stats` — per-key usage statistics (total/success/rejected/peak_per_sec).
+2. `security.rate_policy` — automatic blocking of keys after consecutive rejections.
+
+## Files to change
+- `src/ratelimit/stats.py` — new `UsageStats` collector (allowed in review step).
+- `src/ratelimit/policy.py` — new `RatePolicy` class (block_threshold, block_duration, blocked_until).
+- `src/ratelimit/limiter.py` — add stats tracking, `get_stats()`, and optional `RatePolicy` integration; move `RatePolicy` out of limiter.py into policy.py.
+- `src/ratelimit/__init__.py` — export `UsageStats`.
+- `tests/test_stats.py` — new unit tests for UsageStats.
+- `tests/test_policy.py` — new unit tests for RatePolicy.
+- `tests/test_limiter.py` — unit tests for stats.
+- `tests/test_integration_stats_policy.py` — integration tests for policy + stats interaction.
+
+## Tests to add
+- Stats: total == success + rejected invariant; peak_per_sec counting; unknown-key zeros.
+- Policy: block after threshold, block expiry, consecutive-counter reset on success, invalid params.
+- Integration: stats reflect both token-rejections and block-rejections; invariant holds with policy; block expiry allows consumption again.
+
+## Out of scope
+- No Change package, routing.yaml, coverage.yaml, FSM, or Decision files.
+- No git push.
+
+
+### docs/spec/monitoring/usage_stats.md
+# monitoring.usage_stats
+
+## REQ-US-01 Statistics tracking
+For every key the limiter MUST track the total number of `consume` calls, the number of successful calls, and the number of rejected calls (rejections caused by insufficient tokens OR by a policy block).
+
+## REQ-US-02 Peak load
+The limiter MUST track the peak load for each key, defined as the maximum number of `consume` calls observed within any single wall-clock second.
+
+## REQ-US-03 get_stats
+`get_stats(key)` MUST return a dict with at least the keys `total`, `success`, `rejected`, and `peak_per_sec`. For an unknown key all values MUST be zero.
+
+## REQ-US-04 Stats consistency
+The invariant `total == success + rejected` MUST hold after every `consume` call.
+
+
+### docs/spec/security/rate_policy.md
+# security.rate_policy
+
+## REQ-RP-01 Block threshold
+`RatePolicy` MUST accept a `block_threshold` (default 50) and a `block_duration` (default 300 seconds).
+
+## REQ-RP-02 Automatic blocking
+When the number of consecutive rejected `consume` calls for a key reaches `block_threshold`, the key MUST be blocked for `block_duration` seconds.
+
+## REQ-RP-03 Blocked behavior
+A blocked key MUST return `False` from `consume` without deducting tokens, and `is_blocked(key)` MUST return `True` while blocked.
+
+## REQ-RP-04 blocked_until in stats
+While a key is blocked, `get_stats(key)` MUST include a `blocked_until` timestamp. Once the block has expired, `blocked_until` MUST be absent (or null).
+
+## REQ-RP-05 Consecutive counter reset
+A successful `consume` MUST reset the consecutive-rejection counter. A rejection due to insufficient tokens MUST increment it; a rejection due to an active block MUST NOT increment it further.
+
+
+### src/ratelimit/stats.py
+from __future__ import annotations
+import time
+
+
+class UsageStats:
+    """Per-key usage statistics collector.
+
+    Tracks total/success/rejected counts and peak per-second load for a key.
+    """
+
+    def __init__(self) -> None:
+        self._entries: dict[str, dict] = {}
+
+    def record(self, key: str, success: bool) -> None:
+        entry = self._entries.setdefault(key, {
+            'total': 0,
+            'success': 0,
+            'rejected': 0,
+            'peak_per_sec': 0,
+            '_per_sec': {},
+            '_last_sec': None,
+        })
+        entry['total'] += 1
+        if success:
+            entry['success'] += 1
+        else:
+            entry['rejected'] += 1
+
+        sec = int(time.time())
+        if sec != entry['_last_sec']:
+            entry['_per_sec'] = {sec: 1}
+            entry['_last_sec'] = sec
+        else:
+            entry['_per_sec'][sec] = entry['_per_sec'].get(sec, 0) + 1
+        if entry['_per_sec'][sec] > entry['peak_per_sec']:
+            entry['peak_per_sec'] = entry['_per_sec'][sec]
+
+    def snapshot(self, key: str) -> dict:
+        entry = self._entries.get(key)
+        if entry is None:
+            return {
+                'total': 0,
+                'success': 0,
+                'rejected': 0,
+                'peak_per_sec': 0,
+            }
+        return {
+            'total': entry['total'],
+            'success': entry['success'],
+            'rejected': entry['rejected'],
+            'peak_per_sec': entry['peak_per_sec'],
+        }
+
+    def reset(self, key: str) -> None:
+        self._entries.pop(key, None)
+
+
+### src/ratelimit/policy.py
+from __future__ import annotations
+import time
+
+
+class RatePolicy:
+    """Blocks a key after a threshold of consecutive rejections."""
+
+    def __init__(self, block_threshold: int = 50, block_duration: float = 300.0) -> None:
+        if block_threshold <= 0:
+            raise ValueError('block_threshold must be > 0')
+        if block_duration < 0:
+            raise ValueError('block_duration must be >= 0')
+        self.block_threshold = block_threshold
+        self.block_duration = float(block_duration)
+        self._blocked_until: dict[str, float] = {}
+        self._counters: dict[str, int] = {}
+
+    def note_rejection(self, key: str, count: int) -> None:
+        if count >= self.block_threshold:
+            self._blocked_until[key] = time.monotonic() + self.block_duration
+
+    def is_blocked(self, key: str) -> bool:
+        self._clear_expired(key)
+        return key in self._blocked_until
+
+    def blocked_until(self, key: str):
+        self._clear_expired(key)
+        return self._blocked_until.get(key)
+
+    def reset_counter(self, key: str) -> None:
+        self._counters[key] = 0
+
+    def _clear_expired(self, key: str) -> None:
+        until = self._blocked_until.get(key)
+        if until is not None and time.monotonic() >= until:
+            del self._blocked_until[key]
+            self._counters[key] = 0
+
+
+### tests/test_stats.py
+from ratelimit.stats import UsageStats
+
+
+def test_stats_unknown_key_is_zero():
+    stats = UsageStats()
+    s = stats.snapshot('nobody')
+    assert s['total'] == 0
+    assert s['success'] == 0
+    assert s['rejected'] == 0
+    assert s['peak_per_sec'] == 0
+
+
+def test_stats_total_equals_success_plus_rejected():
+    stats = UsageStats()
+    stats.record('u', success=True)
+    stats.record('u', success=False)
+    stats.record('u', success=False)
+    s = stats.snapshot('u')
+    assert s['total'] == 3
+    assert s['success'] == 1
+    assert s['rejected'] == 2
+    assert s['total'] == s['success'] + s['rejected']
+
+
+def test_stats_peak_per_sec():
+    stats = UsageStats()
+    for _ in range(5):
+        stats.record('u', success=True)
+    assert stats.snapshot('u')['peak_per_sec'] >= 1
+
+
+### tests/test_policy.py
+import time
+
+from ratelimit.policy import RatePolicy
+
+
+def test_policy_block_threshold_triggers_block():
+    policy = RatePolicy(block_threshold=3, block_duration=300.0)
+    assert policy.is_blocked('u') is False
+    policy.note_rejection('u', 1)
+    policy.note_rejection('u', 2)
+    policy.note_rejection('u', 3)
+    assert policy.is_blocked('u') is True
+    assert policy.blocked_until('u') is not None
+
+
+def test_policy_block_expiry():
+    policy = RatePolicy(block_threshold=2, block_duration=0.0)
+    policy.note_rejection('u', 2)
+    assert policy.is_blocked('u') is True
+    time.sleep(0.01)
+    assert policy.is_blocked('u') is False
+
+
+def test_policy_success_resets_counter():
+    policy = RatePolicy(block_threshold=3, block_duration=300.0)
+    policy.note_rejection('u', 1)
+    policy.note_rejection('u', 2)
+    policy.reset_counter('u')
+    policy.note_rejection('u', 1)
+    assert policy.is_blocked('u') is False
+
+
+def test_policy_invalid_params():
+    try:
+        RatePolicy(block_threshold=0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('expected ValueError')
+
+
+### tests/test_integration_stats_policy.py
+import time
+
+from ratelimit.limiter import TokenBucketLimiter, RatePolicy
+
+
+def test_stats_reflect_token_and_block_rejections():
+    limiter = TokenBucketLimiter(capacity=1, refill_rate=0.0)
+    policy = RatePolicy(block_threshold=2, block_duration=300.0)
+    limiter.attach_policy(policy)
+
+    assert limiter.consume('u', 1) is True  # success
+    assert limiter.consume('u', 1) is False  # token rejection (counter=1)
+    assert limiter.consume('u', 1) is False  # token rejection (counter=2 -> block)
+
+    stats = limiter.get_stats('u')
+    assert stats['total'] == 3
+    assert stats['success'] == 1
+    assert stats['rejected'] == 2
+    assert stats['blocked_until'] is not None
+
+    # blocked consumes count as rejected but not as token rejections
+    assert limiter.consume('u', 1) is False
+    stats = limiter.get_stats('u')
+    assert stats['total'] == 4
+    assert stats['rejected'] == 3
+    assert stats['success'] == 1
+
+
+def test_invariant_holds_with_policy():
+    limiter = TokenBucketLimiter(capacity=1, refill_rate=0.0)
+    policy = RatePolicy(block_threshold=2, block_duration=300.0)
+    limiter.attach_policy(policy)
+
+    for _ in range(6):
+        limiter.consume('u', 1)
+    stats = limiter.get_stats('u')
+    assert stats['total'] == stats['success'] + stats['rejected']
+
+
+def test_block_expiry_allows_consumption_again():
+    limiter = TokenBucketLimiter(capacity=1, refill_rate=0.0)
+    policy = RatePolicy(block_threshold=2, block_duration=0.0)
+    limiter.attach_policy(policy)
+
+    assert limiter.consume('u', 1) is True
+    assert limiter.consume('u', 1) is False
+    assert limiter.consume('u', 1) is False
+    time.sleep(0.01)
+    assert limiter.consume('u', 1) is True
+    stats = limiter.get_stats('u')
+    assert stats['success'] == 2
+    assert limiter.get_stats('u')['blocked_until'] is None

@@ -128,10 +128,10 @@ Each capability must strictly specify:
 2. **Pass B: Slice Analysis**
    - Inputs: claims belonging to **one** capability slice, targeted specification modules, accepted decisions.
    - Action: compute typed deltas, detect contradictions, formulate questions.
-   - Output: `slices/SLICE-NN.md` and typed deltas.
+   - Output: `slices/SLICE-NN.md` and typed deltas. Two primary capabilities produce `SLICE-01` and `SLICE-02`, not a single `SLICE-01`.
 
 ### Slicing Invariants
-1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts.
+1. **One Slice = One Primary Capability**: a slice must not span multiple capabilities without explicit integration contracts. A two-capability Change writes `SLICE-01` and `SLICE-02`; do not collapse them into one file.
 2. **Independent Verifiability**: each slice can be specified, implemented, and tested independently of other non-dependent slices.
 3. **Claim Exhaustiveness**: every normalized claim `CR-*` must belong to exactly one primary slice.
 
@@ -144,13 +144,17 @@ Each lifecycle step operates under a strict Context Contract defining what an ag
 | Step | Allowed Read Scope (Context In) | Forbidden Read Scope | Primary Output Artifact |
 |---|---|---|---|
 | **Intake** | Raw input, issue description, logs, review comments. | `docs/spec/**`, repository source code. | `request.md` |
-| **Route & Analyze** | `request.md`, `_capabilities.yaml`, targeted spec modules for selected slice, accepted decisions. | Entire codebase, unrelated specification modules. | `routing.yaml`, `analysis.md`, `slices/**`, `coverage.yaml` |
-| **Specify** | `request.md`, `analysis.md`, `slices/SLICE-NN.md`, target spec module, accepted decisions. | Product source code. | `spec-delta.md`, updated `docs/spec/**` |
+| **Route & Analyze** | `request.md`, `_capabilities.yaml`, targeted spec modules for selected slice, accepted decisions. | Entire codebase, unrelated specification modules. | `routing.yaml`, `slices/**`, `coverage.yaml` (optional `analysis.md`) |
+| **Specify** | `request.md`, `slices/SLICE-NN.md`, target spec module, accepted decisions, and `analysis.md` when present. | Product source code. | `spec-delta.md`, updated `docs/spec/**` |
 | **Decompose** | Updated spec modules, slice definition, target test suite paths. | Full codebase. | `tasks/TASK-NNN-*.md` |
 | **Target** | Single `TASK-NNN.md`, test suite file, public interface signatures. | Implementation code under test. | Executable failing test, `evidence/red/<task-id>.yaml` |
 | **Implement** | Single `TASK-NNN.md`, Red evidence, target test, target implementation file. | Unrelated modules and packages. | Passing code, `evidence/green/<task-id>.yaml`, `evidence/regression/<task-id>.yaml` |
 | **Verify** | `change.yaml`, `request.md`, `routing.yaml`, `slices/**`, `tasks/**`, `coverage.yaml`, test suite results. | Arbitrary refactoring of code. | `verification.md`, `evidence/verification/run.yaml`, archive move |
 
 ### Strict Enforcement
-- Exceeding the context budget (`max_tokens` or `max_files` from `.deltafuse/config.yaml`) is treated as a design defect requiring finer decomposition.
-- Violating the context contract (e.g., an Implementer modifying specification, or an Intake author reading product code) renders the resulting artifacts invalid and halts the lifecycle gate.
+- Each TASK declares `context_budget` (`max_tokens` / `max_files`, typically 16000/24). The `decomposed` gate fails when the budget is missing or when unique `spec_refs` plus `allowed_paths` exceed it. Token counts are an upper bound: A03-01 coefficients (code ×2.7, YAML ×4.5, logs ×4.8, Cyrillic ×2.2, EN prose ×1.3) or `POST /tokenize` when `DELTAFUSE_TOKENIZE_URL` is set. Chat completions are not used to count tokens.
+- `PHASE_CONTRACTS` in `src/deltafuse/core/context.py` is enforced structurally: task `allowed_paths` must match Target/Implement write globs; Red `changed_paths` must match Target write; Green/regression `changed_paths` must match Implement write. Runtime tool sandboxing of agent reads remains the host IDE/CLI; the FSM does not intercept live file opens.
+- Exceeding the context budget is treated as a design defect requiring finer decomposition.
+- `workflow.call_width` (`narrow` | `medium` | `wide`) batches Analyze *writes*; it is not a second token budget and does not close `analyzed` without routing.yaml, slices/, and coverage.yaml.
+- Change `route` (`code` default, `docs`, `ops`) selects Target/Implement write globs. `docs`/`ops` stay outside `src/**` and `tests/**`; they do not skip Specify.
+- Violating the context contract (e.g., an Implementer modifying specification, or Red evidence listing `src/**`) renders the resulting artifacts invalid and halts the lifecycle gate.

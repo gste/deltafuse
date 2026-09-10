@@ -1,0 +1,11 @@
+outcome: fail
+independent_gate:
+  specified: fail
+  attempt1: spec-delta.md missing (wrote live ratelimit.md)
+  attempt2: spec-delta extra keys + slices as strings + no YAML ---
+  attempt3: extra keys + SLICE-01 string + no YAML ---
+  live_spec_has_get_balance: true
+  src_unchanged: true
+  forged_green_by_agent: false
+hidden_suite: not-run
+attempts: 3

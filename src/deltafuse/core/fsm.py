@@ -5,14 +5,28 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.context import validate_context_budget
+from deltafuse.core.context import (
+    validate_context_budget,
+    validate_task_context_budget,
+    validate_paths_against_globs,
+    path_is_listed,
+    phase_write_globs,
+    task_write_globs,
+    load_change_route,
+    is_product_code_path,
+)
 from deltafuse.core.graph import topological_sort, DependencyCycleError
+from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
     validate_spec_ref,
     validate_decision_ref,
     find_unresolved_decisions_for_change,
+    load_capability_catalog,
+    spec_ref_is_under_docs_spec,
+    validate_catalog_capability_specs,
+    scan_changed_paths_for_private_test_access,
 )
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
@@ -154,6 +168,9 @@ def validate_change_package(
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}")
 
+    route, route_errs = load_change_route(change_path)
+    errors.extend(route_errs)
+
     # 1b. Validate request.md presence (P7.5)
     request_file = change_path / "request.md"
     if not request_file.is_file():
@@ -211,10 +228,10 @@ def validate_change_package(
                         ref_files = []
                         for sref in srefs:
                             sp_rel = sref.split("#")[0]
-                            sp_path = (repo_root / sp_rel).resolve()
-                            if sp_path.is_file():
-                                ref_files.append(sp_path)
-                        b_errs = validate_context_budget(context_budget, ref_files)
+                            ref_files.append(repo_root / sp_rel)
+                        b_errs = validate_context_budget(
+                            context_budget, ref_files, repo_root=repo_root
+                        )
                         errors.extend(f"{slice_file.name}: {be}" for be in b_errs)
             except Exception as ex:
                 errors.append(f"{slice_file.name} frontmatter error: {ex}")
@@ -252,6 +269,48 @@ def validate_change_package(
                     if design_ref:
                         d_errs = validate_decision_ref(design_ref, repo_root)
                         errors.extend(f"{task_file.name}: {de}" for de in d_errs)
+
+                    allowed = meta.get("allowed_paths") or []
+                    forbidden = meta.get("forbidden_paths") or []
+                    if not isinstance(allowed, list):
+                        allowed = []
+                    if not isinstance(forbidden, list):
+                        forbidden = []
+                    errors.extend(
+                        f"{task_file.name}: {e}"
+                        for e in validate_paths_against_globs(
+                            [p for p in allowed if isinstance(p, str)],
+                            task_write_globs(route),
+                            label="allowed_paths",
+                        )
+                    )
+                    if route in {"docs", "ops"}:
+                        for apath in allowed:
+                            if isinstance(apath, str) and is_product_code_path(apath):
+                                errors.append(
+                                    f"{task_file.name}: {route} route must not list "
+                                    f"src/** or tests/** in allowed_paths ('{apath}')"
+                                )
+                    for apath in allowed:
+                        if isinstance(apath, str) and path_is_listed(apath, forbidden):
+                            errors.append(
+                                f"{task_file.name}: allowed_paths '{apath}' is also in forbidden_paths"
+                            )
+
+                    context_budget = meta.get("context_budget")
+                    if not context_budget or not isinstance(context_budget, dict):
+                        errors.append(
+                            f"{task_file.name}: context_budget is required "
+                            "(max_tokens/max_files) for Target and Implement"
+                        )
+                    else:
+                        b_errs = validate_task_context_budget(
+                            context_budget,
+                            srefs if isinstance(srefs, list) else [],
+                            allowed,
+                            repo_root,
+                        )
+                        errors.extend(f"{task_file.name}: {be}" for be in b_errs)
             except Exception as ex:
                 errors.append(f"{task_file.name} frontmatter error: {ex}")
 
@@ -269,12 +328,20 @@ def validate_change_package(
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
             if isinstance(meta, dict):
-                added_mod = meta.get("added", []) + meta.get("modified", [])
+                added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
                     if not spec_dir_exists:
                         errors.append("spec-delta.md: Specification root directory 'docs/spec' not found")
                     else:
                         for sref in added_mod:
+                            if not isinstance(sref, str):
+                                errors.append("spec-delta.md: added/modified entries must be strings")
+                                continue
+                            if not spec_ref_is_under_docs_spec(sref, repo_root):
+                                errors.append(
+                                    f"spec-delta.md: '{sref}' must resolve under docs/spec/"
+                                )
+                                continue
                             s_err = validate_spec_ref(sref, repo_root)
                             if s_err:
                                 errors.append(f"spec-delta.md: {s_err}")
@@ -328,14 +395,31 @@ def validate_change_package(
 
                 # Phase-specific result & exit_code rules (T2)
                 if phase == "red":
-                    if result not in {"expected-failure", "not-reproduced"}:
+                    if result not in {"expected-failure", "not-reproduced", "already-green"}:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have result 'expected-failure' or 'not-reproduced' (got '{result}')"
+                            f"{ev_file.relative_to(change_path)}: red evidence must have result "
+                            f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
                         )
-                    if exit_code == 0 and result != "not-reproduced":
+                    if result == "already-green":
+                        if exit_code != 0:
+                            errors.append(
+                                f"{ev_file.relative_to(change_path)}: already-green evidence "
+                                f"must have exit_code 0 (got {exit_code})"
+                            )
+                    elif exit_code == 0 and result != "not-reproduced":
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have non-zero exit_code (got 0)"
+                            f"{ev_file.relative_to(change_path)}: red evidence must have "
+                            f"non-zero exit_code (got 0)"
                         )
+                    if result == "expected-failure" and route == "code":
+                        changed = ev_data.get("changed_paths") or []
+                        if isinstance(changed, list):
+                            errors.extend(
+                                f"{ev_file.relative_to(change_path)}: {pe}"
+                                for pe in scan_changed_paths_for_private_test_access(
+                                    repo_root, changed
+                                )
+                            )
                 elif phase in {"green", "regression"}:
                     if result != "passed":
                         errors.append(
@@ -350,10 +434,265 @@ def validate_change_package(
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
+
+                if phase in {"green", "regression", "verification"}:
+                    recorded = ev_data.get("base_revision")
+                    current = compute_product_baseline_revision(repo_root)
+                    rel_ev = ev_file.relative_to(change_path)
+                    if not recorded:
+                        errors.append(
+                            f"{rel_ev}: missing base_revision; Green/regression/verification "
+                            "must stamp the docs/spec/** and src/** content hash"
+                        )
+                    elif recorded != current:
+                        errors.append(
+                            f"{rel_ev}: stale evidence: base_revision '{recorded}' does not "
+                            f"match current docs/spec/** and src/** tree '{current}'"
+                        )
             except Exception as ex:
                 errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
 
     return errors
+
+
+def _iter_slice_frontmatter(change_path: Path) -> list[tuple[str, dict[str, Any]]]:
+    slices_dir = change_path / "slices"
+    result: list[tuple[str, dict[str, Any]]] = []
+    if not slices_dir.is_dir():
+        return result
+    for slice_file in slices_dir.glob("*.md"):
+        try:
+            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict):
+            result.append((slice_file.name, meta))
+    return result
+
+
+def _validate_specified_live_spec(
+    change_path: Path,
+    repo_root: Path,
+    change_status: str | None,
+    spec_delta_file: Path,
+    registry: SchemaRegistry,
+) -> list[str]:
+    """RM-010: specified requires live docs/spec files, a valid catalog, and exact none-refs."""
+    errors: list[str] = []
+    allowed_status = {"specified", "specification-proposed"}
+    if change_status not in allowed_status:
+        errors.append(
+            "Gate specified: change.yaml status must be 'specified' or "
+            f"'specification-proposed' (got {change_status!r})"
+        )
+
+    catalog, catalog_load_errs = load_capability_catalog(repo_root)
+    errors.extend(f"Gate specified: {e}" for e in catalog_load_errs)
+    catalog_schema_ok = False
+    if catalog is not None:
+        catalog_schema_errs = registry.validate("capability", catalog)
+        errors.extend(
+            f"Gate specified: docs/spec/_capabilities.yaml: {e}" for e in catalog_schema_errs
+        )
+        catalog_schema_ok = not catalog_schema_errs
+
+    added: list[str] = []
+    modified: list[str] = []
+    if spec_delta_file.is_file():
+        try:
+            meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
+            if isinstance(meta, dict):
+                added = [s for s in (meta.get("added") or []) if isinstance(s, str)]
+                modified = [s for s in (meta.get("modified") or []) if isinstance(s, str)]
+        except Exception as ex:
+            errors.append(f"Gate specified: spec-delta.md frontmatter error: {ex}")
+
+    slices = _iter_slice_frontmatter(change_path)
+    primary_caps_str: list[str] = []
+    for _, meta in slices:
+        cap = meta.get("primary_capability")
+        if isinstance(cap, str):
+            primary_caps_str.append(cap)
+
+    if catalog is not None and catalog_schema_ok:
+        errors.extend(
+            f"Gate specified: {e}"
+            for e in validate_catalog_capability_specs(
+                catalog, repo_root, primary_caps_str
+            )
+        )
+
+    live_ops = added + modified
+    if not live_ops:
+        if not slices:
+            errors.append(
+                "Gate specified: requirement_delta none requires slices with exact existing spec_refs"
+            )
+        for slice_name, meta in slices:
+            srefs = meta.get("spec_refs") or []
+            if not isinstance(srefs, list) or not srefs:
+                errors.append(
+                    f"Gate specified: {slice_name} has no spec_refs; "
+                    "unchanged specification must cite existing anchors"
+                )
+                continue
+            for sref in srefs:
+                if not isinstance(sref, str) or "#" not in sref:
+                    errors.append(
+                        f"Gate specified: {slice_name} spec_ref {sref!r} must include "
+                        "an existing anchor"
+                    )
+                    continue
+                s_err = validate_spec_ref(sref, repo_root)
+                if s_err:
+                    errors.append(f"Gate specified: {slice_name}: {s_err}")
+
+    return errors
+
+
+def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
+    tasks: dict[str, dict[str, Any]] = {}
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return tasks
+    for task_file in tasks_dir.glob("*.md"):
+        try:
+            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict) and isinstance(meta.get("id"), str):
+            tasks[meta["id"]] = meta
+    return tasks
+
+
+def _validate_evidence_changed_paths_contract(
+    change_path: Path,
+    evidence_phase: str,
+    contract_phase: str,
+    *,
+    gate: str,
+    route: str = "code",
+) -> list[str]:
+    """RM-002: evidence changed_paths must stay inside route write globs."""
+    errors: list[str] = []
+    ev_dir = change_path / "evidence" / evidence_phase
+    if not ev_dir.is_dir():
+        return errors
+    write_globs = phase_write_globs(contract_phase, route)
+    tasks = _task_frontmatter_by_id(change_path)
+    for ev_file in ev_dir.glob("*.yaml"):
+        try:
+            ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(ev_data, dict):
+            continue
+        changed = ev_data.get("changed_paths") or []
+        if not isinstance(changed, list):
+            continue
+        rel_paths = [p for p in changed if isinstance(p, str)]
+        for msg in validate_paths_against_globs(
+            rel_paths,
+            write_globs,
+            label=f"Gate {gate} {evidence_phase} changed_paths",
+        ):
+            errors.append(msg)
+        if route in {"docs", "ops"}:
+            for rel in rel_paths:
+                if is_product_code_path(rel):
+                    errors.append(
+                        f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
+                        f"must not write src/** or tests/** ('{rel}')"
+                    )
+        task_id = ev_data.get("task")
+        forbidden = []
+        if isinstance(task_id, str) and task_id in tasks:
+            raw = tasks[task_id].get("forbidden_paths") or []
+            if isinstance(raw, list):
+                forbidden = [p for p in raw if isinstance(p, str)]
+        for rel in rel_paths:
+            if path_is_listed(rel, forbidden):
+                errors.append(
+                    f"Gate {gate}: {ev_file.relative_to(change_path)} changed_paths "
+                    f"'{rel}' is listed in task forbidden_paths"
+                )
+    return errors
+
+
+def _spec_delta_ops(spec_delta_file: Path) -> tuple[dict[str, list[str]], list[str]]:
+    ops: dict[str, list[str]] = {"added": [], "modified": [], "removed": []}
+    errors: list[str] = []
+    if not spec_delta_file.is_file():
+        return ops, errors
+    try:
+        meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
+    except Exception as ex:
+        return ops, [f"spec-delta.md frontmatter error: {ex}"]
+    if not isinstance(meta, dict):
+        return ops, errors
+    for key in ops:
+        raw = meta.get(key) or []
+        if not isinstance(raw, list):
+            errors.append(f"spec-delta.md: {key} must be a list")
+            continue
+        for item in raw:
+            if isinstance(item, str):
+                ops[key].append(item)
+            else:
+                errors.append(f"spec-delta.md: {key} entries must be strings")
+    return ops, errors
+
+
+def _validate_spec_delta_matches_disk(
+    repo_root: Path,
+    ops: dict[str, list[str]],
+    *,
+    gate: str,
+) -> list[str]:
+    """RM-008: added/modified must exist; removed must be gone. Not a spec merge on archive."""
+    errors: list[str] = []
+    for kind in ("added", "modified"):
+        for sref in ops.get(kind) or []:
+            if not spec_ref_is_under_docs_spec(sref, repo_root):
+                errors.append(
+                    f"Gate {gate}: spec-delta {kind} '{sref}' must resolve under docs/spec/"
+                )
+                continue
+            s_err = validate_spec_ref(sref, repo_root)
+            if s_err:
+                errors.append(f"Gate {gate}: spec-delta {kind} is not on disk: {s_err}")
+    for sref in ops.get("removed") or []:
+        if not spec_ref_is_under_docs_spec(sref, repo_root):
+            errors.append(
+                f"Gate {gate}: spec-delta removed '{sref}' must resolve under docs/spec/"
+            )
+            continue
+        s_err = validate_spec_ref(sref, repo_root)
+        if s_err is None:
+            errors.append(
+                f"Gate {gate}: spec-delta removed '{sref}' is still present in docs/spec/"
+            )
+        elif "Path traversal" in s_err:
+            errors.append(f"Gate {gate}: {s_err}")
+    return errors
+
+
+def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
+    """Analyze substeps not yet on disk. `analyzed` requires this list to be empty.
+
+    Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
+    not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    """
+    path = Path(change_path)
+    missing: list[str] = []
+    if not (path / "routing.yaml").is_file():
+        missing.append("routing.yaml")
+    slices = path / "slices"
+    if not slices.is_dir() or not any(slices.glob("*.md")):
+        missing.append("slices/")
+    if not (path / "coverage.yaml").is_file():
+        missing.append("coverage.yaml")
+    return missing
 
 
 def check_gate(
@@ -366,17 +705,19 @@ def check_gate(
 
     repo_root = find_repo_root(change_path)
     req_file = change_path / "request.md"
-    routing_file = change_path / "routing.yaml"
     spec_delta_file = change_path / "spec-delta.md"
     tasks_dir = change_path / "tasks"
 
     change_id: str = change_path.name
+    change_status: str | None = None
     change_file = change_path / "change.yaml"
     if change_file.is_file():
         try:
             cdata = yaml.safe_load(change_file.read_text(encoding="utf-8"))
-            if isinstance(cdata, dict) and "id" in cdata:
-                change_id = cdata["id"]
+            if isinstance(cdata, dict):
+                if "id" in cdata:
+                    change_id = cdata["id"]
+                change_status = cdata.get("status")
         except Exception:
             pass
 
@@ -389,12 +730,13 @@ def check_gate(
     elif gate_lower == "analyzed":
         if not req_file.is_file():
             errors.append("Gate analyzed: request.md is missing")
-        if not routing_file.is_file():
-            errors.append("Gate analyzed: routing.yaml is missing")
-        if not (change_path / "slices").is_dir() or not list((change_path / "slices").glob("*.md")):
-            errors.append("Gate analyzed: at least one slice file in slices/ is required")
-        if not (change_path / "coverage.yaml").is_file():
-            errors.append("Gate analyzed: coverage.yaml is missing")
+        for artifact in missing_analyze_artifacts(change_path):
+            if artifact == "routing.yaml":
+                errors.append("Gate analyzed: routing.yaml is missing")
+            elif artifact == "slices/":
+                errors.append("Gate analyzed: at least one slice file in slices/ is required")
+            elif artifact == "coverage.yaml":
+                errors.append("Gate analyzed: coverage.yaml is missing")
 
         # Check blocking decisions (P3)
         unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
@@ -412,23 +754,53 @@ def check_gate(
             errors.append(
                 f"Gate specified: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
             )
+        errors.extend(
+            _validate_specified_live_spec(
+                change_path,
+                repo_root,
+                change_status,
+                spec_delta_file,
+                registry or default_registry,
+            )
+        )
 
     elif gate_lower == "decomposed":
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
 
     elif gate_lower == "targeting":
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate targeting: Red evidence in evidence/red/ is required")
+        errors.extend(
+            _validate_evidence_changed_paths_contract(
+                change_path, "red", "target", gate="targeting", route=route
+            )
+        )
 
     elif gate_lower == "implemented":
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         green_dir = change_path / "evidence" / "green"
         reg_dir = change_path / "evidence" / "regression"
         if not green_dir.is_dir() or not list(green_dir.glob("*.yaml")):
             errors.append("Gate implemented: Green evidence in evidence/green/ is required")
-        if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
-            errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        if route == "code":
+            if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
+                errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        errors.extend(
+            _validate_evidence_changed_paths_contract(
+                change_path, "green", "implement", gate="implemented", route=route
+            )
+        )
+        if reg_dir.is_dir() and list(reg_dir.glob("*.yaml")):
+            errors.extend(
+                _validate_evidence_changed_paths_contract(
+                    change_path, "regression", "implement", gate="implemented", route=route
+                )
+            )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"
@@ -438,16 +810,17 @@ def check_gate(
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
 
-        # Check all tasks frontmatter status (P1 / T3)
+        # Check all tasks frontmatter status (P1 / T3 / RM-005)
         if tasks_dir.is_dir():
+            terminal = {"implemented", "verified", "cancelled", "superseded"}
             for task_file in tasks_dir.glob("*.md"):
                 try:
                     meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
                     task_status = meta.get("status")
-                    if task_status not in {"implemented", "verified"}:
+                    if task_status not in terminal:
                         errors.append(
                             f"Gate converged: task '{task_file.name}' has non-terminal status '{task_status}' "
-                            "(must be 'implemented' or 'verified')"
+                            "(must be 'implemented', 'verified', 'cancelled', or 'superseded')"
                         )
                 except Exception as ex:
                     errors.append(f"Gate converged: failed to parse task '{task_file.name}': {ex}")
@@ -467,5 +840,12 @@ def check_gate(
                             )
             except Exception:
                 pass
+
+        if spec_delta_file.is_file():
+            ops, parse_errs = _spec_delta_ops(spec_delta_file)
+            errors.extend(f"Gate converged: {e}" for e in parse_errs)
+            errors.extend(
+                _validate_spec_delta_matches_disk(repo_root, ops, gate="converged")
+            )
 
     return errors

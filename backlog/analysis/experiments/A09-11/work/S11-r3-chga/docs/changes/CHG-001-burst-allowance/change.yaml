@@ -1,0 +1,23 @@
+schema_version: 2
+id: CHG-001-burst-allowance
+title: Add optional burst_allowance to TokenBucketLimiter
+status: specified
+framework:
+  version: 2.0.0
+  content_hash: sha256:5a4ead83f98380e9d755b0f1fd0d21098245f0c12301423df4ee6977dc81e463
+intent: feature
+risk: low
+source:
+  request: docs/intake/S11.md
+  intake_refs:
+    - docs/intake/S11.md
+deltas: []
+slices:
+  - id: SLICE-01
+    title: Add optional burst_allowance with single retry on rejection
+    status: specified
+    primary_capability: ratelimit
+    spec_refs:
+      - docs/spec/security/ratelimit.md
+decisions: []
+tasks: []

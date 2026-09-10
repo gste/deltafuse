@@ -1,0 +1,22 @@
+revision: "6690b87c7e39efd1c1cf604082ee20c5d5df0dd5"
+task_id: "A04-04"
+packet: "backlog/analysis/packets/A04-04.md"
+criterion_ids:
+  - "SPEC-001"
+  - "SPEC-004"
+  - "PROC-001"
+inputs:
+  - "process/templates/.deltafuse/config.yaml:L18-21"
+  - "docs/workflow.md:L288-320"
+  - "process/templates/docs/spec/context.md:L1-24"
+  - "src/deltafuse/core/layout.py:L20-110"
+method: "Cross-verification of bootstrap workflow profile (`project.baseline: draft -> accepted`), initial baseline specification adoption without declaring existing code bugs as requirements, and defect classification workflow (`implementation bug` vs `spec bug` vs `not a bug`)."
+commands:
+  - "git diff --check"
+budget:
+  prompt_tokens_limit: 6000
+  response_tokens_limit: 2000
+  handoff_tokens_limit: 400
+outputs:
+  result: "backlog/analysis/experiments/A04-04/result.md"
+verdict: "pass"

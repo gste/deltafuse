@@ -1,0 +1,14 @@
+change.yaml: [root] Additional properties are not allowed ('evidence', 'implementation', 'tests' were unexpected)
+change.yaml: [deltas -> 0] Additional properties are not allowed ('spec', 'type' were unexpected)
+change.yaml: [deltas -> 0] 'id' is a required property
+change.yaml: [deltas -> 0] 'slice' is a required property
+change.yaml: [deltas -> 0] 'specification' is a required property
+change.yaml: [deltas -> 0] 'tasks' is a required property
+change.yaml: [deltas -> 0 -> kind] 'add' is not one of ['requirements', 'conformance', 'structural', 'operational', 'mixed']
+change.yaml: [deltas -> 0 -> catalog] 'operation' is a required property
+change.yaml: [deltas -> 0 -> decisions] 'none' is not of type 'object'
+change.yaml: [deltas -> 0 -> tests] 'none' is not of type 'object'
+change.yaml: [deltas -> 0 -> implementation] 'none' is not of type 'object'
+change.yaml: [deltas -> 0 -> evidence] 'none' is not of type 'object'
+change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

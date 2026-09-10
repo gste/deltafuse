@@ -1,0 +1,3 @@
+spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+Gate specified: spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.
+Gate specified: SLICE-01.md spec_ref 'docs/spec/security/ratelimit.md' must include an existing anchor

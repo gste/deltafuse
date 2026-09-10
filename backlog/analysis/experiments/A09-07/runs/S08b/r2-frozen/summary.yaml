@@ -1,0 +1,28 @@
+case: S08b
+repeat: 2
+tag: frozen
+phases:
+- phase: intake
+  outcome: pass
+  attempts: 1
+- phase: analyze-routing
+  outcome: pass
+  attempts: 1
+- phase: analyze-slices
+  outcome: pass
+  attempts: 1
+- phase: analyze-coverage
+  outcome: pass
+  attempts: 1
+- phase: specify
+  outcome: pass
+  attempts: 3
+- phase: decompose
+  outcome: pass
+  attempts: 1
+- phase: target-TASK-001
+  outcome: already-green
+  attempts: 1
+- phase: implement-TASK-001
+  outcome: fail
+  attempts: 3

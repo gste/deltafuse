@@ -1,0 +1,37 @@
+case: S08a
+repeat: 1
+tag: frozen
+phase: analyze
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: slices
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 12355
+  ttft_s: 12.337115000002086
+  elapsed_s: 32.242399299982935
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-refactor/slices/SLICE-01.md
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 4888
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  gpu_after:
+    vram_used_mib: 4889
+    vram_total_mib: 8188
+    gpu_util_pct: 0
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

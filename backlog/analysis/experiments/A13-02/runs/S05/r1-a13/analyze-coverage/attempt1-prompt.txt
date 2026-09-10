@@ -1,0 +1,432 @@
+/no_think
+You execute exactly one DeltaFuse lifecycle phase on a product repository.
+Do not write a chain-of-thought. Put the JSON in the assistant content immediately.
+Return ONLY a JSON object. No markdown fences, no prose outside JSON.
+Shape:
+{"files":[{"path":"relative/from/product/root","content":"full file text"}],"status":"continue","notes":"short"}
+Each files[] item is its own object with keys path and content. Do not put two paths in one object. Do not use a frontmatter key.
+status must be one of: continue, blocked-on-decision, halt.
+Write only paths listed under allowed_write. Do not git push, do not run destructive git, do not accept Decisions, do not invent requirements.
+If the phase cannot proceed without a human Decision, set status to blocked-on-decision and still write the Decision file plus updated change.yaml.
+Preserve existing file contents except the paths you intentionally change.
+
+
+# Skill
+---
+name: analyze-change
+description: Route a normalized DeltaFuse Change through product capabilities, compare bounded slices with accepted specification and Decisions, and compute typed deltas. Use iteratively until blocking Decisions converge.
+---
+
+# Analyze Change
+
+Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterative Decision-convergence step.
+
+Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+
+## Context
+
+Start with `request.md`, `docs/spec/_capabilities.yaml`, compact global policy summaries, and the configured context budget. Route before loading detailed specification.
+
+After routing, read only selected spec modules, related Decision records, and explicitly requested diagnostic evidence. Do not load the whole spec, codebase, tests, or unrelated Changes/tasks by default.
+
+## Procedure
+
+1. Assign every `CR-*` claim one owning capability plus optional related capabilities and policies in `routing.yaml`.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`.
+3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
+4. Classify independently: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
+5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
+6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices. Do not accept them.
+7. Re-run only affected slices after human clarification or a terminal Decision.
+8. Perform global reconciliation over slice summaries, dependency graph, claim coverage, policies, and Decision statuses.
+
+If context exceeds budget, split by connected capability components and outcomes; add integration slices instead of truncating context.
+
+## Gate
+
+Exit only when all claims are routed, every slice has a typed delta, blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
+
+Write `routing.yaml`, `slices/**`, `coverage.yaml`, Decision/catalog proposals, and updated `change.yaml`. `analysis.md` is optional. Recommend `/specify-change <change-id> [slice-id]`.
+
+Read `.deltafuse/lock.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). Always write `routing.yaml` first. `narrow` writes one of routing, slices, or coverage per invocation; `medium` writes routing, then slices and coverage together; `wide` may finish Analyze in one invocation. Leave status `analyzing` until routing, slices, and coverage are on disk — call width does not close the gate. Do not skip Specify. Do not auto-accept Decisions.
+
+Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. `docs`/`ops` do not skip Specify.
+
+Unknown top-level keys on `routing.yaml` (including `schema_version`) do not fail `analyzed`. `routing.yaml` itself remains required. Two slice files do not satisfy Specify without live `docs/spec/**`.
+
+`analysis.md` is optional. `analyzed` is routing, slices, and coverage; `change.yaml` `analysis.summary` may be null.
+
+
+----- USER -----
+
+Phase: analyze
+Product root: (relative paths below)
+allowed_write: see skill and PHASE_CONTRACTS for 'analyze'
+Gate to satisfy after this call: analyzed
+This call writes ONLY docs/changes/<id>/coverage.yaml matching coverage.schema.yaml. Do not add schema_version. Do not rewrite slices or analysis.md. Use status continue. Do not set blocked-on-decision and do not write Decision files: intake unknowns (U*) are not blocking Decisions for a single unambiguous feature. Map each CR-NNN id from request.md to slice SLICE-01.
+
+=== FILE .deltafuse/config.yaml ===
+schema_version: 2
+
+framework:
+  source: deltafuse://v2.0.0
+  version: 2.0.0
+
+paths:
+  intake: docs/intake
+  changes: docs/changes
+  specification: docs/spec
+  decisions: docs/decisions
+  archive: docs/archive
+
+context:
+  max_tokens: 16000
+  max_files: 24
+
+workflow:
+  call_width: wide
+  auto_accept_decisions: false
+
+project:
+  baseline: draft
+  capability_catalog: docs/spec/_capabilities.yaml
+
+adapters:
+  roots:
+    - .agents/skills
+    - .cursor/skills
+    - .gemini/skills
+
+
+=== FILE .deltafuse/lock.yaml ===
+schema_version: 2
+framework:
+  version: 2.0.0
+  source: deltafuse://v2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+workflow:
+  call_width: wide
+  auto_accept_decisions: false
+
+
+=== FILE docs/changes/CHG-001-usage-stats-and-rate-policy/change.yaml ===
+schema_version: 2
+id: CHG-001-usage-stats-and-rate-policy
+title: Extend Rate Limiter with usage stats capability and rate policy
+status: normalized
+framework:
+  version: 2.0.0
+  content_hash: sha256:79b4ebce12a164eb6903d741721004b5ac60ecdb64072548359aede4ada3f83c
+intent: feature
+route: code
+risk: medium
+source:
+  request: docs/intake/S05.md
+  intake_refs:
+    - docs/intake/S05.md
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null
+
+
+=== FILE docs/changes/CHG-001-usage-stats-and-rate-policy/request.md ===
+# Request: Extend Rate Limiter with usage stats and rate policy
+
+Source: docs/intake/S05.md
+
+## Summary
+
+The Rate Limiter product must be extended with two simultaneous changes:
+
+1. A new capability `monitoring.usage_stats` that collects usage statistics per key (total consume calls, successful and rejected counts, peak load as max calls per second) and exposes them via a `get_stats(key)` method returning a dict.
+2. A policy `security.rate_policy` that automatically blocks a key for a configurable period (default 300s) when a rejection threshold is exceeded (e.g. 50 rejected consumes in a row). A blocked key returns `False` from `consume` without consuming tokens and carries a `blocked_until` label in stats.
+
+Both changes must be mutually compatible: stats must correctly reflect rejections caused by both token shortage and policy-based blocking. Integration tests verifying the interaction of both changes are required.
+
+## Claims
+
+- CR-001 (expectation): A new capability `monitoring.usage_stats` should be added to the Rate Limiter product.
+- CR-002 (expectation): For each key, track total number of consume calls, number of successful and rejected requests, and peak load (maximum number of calls per second).
+- CR-003 (expectation): A method `get_stats(key)` should return a dictionary with these values.
+- CR-004 (expectation): A policy `security.rate_policy` should be added that, upon exceeding a rejection threshold (e.g. 50 rejected consumes in a row), automatically blocks the key for a configurable period (default 300 seconds).
+- CR-005 (expectation): A blocked key should return `False` from `consume` without spending tokens and should carry a `blocked_until` label in stats.
+- CR-006 (constraint): Both changes must be compatible with each other; stats must correctly reflect rejections caused by both token shortage and policy-based blocking.
+- CR-007 (constraint): Integration tests verifying the interaction of both changes are required.
+- CR-008 (observation): The source is a user request note; product specification and code were not read during intake.
+
+
+=== FILE docs/changes/CHG-001-usage-stats-and-rate-policy/routing.yaml ===
+change: CHG-001-usage-stats-and-rate-policy
+route: code
+claims:
+  CR-001:
+    summary: Add new monitoring.usage_stats capability to the Rate Limiter product.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-002:
+    summary: Track per-key total/successful/rejected consume counts and peak load.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-003:
+    summary: Expose tracked values via a get_stats(key) method returning a dict.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-004:
+    summary: Add security.rate_policy that blocks a key after a rejection threshold.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-005:
+    summary: Blocked keys return False without spending tokens and carry blocked_until in stats.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-006:
+    summary: Stats must reflect rejections from both token shortage and policy blocking.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-007:
+    summary: Integration tests verifying interaction of both changes are required.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+  CR-008:
+    summary: Source is a user request note; spec and code were not read during intake.
+    primary_capability: security.ratelimit
+    related_capabilities: []
+    policies: []
+    confidence: high
+
+
+=== FILE docs/changes/CHG-001-usage-stats-and-rate-policy/slices/SLICE-01.md ===
+---
+id: SLICE-01
+change: CHG-001-usage-stats-and-rate-policy
+title: Usage stats capability and rate policy for security.ratelimit
+status: analyzing
+primary_capability: security.ratelimit
+related_capabilities: []
+policies: []
+spec_refs:
+  - docs/spec/security/ratelimit.md
+claims:
+  - CR-001
+  - CR-002
+  - CR-003
+  - CR-004
+  - CR-005
+  - CR-006
+  - CR-007
+  - CR-008
+context_budget:
+  max_tokens: 16000
+  max_files: 24
+---
+
+## In scope
+- Extend `security.ratelimit` with per-key usage tracking (total/successful/rejected consume counts, peak load as max calls/sec).
+- Add `get_stats(key)` returning a dict of those values.
+- Add `security.rate_policy`: block a key for a configurable period (default 300s) after a rejection threshold (e.g. 50 rejected consumes in a row).
+- Blocked keys return `False` from `consume` without spending tokens and carry a `blocked_until` label in stats.
+- Stats must reflect rejections from both token shortage and policy-based blocking.
+- Integration tests verifying the interaction of both changes.
+
+## Out of scope
+- Changes to token-bucket capacity/refill semantics (REQ-RL-01/02/03 unchanged).
+- New domains or capabilities outside `security.ratelimit`.
+
+## Dependencies
+- Requires the live spec `docs/spec/security/ratelimit.md` to be extended with normative requirements for stats and the rate policy before implementation.
+
+## Spec references
+- REQ-RL-02 (consume contract) — must be extended to cover blocked-key behavior.
+- REQ-RL-04 (is_blocked) — baseline currently returns False; policy introduces penalty lock, so this requirement must be updated.
+
+## Unchanged behavior
+- Capacity/refill initialization (REQ-RL-01), unknown-key full capacity (REQ-RL-03).
+
+## Risks
+- REQ-RL-04 conflicts with the new policy (baseline says no penalty lock); spec must be reconciled during Specify.
+- Peak-load measurement granularity and `blocked_until` semantics need normative definition.
+
+## Context budget
+- Within configured budget (16000 tokens, 24 files); only selected spec modules and this Change are loaded.
+
+## Typed delta
+- intent: feature
+- delta_kind: capability + policy
+- requirement_delta: extend docs/spec/security/ratelimit.md with stats and rate-policy requirements
+- design_impact: new methods/labels on the token-bucket limiter; policy hook on rejection
+- risk: medium
+- size: medium
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/_capabilities.yaml ===
+schema_version: 2
+domains:
+  security:
+    summary: Security controls
+    capabilities:
+      ratelimit:
+        summary: Token-bucket rate limiter
+        spec:
+        - docs/spec/security/ratelimit.md
+        code_roots:
+        - src/ratelimit
+        test_roots:
+        - tests
+        status: active
+        type: supporting
+
+
+=== FILE docs/spec/context.md ===
+# Product Context
+
+## Scope
+
+### In scope
+
+- Define product responsibilities.
+
+### Out of scope
+
+- Define explicit exclusions.
+
+## Actors
+
+- List external and internal actors.
+
+## System boundaries
+
+- List services, external systems, data ownership, and trust boundaries.
+
+## Global invariants
+
+- Add stable requirement IDs for cross-cutting behavior. Prefer RFC 2119 / EARS phrasing (see [README.md](./README.md)).
+
+
+=== FILE docs/spec/README.md ===
+# Specification
+
+This directory is the sole implementation law for product behavior.
+
+If code, chat, intake, a Change, a Decision, task, or diff disagrees with the accepted specification, stop and resolve the specification state before implementation.
+
+## Entry points
+
+| Document | Responsibility |
+|---|---|
+| [`context.md`](./context.md) | Product scope, actors, boundaries, and global invariants |
+| [`_capabilities.yaml`](./_capabilities.yaml) | Routing catalog for domains, capabilities, policies, code, and tests |
+
+Add domain directories and capability modules with stable requirement and scenario IDs.
+
+## Review rules
+
+- The live specification describes current required behavior, not change history.
+- Normative edits are surgical and traceable to a Change delta.
+- Accepted Decisions affecting behavior, contracts, policies, or invariants are mirrored here.
+- A human accepts the initial baseline and later normative changes.
+
+## Requirement style (SPEC-003)
+
+Write live requirements with RFC 2119 keywords (`MUST`, `MUST NOT`, `SHOULD`, `MAY`) or Russian equivalents (`ДОЛЖЕН`, `НЕ ДОЛЖЕН`). Prefer EARS so each requirement has a trigger or state and an observable outcome:
+
+- WHEN [trigger] THE SYSTEM SHALL [behavior]
+- WHILE [in state] THE SYSTEM SHALL [behavior]
+- IF [unwanted condition] THEN THE SYSTEM SHALL [behavior]
+
+EARS is phrasing, not a new file format and not a Specify gate. Vague words ("fast", "convenient") remain invalid. Live files under `docs/spec/**` remain required.
+
+Do not add `.kiro/` specs or Cucumber features as a second source of truth.
+
+
+=== FILE docs/spec/security/ratelimit.md ===
+# security.ratelimit
+
+## REQ-RL-01 Capacity and refill
+TokenBucketLimiter MUST initialize with capacity > 0 and refill_rate >= 0.
+
+## REQ-RL-02 Consume
+consume(key, tokens) MUST return True and deduct tokens when the key has enough tokens, otherwise False without deduction.
+
+## REQ-RL-03 Unknown keys
+An unknown key MUST start at full capacity.
+
+## REQ-RL-04 is_blocked
+is_blocked(key) MUST return False for the baseline limiter (no penalty lock).
+
+
+=== FILE process/schemas/coverage.schema.yaml ===
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/coverage.schema.yaml
+title: DeltaFuse Claim Coverage
+type: object
+additionalProperties: false
+required: [change, claims]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  claims:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        slice:
+          type: string
+          pattern: '^SLICE-[0-9]{2,}$'
+        tasks:
+          type: array
+          items:
+            type: string
+            pattern: '^TASK-[0-9]{3,}$'
+        spec_refs:
+          type: array
+          items:
+            type: string
+        evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            red:
+              type: string
+            green:
+              type: string
+            regression:
+              type: string
+            verification:
+              type: string
+        status:
+          enum: [pending, analyzing, analyzed, specified, decomposed, targeting, target-confirmed, implementing, implemented, verified, rejected, not-reproduced]

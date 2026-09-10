@@ -1,0 +1,63 @@
+case: S02
+repeat: 4
+tag: frozen
+phase: decompose
+model: ornith-1.5-35b-a3b
+temperature: 0.1
+top_p: 0.9
+max_tokens: 4096
+enable_thinking: false
+timeout_s_used: 300
+timeout_s_protocol: 300
+analyze_focus: null
+task: null
+attempts:
+- attempt: 1
+  prompt_chars: 16614
+  ttft_s: 30.656553099979647
+  elapsed_s: 99.37505089998012
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-001-add-penalty-param-and-baseline.md
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-002-penalty-lock-and-is_blocked.md
+  model_status: continue
+  gate_exit: 1
+  gpu_before:
+    vram_used_mib: 5473
+    vram_total_mib: 8188
+    gpu_util_pct: 3
+  gpu_after:
+    vram_used_mib: 5469
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  content_empty: false
+  reasoning_chars: 0
+- attempt: 2
+  prompt_chars: 20810
+  ttft_s: 34.17332709999755
+  elapsed_s: 132.32083119999152
+  usage: {}
+  finish_reason: stop
+  overflow: false
+  parse_error: null
+  written:
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-001-add-penalty-param-and-baseline.md
+  - docs/changes/CHG-001-ratelimit-cooldown/tasks/TASK-002-penalty-lock-and-is_blocked.md
+  - docs/changes/CHG-001-ratelimit-cooldown/change.yaml
+  - docs/changes/CHG-001-ratelimit-cooldown/coverage.yaml
+  model_status: continue
+  gate_exit: 0
+  gpu_before:
+    vram_used_mib: 5469
+    vram_total_mib: 8188
+    gpu_util_pct: 5
+  gpu_after:
+    vram_used_mib: 5470
+    vram_total_mib: 8188
+    gpu_util_pct: 9
+  content_empty: false
+  reasoning_chars: 0
+outcome: pass

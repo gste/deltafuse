@@ -1,0 +1,50 @@
+case_id: S11
+title: "Two concurrent Changes on shared spec, then feature deletion"
+category: spec-evolution
+group: holdout
+target_capability: security.ratelimit
+slices:
+  - SLICE-01
+target_gate: converged
+expected_outcome: pass
+initial_state:
+  is_empty_product: false
+  existing_spec: true
+  existing_capabilities:
+    - security.ratelimit
+  shared_spec: "docs/spec/security/ratelimit.md"
+  concurrent_changes: 2
+size_ladder:
+  base:
+    concurrent_changes: 2
+    shared_spec_files: 1
+    overlapping_claims: 1
+  geometric_growth: "A09-11: 2 → 4 → 8 overlapping claims / concurrent Changes until first boundary"
+protocol:
+  phase_a:
+    change_id: CHG-A
+    role: "peer change that lands first"
+    input: |
+      Добавить optional burst_allowance при инициализации TokenBucketLimiter.
+      Пока ключ не исчерпал burst_allowance дополнительных токенов, rejected consume
+      должен один раз получить extra tokens и повторить попытку в том же вызове.
+      burst_allowance по умолчанию 0 (поведение без изменений).
+    expected_status: archived
+  phase_b:
+    change_id: CHG-B
+    role: "this case input.md; starts from the same baseline as CHG-A"
+    input_file: input.md
+    conflict: "merge/rebase of archived CHG-A into CHG-B working tree"
+    expected_after_merge: "stale Green evidence must not pass converged"
+  phase_c:
+    change_id: CHG-C
+    role: "delete burst_allowance after CHG-A is in the product"
+    input: |
+      Удалить burst_allowance из Rate Limiter.
+      Публичный конструктор, спецификация и тесты не должны упоминать burst.
+      Документация и каталог capabilities остаются согласованными, без битых якорей.
+    expected: "spec, code, tests, and capability catalog have no leftover burst_allowance"
+notes:
+  - "Executing model for CHG-B sees only input.md"
+  - "CHG-A and CHG-C texts live in this manifest for the evaluator"
+  - "Related defect F-006: stale evidence silent pass after shared-spec merge"

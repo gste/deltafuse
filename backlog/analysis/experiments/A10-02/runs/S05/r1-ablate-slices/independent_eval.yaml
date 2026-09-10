@@ -1,0 +1,6 @@
+outcome: fail
+factor: multi-slice extra (not reached)
+independent_gate:
+  intake: fail (change.yaml YAML / missing title)
+hidden_suite: not-run
+note: Repeat noise; not used as AB-02 evidence.
