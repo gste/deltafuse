@@ -4,14 +4,14 @@
 
 Программа: [leash.md](leash.md) — железный поводок (envelope, `leash`, hook/CI, decide, evidence stamp, хост).
 
-Брать в работу: **LS-004**, затем LS-005 / LS-006 параллельно.
+Брать в работу: **LS-005**, затем LS-006. LS-007 после хост-контракта.
 
 | ID | Статус | Зачем |
 |---|---|---|
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |
 | [LS-003](LS-003.md) | `done` | Orphan-правка продукта без Change |
-| [LS-004](LS-004.md) | `planned` | Hook + CI, `workflow.leash` |
+| [LS-004](LS-004.md) | `done` | Hook + CI, `workflow.leash` |
 | [LS-005](LS-005.md) | `planned` | `accepted`/`rejected` только через `decide` |
 | [LS-006](LS-006.md) | `planned` | Evidence без штампа ядра не закрывает гейт |
 | [LS-007](LS-007.md) | `planned` | Хост MUST резать writes по envelope |

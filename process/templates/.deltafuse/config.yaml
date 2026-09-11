@@ -18,6 +18,7 @@ context:
 workflow:
   call_width: wide
   auto_accept_decisions: false
+  leash: "off"
 
 project:
   baseline: draft

@@ -58,6 +58,8 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
 
+Свежий `init` ставит `workflow.leash: off`, чтобы pet мог brainstorm. После `project.baseline: accepted` поставить `workflow.leash: enforce` и перезапустить installer (`deltafuse init --force`). Тогда появится локальный git `pre-commit`, который зовёт `deltafuse leash`, даже если воркер команду не набрал. Шаблон GitHub Action (`.github/workflows/deltafuse-leash.yml`) копируется один раз и необязателен. per-ankh и fuse-map включают `enforce` сами. `advisory` — hook отрабатывает, commit не валится. `off` — hook нет; сам `deltafuse leash` при нарушениях всё равно падает.
+
 ## Evidence ядра
 
 Воркер пишет тесты и продуктовые файлы. Ядро записывает доказательство:
@@ -122,7 +124,7 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 ## Конверт записи
 
-`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` / `docs/spec/**` — orphan, команда падает. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0.
+`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` — orphan, команда падает. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0. `enforce` ставит git hook и (по желанию) CI; `off` — нет.
 
 ```text
 deltafuse leash <product-root>

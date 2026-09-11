@@ -58,6 +58,8 @@ Never edit adapter skills (copied snapshots or the canonical files they link to)
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
 
+Fresh `init` sets `workflow.leash: off` so a pet can brainstorm. After `project.baseline: accepted`, set `workflow.leash: enforce` and re-run the installer (`deltafuse init --force`). That writes a local git `pre-commit` hook that runs `deltafuse leash` even if the Worker never types the command. A GitHub Action template (`.github/workflows/deltafuse-leash.yml`) is copied once and is optional. per-ankh and fuse-map turn `enforce` on themselves. `advisory` still runs the hook; the commit is not blocked. `off` means no hook; invoking `deltafuse leash` still fails on violations.
+
 ## Kernel evidence
 
 The Worker writes tests and production files. The Core records proof:
@@ -122,7 +124,7 @@ See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
 ## Write envelope
 
-`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). `deltafuse leash` compares the git diff (or `--file`) to ready envelopes. Intake must not write `src/**`. A null envelope plus a dirty `src/**` / `tests/**` / `docs/spec/**` is an orphan and fails. `docs/intake/**` and `AGENTS.md` are not orphans. `workflow.leash: advisory` reports the same violations and exits 0.
+`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). `deltafuse leash` compares the git diff (or `--file`) to ready envelopes. Intake must not write `src/**`. A null envelope plus a dirty `src/**` / `tests/**` is an orphan and fails. `docs/spec/**` is an orphan only after `project.baseline: accepted`. `docs/intake/**` and `AGENTS.md` are not orphans. `workflow.leash: advisory` reports the same violations and exits 0. `enforce` installs a git hook and (optional) CI job; `off` does not.
 
 ```text
 deltafuse leash <product-root>

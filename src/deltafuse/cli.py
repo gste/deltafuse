@@ -29,6 +29,7 @@ from deltafuse.core.leash import (
     check_paths,
     collect_ready_envelopes,
     git_dirty_paths,
+    load_baseline,
     load_leash_mode,
 )
 from deltafuse.core.steps import step_names
@@ -490,7 +491,7 @@ def main(argv: list[str] | None = None) -> int:
                 dirty = list(args.files)
             else:
                 dirty = git_dirty_paths(root)
-            errors = check_paths(dirty, covering)
+            errors = check_paths(dirty, covering, baseline=load_baseline(root))
             mode = load_leash_mode(root)
             skipped = envelope is None and not errors
             ok = not errors

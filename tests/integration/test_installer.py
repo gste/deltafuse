@@ -1,6 +1,9 @@
 import pytest
 from pathlib import Path
+import os
 import shutil
+import subprocess
+import sys
 import yaml
 from deltafuse.core.hasher import compute_framework_content_hash
 from deltafuse.core.installer import install, InstallationError
@@ -34,6 +37,12 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert lock["workflow"]["auto_accept_decisions"] is False
     cfg = yaml.safe_load((tmp_path / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["workflow"]["call_width"] == "wide"
+    assert cfg["workflow"]["leash"] == "off"
+    assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
+    workflow = (tmp_path / ".github" / "workflows" / "deltafuse-leash.yml").read_text(encoding="utf-8")
+    assert "deltafuse leash" in workflow
+    assert "pytest" in workflow
+    assert "docs/contracts" not in workflow
     assert (tmp_path / "docs" / "spec" / "_capabilities.yaml").is_file()
     assert (tmp_path / "docs" / "decisions" / "DEC-0000-template.md").is_file()
     assert (tmp_path / "CHANGELOG.md").is_file()
@@ -51,6 +60,7 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert "The Core" in agents
     assert "The Worker" in agents
+    assert "workflow.leash" in agents
 
 def test_idempotent_upgrade_preserves_custom_files(tmp_path: Path, repo_root: Path):
     # Step 1: initial install
@@ -167,3 +177,118 @@ def test_explicit_link_without_nested_checkout_fails(tmp_path: Path, repo_root: 
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     with pytest.raises(InstallationError, match="not inside the product"):
         install(target_dir=tmp_path, force=True, framework_root=repo_root)
+
+
+def _git(args: list[str], cwd: Path, env: dict[str, str] | None = None, check: bool = True):
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        env=env,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _leash_env(repo_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["DELTAFUSE_PYTHON"] = sys.executable
+    src = str(repo_root / "src")
+    env["PYTHONPATH"] = src + os.pathsep + env.get("PYTHONPATH", "")
+    env["GIT_AUTHOR_NAME"] = "leash"
+    env["GIT_AUTHOR_EMAIL"] = "leash@test"
+    env["GIT_COMMITTER_NAME"] = "leash"
+    env["GIT_COMMITTER_EMAIL"] = "leash@test"
+    return env
+
+
+def _commit(product: Path, message: str, env: dict[str, str], check: bool = True):
+    return _git(
+        [
+            "-c",
+            "user.email=leash@test",
+            "-c",
+            "user.name=leash",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.hooksPath=.git/hooks",
+            "commit",
+            "-m",
+            message,
+        ],
+        cwd=product,
+        env=env,
+        check=check,
+    )
+
+
+def _set_leash(product: Path, mode: str) -> None:
+    cfg_path = product / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("workflow", {})["leash"] = mode
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+
+
+def test_install_rejects_invalid_leash(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["workflow"]["leash"] = "banana"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    with pytest.raises(InstallationError, match="leash"):
+        install(target_dir=tmp_path, framework_root=repo_root)
+
+
+def test_enforce_hook_blocks_orphan_src_commit(tmp_path: Path, repo_root: Path):
+    env = _leash_env(repo_root)
+    _git(["init"], cwd=tmp_path, env=env)
+    install(target_dir=tmp_path, framework_root=repo_root)
+    assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
+    _git(["add", "-A"], cwd=tmp_path, env=env)
+    first = _commit(tmp_path, "init", env)
+    assert first.returncode == 0
+    _set_leash(tmp_path, "enforce")
+    install(target_dir=tmp_path, force=True, framework_root=repo_root)
+    hook = tmp_path / ".git" / "hooks" / "pre-commit"
+    assert hook.is_file()
+    assert "deltafuse leash" in hook.read_text(encoding="utf-8")
+    src = tmp_path / "src" / "x.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text("print(1)\n", encoding="utf-8")
+    _git(["add", "src/x.py"], cwd=tmp_path, env=env)
+    blocked = _commit(tmp_path, "orphan", env, check=False)
+    assert blocked.returncode != 0
+
+
+def test_advisory_hook_allows_orphan_commit(tmp_path: Path, repo_root: Path):
+    env = _leash_env(repo_root)
+    _git(["init"], cwd=tmp_path, env=env)
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _git(["add", "-A"], cwd=tmp_path, env=env)
+    _commit(tmp_path, "init", env)
+    _set_leash(tmp_path, "advisory")
+    install(target_dir=tmp_path, force=True, framework_root=repo_root)
+    assert (tmp_path / ".git" / "hooks" / "pre-commit").is_file()
+    src = tmp_path / "src" / "x.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text("print(1)\n", encoding="utf-8")
+    _git(["add", "src/x.py"], cwd=tmp_path, env=env)
+    allowed = _commit(tmp_path, "advisory orphan", env, check=False)
+    assert allowed.returncode == 0
+
+
+def test_enforce_does_not_overwrite_foreign_pre_commit(tmp_path: Path, repo_root: Path):
+    env = _leash_env(repo_root)
+    _git(["init"], cwd=tmp_path, env=env)
+    hooks = tmp_path / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    foreign = hooks / "pre-commit"
+    foreign.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8", newline="\n")
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_leash(tmp_path, "enforce")
+    install(target_dir=tmp_path, force=True, framework_root=repo_root)
+    assert foreign.read_text(encoding="utf-8") == "#!/bin/sh\nexit 0\n"
+    managed = tmp_path / ".deltafuse" / "hooks" / "pre-commit"
+    assert managed.is_file()
+    assert "deltafuse leash" in managed.read_text(encoding="utf-8")

@@ -1,6 +1,7 @@
 from deltafuse.core.lock import (
     DEFAULT_CALL_WIDTH,
     format_lock_yaml,
+    normalize_leash_mode,
     workflow_alignment_errors,
     workflow_from_mapping,
 )
@@ -18,6 +19,20 @@ def test_workflow_rejects_invalid_call_width():
     assert width == "wide"
     assert auto is False
     assert any("call_width" in e for e in errors)
+
+
+def test_workflow_rejects_invalid_leash():
+    width, auto, errors = workflow_from_mapping({"workflow": {"leash": "banana"}})
+    assert width == DEFAULT_CALL_WIDTH
+    assert auto is False
+    assert any("leash" in e for e in errors)
+
+
+def test_workflow_accepts_yaml11_off_boolean():
+    _, _, errors = workflow_from_mapping({"workflow": {"leash": False}})
+    assert errors == []
+    mode = normalize_leash_mode(False)
+    assert mode == "off"
 
 
 def test_format_lock_yaml_pins_profile():

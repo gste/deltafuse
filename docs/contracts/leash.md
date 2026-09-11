@@ -8,7 +8,7 @@ This is the **producer-canonical** write envelope. `deltafuse leash`, a git hook
 
 Producer: `deltafuse next --json` (`deltafuse.core.leash.build_envelope` via `queue_snapshot`). Guard: `deltafuse leash`. Core does not draw UI and does not `git push`.
 
-`envelope` is either an object that validates against this schema, or JSON `null`. `null` means there is no ready Worker step (Human Gate, blocked, or `halt.kind: done`). Product paths (`src/**`, `tests/**`, `docs/spec/**`, ops/deploy) in the diff with a null envelope are **orphans**: `deltafuse leash` MUST fail (unless `advisory`). `docs/intake/**`, `AGENTS.md`, and `.deltafuse/lock.yaml` are not orphans.
+`envelope` is either an object that validates against this schema, or JSON `null`. `null` means there is no ready Worker step (Human Gate, blocked, or `halt.kind: done`). Code/ops/deploy paths in the diff with a null envelope are **orphans**: `deltafuse leash` MUST fail (unless `advisory`). `docs/spec/**` is an orphan only after `project.baseline: accepted`. `docs/intake/**`, `AGENTS.md`, and `.deltafuse/lock.yaml` are not orphans.
 
 ## Roles
 
@@ -31,11 +31,11 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 |---|---|
 | Ready Worker step | `halt` is JSON `null`, `envelope` validates, `write` is non-empty. |
 | Human Gate / nothing to run | `envelope` is JSON `null`. Product paths in the diff are orphans and fail. Exempt paths (`docs/intake/**`, `AGENTS.md`, `.deltafuse/**`) still skip. |
-| Orphan product edit | `src/**`, `tests/**`, `docs/spec/**` (and ops/deploy) MUST be covered by a ready Change envelope. Docs/ops route MUST NOT cover `src/**`. |
+| Orphan product edit | `src/**`, `tests/**`, ops/deploy MUST be covered by a ready Change envelope. `docs/spec/**` MUST after `project.baseline: accepted`. Docs/ops route MUST NOT cover `src/**`. |
 | Intake `write` | MUST NOT include `src/**`. |
 | Declare/Implement | Declare keeps `tests/**` and Red evidence globs, not `src/**`. Implement keeps `tests/**` and shrinks product paths to task `allowed_paths`. |
 | `leash` side effects | Zero product writes. Diagnostics on stderr unless `--json`. |
-| `workflow.leash: advisory` | Same violations, exit `0`. Missing/`enforce`: exit `≠ 0` when a path is outside `write`. |
+| `workflow.leash` | Fresh `init` writes `off` (no hook). `advisory`: same violations, exit `0` (hook does not block commit). Missing/`enforce`: exit `≠ 0` when a path is outside `write`. `enforce` and `advisory` install a local `pre-commit` that runs `deltafuse leash`. The hook MUST NOT `git push`. |
 
 ## Example (Analyze)
 

@@ -66,13 +66,13 @@ delta-fuse/
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_halt_contract.py     # HS-001: next --json halt — кнопки хоста; pack не в адаптерах
-│   │   ├── test_leash.py             # LS-001/LS-002: write envelope и deltafuse leash
+│   │   ├── test_leash.py             # LS-001–003: write envelope, deltafuse leash, orphan
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
 │   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
 │   │   ├── test_first_write.py       # SK-001: шаблон Intake/Analyze/Decompose проходит check-gate; синонимы YAML
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
-│   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade
+│   │   ├── test_installer.py         # Установка, --force, LS-004 hook/CI template
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
 │   │   └── test_validator_cli.py     # CLI: validate, check-gate, validate-layout, evidence, lint-context
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла

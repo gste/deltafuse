@@ -225,6 +225,28 @@ def test_leash_orphan_src_without_change(tmp_path: Path, repo_root: Path, capsys
     assert any("not covered by any Change" in row for row in data["violations"])
 
 
+def test_leash_draft_src_is_orphan(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    ret, data = _leash_json(tmp_path, capsys, files=["src/x.py"])
+    assert ret == 1
+    assert any("not covered by any Change" in row for row in data["violations"])
+
+
+def test_leash_draft_spec_is_not_orphan(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    ret, data = _leash_json(tmp_path, capsys, files=["docs/spec/core.md"])
+    assert ret == 0
+    assert data["violations"] == []
+
+
+def test_leash_accepted_spec_is_orphan(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_baseline(tmp_path)
+    ret, data = _leash_json(tmp_path, capsys, files=["docs/spec/core.md"])
+    assert ret == 1
+    assert any("not covered by any Change" in row for row in data["violations"])
+
+
 def test_leash_implement_covers_allowed_src(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     _set_baseline(tmp_path)
