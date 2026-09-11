@@ -53,6 +53,8 @@ def test_run_evidence_red_behavioral(tmp_path: Path, repo_root: Path):
     assert outcome.payload["result"] == "expected-failure"
     assert outcome.payload["failure_category"] == "behavioral-mismatch"
     assert outcome.payload["exit_code"] != 0
+    assert outcome.payload["recorded_by"] == "deltafuse-evidence"
+    assert str(outcome.payload["recorded_sha256"]).startswith("sha256:")
     assert check_gate(builder.change_dir, "targeting") == []
 
 
@@ -154,3 +156,55 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
         (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     )["status"]
     assert status_after == status_before
+
+
+def test_handwritten_red_yaml_fails_targeting(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-040")
+    red_dir = builder.change_dir / "evidence" / "red"
+    red_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 2,
+        "change": "CHG-040",
+        "task": "TASK-001",
+        "phase": "red",
+        "timestamp": "2026-09-05T12:00:00Z",
+        "command": "pytest tests/test_task-001.py",
+        "exit_code": 1,
+        "result": "expected-failure",
+        "failure_category": "behavioral-mismatch",
+        "summary": "Hand-written without a kernel stamp",
+        "changed_paths": ["tests/test_task-001.py"],
+        "spec_status": "unchanged",
+    }
+    from deltafuse.core.schemas import default_registry
+
+    assert default_registry.validate("evidence", payload) == []
+    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(payload), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("not stamped by deltafuse evidence" in e for e in errs)
+
+
+def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-041")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_task-001.py").write_text(
+        "assert False, 'not implemented'\n",
+        encoding="utf-8",
+    )
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=_run_file_cmd("tests/test_task-001.py"),
+        changed_paths=["tests/test_task-001.py"],
+    )
+    assert check_gate(builder.change_dir, "targeting") == []
+    payload = dict(outcome.payload)
+    payload["exit_code"] = 0
+    payload["result"] = "already-green"
+    payload["summary"] = "Edited by eye after the kernel stamp"
+    outcome.dest.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    errs = check_gate(builder.change_dir, "targeting")
+    assert any("stamp does not match the recorded payload" in e for e in errs)
+

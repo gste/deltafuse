@@ -222,7 +222,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 1. Implement the minimal test case in the file indicated by `test_target`.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
-   Do not hand-write `evidence/red/*.yaml`.
+   Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
 3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml

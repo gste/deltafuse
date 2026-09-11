@@ -364,6 +364,12 @@ def validate_change_package(
                 if not isinstance(ev_data, dict):
                     continue
 
+                from deltafuse.core.evidence import evidence_stamp_error
+
+                stamp_err = evidence_stamp_error(ev_data, repo_root)
+                if stamp_err:
+                    errors.append(f"{ev_file.relative_to(change_path)}: {stamp_err}")
+
                 rel_path = ev_file.relative_to(evidence_dir)
                 parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
 

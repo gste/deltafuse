@@ -10,6 +10,7 @@ from deltafuse.core.fsm import (
     VALID_CHANGE_STATUSES,
 )
 from deltafuse.core.archiver import is_change_id_archived
+from deltafuse.core.evidence import write_stamped_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.frontmatter import parse_frontmatter
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -450,8 +451,10 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
     red["result"] = "already-green"
     red["summary"] = "Public oracle already passes; lift is present from TASK-001"
     red["changed_paths"] = ["tests/test_task-001.py"]
-    (builder.change_dir / "evidence" / "red" / "TASK-001.yaml").write_text(
-        yaml.safe_dump(red, sort_keys=False), encoding="utf-8"
+    write_stamped_evidence(
+        builder.change_dir / "evidence" / "red" / "TASK-001.yaml",
+        red,
+        tmp_path,
     )
     assert check_gate(builder.change_dir, "targeting") == []
 
@@ -471,7 +474,7 @@ def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["failure_category"] = "import-error"
     red["summary"] = "ModuleNotFoundError"
-    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    write_stamped_evidence(red_file, red, tmp_path)
     errs = check_gate(builder.change_dir, "targeting")
     assert any("behavioral-mismatch" in e for e in errs)
 
@@ -498,7 +501,7 @@ def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["tests/test_task-001.py"]
-    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    write_stamped_evidence(red_file, red, tmp_path)
     errs = check_gate(builder.change_dir, "targeting")
     assert any("private symbols" in e for e in errs)
 
@@ -528,7 +531,7 @@ def test_implemented_rejects_stale_green_after_spec_change(tmp_path: Path, repo_
         ev_file = builder.change_dir / "evidence" / rel
         data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
         data["base_revision"] = fresh
-        ev_file.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        write_stamped_evidence(ev_file, data, tmp_path)
     assert check_gate(builder.change_dir, "implemented") == []
 
 
@@ -543,7 +546,7 @@ def _restamp_evidence(change_dir: Path, repo_root: Path) -> None:
         data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
         if isinstance(data, dict) and data.get("phase") in {"green", "regression", "verification"}:
             data["base_revision"] = fresh
-            ev_file.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+            write_stamped_evidence(ev_file, data, repo_root)
 
 
 def _write_ops_spec_delta(
@@ -699,7 +702,7 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["src/core.py"]
-    red_file.write_text(yaml.safe_dump(red, sort_keys=False), encoding="utf-8")
+    write_stamped_evidence(red_file, red, tmp_path)
     errs = check_gate(builder.change_dir, "targeting")
     assert any("outside the phase contract" in e and "src/core.py" in e for e in errs)
 

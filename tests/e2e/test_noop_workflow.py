@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package, can_transition
+from deltafuse.core.evidence import write_stamped_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.archiver import archive_change
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -53,7 +54,7 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
         "changed_paths": ["tests/test_bug.py"],
         "spec_status": "unchanged",
     }
-    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(ev_not_rep), encoding="utf-8")
+    write_stamped_evidence(red_dir / "TASK-001.yaml", ev_not_rep, tmp_path)
     assert check_gate(builder.change_dir, "targeting") == []
 
     # Transition change to terminal not-reproduced status

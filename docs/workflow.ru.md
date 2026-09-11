@@ -229,7 +229,7 @@ context_budget:
 2. Пишется минимальный тест, проверяющий требуемое поведение.
 3. Тест запускается на **неизменённом** коде продукта командой ядра:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
-   YAML evidence вручную не заполняется.
+   YAML evidence вручную не заполняется. Ядро ставит штамп; `check-gate` отвергает YAML без штампа.
 4. Тест обязан упасть (**Red**) строго по ожидаемой поведенческой причине (`behavioral-mismatch`), а не из-за ошибки компиляции, синтаксиса или инфраструктуры. Authentic Red — exit 0 у CLI.
 5. Runner записывает команду, логи, код возврата и категорию в `evidence/red/<task-id>.yaml`.
 6. Опционально: property-based тесты класса Hypothesis как дополнительные оракулы. Skip, если нет локального runner. PBT не заменяет GWT Red и независимый hidden suite. Не `.kiro` и не Cucumber.

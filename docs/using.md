@@ -68,7 +68,7 @@ The Worker writes tests and production files. The Core records proof:
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate --gate targeting` still enforces the YAML on disk.
+Import/syntax failures and `_`-prefixed Red tests are not authentic. The Core stamps the YAML; `check-gate --gate targeting` rejects a schema-valid file that was not written by `deltafuse evidence`.
 
 ## Kernel coverage
 

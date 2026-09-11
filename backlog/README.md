@@ -13,7 +13,7 @@
 | [LS-003](product/LS-003.md) | `done` | orphan-diff без Change |
 | [LS-004](product/LS-004.md) | `done` | hook/CI + `workflow.leash` |
 | [LS-005](product/LS-005.md) | `done` | Gate только через `decide` |
-| [LS-006](product/LS-006.md) | `planned` | штамп `deltafuse evidence` |
+| [LS-006](product/LS-006.md) | `done` | штамп `deltafuse evidence` |
 | [LS-007](product/LS-007.md) | `planned` | контракт хоста (writes + halt) |
 
 Сводка: [product/index.md](product/index.md).
