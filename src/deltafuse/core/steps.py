@@ -22,6 +22,7 @@ WORKER_LLM_MARKERS = (
     "deltafuse next",
     "Do not auto-accept Decisions",
     "Do not choose the next slash command yourself",
+    "in this same session",
 )
 
 

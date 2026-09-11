@@ -1,1 +1,0 @@
-spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

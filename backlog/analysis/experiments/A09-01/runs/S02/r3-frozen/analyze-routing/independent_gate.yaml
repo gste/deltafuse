@@ -1,8 +1,0 @@
-outcome: pass
-focus: routing
-independent_gate:
-  routing_schema: []
-attempts: 2
-attempt1: schema_version rejected
-elapsed_s_ok: 34.6
-reasoning_chars: 0

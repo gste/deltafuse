@@ -1,6 +1,6 @@
 # Tests and Layout Validators
 
-This directory contains the automated test suites, layout validators, and LLM evaluation benchmarks for the DeltaFuse framework.
+This directory contains the automated test suites and layout validators for the DeltaFuse framework.
 
 ## Structure
 
@@ -16,6 +16,7 @@ tests/
 │   ├── test_queue.py             # Derived work queue and deltafuse next
 │   ├── test_board.py             # Read-only fuse-map board snapshot
 │   ├── test_llm_adapter.py       # Skills bind Worker (LLM); Core selects the step
+│   ├── test_bench.py             # Agent-agnostic Worker bench (init / score / compare)
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
 ├── integration/
 │   ├── test_installer.py         # Product initialization and framework upgrade
@@ -25,11 +26,6 @@ tests/
 │   ├── test_golden_workflow.py   # Full 8-step lifecycle flow with archival
 │   ├── test_noop_workflow.py     # Terminal no-op / not-reproduced bug lifecycle
 │   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
-├── evals/
-│   ├── test_dataset.py           # Eval dataset schema validation and loader
-│   ├── test_mock_provider.py     # Deterministic MockLLMProvider scenarios
-│   ├── test_eval_runner.py       # Benchmark evaluation engine and metric aggregations
-│   └── test_eval_cli.py          # deltafuse eval CLI command and reporting
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
 ├── validate-layout.ps1 / .sh     # Legacy shell layout validators (canonical in python `deltafuse validate-layout`)
@@ -74,9 +70,10 @@ deltafuse board . --json
 python -m pytest --cov=deltafuse --cov-report=term-missing
 ```
 
-### Run LLM Benchmark Evals
+### Worker bench (no LLM)
 ```bash
-deltafuse eval --scenario golden --threshold 90.0
+deltafuse bench init M02-policy-stats ./m02
+deltafuse bench score ./m02 --pack . --json --label smoke --out-file ../scores/smoke.json
 ```
 
 ### Continuous Integration (CI)

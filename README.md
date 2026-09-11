@@ -35,15 +35,15 @@ flowchart LR
     Implement --> Verify[Verify]
 ```
 
-| Step | Skill | Primary result |
-|---|---|---|
-| Intake | `/intake` | Immutable request and Change root |
-| Analyze | `/analyze` | Routing, slices, Decisions, typed deltas |
-| Specify | `/specify` | Accepted normative state or proven unchanged spec |
-| Decompose | `/decompose` | Atomic tasks inside the Change |
-| Declare | `/declare` | Declared Red oracle: what must become true, proven failing on unchanged code |
-| Implement | `/implement` | Minimal code and Green evidence |
-| Verify | `/verify` | Convergence proof and archived Change |
+| Step      | Skill        | Primary result                                                               |
+|-----------|--------------|------------------------------------------------------------------------------|
+| Intake    | `/intake`    | Immutable request and Change root                                            |
+| Analyze   | `/analyze`   | Routing, slices, Decisions, typed deltas                                     |
+| Specify   | `/specify`   | Accepted normative state or proven unchanged spec                            |
+| Decompose | `/decompose` | Atomic tasks inside the Change                                               |
+| Declare   | `/declare`   | Declared Red oracle: what must become true, proven failing on unchanged code |
+| Implement | `/implement` | Minimal code and Green evidence                                              |
+| Verify    | `/verify`    | Convergence proof and archived Change                                        |
 
 Analyze repeats until all blocking Decisions are terminal and global reconciliation finds no new material question.
 
@@ -56,7 +56,7 @@ delta-fuse/
 ├── docs/             # canonical lifecycle, roles, context model, and rationale
 ├── process/          # executable framework assets
 │   ├── schemas/      # Change, capability, Decision, task, evidence
-│   ├── skills/       # seven operation contracts
+│   ├── skills/       # seven lifecycle skills plus through-mode /run
 │   └── templates/    # product artifacts and Change templates
 ├── scripts/          # installers
 └── tests/            # product layout validators and smoke tests
@@ -78,7 +78,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are generated, version/hash-stamped snapshots and are not editable process sources.
+The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are installer-created copies or links (`adapters.mode`: `auto` | `link` | `copy`), version/hash-stamped, and are not editable process sources.
 
 ## Install
 

@@ -1,6 +1,0 @@
-outcome: pass
-note: "Independent check_gate(CHG-107, intake) and validate_change_package returned []. Harness originally reported fail because find_change_dir selected leftover CHG-001."
-independent_gate:
-  change: CHG-107-ratelimit-cooldown-penalty
-  validate: []
-  intake: []

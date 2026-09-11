@@ -1,9 +1,0 @@
-outcome: pass
-independent_gate:
-  change_status: duplicate
-  provenance: CHG-042 CHG-055 CHG-060 INFRA-789 in request.md
-  spec_unchanged: true
-  src_unchanged: true
-  json_status: continue
-hidden_suite: pass (duplicate + provenance + no code/spec)
-attempts: 1

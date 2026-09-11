@@ -1,8 +1,0 @@
-outcome: pass
-independent_gate:
-  routing_schema: []
-stripped_schema_version: true
-prior_fail: analyze-routing-schema-fail (3 attempts)
-elapsed_s: 48.5
-reasoning_chars: 0
-attempts: 1

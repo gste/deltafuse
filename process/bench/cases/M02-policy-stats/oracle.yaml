@@ -1,0 +1,89 @@
+# M02-policy-stats oracle (never copy into the product tree)
+
+case_id: M02-policy-stats
+tier: frontier
+ambiguity_expected: false
+expected_decision_needed: false
+target_capabilities:
+  - monitoring.usage_stats
+  - security.rate_policy
+min_claims: 3
+min_slices: 2
+min_tasks: 2
+catalog_must_contain:
+  - monitoring.usage_stats
+  - security.rate_policy
+new_spec_files:
+  - docs/spec/monitoring/usage_stats.md
+  - docs/spec/security/rate_policy.md
+intake_must_not_contain:
+  - token_rejects
+  - policy_rejects
+live_specs:
+  - path: docs/spec/monitoring/usage_stats.md
+    must_contain:
+      - get_stats
+      - successful_calls
+      - rejected_calls
+      - peak_rate
+      - token_rejects
+      - policy_rejects
+  - path: docs/spec/security/rate_policy.md
+    must_contain:
+      - consecutive
+      - reject_threshold
+      - block_seconds
+      - blocked_until
+hidden_tests:
+  - test_seed_consume_still_works
+  - test_stats_unknown_key_is_zero
+  - test_stats_split_token_and_policy_rejects
+  - test_peak_rate_is_one_second_window
+  - test_policy_consecutive_lockout
+  - test_success_resets_consecutive_streak
+  - test_blocked_consume_does_not_debit
+  - test_keys_isolated_stats_and_policy
+leak_needles:
+  - test_policy_consecutive_lockout
+  - test_stats_split_token_and_policy_rejects
+  - test_peak_rate_is_one_second_window
+code_must_contain:
+  - path: src/ratelimit/stats.py
+    tokens: [get_stats]
+  - path: src/ratelimit/policy.py
+    tokens: [reject_threshold]
+  - id: code.get_stats
+    path: src/ratelimit/limiter.py
+    tokens: [get_stats]
+forbidden_src_needles:
+  - redis
+  - StrictRedis
+  - celery
+default_weight: 1
+check_weights:
+  hidden.suite.test_policy_consecutive_lockout: 10
+  hidden.suite.test_stats_split_token_and_policy_rejects: 8
+  hidden.suite.test_peak_rate_is_one_second_window: 8
+  hidden.suite.test_blocked_consume_does_not_debit: 6
+  hidden.suite.test_success_resets_consecutive_streak: 6
+  hidden.suite.test_keys_isolated_stats_and_policy: 5
+  hidden.suite.test_stats_unknown_key_is_zero: 3
+  hidden.suite.test_seed_consume_still_works: 2
+  live.spec.usage_stats.token_rejects: 3
+  live.spec.usage_stats.policy_rejects: 3
+  live.spec.usage_stats.successful_calls: 3
+  live.spec.usage_stats.rejected_calls: 3
+  live.spec.rate_policy.consecutive: 3
+  routing.capability: 4
+  slices.capability: 4
+  catalog.monitoring_usage_stats: 3
+  catalog.security_rate_policy: 3
+  code.stats.get_stats: 2
+  code.policy.reject_threshold: 2
+  code.forbidden.redis: 4
+score_mix:
+  correctness: 0.6
+  process: 0.4
+scope:
+  forbidden_until_implement:
+    - src/ratelimit/limiter.py

@@ -6,7 +6,7 @@
 
 **Канон продюсера** — этот репозиторий. fuse-map пинит тот же `schema_version` у себя в `docs/contracts/`. SSOT артефактов — git продукта. Снимок — только чтение.
 
-Продюсер: `deltafuse board` и `deltafuse.core.board.build_board_snapshot` ([FM-001](../../backlog/product/FM-001.md)). Документ — pin совместимости.
+Продюсер: `deltafuse board` и `deltafuse.core.board.build_board_snapshot`. Документ — pin совместимости.
 
 `layout` обязателен в v1 (продюсер ещё не шипился; это дополнение v1, не bump на 2). Тело без `layout` — не снимок.
 

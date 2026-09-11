@@ -1,4 +1,0 @@
-outcome: fail
-independent_gate:
-  decomposed: schema errors on change.yaml slices/tasks
-attempts: 3

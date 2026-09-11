@@ -1,3 +1,0 @@
-change.yaml: [status] 'closed-superseded' is not one of ['normalized', 'analyzing', 'blocked-on-decision', 'analyzed', 'specification-proposed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verifying', 'converged', 'archived', 'rejected', 'duplicate', 'not-reproduced', 'superseded']
-change.yaml: invalid status 'closed-superseded'
-Gate specified: spec-delta.md is missing

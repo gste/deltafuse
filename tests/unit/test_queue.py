@@ -10,6 +10,25 @@ from deltafuse.core.steps import STEP_CONTRACTS, validate_step_contracts
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
+def _write_proposed_dec(tmp_path: Path, change_id: str, dec_id: str = "DEC-0001", title: str = "Pick a store") -> Path:
+    dec_dir = tmp_path / "docs" / "decisions"
+    dec_dir.mkdir(parents=True, exist_ok=True)
+    path = dec_dir / f"{dec_id}-test.md"
+    path.write_text(
+        "---\n"
+        f"id: {dec_id}\n"
+        f"title: {title}\n"
+        "kind: architecture\n"
+        "status: proposed\n"
+        "owner: ghost\n"
+        f"change: {change_id}\n"
+        "affects: {capabilities: [], spec_refs: []}\n"
+        "---\n# Decision\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_step_contracts_match_phase_contracts():
     assert validate_step_contracts() == []
     assert STEP_CONTRACTS["declare"]["gate"] == "targeting"
@@ -50,12 +69,27 @@ def test_next_empty_product_is_intake(tmp_path: Path, repo_root: Path):
     assert selected is not None
     assert selected.skill == "intake"
     assert selected.change_id is None
+    assert selected.intake_pending is False
+
+
+def test_next_json_empty_product_has_done_halt(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    import json
+
+    ret = main(["next", str(tmp_path), "--json"])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    data = json.loads(out)
+    assert data["selected"]["skill"] == "intake"
+    assert data["selected"]["intake_pending"] is False
+    assert data["halt"]["kind"] == "done"
 
 
 def test_next_blocked_on_decision_exits_without_ready(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-033", title="Blocked").step_intake()
     builder._update_change_yaml({"status": "blocked-on-decision"})
+    _write_proposed_dec(tmp_path, "CHG-033")
     queue = build_work_queue(tmp_path)
     assert select_next(queue) is None
     assert queue.blocked and queue.blocked[0].change_id == "CHG-033"
@@ -75,6 +109,7 @@ def test_next_json_and_no_writes(tmp_path: Path, repo_root: Path, capsys):
     data = json.loads(out)
     assert data["selected"]["skill"] == "analyze"
     assert data["selected"]["change_id"] == "CHG-034"
+    assert data["halt"] is None
     assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
 
 
@@ -152,6 +187,7 @@ def test_next_human_blocked_is_human_gate(tmp_path: Path, repo_root: Path, capsy
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-039", title="Human blocked").step_intake()
     builder._update_change_yaml({"status": "blocked-on-decision"})
+    _write_proposed_dec(tmp_path, "CHG-039")
     ret = main(["next", str(tmp_path), "--human"])
     _, err = capsys.readouterr()
     assert ret == 1
@@ -241,3 +277,23 @@ def test_next_human_analyze_coverage_uses_kernel(tmp_path: Path, repo_root: Path
     assert "analyze_pass: coverage" in out
     assert "deltafuse coverage" in out
     assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate analyzed" in out
+
+
+def test_next_json_blocked_decision_has_halt_choices(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-070", title="Halt").step_intake()
+    builder._update_change_yaml({"status": "blocked-on-decision"})
+    _write_proposed_dec(tmp_path, "CHG-070", title="Use Redis")
+    import json
+
+    ret = main(["next", str(tmp_path), "--json"])
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    data = json.loads(out)
+    assert data["selected"] is None
+    assert data["halt"]["kind"] == "decision"
+    labels = [row["label"] for row in data["halt"]["choices"]]
+    assert any("Accept DEC-0001" in label and "Use Redis" in label for label in labels)
+    assert any("Reject DEC-0001" in label for label in labels)
+    assert any(row["id"] == "inspect" and row["command"] is None for row in data["halt"]["choices"])
+    assert any("deltafuse decide" in (row["command"] or "") for row in data["halt"]["choices"])

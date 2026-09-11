@@ -1,7 +1,0 @@
-outcome: pass
-independent_gate:
-  specified: examples, RFC 2697, Leaky Bucket, typo скорость, CHANGELOG entry
-  spec_rewrite: true
-  lost_req_rl_03: unknown keys at full capacity replaced by blocking-state REQ
-hidden_suite: not-run
-attempts: 3

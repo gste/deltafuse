@@ -1,9 +1,0 @@
-outcome: fail
-independent_gate:
-  specified: fail
-  live_spec_has_burst_allowance: true
-  src_has_burst_allowance: false
-  attempt1: spec-delta missing
-  attempt3: added REQ-RL-05 treated as spec file path
-hidden_suite: not-run
-attempts: 3

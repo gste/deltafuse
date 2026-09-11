@@ -1,7 +1,0 @@
-outcome: pass
-independent_gate:
-  specified: F-010 vacuous — spec-delta exists, requirement_delta none
-  change_status_still: blocked-on-decision
-  spec_unchanged: true
-hidden_suite: fail
-attempts: 2

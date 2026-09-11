@@ -1,8 +1,0 @@
-outcome: pass
-change: CHG-001-ratelimit-cooldown
-independent_gate:
-  intake: []
-extracted_CR: [CR-001, CR-002, CR-003, CR-004, CR-005, CR-006, CR-007, CR-008, CR-009]
-elapsed_s: 62.5
-reasoning_chars: 0
-attempts: 1

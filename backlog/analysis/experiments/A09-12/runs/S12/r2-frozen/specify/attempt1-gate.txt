@@ -1,2 +1,0 @@
-change.yaml: [slices -> 0] 'docs/changes/CHG-001-get-balance/slices/SLICE-01.md' is not of type 'object'
-Gate specified: spec-delta.md is missing

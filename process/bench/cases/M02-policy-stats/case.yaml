@@ -1,0 +1,27 @@
+id: M02-policy-stats
+title: Usage stats and consecutive-reject policy across two capabilities
+intent: feature
+tier: frontier
+target_capabilities:
+  - monitoring.usage_stats
+  - security.rate_policy
+intake_name: M02-policy-stats.md
+ambiguity_expected: false
+min_claims: 3
+min_slices: 2
+min_tasks: 2
+live_specs:
+  - path: docs/spec/monitoring/usage_stats.md
+  - path: docs/spec/security/rate_policy.md
+seed_must_stay_until_implement:
+  - src/ratelimit/limiter.py
+  - tests/test_limiter.py
+hidden_suite: hidden_suite/test_acceptance.py
+stages:
+  - intake
+  - analyze
+  - specify
+  - decompose
+  - declare
+  - implement
+  - verify

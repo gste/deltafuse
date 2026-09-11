@@ -1,3 +1,0 @@
-change.yaml: [slices -> 0] 'file' is a required property
-coverage.yaml: [root] Additional properties are not allowed ('slice_status' was unexpected)
-spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

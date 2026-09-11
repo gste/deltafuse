@@ -1,2 +1,0 @@
-spec-delta.md: Referenced specification file does not exist: 'REQ-RL-05 get_balance — read-only balance accessor under security.ratelimit'
-spec-delta.md: Referenced specification file does not exist: 'REQ-RL-06 get_balance unknown keys — unknown-key balance equals initial capacity'

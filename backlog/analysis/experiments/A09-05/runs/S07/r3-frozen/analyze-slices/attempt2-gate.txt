@@ -1,2 +1,0 @@
-SLICE-01.md: [root] 'title' is a required property
-SLICE-01.md: [status] 'continue' is not one of ['draft', 'analyzing', 'blocked', 'analyzed', 'specified', 'decomposed', 'verified']

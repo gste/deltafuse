@@ -36,3 +36,14 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
         return data, body
     except yaml.YAMLError as e:
         raise FrontmatterParseError(f"YAML parsing error in frontmatter: {e}") from e
+
+
+def replace_frontmatter(content: str, updates: dict[str, Any]) -> str:
+    """Return Markdown with selected frontmatter keys replaced. Preserves body."""
+    meta, body = parse_frontmatter(content)
+    meta.update(updates)
+    dumped = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).rstrip()
+    body_out = body if body.startswith("\n") or body == "" else "\n" + body
+    if not body_out.endswith("\n"):
+        body_out += "\n"
+    return f"---\n{dumped}\n---{body_out}"

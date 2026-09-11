@@ -35,15 +35,15 @@ flowchart LR
     Implement --> Verify[Verify]
 ```
 
-| Шаг               | Skill               | Основной результат                                           |
-|-------------------|---------------------|--------------------------------------------------------------|
-| Intake            | `/intake`           | Immutable request и корень Change                            |
-| Analyze           | `/analyze`          | Routing, slices, Decisions, typed deltas                     |
-| Specify           | `/specify`          | Принятое нормативное состояние или доказанный unchanged spec |
-| Decompose         | `/decompose`        | Atomic tasks внутри Change                                   |
-| Declare           | `/declare`          | Объявленный Red-оракул: что должно стать правдой, падает на неизменённом коде |
-| Implement         | `/implement`        | Минимальный code и Green evidence                            |
-| Verify            | `/verify`           | Convergence proof и архивированный Change                    |
+| Шаг       | Skill        | Основной результат                                                            |
+|-----------|--------------|-------------------------------------------------------------------------------|
+| Intake    | `/intake`    | Immutable request и корень Change                                             |
+| Analyze   | `/analyze`   | Routing, slices, Decisions, typed deltas                                      |
+| Specify   | `/specify`   | Принятое нормативное состояние или доказанный unchanged spec                  |
+| Decompose | `/decompose` | Atomic tasks внутри Change                                                    |
+| Declare   | `/declare`   | Объявленный Red-оракул: что должно стать правдой, падает на неизменённом коде |
+| Implement | `/implement` | Минимальный code и Green evidence                                             |
+| Verify    | `/verify`    | Convergence proof и архивированный Change                                     |
 
 Analyze повторяется, пока все blocking Decisions не получат terminal status, а global reconciliation не перестанет находить новые существенные вопросы.
 
@@ -56,7 +56,7 @@ delta-fuse/
 ├── docs/             # канонический lifecycle, роли, контекстная модель и rationale
 ├── process/          # исполняемые ресурсы фреймворка
 │   ├── schemas/      # Change, capability, Decision, task, evidence
-│   ├── skills/       # контракты семи операций
+│   ├── skills/       # семь lifecycle skills и сквозной /run
 │   └── templates/    # product artifacts и шаблоны Change
 ├── scripts/          # installers
 └── tests/            # валидаторы разметки и smoke-тесты
@@ -78,7 +78,7 @@ product/
     └── archive/{intake,changes}/
 ```
 
-Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills являются generated snapshots с version/hash metadata, а не редактируемым process source.
+Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills — копии или ссылки инсталлера (`adapters.mode`: `auto` | `link` | `copy`) с version/hash, а не редактируемый process source.
 
 ## Установка
 

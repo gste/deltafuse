@@ -30,7 +30,10 @@ docs/archive/intake/
 docs/archive/changes/
 ```
 
-It also generates tool-specific skill snapshots in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. Each snapshot is marked `DO NOT EDIT` and records the installed framework version, source URI, and content hash.
+It also installs adapter skills in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. `adapters.mode` is `auto` (default), `link`, or `copy`.
+
+- **link** when the framework checkout lives inside the product (git submodule or vendor path): each adapter skill is a relative symlink to `process/skills/<name>`. Cursor sees live skills after `git submodule update`. `init --force` only refreshes `.deltafuse/lock.yaml`. Do not commit the adapter links. On Windows without symlink privilege the installer may create a directory junction instead (absolute, machine-local).
+- **copy** otherwise, and when the OS refuses symlinks: stamped snapshots marked `DO NOT EDIT`, with version, source URI, and content hash.
 
 The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in the product repository.
 
@@ -38,13 +41,13 @@ The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in 
 
 `.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and the Analyze call-width profile. Re-run the installer after changing `call_width` so lock matches config.
 
-Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config, lock, and generated adapters, while preserving product-owned specification, Changes, Decisions, `AGENTS.md`, and any existing templates. Before updating lock:
+Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config and lock. Linked adapters follow the nested checkout; copied adapters are regenerated. Product-owned specification, Changes, Decisions, `AGENTS.md`, and existing templates stay. Before updating lock:
 
 1. Review active Changes and their recorded framework/schema versions.
 2. Complete them on the current version or explicitly close the Change.
-3. Regenerate adapters and validate product layout.
+3. Re-run the installer and validate product layout.
 
-Never manually edit generated skills or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
+Never edit adapter skills (copied snapshots or the canonical files they link to) or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
 
 ## First operation
 
@@ -88,13 +91,30 @@ deltafuse next
 deltafuse next --list
 deltafuse next --human
 deltafuse next --step declare --json
+deltafuse decide <change-dir> --decision DEC-0001 --status accepted
+deltafuse decide <change-dir> --spec --status accepted
 ```
 
 `--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
 
-Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next`. They do not pick the next slash command.
+Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons, wait, then `deltafuse decide`. Single-step skills restart one step after a problem.
 
-Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) or `/intake`.
+Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
+
+Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) plus `halt.choices`, or a `done` halt when there is no new intake.
+
+## Worker bench
+
+Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `bench score`. Attempts come from the Core journal, not from the Worker.
+
+```text
+deltafuse bench init M02-policy-stats <product-dir>
+deltafuse bench journal <product-dir>
+deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse bench compare ../scores/opus.json ../scores/flash.json
+```
+
+See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
 ## External boards
 

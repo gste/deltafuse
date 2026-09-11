@@ -1,5 +1,0 @@
-outcome: pass
-independent_gate:
-  routing: all CR-* primary_capability infra.distributed_ratelimit
-catalog_dump_in_routing_prompt: catalog yaml only, no stub spec FILE bodies
-attempts: 2

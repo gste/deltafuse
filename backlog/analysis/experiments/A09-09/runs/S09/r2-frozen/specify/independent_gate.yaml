@@ -1,6 +1,0 @@
-outcome: fail
-independent_gate:
-  specified: extra key specification; spec-delta status unchanged; change status closed invalid
-  change_status_end: normalized
-hidden_suite: fail
-attempts: 3

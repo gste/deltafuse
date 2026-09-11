@@ -1,4 +1,0 @@
-change.yaml: [root] 'deltas' is a required property
-change.yaml: [root] 'slices' is a required property
-change.yaml: [root] 'decisions' is a required property
-change.yaml: [root] 'tasks' is a required property

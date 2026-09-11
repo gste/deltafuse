@@ -30,7 +30,10 @@ docs/archive/intake/
 docs/archive/changes/
 ```
 
-Также генерируются tool-specific skill snapshots в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. Каждый snapshot помечен `DO NOT EDIT` и содержит installed framework version, source и content hash.
+Также ставит adapter skills в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. `adapters.mode`: `auto` (по умолчанию), `link` или `copy`.
+
+- **link**, если checkout фреймворка лежит внутри продукта (git submodule или vendor path): каждый скилл — относительный symlink на `process/skills/<name>`. Cursor видит живые скиллы после `git submodule update`. `init --force` только обновляет `.deltafuse/lock.yaml`. Сами ссылки в git не коммитить. На Windows без права на symlink installer может сделать directory junction (абсолютный, только локально).
+- **copy** в остальных случаях и если ОС отказывает в symlink: stamped snapshots с `DO NOT EDIT`, version, source URI и content hash.
 
 Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
 
@@ -38,13 +41,13 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 `.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 
-Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config, lock и generated adapters, но сохраняет product-owned specification, Changes, Decisions, `AGENTS.md` и остальные существующие templates. До изменения lock:
+Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config и lock. Linked adapters следуют за nested checkout; copied adapters перегенерируются. Product-owned specification, Changes, Decisions, `AGENTS.md` и существующие templates сохраняются. До изменения lock:
 
 1. Проверить active Changes и записанные в них framework/schema versions.
 2. Завершить их на прежней версии либо закрыть Change.
-3. Перегенерировать adapters и проверить product layout.
+3. Перезапустить installer и проверить product layout.
 
-Нельзя вручную редактировать generated skills и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
+Нельзя вручную править adapter skills (копии или канонические файлы, на которые они ссылаются) и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
 
 ## First operation
 
@@ -88,13 +91,30 @@ deltafuse next
 deltafuse next --list
 deltafuse next --human
 deltafuse next --step declare --json
+deltafuse decide <change-dir> --decision DEC-0001 --status accepted
+deltafuse decide <change-dir> --spec --status accepted
 ```
 
 `--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
 
-Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next`. Следующую слеш-команду сами не выбирают.
+Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста, ждать, затем `deltafuse decide`. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
-Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) или `/intake`.
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
+
+Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) и `halt.choices`, либо halt `done`, если нового intake нет.
+
+## Бенчмарк воркера
+
+Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
+
+```text
+deltafuse bench init M02-policy-stats <product-dir>
+deltafuse bench journal <product-dir>
+deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse bench compare ../scores/opus.json ../scores/flash.json
+```
+
+См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.
 
 ## Внешние доски
 

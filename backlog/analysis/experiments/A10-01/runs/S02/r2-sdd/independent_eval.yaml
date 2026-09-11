@@ -1,6 +1,0 @@
-outcome: fail
-hidden_suite: 1 passed, 1 failed (consume during penalty returned True)
-product_pytest: fail (3 failed lock tests)
-penalty_seconds: present
-llm_calls: 6
-notes: Implement wrote penalty_seconds; review did not fix lock vs refill.

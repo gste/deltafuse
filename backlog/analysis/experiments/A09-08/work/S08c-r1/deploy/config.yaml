@@ -1,3 +1,0 @@
-hostname: limiter-prod-01
-port: 8080
-log_path: /var/log/ratelimiter/

@@ -1,9 +1,0 @@
-outcome: pass
-independent_gate:
-  specified: F-010 vacuous — spec-delta exists, requirement_delta none, no unresolved DEC
-  ops_updated: false
-  spec_unchanged: true
-  src_unchanged: true
-  tests_unchanged: true
-hidden_suite: not-run
-attempts: 3

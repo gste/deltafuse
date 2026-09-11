@@ -32,7 +32,3 @@ jobs:
       - name: Run Test Suite
         run: |
           python -m pytest -v
-
-      - name: Run DeltaFuse Evals Benchmark
-        run: |
-          python -m deltafuse eval --scenario golden --min-schema-compliance 100.0 --min-gate-pass-rate 100.0

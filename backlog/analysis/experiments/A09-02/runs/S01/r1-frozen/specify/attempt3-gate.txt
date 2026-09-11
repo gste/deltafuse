@@ -1,2 +1,0 @@
-change.yaml: [deltas -> 0] 'docs/changes/CHG-001-token-bucket-limiter/spec-delta.md' is not of type 'object'
-change.yaml: [slices -> 0] 'file' is a required property

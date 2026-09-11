@@ -19,16 +19,21 @@ from deltafuse.core.queue import (
     format_human_guide,
     format_item,
     format_queue,
+    load_product_root,
     queue_snapshot,
     select_next,
 )
+from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.evals.dataset import EvalDataset
-from deltafuse.evals.providers import MockLLMProvider, RealLLMProvider
-from deltafuse.evals.reporter import export_report
-from deltafuse.evals.runner import run_eval
+from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
+
+
+def _journal(start: Path | str, **event: object) -> None:
+    from deltafuse.bench.journal import record_event
+
+    record_event(start, **event)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,6 +130,35 @@ def main(argv: list[str] | None = None) -> int:
         help="Only select this step",
     )
 
+    decide_parser = subparsers.add_parser(
+        "decide",
+        help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)",
+    )
+    decide_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Product root, or Change directory for --spec",
+    )
+    decide_parser.add_argument(
+        "--decision",
+        "-d",
+        default=None,
+        help="DEC id or docs/decisions/*.md path",
+    )
+    decide_parser.add_argument(
+        "--spec",
+        action="store_true",
+        help="Apply the specification Human Gate (spec-delta.md on the Change path)",
+    )
+    decide_parser.add_argument(
+        "--status",
+        required=True,
+        choices=["accepted", "rejected"],
+        help="Recorded human choice",
+    )
+    decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
         "board",
@@ -152,15 +186,49 @@ def main(argv: list[str] | None = None) -> int:
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
-    # eval command (Stage 5)
-    eval_parser = subparsers.add_parser("eval", help="Run LLM Eval benchmark against DeltaFuse dataset and gatekeepers")
-    eval_parser.add_argument("--dataset", "-d", default=None, help="Path to custom eval dataset YAML/JSON file")
-    eval_parser.add_argument("--provider", "-p", default="mock", choices=["mock", "real"], help="LLM Provider to use (mock or real)")
-    eval_parser.add_argument("--scenario", "-s", default="golden",  choices=["golden", "schema_violation", "fsm_violation", "routing_mismatch", "claim_hallucination"], help="Mock LLM simulation scenario")
-    eval_parser.add_argument("--output", "-o", default="text", choices=["text", "json", "markdown"], help="Output format for report")
-    eval_parser.add_argument("--out-file", default=None, help="File path to save the eval report")
-    eval_parser.add_argument("--min-schema-compliance", type=float, default=0.0, help="Minimum required Schema Compliance Rate (0.0 - 100.0)")
-    eval_parser.add_argument("--min-gate-pass-rate", type=float, default=0.0, help="Minimum required Gate Pass Rate (0.0 - 100.0)")
+    bench_parser = subparsers.add_parser(
+        "bench",
+        help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)",
+    )
+    bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
+    bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
+    bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
+    bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
+    bench_init.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Recreate the sandbox if the directory already exists",
+    )
+    bench_init.add_argument(
+        "--pack",
+        default=None,
+        help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
+    )
+    bench_score = bench_sub.add_parser("score", help="Judge: score a sandbox from the pack (not for the Worker)")
+    bench_score.add_argument("product_dir", help="Product root created by bench init")
+    bench_score.add_argument("--stage", choices=list(BENCH_STAGES), help="Score one lifecycle step")
+    bench_score.add_argument("--json", action="store_true", help="Write the scorecard as JSON")
+    bench_score.add_argument("--label", default=None, help="Run label (agent+model) stored in the JSON")
+    bench_score.add_argument("--out-file", default=None, help="Save JSON outside the sandbox")
+    bench_score.add_argument(
+        "--pack",
+        default=None,
+        help=f"Judge pack required unless {BENCH_PACK_ENV} is set",
+    )
+    bench_score.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include hidden-suite pytest output (judge-only; do not share with the Worker)",
+    )
+    bench_cmp = bench_sub.add_parser("compare", help="Compare two bench score JSON files")
+    bench_cmp.add_argument("left", help="First score JSON")
+    bench_cmp.add_argument("right", help="Second score JSON")
+    bench_journal = bench_sub.add_parser(
+        "journal",
+        help="Judge: collect Core attempts from a sandbox journal (no LLM)",
+    )
+    bench_journal.add_argument("product_dir", help="Product root created by bench init")
 
     args = parser.parse_args(raw)
 
@@ -169,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
             result = install(target_dir=args.target, force=args.force)
             print(f"DeltaFuse {result.version} successfully installed into {result.target_dir}")
             print(f"Content hash: sha256:{result.content_hash}")
+            if result.adapter_mode == "link":
+                print("Adapter skills are relative links into the nested framework checkout.")
             return 0
         except InstallationError as e:
             print(f"Installation Error: {e}", file=sys.stderr)
@@ -180,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "validate":
         target = Path(args.change_path)
         errors = validate_change_package(target)
+        _journal(target, cmd="validate", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -191,6 +262,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "check-gate":
         target = Path(args.change_path)
         errors = check_gate(target, args.gate)
+        _journal(
+            target,
+            cmd="check-gate",
+            gate=args.gate,
+            ok=not errors,
+            errors=errors,
+            n_errors=len(errors),
+        )
         if errors:
             print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
             for err in errors:
@@ -203,18 +282,22 @@ def main(argv: list[str] | None = None) -> int:
         target = Path(args.change_path)
         try:
             dest = archive_change(target, force=args.force)
+            _journal(target, cmd="archive", ok=True)
             print(f"Change package {target.name} successfully archived to {dest}")
             return 0
         except ArchivalError as ae:
+            _journal(target, cmd="archive", ok=False, errors=[str(ae)])
             print(f"Archival failed: {ae}", file=sys.stderr)
             return 1
         except Exception as ex:
+            _journal(target, cmd="archive", ok=False, errors=[str(ex)])
             print(f"Unexpected error during archival: {ex}", file=sys.stderr)
             return 2
 
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
+        _journal(target, cmd="validate-layout", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -234,8 +317,25 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=args.timeout,
             )
         except EvidenceRunError as ex:
+            _journal(
+                Path(args.change_path),
+                cmd="evidence",
+                phase=args.phase,
+                task=args.task,
+                ok=False,
+                errors=[str(ex)],
+            )
             print(f"Evidence run failed: {ex}", file=sys.stderr)
             return 2
+        _journal(
+            Path(args.change_path),
+            cmd="evidence",
+            phase=args.phase,
+            task=args.task,
+            ok=bool(outcome.authentic),
+            errors=list(outcome.errors or []),
+            n_errors=len(outcome.errors or []),
+        )
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
@@ -249,30 +349,49 @@ def main(argv: list[str] | None = None) -> int:
         try:
             dest = write_coverage(Path(args.change_path))
         except CoverageError as ex:
+            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 1
         except Exception as ex:
+            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
             print(f"Coverage failed: {ex}", file=sys.stderr)
             return 2
+        _journal(Path(args.change_path), cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
     elif args.command == "next":
         target = Path(args.path)
+        mode = "list" if args.list else "json" if args.json else "human" if args.human else "select"
         try:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
             queue = build_work_queue(target, only_change=only)
         except QueueError as ex:
+            _journal(target, cmd="next", ok=False, mode=mode, errors=[str(ex)])
             print(f"Next failed: {ex}", file=sys.stderr)
             return 2
         selected = select_next(queue, step=args.step)
+        _journal(
+            target if only is None else only,
+            cmd="next",
+            ok=True if mode in {"list", "json"} else selected is not None,
+            mode=mode,
+            skill=selected.skill if selected is not None else None,
+            step=selected.step if selected is not None else None,
+            change=selected.change_id if selected is not None else None,
+            empty=selected is None,
+        )
         guide = (
             format_human_guide(selected)
             if selected is not None
             else format_human_blocked_queue(queue)
         )
         if args.json:
-            payload = queue_snapshot(queue, selected=selected)
+            payload = queue_snapshot(
+                queue,
+                selected=selected,
+                product_root=load_product_root(target if only is None else only),
+            )
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -291,15 +410,57 @@ def main(argv: list[str] | None = None) -> int:
             print("To start a new Change: /intake", file=sys.stderr)
         return 0 if selected is not None else 1
 
+    elif args.command == "decide":
+        target = Path(args.path)
+        try:
+            result = apply_decision(
+                target,
+                status=args.status,
+                decision=args.decision,
+                spec=args.spec,
+            )
+        except DecideError as ex:
+            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
+            print(f"Decide failed: {ex}", file=sys.stderr)
+            return 1
+        except QueueError as ex:
+            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
+            print(f"Decide failed: {ex}", file=sys.stderr)
+            return 2
+        _journal(
+            target,
+            cmd="decide",
+            ok=True,
+            gate=result.get("gate"),
+            status=result.get("status"),
+            decision=result.get("decision"),
+        )
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"decide: {result.get('gate')} {result.get('status')}")
+            if result.get("decision"):
+                print(f"decision: {result['decision']}")
+            if result.get("change_status"):
+                print(f"change_status: {result['change_status']}")
+            for rel in result.get("written") or []:
+                print(f"wrote: {rel}")
+            for err in result.get("gate_errors") or []:
+                print(f"gate: {err}", file=sys.stderr)
+        return 0
+
     elif args.command == "board":
+        target = Path(args.product_path)
         try:
             snapshot = build_board_snapshot(
-                Path(args.product_path),
+                target,
                 include_archive=args.archive,
             )
         except BoardError as ex:
+            _journal(target, cmd="board", ok=False, errors=[str(ex)])
             print(f"Board failed: {ex}", file=sys.stderr)
             return 2
+        _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
 
@@ -345,6 +506,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 except Exception as ex:
                     errors.append(f"{tf.name}: {ex}")
+        _journal(target, cmd="lint-context", ok=not errors, errors=errors, n_errors=len(errors))
         if errors:
             print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -353,43 +515,63 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Context budget for {target} is within limits.")
         return 0
 
-    elif args.command == "eval":
+    elif args.command == "bench":
+        from deltafuse.bench import BenchError
+        from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
+        from deltafuse.bench.score import compare_reports, format_score, score_product
+
         try:
-            if args.dataset:
-                dataset = EvalDataset.load_from_file(args.dataset)
-            else:
-                dataset = EvalDataset.get_default_dataset()
-
-            if args.provider == "real":
-                provider = RealLLMProvider()
-            else:
-                provider = MockLLMProvider(scenario=args.scenario)
-            report = run_eval(dataset=dataset, provider=provider)
-
-            output_text = export_report(report, format_type=args.output, output_file=args.out_file)
-            print(output_text)
-
-            failed_threshold = False
-            if report.schema_compliance_rate < args.min_schema_compliance:
-                print(
-                    f"Error: Schema Compliance Rate {report.schema_compliance_rate:.1f}% is below required {args.min_schema_compliance:.1f}%",
-                    file=sys.stderr,
+            if args.bench_cmd == "init":
+                meta = init_bench_product(
+                    args.case_id,
+                    args.product_dir,
+                    pack_root=args.pack,
+                    force=args.force,
                 )
-                failed_threshold = True
+                product = Path(args.product_dir).resolve()
+                print(f"Bench {meta['case']} ready in {product}")
+                print("Open that directory as the Worker workspace, then paste:")
+                print()
+                print("----- paste into the Worker -----")
+                print(format_worker_start_prompt(meta))
+                print("----- end -----")
+                return 0
+            if args.bench_cmd == "score":
+                from deltafuse.bench.loader import assert_scorecard_outside_sandbox
 
-            if report.gate_pass_rate < args.min_gate_pass_rate:
-                print(
-                    f"Error: Gate Pass Rate {report.gate_pass_rate:.1f}% is below required {args.min_gate_pass_rate:.1f}%",
-                    file=sys.stderr,
+                product = Path(args.product_dir)
+                if args.out_file:
+                    assert_scorecard_outside_sandbox(args.out_file, product)
+                report = score_product(
+                    args.product_dir,
+                    stage=args.stage,
+                    label=args.label,
+                    pack_root=args.pack,
+                    reveal_hidden=args.verbose,
                 )
-                failed_threshold = True
+                payload = json.dumps(report, ensure_ascii=False, indent=2)
+                if args.out_file:
+                    Path(args.out_file).write_text(payload + "\n", encoding="utf-8")
+                if args.json:
+                    print(payload)
+                else:
+                    print(format_score(report))
+                return 0 if report.get("pass") else 1
+            if args.bench_cmd == "journal":
+                from deltafuse.bench.journal import collect_attempts, load_events
 
-            if failed_threshold:
-                return 1
-
-            return 0 if report.failed_cases == 0 else 1
+                payload = collect_attempts(load_events(Path(args.product_dir).resolve()))
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+            left = json.loads(Path(args.left).read_text(encoding="utf-8"))
+            right = json.loads(Path(args.right).read_text(encoding="utf-8"))
+            print(compare_reports(left, right))
+            return 0
+        except BenchError as ex:
+            print(f"Bench failed: {ex}", file=sys.stderr)
+            return 2
         except Exception as ex:
-            print(f"Evaluation failed with error: {ex}", file=sys.stderr)
+            print(f"Bench failed: {ex}", file=sys.stderr)
             return 2
 
     return 0

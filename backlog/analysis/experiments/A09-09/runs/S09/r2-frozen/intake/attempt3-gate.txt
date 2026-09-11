@@ -1,3 +1,0 @@
-coverage.yaml: [root] Additional properties are not allowed ('specification' was unexpected)
-coverage.yaml: Claim 'CR-007' from request.md is not mapped in coverage.yaml
-spec-delta.md: [status] 'unchanged' is not one of ['proposed', 'accepted', 'rejected', 'superseded']

@@ -1,7 +1,0 @@
-coverage.yaml: [claims -> CR-003 -> status] 'unchanged' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
-coverage.yaml: [claims -> CR-004 -> status] 'unchanged' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
-coverage.yaml: [claims -> CR-002 -> status] 'unchanged' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
-coverage.yaml: [claims -> CR-001 -> status] 'unchanged' is not one of ['pending', 'analyzing', 'analyzed', 'specified', 'decomposed', 'targeting', 'target-confirmed', 'implementing', 'implemented', 'verified', 'rejected', 'not-reproduced']
-Gate specified: spec-delta.md is missing
-Gate specified: change.yaml status must be 'specified' or 'specification-proposed' (got 'normalized')
-Gate specified: SLICE-01.md spec_ref 'docs/spec/security/ratelimit.md' must include an existing anchor

@@ -261,23 +261,38 @@ def validate_catalog_capability_specs(
     return errors
 
 
-def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> list[str]:
-    """Finds any decision records in docs/decisions/ associated with change_id that are in 'proposed' status."""
+def list_proposed_decisions_for_change(change_id: str, repo_root: Path) -> list[dict[str, str]]:
+    """Proposed DEC-* records for a Change: id, path (relative), title, filename."""
     dec_dir = repo_root / "docs" / "decisions"
     if not dec_dir.is_dir():
         return []
-
-    unresolved: list[str] = []
-    for dec_file in dec_dir.glob("*.md"):
+    found: list[dict[str, str]] = []
+    for dec_file in sorted(dec_dir.glob("*.md")):
         try:
             meta, _ = parse_frontmatter(dec_file.read_text(encoding="utf-8"))
-            if meta.get("change") == change_id and meta.get("status") == "proposed":
-                unresolved.append(
-                    f"Decision '{dec_file.name}' for Change '{change_id}' is in 'proposed' status"
-                )
         except Exception:
-            pass
-    return unresolved
+            continue
+        if meta.get("change") != change_id or meta.get("status") != "proposed":
+            continue
+        dec_id = meta.get("id")
+        title = meta.get("title")
+        found.append(
+            {
+                "id": dec_id if isinstance(dec_id, str) else dec_file.stem,
+                "path": dec_file.relative_to(repo_root).as_posix(),
+                "filename": dec_file.name,
+                "title": title if isinstance(title, str) and title.strip() else dec_file.stem,
+            }
+        )
+    return found
+
+
+def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> list[str]:
+    """Finds any decision records in docs/decisions/ associated with change_id that are in 'proposed' status."""
+    return [
+        f"Decision '{row['filename']}' for Change '{change_id}' is in 'proposed' status"
+        for row in list_proposed_decisions_for_change(change_id, repo_root)
+    ]
 
 
 def validate_coverage_completeness(

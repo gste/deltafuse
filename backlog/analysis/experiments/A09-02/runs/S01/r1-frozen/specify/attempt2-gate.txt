@@ -1,2 +1,0 @@
-change.yaml: [slices -> 0] 'SLICE-01' is not of type 'object'
-spec-delta.md frontmatter error: File does not contain valid YAML frontmatter enclosed by '---' delimiters.

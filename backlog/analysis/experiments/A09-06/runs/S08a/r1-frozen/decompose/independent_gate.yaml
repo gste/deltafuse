@@ -1,6 +1,0 @@
-outcome: fail
-independent_gate:
-  decomposed: coverage.claims.*.task extra key; slices list emptied; status normalized then decomposed
-task_count: 5
-hidden_suite: not-run
-attempts: 3

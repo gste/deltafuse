@@ -1,6 +1,0 @@
-outcome: pass
-independent_gate:
-  wrote_limiter: true
-  get_window_stats: true before evaluator merge overwrote limiter.py with CHG-A seed
-hidden_suite: not-run
-attempts: 3

@@ -1,6 +1,0 @@
-case: S02
-repeat: 1
-phases:
-- phase: intake
-  outcome: fail
-  attempts: 3

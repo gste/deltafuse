@@ -1,9 +1,0 @@
-outcome: pass
-independent_gate:
-  routing_schema_attempt3: []
-attempts: 3
-attempt1: fake blocked-on-decision, no DEC file (SPEC-002 trap; harness rejected)
-attempt2: schema_version forbidden
-attempt3: routing.yaml ok
-elapsed_s: 41.1
-reasoning_chars: 0

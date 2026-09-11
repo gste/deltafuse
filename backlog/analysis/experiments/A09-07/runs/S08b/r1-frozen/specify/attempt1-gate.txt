@@ -1,1 +1,0 @@
-Gate specified: spec-delta.md is missing
