@@ -10,6 +10,27 @@ DeltaFuse turns an unstructured feature or bug report into a typed Delta, applie
 Request -> Analyze -> Delta -> Fuse -> Converge
 ```
 
+## Who this is for
+
+DeltaFuse is for a product whose specification is law, whose Human Gates are real stops, and whose Red/Green proof is a recorded command — not a file the model typed.
+
+**Use it when:**
+
+- `docs/spec/**` is the implementation law, not a draft in chat.
+- A bug must not rewrite the specification.
+- A Worker (LLM or human) must not skip `deltafuse next` and edit product files anyway.
+- Decisions, spec acceptance, and merge wait for a person — not `accepted` written into markdown.
+- Red is a failing run recorded by the Core, not hand-written YAML.
+
+Through-mode (`/run`) follows the lifecycle until a Human Gate, a failed gate, or nothing ready. The seven steps remain; the Worker does not paste `/analyze` … `/verify`. Lighter spec-driven kits (OpenSpec, Spec Kit, and similar) optimize the model's flow. DeltaFuse enforces the product invariant: the Core refuses when the Process was skipped.
+
+**Use a lighter kit when:**
+
+- The change is an evening feature and there will be no living specification.
+- The team wants the model to drive plan and tasks in chat.
+- There is no accepted `docs/spec/**`, no Decision gate, and no Red-before-Green.
+- One person reviewing the diff is enough.
+
 ## Why DeltaFuse
 
 Small local models fail when a workflow treats the whole repository as context. DeltaFuse routes each claim to a product capability and combines that scope with one artifact layer per operation. Every transition leaves a compact, traceable artifact.
