@@ -2,12 +2,13 @@
 
 Очередь работ вокруг канонического репозитория DeltaFuse. Это не lifecycle продукта и не замена `docs/**`.
 
-Тезис текущей программы: [product/leash.md](product/leash.md).
+Брать в работу: [AU-001](product/AU-001.md) — полный внешний аудит. Промпт: [product/audit-prompt.md](product/audit-prompt.md).
 
-Брать в работу: нет. Программа [product/leash.md](product/leash.md) закрыта.
+Закрытая программа: [product/leash.md](product/leash.md).
 
 | ID | Статус | Слой |
 |---|---|---|
+| [AU-001](product/AU-001.md) | `ready` | полный аудит (промпт → другие модели) |
 | [LS-001](product/LS-001.md) | `done` | `next --json` write envelope |
 | [LS-002](product/LS-002.md) | `done` | `deltafuse leash` |
 | [LS-003](product/LS-003.md) | `done` | orphan-diff без Change |

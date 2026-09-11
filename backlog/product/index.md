@@ -2,12 +2,13 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Программа: [leash.md](leash.md) — железный поводок (envelope, `leash`, hook/CI, decide, evidence stamp, хост).
+Брать в работу: [AU-001](AU-001.md) — полный внешний аудит. Промпт: [audit-prompt.md](audit-prompt.md).
 
-Брать в работу: нет. Программа [leash.md](leash.md) закрыта.
+Закрытая программа: [leash.md](leash.md) — железный поводок (envelope, `leash`, hook/CI, decide, evidence stamp, хост).
 
 | ID | Статус | Зачем |
 |---|---|---|
+| [AU-001](AU-001.md) | `ready` | Внешний аудит: дефекты, слабые места, steal-sheet, roadmap |
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |
 | [LS-003](LS-003.md) | `done` | Orphan-правка продукта без Change |
