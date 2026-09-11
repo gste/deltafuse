@@ -5,6 +5,7 @@ import pytest
 import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.archiver import archive_change, ArchivalError
+from deltafuse.core.evidence import write_stamped_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.hasher import compute_product_baseline_revision
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -35,7 +36,7 @@ def test_mutation_t1_green_evidence_in_red_folder_rejected(tmp_path: Path):
         "spec_status": "unchanged",
         "base_revision": compute_product_baseline_revision(tmp_path),
     }
-    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(green_fake), encoding="utf-8")
+    write_stamped_evidence(red_dir / "TASK-001.yaml", green_fake, tmp_path)
 
     errs = validate_change_package(builder.change_dir)
     assert any("phase mismatch" in e for e in errs)
@@ -68,7 +69,7 @@ def test_mutation_t2_red_evidence_with_passed_result_rejected(tmp_path: Path):
         "changed_paths": ["tests/test_task.py"],
         "spec_status": "unchanged",
     }
-    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(passed_red), encoding="utf-8")
+    write_stamped_evidence(red_dir / "TASK-001.yaml", passed_red, tmp_path)
 
     errs = validate_change_package(builder.change_dir)
     assert any("red evidence must have result 'expected-failure'" in e for e in errs)
@@ -97,12 +98,12 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     (builder.change_dir / "verification.md").write_text("# Verification", encoding="utf-8")
     ver_dir = builder.change_dir / "evidence" / "verification"
     ver_dir.mkdir(parents=True, exist_ok=True)
-    (ver_dir / "run.yaml").write_text(yaml.safe_dump({
+    write_stamped_evidence(ver_dir / "run.yaml", {
         "schema_version": 2, "change": "CHG-203", "phase": "verification",
         "timestamp": "2026-09-05T12:00:00Z", "command": "pytest", "exit_code": 0,
         "result": "passed", "summary": "Passed", "changed_paths": [], "spec_status": "unchanged",
         "base_revision": compute_product_baseline_revision(tmp_path),
-    }), encoding="utf-8")
+    }, tmp_path)
 
     gate_errs = check_gate(builder.change_dir, "converged")
     assert any("has non-terminal status 'pending'" in e for e in gate_errs)
@@ -159,7 +160,7 @@ def test_mutation_t4_evidence_for_nonexistent_task_rejected(tmp_path: Path):
         "changed_paths": ["tests/phantom.py"],
         "spec_status": "unchanged",
     }
-    (red_dir / "TASK-999.yaml").write_text(yaml.safe_dump(phantom_evidence), encoding="utf-8")
+    write_stamped_evidence(red_dir / "TASK-999.yaml", phantom_evidence, tmp_path)
 
     errs = validate_change_package(builder.change_dir)
     assert any("references nonexistent task 'TASK-999'" in e for e in errs)
@@ -311,7 +312,7 @@ def test_mutation_t4_evidence_with_empty_tasks_directory_rejected(tmp_path: Path
         "changed_paths": ["tests/test.py"],
         "spec_status": "unchanged",
     }
-    (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(phantom_evidence), encoding="utf-8")
+    write_stamped_evidence(red_dir / "TASK-001.yaml", phantom_evidence, tmp_path)
 
     errs = validate_change_package(builder.change_dir)
     assert any("references nonexistent task 'TASK-001'" in e for e in errs)

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 import yaml
+from deltafuse.core.gate_journal import TERMINAL_STATUSES, has_click
 from deltafuse.core.frontmatter import parse_frontmatter
 
 
@@ -157,6 +158,16 @@ def validate_decision_ref(design_ref: str | None, repo_root: Path) -> list[str]:
                 f"Referenced decision '{dec_path.name}' has status '{status}', "
                 f"must be 'accepted' (Change is blocked-on-decision)"
             )
+        elif not has_click(
+            repo_root,
+            kind="decision",
+            status="accepted",
+            artifact_id=str(meta.get("id") or "") or None,
+            rel_path=dec_path.resolve().relative_to(repo_root.resolve()).as_posix(),
+        ):
+            errors.append(
+                f"Referenced decision '{dec_path.name}' is accepted without deltafuse decide"
+            )
     except Exception as ex:
         errors.append(f"Failed to parse decision record '{dec_path.name}': {ex}")
 
@@ -293,6 +304,38 @@ def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> lis
         f"Decision '{row['filename']}' for Change '{change_id}' is in 'proposed' status"
         for row in list_proposed_decisions_for_change(change_id, repo_root)
     ]
+
+
+def find_unrecorded_terminal_decisions_for_change(change_id: str, repo_root: Path) -> list[str]:
+    """accepted/rejected DEC-* for this Change that were not written by deltafuse decide."""
+    dec_dir = repo_root / "docs" / "decisions"
+    if not dec_dir.is_dir():
+        return []
+    found: list[str] = []
+    for dec_file in sorted(dec_dir.glob("*.md")):
+        try:
+            meta, _ = parse_frontmatter(dec_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if meta.get("change") != change_id:
+            continue
+        status = meta.get("status")
+        if status not in TERMINAL_STATUSES:
+            continue
+        rel = dec_file.relative_to(repo_root).as_posix()
+        dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_file.stem
+        if has_click(
+            repo_root,
+            kind="decision",
+            status=str(status),
+            artifact_id=dec_id,
+            rel_path=rel,
+        ):
+            continue
+        found.append(
+            f"Decision '{dec_file.name}' is {status} without deltafuse decide"
+        )
+    return found
 
 
 def validate_coverage_completeness(

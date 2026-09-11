@@ -14,6 +14,7 @@ from deltafuse.core.adapters import (
     resolve_effective_adapter_mode,
 )
 from deltafuse.core.hasher import compute_framework_content_hash
+from deltafuse.core.leash import load_leash_mode, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
 
 
@@ -44,6 +45,7 @@ TEMPLATE_MAPPINGS = [
     ("process/templates/docs/archive/intake/README.md", "docs/archive/intake/README.md"),
     ("process/templates/docs/archive/changes/README.md", "docs/archive/changes/README.md"),
     ("process/templates/CHANGELOG.md", "CHANGELOG.md"),
+    ("process/templates/.github/workflows/deltafuse-leash.yml", ".github/workflows/deltafuse-leash.yml"),
 ]
 
 DIRECTORIES_TO_CREATE = [
@@ -242,6 +244,8 @@ def install(
             ),
             encoding="utf-8",
         )
+
+    sync_leash_hook(target_root, load_leash_mode(target_root, missing="off"))
 
     return InstallResult(
         target_dir=target_root,

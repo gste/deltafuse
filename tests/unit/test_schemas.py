@@ -279,6 +279,35 @@ def test_routing_schema_validation(registry: SchemaRegistry):
         for e in registry.validate("routing", extra_claim_field)
     )
 
+    o1_ok = {
+        "change": "CHG-001",
+        "claims": {"O1": {"primary_capability": "identity.auth"}},
+    }
+    assert registry.validate("routing", o1_ok) == []
+
+
+def test_change_source_rejects_invented_keys(registry: SchemaRegistry):
+    valid = {
+        "schema_version": 2,
+        "id": "CHG-042",
+        "title": "Fix authentication expiration",
+        "status": "normalized",
+        "framework": {
+            "version": "2.0.0",
+            "content_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+        "source": {"request": "request.md", "path": "docs/intake/note.md"},
+        "deltas": [],
+        "slices": [],
+        "decisions": [],
+        "tasks": [],
+    }
+    errors = registry.validate("change", valid)
+    blob = "\n".join(errors)
+    assert "path" in blob
+    assert "intake_refs" in blob
+
+
 def test_spec_delta_schema_validation(registry: SchemaRegistry):
     valid_spec_delta = {
         "change": "CHG-001",

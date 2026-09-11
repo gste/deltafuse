@@ -16,7 +16,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 1. If no Change was named, run `deltafuse next --step verify` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).
 3. Close with `deltafuse check-gate <change-dir> --gate converged`. Halt if it exits non-zero.
-4. After the gate passes, archive with `deltafuse archive <change-dir>`. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run the matching `deltafuse decide` command, and continue. If they chose inspect, or there is no new intake, stop. Merge/push is a Human Gate. Do not git push.
+4. After the gate passes, archive with `deltafuse archive <change-dir>`. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If they chose inspect, or there is no new intake, stop. Merge/push is a Human Gate. Do not git push.
 5. Do not auto-accept Decisions or merge.
 
 ## Context

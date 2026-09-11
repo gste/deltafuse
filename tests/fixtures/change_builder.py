@@ -70,6 +70,11 @@ class MockChangeBuilder:
         data.update(updates)
         cfile.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
+    def _write_evidence(self, dest: Path, payload: dict[str, Any]) -> None:
+        from deltafuse.core.evidence import write_stamped_evidence
+
+        write_stamped_evidence(dest, payload, self.root_dir)
+
     def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
         if claims is None:
             claims = ["CR-001"]
@@ -190,7 +195,10 @@ class MockChangeBuilder:
             f"---\n\n# Spec Delta\nDetails\n"
         )
         (self.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
-        self._update_change_yaml({"status": "specified"})
+        self._update_change_yaml({"status": "specification-proposed"})
+        from deltafuse.core.decide import apply_decision
+
+        apply_decision(self.change_dir, status="accepted", spec=True)
         return self
 
     def step_decompose(self, tasks: list[dict[str, Any]] | None = None) -> MockChangeBuilder:
@@ -297,7 +305,7 @@ class MockChangeBuilder:
                 "changed_paths": [f"tests/test_{task_id.lower()}.py"],
                 "spec_status": "unchanged",
             }
-        (red_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev), encoding="utf-8")
+        self._write_evidence(red_dir / f"{task_id}.yaml", ev)
 
         cov_file = self.change_dir / "coverage.yaml"
         if cov_file.is_file():
@@ -327,7 +335,7 @@ class MockChangeBuilder:
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
             }
-            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
                 "schema_version": 2,
                 "change": self.change_id,
@@ -344,7 +352,7 @@ class MockChangeBuilder:
             }
             reg_dir = self.change_dir / "evidence" / "regression"
             reg_dir.mkdir(parents=True, exist_ok=True)
-            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+            self._write_evidence(reg_dir / f"{task_id}.yaml", ev_reg)
         elif self.route == "ops":
             ev_green = {
                 "schema_version": 2,
@@ -360,7 +368,7 @@ class MockChangeBuilder:
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
             }
-            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
                 "schema_version": 2,
                 "change": self.change_id,
@@ -377,7 +385,7 @@ class MockChangeBuilder:
             }
             reg_dir = self.change_dir / "evidence" / "regression"
             reg_dir.mkdir(parents=True, exist_ok=True)
-            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+            self._write_evidence(reg_dir / f"{task_id}.yaml", ev_reg)
         else:
             reg_dir = self.change_dir / "evidence" / "regression"
             reg_dir.mkdir(parents=True, exist_ok=True)
@@ -395,7 +403,7 @@ class MockChangeBuilder:
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
             }
-            (green_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_green), encoding="utf-8")
+            self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
                 "schema_version": 2,
                 "change": self.change_id,
@@ -410,7 +418,7 @@ class MockChangeBuilder:
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
             }
-            (reg_dir / f"{task_id}.yaml").write_text(yaml.safe_dump(ev_reg), encoding="utf-8")
+            self._write_evidence(reg_dir / f"{task_id}.yaml", ev_reg)
 
         task_file = self.change_dir / "tasks" / f"{task_id}.md"
         if task_file.is_file():
@@ -451,7 +459,7 @@ class MockChangeBuilder:
             "spec_status": "unchanged",
             "base_revision": self._baseline_revision(),
         }
-        (ver_dir / "run.yaml").write_text(yaml.safe_dump(ev_ver), encoding="utf-8")
+        self._write_evidence(ver_dir / "run.yaml", ev_ver)
 
         tasks_dir = self.change_dir / "tasks"
         if tasks_dir.is_dir():

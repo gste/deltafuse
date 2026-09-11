@@ -19,7 +19,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
    - `slice`: one `slices/<slice_id>.md` for `capability`. Read only `spec_refs` from `next`. Do not collapse two capabilities into one file.
    - `coverage`: run `deltafuse coverage <change-dir>`. Do not hand-write `coverage.yaml`.
 3. If `analyze_pass` is `coverage`, run `deltafuse coverage <change-dir>` if needed, then close with `deltafuse check-gate <change-dir> --gate analyzed`. Halt if it exits non-zero. For `routing` or `slice`, do not call `check-gate --gate analyzed`.
-4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run the matching `deltafuse decide` command, and continue. If `check-gate` failed or they chose inspect, stop.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
 ## Context
@@ -30,10 +30,10 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
 
 ## Procedure
 
-1. Assign every `CR-*` claim one owning capability plus optional related capabilities and policies in `routing.yaml`.
-2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that file only.
+1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies in `routing.yaml`. `claims` is a map, not a list. The field name is `primary_capability`, not `capability` or `primary`.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that file only. Slice frontmatter uses only slice schema keys (`id`, `change`, `title`, `status: draft`, `primary_capability`, `claims`, …). Put `intent` / `risk` / `size` in the markdown body. In `change.yaml`, `slices` is a list of `{id, status, file}` objects, not strings.
 3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
-4. Classify independently: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
+4. Classify independently in the slice markdown body, not as extra frontmatter keys: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
 5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
 6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices. Do not accept them.
 7. Re-run only affected slices after human clarification or a terminal Decision.

@@ -521,14 +521,20 @@ def queue_snapshot(
     product_root: Path | None = None,
 ) -> dict[str, Any]:
     halt = None
+    envelope = None
     if product_root is not None:
         halt = build_halt(queue, selected, product_root)
+        if halt is None and selected is not None:
+            from deltafuse.core.leash import build_envelope
+
+            envelope = build_envelope(selected, product_root)
     return {
         "schema_version": 1,
         "selected": selected.as_dict() if selected else None,
         "ready": [item.as_dict() for item in queue.ready],
         "blocked": [item.as_dict() for item in queue.blocked],
         "halt": halt,
+        "envelope": envelope,
     }
 
 

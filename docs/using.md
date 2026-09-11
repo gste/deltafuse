@@ -58,6 +58,8 @@ Never edit adapter skills (copied snapshots or the canonical files they link to)
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
 
+Fresh `init` sets `workflow.leash: off` so a pet can brainstorm. After `project.baseline: accepted`, set `workflow.leash: enforce` and re-run the installer (`deltafuse init --force`). That writes a local git `pre-commit` hook that runs `deltafuse leash` even if the Worker never types the command. A GitHub Action template (`.github/workflows/deltafuse-leash.yml`) is copied once and is optional. per-ankh and fuse-map turn `enforce` on themselves. `advisory` still runs the hook; the commit is not blocked. `off` means no hook; invoking `deltafuse leash` still fails on violations.
+
 ## Kernel evidence
 
 The Worker writes tests and production files. The Core records proof:
@@ -66,7 +68,7 @@ The Worker writes tests and production files. The Core records proof:
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax failures and `_`-prefixed Red tests are not authentic. `check-gate --gate targeting` still enforces the YAML on disk.
+Import/syntax failures and `_`-prefixed Red tests are not authentic. The Core stamps the YAML; `check-gate --gate targeting` rejects a schema-valid file that was not written by `deltafuse evidence`.
 
 ## Kernel coverage
 
@@ -95,9 +97,9 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
+`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate.
 
-Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons, wait, then `deltafuse decide`. Single-step skills restart one step after a problem.
+Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 
 Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
 
@@ -116,9 +118,22 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
+## Host halt
+
+`deltafuse next --json` `halt` is the host button contract ([halt.md](./contracts/halt.md)). Render every `choices[].label`. Run only `choice.command` from the product root. `inspect` (`command: null`) means stop. Do not add merge or `git push` buttons. Core does not draw UI.
+
+## Write envelope
+
+`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). The host MUST restrict write-tools to `envelope.write`. If it cannot, `/run` still calls `deltafuse leash` before leaving the step (not a substitute for the git hook). `deltafuse leash` compares the git diff (or `--file`) to ready envelopes. Intake must not write `src/**`. A null envelope plus a dirty `src/**` / `tests/**` is an orphan and fails. When `halt.kind` is `decision` or `spec`, `envelope` is null and product-code write tools stay off. `docs/spec/**` is an orphan only after `project.baseline: accepted`. `docs/intake/**` and `AGENTS.md` are not orphans. `workflow.leash: advisory` reports the same violations and exits 0. `enforce` installs a git hook and (optional) CI job; `off` does not. Fuse-map UI and Cursor buttons live outside `src/deltafuse/**`.
+
+```text
+deltafuse leash <product-root>
+deltafuse leash <product-root> --file src/foo.py
+```
+
 ## External boards
 
-A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.
+A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository. This framework does not ship a board UI.
 
 ```text
 deltafuse board <product-root> --json

@@ -2,14 +2,23 @@
 
 Очередь работ вокруг канонического репозитория DeltaFuse. Это не lifecycle продукта и не замена `docs/**`.
 
-Брать в работу:
+Тезис текущей программы: [product/leash.md](product/leash.md).
+
+Брать в работу: нет. Программа [product/leash.md](product/leash.md) закрыта.
 
 | ID | Статус | Слой |
 |---|---|---|
-| [SK-001](product/SK-001.md) | `planned` | schemas / templates / skills — первый `check-gate` |
-| [HS-001](product/HS-001.md) | `planned` | контракт хоста (`halt.choices`, pack isolation, Human Gates) |
+| [LS-001](product/LS-001.md) | `done` | `next --json` write envelope |
+| [LS-002](product/LS-002.md) | `done` | `deltafuse leash` |
+| [LS-003](product/LS-003.md) | `done` | orphan-diff без Change |
+| [LS-004](product/LS-004.md) | `done` | hook/CI + `workflow.leash` |
+| [LS-005](product/LS-005.md) | `done` | Gate только через `decide` |
+| [LS-006](product/LS-006.md) | `done` | штамп `deltafuse evidence` |
+| [LS-007](product/LS-007.md) | `done` | контракт хоста (writes + halt) |
 
 Сводка: [product/index.md](product/index.md).
+
+Сделано ранее: [SK-001](product/SK-001.md), [HS-001](product/HS-001.md).
 
 Закрытые карточки, пакеты анализа, findings, матрицы и снимки экспериментов остаются в git history.
 

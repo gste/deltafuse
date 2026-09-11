@@ -58,6 +58,8 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
 
+Свежий `init` ставит `workflow.leash: off`, чтобы pet мог brainstorm. После `project.baseline: accepted` поставить `workflow.leash: enforce` и перезапустить installer (`deltafuse init --force`). Тогда появится локальный git `pre-commit`, который зовёт `deltafuse leash`, даже если воркер команду не набрал. Шаблон GitHub Action (`.github/workflows/deltafuse-leash.yml`) копируется один раз и необязателен. per-ankh и fuse-map включают `enforce` сами. `advisory` — hook отрабатывает, commit не валится. `off` — hook нет; сам `deltafuse leash` при нарушениях всё равно падает.
+
 ## Evidence ядра
 
 Воркер пишет тесты и продуктовые файлы. Ядро записывает доказательство:
@@ -66,7 +68,7 @@ Initial capability catalog предлагается ИИ и принимаетс
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax и Red с `_` не authentic. `check-gate --gate targeting` по-прежнему проверяет YAML на диске.
+Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; `check-gate --gate targeting` отвергает schema-valid файл, который написали не через `deltafuse evidence`.
 
 ## Coverage ядра
 
@@ -95,9 +97,9 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс.
+`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает.
 
-Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста, ждать, затем `deltafuse decide`. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
+Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста по [контракту halt](./contracts/halt.ru.md), ждать, выполнить только `choice.command`. `inspect` (`command: null`) — стоп. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
 Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
 
@@ -116,9 +118,22 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.
 
+## Halt хоста
+
+`deltafuse next --json` `halt` — контракт кнопок хоста ([halt.ru.md](./contracts/halt.ru.md)). Показать каждый `choices[].label`. Выполнить только `choice.command` из корня продукта. `inspect` (`command: null`) — стоп. Не добавлять кнопки merge / `git push`. Ядро UI не рисует.
+
+## Конверт записи
+
+`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). Хост MUST резать write-tools по `envelope.write`. Если не умеет — `/run` всё равно зовёт `deltafuse leash` перед концом шага (не замена hook). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` — orphan, команда падает. При `halt.kind` `decision` или `spec` envelope пустой, запись в код продукта выключена. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0. `enforce` ставит git hook и (по желанию) CI; `off` — нет. UI fuse-map и кнопки Cursor живут вне `src/deltafuse/**`.
+
+```text
+deltafuse leash <product-root>
+deltafuse leash <product-root> --file src/foo.py
+```
+
 ## Внешние доски
 
-Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя.
+Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя. Этот репозиторий UI доски не содержит.
 
 ```text
 deltafuse board <product-root> --json

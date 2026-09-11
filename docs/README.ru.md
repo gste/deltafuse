@@ -97,6 +97,8 @@ product/
 | [using.ru.md](./using.ru.md) | Установка и product integration |
 | [bench.ru.md](./bench.ru.md) ([en](./bench.md)) | Агент-агностичный бенчмарк воркера (`deltafuse bench`); ядро считает диск |
 | [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
+| [contracts/halt.ru.md](./contracts/halt.ru.md) ([en](./contracts/halt.md)) | Кнопки хоста для `next --json` halt (`kind` + `choices`) |
+| [contracts/leash.ru.md](./contracts/leash.ru.md) ([en](./contracts/leash.md)) | Конверт записи для `next --json` и `deltafuse leash` |
 
-Исполняемые привязки воркера (LLM) — `process/skills/**`; машинный контракт Ядра — kernel. Схемы артефактов Change — в `process/schemas/**`. Схема снимка доски — контракт совместимости с внешним UI (`docs/contracts/`), не схема продукта; в consuming repository её не копировать.
+Исполняемые привязки воркера (LLM) — `process/skills/**`; машинный контракт Ядра — kernel. Схемы артефактов Change — в `process/schemas/**`. Схемы снимка доски, halt и leash — контракты совместимости с внешним UI/хостом (`docs/contracts/`), не схемы продукта; в consuming repository их не копировать.
 

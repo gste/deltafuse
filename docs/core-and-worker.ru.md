@@ -46,6 +46,6 @@
 2. `halt.kind` = `spec` — показать `halt.choices`, ждать, затем `deltafuse decide --spec …`.
 3. Гейт упал, задача blocked, или человек выбрал inspect — стоп, осмотр, затем снова `/run` или названный шаг.
 
-`deltafuse decide` записывает нажатие. Это не auto-accept. Merge и `git push` остаются Human Gate; сквозной режим не делает push.
+Список кнопок хоста — [контракт halt](./contracts/halt.ru.md). `deltafuse decide` записывает клик, это не auto-accept. Ядро UI не рисует. Merge и `git push` остаются Human Gate. Список записи — [конверт](./contracts/leash.ru.md): хост MUST резать write-tools по `envelope.write`. Если не умеет — `/run` всё равно зовёт `deltafuse leash` перед концом шага (не замена hook). UI fuse-map и кнопки Cursor живут вне `src/deltafuse/**` и читают [снимок доски](./contracts/board-snapshot.ru.md).
 
 Одношаговые slash-команды остаются, чтобы после сбоя перезапустить один шаг.

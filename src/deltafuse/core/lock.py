@@ -5,6 +5,7 @@ from typing import Any
 
 CALL_WIDTHS = frozenset({"narrow", "medium", "wide"})
 DEFAULT_CALL_WIDTH = "wide"
+LEASH_MODES = frozenset({"off", "advisory", "enforce"})
 
 
 def normalize_call_width(value: Any) -> str | None:
@@ -14,6 +15,23 @@ def normalize_call_width(value: Any) -> str | None:
     width = str(value).strip().lower()
     if width in CALL_WIDTHS:
         return width
+    return None
+
+
+def normalize_leash_mode(value: Any) -> str | None:
+    """Return a valid leash mode or None if missing/invalid.
+
+    Unquoted YAML 1.1 `off` loads as boolean False; treat that as `off`.
+    """
+    if value is None or value == "":
+        return None
+    if value is False:
+        return "off"
+    if isinstance(value, bool):
+        return None
+    mode = str(value).strip().lower()
+    if mode in LEASH_MODES:
+        return mode
     return None
 
 
@@ -47,6 +65,12 @@ def workflow_from_mapping(data: dict[str, Any] | None) -> tuple[str, bool, list[
         auto = raw_auto
     else:
         errors.append("auto_accept_decisions must be a boolean")
+
+    raw_leash = workflow.get("leash")
+    if raw_leash is not None and normalize_leash_mode(raw_leash) is None:
+        errors.append(
+            f"leash must be one of {', '.join(sorted(LEASH_MODES))}; got {raw_leash!r}"
+        )
 
     return width, auto, errors
 

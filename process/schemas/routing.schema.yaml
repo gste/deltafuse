@@ -14,6 +14,8 @@ properties:
     description: Echo of change.yaml route. Missing means code.
   claims:
     type: object
+    propertyNames:
+      pattern: '^((CR-[0-9]{3,})|([A-Z]{1,3}[0-9]{1,3}))$'
     additionalProperties:
       type: object
       additionalProperties: false

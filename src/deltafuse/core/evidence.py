@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+import hashlib
+import json
 import shlex
 import subprocess
 from typing import Any
@@ -17,6 +19,8 @@ from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
+RECORDED_BY = "deltafuse-evidence"
+STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
 _IMPORT_MARKERS = ("ImportError", "ModuleNotFoundError")
 
@@ -100,6 +104,73 @@ def _is_authentic(
     if phase in {"green", "regression"}:
         return result == "passed"
     return False
+
+
+def _lock_pin(product_root: Path) -> str:
+    lock = Path(product_root) / ".deltafuse" / "lock.yaml"
+    if not lock.is_file():
+        return ""
+    try:
+        data = yaml.safe_load(lock.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    framework = data.get("framework")
+    if not isinstance(framework, dict):
+        return ""
+    pin = framework.get("content_hash")
+    return pin if isinstance(pin, str) else ""
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if isinstance(value, Path):
+        return str(value).replace("\\", "/")
+    return value
+
+
+def stamp_digest(payload: dict[str, Any], product_root: Path) -> str:
+    body = {key: payload[key] for key in payload if key not in STAMP_KEYS}
+    material = {"pin": _lock_pin(product_root), "evidence": _jsonable(body)}
+    raw = json.dumps(material, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def stamp_evidence(payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
+    """Return a copy of *payload* with the kernel evidence stamp."""
+    out = {key: value for key, value in payload.items() if key not in STAMP_KEYS}
+    out["recorded_by"] = RECORDED_BY
+    out["recorded_sha256"] = stamp_digest(out, product_root)
+    return out
+
+
+def evidence_stamp_error(payload: dict[str, Any], product_root: Path) -> str | None:
+    """None when the kernel stamp matches the payload."""
+    if not isinstance(payload, dict):
+        return "evidence is not a mapping"
+    if payload.get("recorded_by") != RECORDED_BY:
+        return "evidence is not stamped by deltafuse evidence"
+    want = stamp_digest(payload, product_root)
+    if payload.get("recorded_sha256") != want:
+        return "evidence stamp does not match the recorded payload"
+    return None
+
+
+def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
+    """Stamp *payload* and write YAML. Used by the runner and test fixtures."""
+    stamped = stamp_evidence(payload, product_root)
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return stamped
 
 
 def run_evidence(
@@ -186,8 +257,7 @@ def run_evidence(
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
 
     dest = change_path / "evidence" / phase / f"{task}.yaml"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    payload = write_stamped_evidence(dest, payload, repo_root)
 
     errors = list(route_errs)
     errors.extend(private_errors)

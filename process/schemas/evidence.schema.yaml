@@ -23,6 +23,12 @@ properties:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
     description: Content hash of docs/spec/** and src/** when the evidence was recorded.
+  recorded_by:
+    const: deltafuse-evidence
+    description: Optional kernel stamp. Gates reject evidence YAML without a matching hash.
+  recorded_sha256:
+    type: string
+    pattern: '^sha256:[a-fA-F0-9]{64}$'
 allOf:
   - if:
       properties:

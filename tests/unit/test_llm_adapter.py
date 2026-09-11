@@ -15,6 +15,25 @@ def test_canonical_skills_bind_worker_to_llm(repo_root: Path):
         assert "Recommend /" not in text, f"{step}: still recommends a slash command"
 
 
+def test_intake_skill_forbids_provenance_yaml(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "intake" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Do not add `provenance`" in text
+    assert "CR-001" in text
+
+
+def test_intake_skill_does_not_teach_src_writes(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "intake" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Do not write `src/**`" in text
+    for line in text.splitlines():
+        if "src/" in line or "src/**" in line:
+            lowered = line.lower()
+            assert "do not" in lowered or "must not" in lowered, line
+
+
 def test_analyze_skill_follows_next_pass(repo_root: Path):
     text = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(
         encoding="utf-8"
@@ -22,6 +41,8 @@ def test_analyze_skill_follows_next_pass(repo_root: Path):
     assert "analyze_pass" in text
     assert "do not call `check-gate --gate analyzed`" in text
     assert "deltafuse coverage" in text
+    assert "primary_capability" in text
+    assert "CR-001" in text
 
 
 def test_specify_skill_follows_next_pass(repo_root: Path):
@@ -31,6 +52,8 @@ def test_specify_skill_follows_next_pass(repo_root: Path):
     assert "specify_pass" in text
     assert "do not call `check-gate --gate specified`" in text
     assert "spec_refs" in text
+    assert "Do not set `specified` yourself" in text
+    assert "status: accepted" not in text
 
 
 def test_declare_and_implement_call_evidence_runner(repo_root: Path):
@@ -58,8 +81,19 @@ def test_run_skill_is_through_mode(repo_root: Path):
     assert "deltafuse next --json" in text
     assert "halt.choices" in text
     assert "deltafuse decide" in text
+    assert "choice.command" in text
     assert "Do not auto-accept Decisions" in text
     assert "in this same session" in text
+    assert "deltafuse leash" in text
+    assert "envelope.write" in text
+
+
+def test_worker_skills_do_not_instruct_writing_accepted_status(repo_root: Path):
+    skills = repo_root / "process" / "skills"
+    for path in sorted(skills.glob("*/SKILL.md")):
+        text = path.read_text(encoding="utf-8")
+        assert "status: accepted" not in text, path
+        assert "status: rejected" not in text, path
 
 
 def test_product_agents_template_defers_to_core(repo_root: Path):
@@ -69,6 +103,9 @@ def test_product_agents_template_defers_to_core(repo_root: Path):
     assert "Do not auto-accept Decisions" in text
     assert "/run" in text
     assert "halt.choices" in text
+    assert "choice.command" in text
+    assert "envelope.write" in text
+    assert "Intake MUST NOT write `src/**`" in text
 
 
 def test_core_and_worker_glossary(repo_root: Path):

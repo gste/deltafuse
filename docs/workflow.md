@@ -38,9 +38,10 @@ Normalize an incoming raw request (issue, chat transcript, bug report, review no
 2. Create `docs/changes/<change-id>/request.md` with:
    - Verbatim user request preserved intact;
    - Normalized context;
-   - Extracted atomic claims numbered sequentially (`CR-001`, `CR-002`, etc.);
+   - Extracted atomic claims numbered `CR-001`, `CR-002`, … (three digits, not `CR-01`);
+   - A Provenance section in markdown (not a `provenance:` key in `change.yaml`);
    - Non-functional requirements, constraints, and known uncertainties.
-3. Initialize `docs/changes/<change-id>/change.yaml` with `status: normalized`.
+3. Initialize `docs/changes/<change-id>/change.yaml` by copying the Change template (`status: normalized`). Required empty lists: `deltas`, `slices`, `decisions`, `tasks`. `source.request` is `request.md`. Intake file paths go in `source.intake_refs`.
 4. The Intake step must never guess implementation details or propose architecture.
 
 ### Gate
@@ -57,7 +58,7 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
 
 ### Pass A: Routing
 1. Read `request.md`, `docs/spec/_capabilities.yaml`, and compact global policy summaries.
-2. Map each claim (`CR-*`) to its owning primary capability:
+2. Map each claim (`CR-001`, three digits) to its owning `primary_capability` in a `routing.yaml` map (not a list, not a `capability:` field):
    - **Matched**: claim maps cleanly to an existing capability;
    - **Ambiguous**: claim spans or conflicts across multiple capabilities;
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
@@ -152,7 +153,7 @@ Decompose each specified slice into atomic, dependency-ordered task files inside
 - **Forbidden Read Scope**: Full codebase exploration.
 
 ### Atomic Task Contract
-Each task is authored in `tasks/TASK-NNN-<slug>.md` with YAML frontmatter conforming to `task.schema.yaml`:
+Each task is authored in `tasks/TASK-NNN.md` (optional `TASK-NNN-<slug>.md` filename) with YAML frontmatter conforming to `task.schema.yaml`. Frontmatter `id` is `TASK-001` (digits only). `change.yaml` `tasks` is a list of those id strings.
 ```yaml
 ---
 id: TASK-001
@@ -221,7 +222,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 1. Implement the minimal test case in the file indicated by `test_target`.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
-   Do not hand-write `evidence/red/*.yaml`.
+   Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
 3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml

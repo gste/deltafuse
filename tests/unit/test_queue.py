@@ -83,6 +83,7 @@ def test_next_json_empty_product_has_done_halt(tmp_path: Path, repo_root: Path, 
     assert data["selected"]["skill"] == "intake"
     assert data["selected"]["intake_pending"] is False
     assert data["halt"]["kind"] == "done"
+    assert data.get("envelope") is None
 
 
 def test_next_blocked_on_decision_exits_without_ready(tmp_path: Path, repo_root: Path):
@@ -110,6 +111,7 @@ def test_next_json_and_no_writes(tmp_path: Path, repo_root: Path, capsys):
     assert data["selected"]["skill"] == "analyze"
     assert data["selected"]["change_id"] == "CHG-034"
     assert data["halt"] is None
+    assert data["envelope"]["step"] == "analyze"
     assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
 
 

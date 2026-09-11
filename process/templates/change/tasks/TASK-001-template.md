@@ -7,7 +7,7 @@ status: pending
 depends_on: []
 requirement_delta: none
 spec_refs:
-  - docs/spec/context.md#REQ-PLACEHOLDER
+  - docs/spec/context.md
 design_ref: null
 allowed_paths: []
 forbidden_paths: []
