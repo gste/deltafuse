@@ -1,0 +1,62 @@
+# Canonical halt object on `deltafuse next --json` (producer).
+# Hosts (Cursor, IDE, orchestrator) pin this schema. Not a product artifact schema.
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/contracts/halt/v1
+title: DeltaFuse next halt (host button contract)
+description: >
+  The `halt` property of `deltafuse next --json` when a Human Gate or empty
+  queue stops through-mode. JSON null halt (ready Worker step) is not this
+  schema. Unknown properties are allowed; hosts MUST ignore them.
+type: object
+additionalProperties: true
+required: [kind, prompt, choices]
+properties:
+  kind:
+    enum: [decision, spec, blocked, done]
+    description: Why through-mode stopped. Hosts MUST NOT invent extra kinds.
+  prompt:
+    type: string
+    minLength: 1
+    description: Human-readable stop reason. Not a command. Do not execute it.
+  choices:
+    type: array
+    minItems: 1
+    items:
+      $ref: '#/$defs/choice'
+    description: Sole button list. Host MUST render every item and MUST NOT add merge/push.
+$defs:
+  choice:
+    type: object
+    additionalProperties: true
+    required: [id, label, command]
+    properties:
+      id:
+        type: string
+        minLength: 1
+        description: Opaque choice key (e.g. accept:DEC-0001, inspect).
+      label:
+        type: string
+        minLength: 1
+        description: Button title. Host MUST display this string.
+      command:
+        description: >
+          Shell to run from the product root after a human click.
+          null means stop (inspect). A string MUST be a deltafuse decide invocation.
+        type: [string, 'null']
+    allOf:
+      - if:
+          properties:
+            id: {const: inspect}
+          required: [id]
+        then:
+          properties:
+            command: {type: 'null'}
+      - if:
+          properties:
+            command: {type: string}
+          required: [command]
+        then:
+          properties:
+            command:
+              type: string
+              pattern: '^deltafuse decide '

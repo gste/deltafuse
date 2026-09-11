@@ -68,6 +68,7 @@ def test_run_skill_is_through_mode(repo_root: Path):
     assert "deltafuse next --json" in text
     assert "halt.choices" in text
     assert "deltafuse decide" in text
+    assert "choice.command" in text
     assert "Do not auto-accept Decisions" in text
     assert "in this same session" in text
 
@@ -79,6 +80,7 @@ def test_product_agents_template_defers_to_core(repo_root: Path):
     assert "Do not auto-accept Decisions" in text
     assert "/run" in text
     assert "halt.choices" in text
+    assert "choice.command" in text
 
 
 def test_core_and_worker_glossary(repo_root: Path):

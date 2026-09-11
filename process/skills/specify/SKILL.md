@@ -18,7 +18,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
    - `slice`: live `docs/spec/**` files listed in `spec_refs` (and `_capabilities.yaml` only for an accepted catalog delta). Append that slice to `spec-delta.md`. Set this slice `status: specified`. Do not load other spec modules.
    - `close`: set Change status `specified` or `specification-proposed`. Do not invent new requirements.
 3. If `specify_pass` is `close`, close with `deltafuse check-gate <change-dir> --gate specified`. Halt if it exits non-zero. For `slice`, do not call `check-gate --gate specified`.
-4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run the matching `deltafuse decide` command, and continue. If `check-gate` failed or they chose inspect, stop.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
 ## Context

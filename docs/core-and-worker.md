@@ -46,6 +46,6 @@ The loop stops only when:
 2. `halt.kind` is `spec` — present `halt.choices`, wait, then `deltafuse decide --spec …`.
 3. A gate fails, a task is blocked, or the human chose inspect — stop so they can look, then restart `/run` or the named step.
 
-`deltafuse decide` writes the recorded click. It is not auto-accept. Merge and `git push` stay Human Gates; through-mode must not push.
+The host button list is the [halt contract](./contracts/halt.md). `deltafuse decide` records the click; it is not auto-accept. Core does not draw UI. Merge and `git push` stay Human Gates; through-mode must not push. Fuse-map UI lives in another repository and reads [board-snapshot](./contracts/board-snapshot.md).
 
 Single-step slash commands remain for restarting one step after a problem.

@@ -15,6 +15,7 @@ tests/
 │   ├── test_evidence.py          # Evidence runner classification and YAML write
 │   ├── test_queue.py             # Derived work queue and deltafuse next
 │   ├── test_board.py             # Read-only fuse-map board snapshot
+│   ├── test_halt_contract.py     # Host halt contract (next --json choices)
 │   ├── test_llm_adapter.py       # Skills bind Worker (LLM); Core selects the step
 │   ├── test_bench.py             # Agent-agnostic Worker bench (init / score / compare)
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)

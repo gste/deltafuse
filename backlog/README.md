@@ -7,7 +7,7 @@
 | ID | Статус | Слой |
 |---|---|---|
 | [SK-001](product/SK-001.md) | `done` | schemas / templates / skills — первый `check-gate` |
-| [HS-001](product/HS-001.md) | `planned` | контракт хоста (`halt.choices`, pack isolation, Human Gates) |
+| [HS-001](product/HS-001.md) | `done` | контракт хоста (`halt.choices`, pack isolation, Human Gates) |
 
 Сводка: [product/index.md](product/index.md).
 

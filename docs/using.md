@@ -97,7 +97,7 @@ deltafuse decide <change-dir> --spec --status accepted
 
 `--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
 
-Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons, wait, then `deltafuse decide`. Single-step skills restart one step after a problem.
+Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 
 Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
 
@@ -116,9 +116,13 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
+## Host halt
+
+`deltafuse next --json` `halt` is the host button contract ([halt.md](./contracts/halt.md)). Render every `choices[].label`. Run only `choice.command` from the product root. `inspect` (`command: null`) means stop. Do not add merge or `git push` buttons. Core does not draw UI.
+
 ## External boards
 
-A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository.
+A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository. This framework does not ship a board UI.
 
 ```text
 deltafuse board <product-root> --json

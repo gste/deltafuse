@@ -112,4 +112,4 @@ High-level operational workflows are orchestrated by invoking these canonical pr
 Any external automation or end-to-end agent orchestration (composite orchestration, including `/run` through-mode) must:
 - Use strictly the 7 canonical framework primitives (`next` selects them);
 - Produce complete sets of normative artifacts at every step;
-- Unconditionally halt at Human Gates. Present `halt.choices` and wait; `deltafuse decide` records the human click and is not auto-accept. Automation must never blur role responsibilities or bypass human oversight.
+- Unconditionally halt at Human Gates. Present `halt.choices` from the [halt contract](./contracts/halt.md) and wait; run only `choice.command`. `deltafuse decide` records the human click and is not auto-accept. Automation must never blur role responsibilities or bypass human oversight.
