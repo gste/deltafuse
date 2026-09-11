@@ -69,6 +69,13 @@ def _git_init_commit(root: Path) -> None:
     )
 
 
+def _set_baseline(product: Path, status: str = "accepted") -> None:
+    config = product / ".deltafuse" / "config.yaml"
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data.setdefault("project", {})["baseline"] = status
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
 def test_envelope_schema_is_draft_2020(repo_root: Path):
     schema = _envelope_schema(repo_root)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -199,13 +206,62 @@ def test_leash_advisory_same_violations_exit_zero(tmp_path: Path, repo_root: Pat
     assert payload["ok"] is False
 
 
-def test_leash_skipped_when_no_ready_step(tmp_path: Path, repo_root: Path, capsys):
+def test_leash_exempt_path_when_no_ready_step(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
-    ret, data = _leash_json(tmp_path, capsys, files=["src/foo.py"])
+    ret, data = _leash_json(tmp_path, capsys, files=["AGENTS.md"])
     assert ret == 0
     assert data["skipped"] is True
     assert data["envelope"] is None
     assert data["violations"] == []
+
+
+def test_leash_orphan_src_without_change(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_baseline(tmp_path)
+    ret, data = _leash_json(tmp_path, capsys, files=["src/x.py"])
+    assert ret == 1
+    assert data["skipped"] is False
+    assert data["envelope"] is None
+    assert any("not covered by any Change" in row for row in data["violations"])
+
+
+def test_leash_implement_covers_allowed_src(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_baseline(tmp_path)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-094", title="Covered src")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(
+        task.read_text(encoding="utf-8").replace("status: pending", "status: implementing"),
+        encoding="utf-8",
+    )
+    ret, data = _leash_json(tmp_path, capsys, files=["src/core.py"])
+    assert ret == 0
+    assert data["ok"] is True
+    assert data["envelope"]["step"] == "implement"
+
+
+def test_leash_docs_route_allows_spec_rejects_src(tmp_path: Path, repo_root: Path, capsys):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_baseline(tmp_path)
+    (
+        MockChangeBuilder(tmp_path, change_id="CHG-095", title="Docs route", route="docs")
+        .step_intake()
+        .step_analyze()
+    )
+    ret_ok, data_ok = _leash_json(tmp_path, capsys, files=["docs/spec/core.md"])
+    assert ret_ok == 0
+    assert data_ok["ok"] is True
+    assert data_ok["envelope"]["step"] == "specify"
+    ret_bad, data_bad = _leash_json(tmp_path, capsys, files=["src/x.py"])
+    assert ret_bad == 1
+    assert data_bad["ok"] is False
+    assert data_bad["violations"]
 
 
 def test_leash_git_diff_rejects_src_on_intake(tmp_path: Path, repo_root: Path, capsys):

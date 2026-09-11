@@ -10,7 +10,7 @@
 |---|---|---|
 | [LS-001](product/LS-001.md) | `done` | `next --json` write envelope |
 | [LS-002](product/LS-002.md) | `done` | `deltafuse leash` |
-| [LS-003](product/LS-003.md) | `planned` | orphan-diff без Change |
+| [LS-003](product/LS-003.md) | `done` | orphan-diff без Change |
 | [LS-004](product/LS-004.md) | `planned` | hook/CI + `workflow.leash` |
 | [LS-005](product/LS-005.md) | `planned` | Gate только через `decide` |
 | [LS-006](product/LS-006.md) | `planned` | штамп `deltafuse evidence` |

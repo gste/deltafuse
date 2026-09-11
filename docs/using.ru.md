@@ -122,7 +122,7 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 ## Конверт записи
 
-`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с `envelope.write`. Intake не пишет `src/**`. `envelope: null` — нет готового шага; `leash` тогда пропускает (orphan — отдельное правило). `workflow.leash: advisory` — те же нарушения, exit 0.
+`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` / `docs/spec/**` — orphan, команда падает. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0.
 
 ```text
 deltafuse leash <product-root>

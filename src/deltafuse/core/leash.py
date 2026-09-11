@@ -24,6 +24,32 @@ from deltafuse.core.queue import WorkItem
 LEASH_MODES = frozenset({"off", "advisory", "enforce"})
 DEFAULT_LEASH_MODE = "enforce"
 
+PRODUCT_WRITE_GLOBS = (
+    "src/**",
+    "tests/**",
+    "docs/spec/**",
+    "deploy/**",
+    "docs/ops/**",
+    "ops/**",
+)
+EXEMPT_EXACT = frozenset(
+    {
+        "AGENTS.md",
+        "CHANGELOG.md",
+        ".deltafuse/lock.yaml",
+        ".deltafuse/config.yaml",
+    }
+)
+EXEMPT_GLOBS = (
+    ".git/**",
+    ".deltafuse/**",
+    "docs/intake/**",
+    "docs/archive/**",
+)
+EXEMPT_NAMES = frozenset({"README.md", "README.ru.md"})
+CHANGE_ARTIFACT_GLOB = "docs/changes/**"
+
+
 
 class LeashError(Exception):
     """Product root / git / queue error before a diff can be judged."""
@@ -147,20 +173,89 @@ def path_in_envelope(rel_path: str, write_globs: list[str]) -> bool:
     return matches_contract_globs(posix_relpath(rel_path), write_globs)
 
 
-def check_paths(envelope: dict[str, Any] | None, rel_paths: list[str]) -> list[str]:
-    """Return violation messages. No envelope → no LS-002 judgement (orphan is LS-003)."""
-    if envelope is None:
+def is_exempt_path(rel_path: str) -> bool:
+    rel = posix_relpath(rel_path)
+    if rel in EXEMPT_EXACT:
+        return True
+    name = rel.rsplit("/", 1)[-1]
+    if name in EXEMPT_NAMES:
+        return True
+    if matches_contract_globs(rel, EXEMPT_GLOBS):
+        return True
+    return False
+
+
+def is_product_path(rel_path: str) -> bool:
+    rel = posix_relpath(rel_path)
+    return matches_contract_globs(rel, PRODUCT_WRITE_GLOBS)
+
+
+def is_change_artifact(rel_path: str) -> bool:
+    return matches_contract_globs(posix_relpath(rel_path), [CHANGE_ARTIFACT_GLOB])
+
+
+def collect_ready_envelopes(queue: Any, product_root: Path, halt: Any) -> list[dict[str, Any]]:
+    """Envelopes of ready Worker steps. Empty when through-mode is halted."""
+    if halt is not None:
         return []
-    writes = envelope.get("write")
-    globs = [row for row in writes if isinstance(row, str)] if isinstance(writes, list) else []
+    out: list[dict[str, Any]] = []
+    for item in getattr(queue, "ready", []) or []:
+        env = build_envelope(item, product_root)
+        if env:
+            out.append(env)
+    return out
+
+
+def _covered_by(rel_path: str, envelopes: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for env in envelopes:
+        writes = env.get("write")
+        globs = [row for row in writes if isinstance(row, str)] if isinstance(writes, list) else []
+        if path_in_envelope(rel_path, globs):
+            return env
+    return None
+
+
+def check_paths(
+    rel_paths: list[str],
+    envelopes: list[dict[str, Any]] | dict[str, Any] | None = None,
+    *,
+    envelope: dict[str, Any] | None = None,
+) -> list[str]:
+    """Return violation messages for dirty paths.
+
+    A path is allowed when a ready envelope covers it. Product paths
+    (`src/**`, `tests/**`, `docs/spec/**`, ops/deploy) with no covering
+    Change are orphans (LS-003). Ready step + uncovered Change artifact
+    is still an LS-002 miss.
+    """
+    if isinstance(envelopes, dict):
+        env_list = [envelopes]
+    elif envelopes is None:
+        env_list = [envelope] if envelope is not None else []
+    else:
+        env_list = list(envelopes)
     errors: list[str] = []
+    steps = [str(env.get("step") or "?") for env in env_list]
+    step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
     for raw in _unique(rel_paths):
-        if raw.startswith(".git/"):
+        if raw.startswith(".git/") or is_exempt_path(raw):
             continue
-        if not path_in_envelope(raw, globs):
-            step = envelope.get("step") or "?"
-            errors.append(f"leash: '{raw}' is outside the {step} write envelope")
+        if _covered_by(raw, env_list) is not None:
+            continue
+        if is_product_path(raw):
+            if not env_list:
+                errors.append(f"leash: '{raw}' is not covered by any Change")
+            else:
+                errors.append(
+                    f"leash: '{raw}' is outside the {step_label} write envelope"
+                )
+            continue
+        if is_change_artifact(raw) and env_list:
+            errors.append(
+                f"leash: '{raw}' is outside the {step_label} write envelope"
+            )
     return errors
+
 
 
 def git_dirty_paths(product_root: Path) -> list[str]:

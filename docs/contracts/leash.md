@@ -8,7 +8,7 @@ This is the **producer-canonical** write envelope. `deltafuse leash`, a git hook
 
 Producer: `deltafuse next --json` (`deltafuse.core.leash.build_envelope` via `queue_snapshot`). Guard: `deltafuse leash`. Core does not draw UI and does not `git push`.
 
-`envelope` is either an object that validates against this schema, or JSON `null`. `null` means there is no ready Worker step (Human Gate, blocked, or `halt.kind: done`). `deltafuse leash` does **not** treat a null envelope as an orphan-product failure; that is a later leash rule.
+`envelope` is either an object that validates against this schema, or JSON `null`. `null` means there is no ready Worker step (Human Gate, blocked, or `halt.kind: done`). Product paths (`src/**`, `tests/**`, `docs/spec/**`, ops/deploy) in the diff with a null envelope are **orphans**: `deltafuse leash` MUST fail (unless `advisory`). `docs/intake/**`, `AGENTS.md`, and `.deltafuse/lock.yaml` are not orphans.
 
 ## Roles
 
@@ -30,7 +30,8 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 | Rule | MUST |
 |---|---|
 | Ready Worker step | `halt` is JSON `null`, `envelope` validates, `write` is non-empty. |
-| Human Gate / nothing to run | `envelope` is JSON `null`. `leash` exits `0` with `skipped` (no LS-002 judgement). |
+| Human Gate / nothing to run | `envelope` is JSON `null`. Product paths in the diff are orphans and fail. Exempt paths (`docs/intake/**`, `AGENTS.md`, `.deltafuse/**`) still skip. |
+| Orphan product edit | `src/**`, `tests/**`, `docs/spec/**` (and ops/deploy) MUST be covered by a ready Change envelope. Docs/ops route MUST NOT cover `src/**`. |
 | Intake `write` | MUST NOT include `src/**`. |
 | Declare/Implement | Declare keeps `tests/**` and Red evidence globs, not `src/**`. Implement keeps `tests/**` and shrinks product paths to task `allowed_paths`. |
 | `leash` side effects | Zero product writes. Diagnostics on stderr unless `--json`. |

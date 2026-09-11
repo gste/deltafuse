@@ -24,7 +24,13 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
-from deltafuse.core.leash import LeashError, check_paths, git_dirty_paths, load_leash_mode
+from deltafuse.core.leash import (
+    LeashError,
+    check_paths,
+    collect_ready_envelopes,
+    git_dirty_paths,
+    load_leash_mode,
+)
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -478,13 +484,15 @@ def main(argv: list[str] | None = None) -> int:
             selected = select_next(queue)
             snapshot = queue_snapshot(queue, selected=selected, product_root=root)
             envelope = snapshot.get("envelope")
+            halt = snapshot.get("halt")
+            covering = collect_ready_envelopes(queue, root, halt)
             if args.files:
                 dirty = list(args.files)
             else:
                 dirty = git_dirty_paths(root)
-            errors = check_paths(envelope if isinstance(envelope, dict) else None, dirty)
+            errors = check_paths(dirty, covering)
             mode = load_leash_mode(root)
-            skipped = envelope is None
+            skipped = envelope is None and not errors
             ok = not errors
             _journal(
                 root,
