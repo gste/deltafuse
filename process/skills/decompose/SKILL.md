@@ -27,10 +27,10 @@ Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks
 
 ## Procedure
 
-1. Create `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md` files.
+1. Create `docs/changes/<change-id>/tasks/TASK-NNN.md` files (optional `TASK-NNN-<slug>.md` filename). Frontmatter `id` is `TASK-001` (digits only, no slug). Status `pending`, not `proposed`.
 2. Give each task one verifiable outcome that fits one implementation context.
-3. Include Change/slice IDs, exact requirement/scenario refs, dependencies, test oracle, unchanged behavior, allowed/forbidden paths or symbols, `context_budget` (`max_tokens`/`max_files`, default 16000/24), and verification commands.
-4. Order dependencies and update `coverage.yaml` plus task metadata in `change.yaml`.
+3. Copy the task template frontmatter: `kind`, `depends_on` (not `dependencies`), `requirement_delta: added` (not `add`), `spec_refs`, `allowed_paths`, `forbidden_paths`, `context_budget`. No `title` or `claims` in frontmatter. In `change.yaml`, `tasks` is a list of strings (`TASK-001`), not objects.
+4. Order `depends_on` and update `coverage.yaml` plus the `tasks` string list in `change.yaml`.
 5. For an implementation bug, derive tasks from observation, reproduction, exact existing spec refs, oracle, unchanged behavior, and scope with `requirement_delta: none`.
 
 Do not copy normative spec text, hide a design choice inside a task, estimate primarily by lines of code, or modify production code.

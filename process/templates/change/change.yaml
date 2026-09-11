@@ -10,6 +10,8 @@ framework:
 intent: unknown
 risk: unknown
 
+# Do not add provenance: here. Provenance is a heading in request.md.
+# source.request is the filename request.md. Intake paths go in intake_refs.
 source:
   request: request.md
   intake_refs: []

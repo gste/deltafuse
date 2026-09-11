@@ -30,6 +30,7 @@ properties:
     enum: [low, medium, high, critical, unknown]
   source:
     type: object
+    additionalProperties: false
     required: [request]
     properties:
       request: {type: string}

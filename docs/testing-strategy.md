@@ -67,6 +67,7 @@ delta-fuse/
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
 │   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
+│   │   ├── test_first_write.py       # SK-001: шаблон Intake/Analyze/Decompose проходит check-gate; синонимы YAML
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, сохранение пользовательских данных, --force upgrade

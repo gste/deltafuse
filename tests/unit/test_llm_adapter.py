@@ -15,6 +15,14 @@ def test_canonical_skills_bind_worker_to_llm(repo_root: Path):
         assert "Recommend /" not in text, f"{step}: still recommends a slash command"
 
 
+def test_intake_skill_forbids_provenance_yaml(repo_root: Path):
+    text = (repo_root / "process" / "skills" / "intake" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Do not add `provenance`" in text
+    assert "CR-001" in text
+
+
 def test_analyze_skill_follows_next_pass(repo_root: Path):
     text = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(
         encoding="utf-8"
@@ -22,6 +30,8 @@ def test_analyze_skill_follows_next_pass(repo_root: Path):
     assert "analyze_pass" in text
     assert "do not call `check-gate --gate analyzed`" in text
     assert "deltafuse coverage" in text
+    assert "primary_capability" in text
+    assert "CR-001" in text
 
 
 def test_specify_skill_follows_next_pass(repo_root: Path):

@@ -42,8 +42,8 @@ Intake
 - **Reads**: только сообщение пользователя, явно переданные файлы из `docs/intake/**`, шаблоны артефактов (`process/templates/change/**`) и правила санитизации.
 - **Must NOT Read**: `docs/spec/**`, `docs/decisions/**`, задачи, тесты, исходный код продукта.
 - **Writes**:
-  - `docs/changes/<change-id>/change.yaml` со статусом `normalized` и зафиксированными версиями фреймворка и схем;
-  - `docs/changes/<change-id>/request.md` со стабильными идентификаторами утверждений `CR-*` (Claims) и метаданными источника (provenance).
+  - `docs/changes/<change-id>/change.yaml` со статусом `normalized` по шаблону Change (без ключа `provenance:`; `source.request` = `request.md`);
+  - `docs/changes/<change-id>/request.md` со стабильными идентификаторами `CR-001` (три цифры, не `CR-01`) и секцией Provenance в markdown.
 
 ### Правила
 1. Все высказывания пользователя классифицируются на:
@@ -67,10 +67,10 @@ Intake
 ### Pass A: Routing
 1. Читаются `request.md`, каталог возможностей `docs/spec/_capabilities.yaml` и краткие сводки глобальных политик.
 2. Не загружается вся спецификация и кодовая база.
-3. Каждому claim назначается:
-   - ровно одна основная capability (`owning capability`);
+3. Каждому claim (`CR-001`, три цифры) назначается:
+   - ровно одна `primary_capability` (поле так и называется, не `capability`);
    - опциональные связанные capabilities и применимые политики (`policies`).
-4. Результат маршрутизации фиксируется в `routing.yaml`.
+4. Результат маршрутизации — карта в `routing.yaml`, не список.
 
 Маршрутизация — первая запись Analyze. `deltafuse next` выбирает один Analyze pass за вызов: `routing`, затем один `slice` на непокрытую primary capability из routing, затем `coverage`. Две capability не попадают в один `next`, в том числе при `call_width: wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml` как профиль; он не склеивает pass. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
 
@@ -159,10 +159,10 @@ Analyze — итеративный шаг. Если возникают суще�
 ### Context Contract
 - **Reads**: слайс, точечные ссылки на требования спецификации (`REQ-*`), опциональный `design.md`, граф зависимостей capabilities, компактные интерфейсы затронутых модулей кода/тестов.
 - **Must NOT Read**: весь сырой интейк, несвязанные части кодовой базы или другие Changes.
-- **Writes**: задачи в директории `docs/changes/<change-id>/tasks/TASK-NNN-<slug>.md`.
+- **Writes**: задачи в директории `docs/changes/<change-id>/tasks/TASK-NNN.md` (имя `TASK-NNN-<slug>.md` допустимо; `id` в frontmatter — `TASK-001` без slug).
 
 ### Контракт атомарной задачи
-Каждая задача оформляется в файле `tasks/TASK-NNN-<slug>.md` с YAML frontmatter, соответствующим `task.schema.yaml`:
+Каждая задача оформляется в файле `tasks/TASK-NNN.md` (опционально `TASK-NNN-<slug>.md`) с YAML frontmatter, соответствующим `task.schema.yaml`. `id` — `TASK-001` (только цифры). В `change.yaml` поле `tasks` — список этих строк.
 ```yaml
 ---
 id: TASK-001
