@@ -25,11 +25,13 @@ from deltafuse.core.integrity import (
     validate_spec_ref,
     validate_decision_ref,
     find_unresolved_decisions_for_change,
+    find_unrecorded_terminal_decisions_for_change,
     load_capability_catalog,
     spec_ref_is_under_docs_spec,
     validate_catalog_capability_specs,
     scan_changed_paths_for_private_test_access,
 )
+from deltafuse.core.gate_journal import TERMINAL_STATUSES, has_click
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
 VALID_CHANGE_STATUSES = {
@@ -708,6 +710,59 @@ def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
     return missing
 
 
+def _spec_delta_status(spec_delta_file: Path) -> str | None:
+    if not spec_delta_file.is_file():
+        return None
+    try:
+        meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("status")
+    return raw if isinstance(raw, str) else None
+
+
+def _human_gate_errors(
+    *,
+    gate: str,
+    change_id: str,
+    change_status: str | None,
+    repo_root: Path,
+    spec_delta_file: Path,
+) -> list[str]:
+    errors: list[str] = []
+    unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
+    if unresolved:
+        errors.append(
+            f"Gate {gate}: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+        )
+    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, repo_root)
+    if unrecorded:
+        errors.append(f"Gate {gate}: {'; '.join(unrecorded)}")
+    if gate != "specified":
+        return errors
+    spec_status = _spec_delta_status(spec_delta_file)
+    if spec_status in TERMINAL_STATUSES:
+        rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
+        if not has_click(
+            repo_root,
+            kind="spec",
+            status=spec_status,
+            artifact_id=change_id,
+            rel_path=rel,
+        ):
+            errors.append(
+                f"Gate specified: spec-delta.md is {spec_status} without deltafuse decide"
+            )
+    if change_status == "specified" and spec_status != "accepted":
+        errors.append(
+            "Gate specified: specified requires spec-delta.md accepted via "
+            f"deltafuse decide (got {spec_status!r})"
+        )
+    return errors
+
+
 def check_gate(
     change_dir: Path | str,
     gate: str,
@@ -755,22 +810,28 @@ def check_gate(
                 f"Gate analyzed: routing capability '{cap}' has no slice"
             )
 
-        # Check blocking decisions (P3)
-        unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
-        if unresolved:
-            errors.append(
-                f"Gate analyzed: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+        errors.extend(
+            _human_gate_errors(
+                gate="analyzed",
+                change_id=change_id,
+                change_status=change_status,
+                repo_root=repo_root,
+                spec_delta_file=spec_delta_file,
             )
+        )
 
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
             errors.append("Gate specified: spec-delta.md is missing")
-        # Check blocking decisions (P3)
-        unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
-        if unresolved:
-            errors.append(
-                f"Gate specified: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+        errors.extend(
+            _human_gate_errors(
+                gate="specified",
+                change_id=change_id,
+                change_status=change_status,
+                repo_root=repo_root,
+                spec_delta_file=spec_delta_file,
             )
+        )
         errors.extend(
             _validate_specified_live_spec(
                 change_path,

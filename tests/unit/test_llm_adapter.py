@@ -41,6 +41,8 @@ def test_specify_skill_follows_next_pass(repo_root: Path):
     assert "specify_pass" in text
     assert "do not call `check-gate --gate specified`" in text
     assert "spec_refs" in text
+    assert "Do not set `specified` yourself" in text
+    assert "status: accepted" not in text
 
 
 def test_declare_and_implement_call_evidence_runner(repo_root: Path):
@@ -71,6 +73,14 @@ def test_run_skill_is_through_mode(repo_root: Path):
     assert "choice.command" in text
     assert "Do not auto-accept Decisions" in text
     assert "in this same session" in text
+
+
+def test_worker_skills_do_not_instruct_writing_accepted_status(repo_root: Path):
+    skills = repo_root / "process" / "skills"
+    for path in sorted(skills.glob("*/SKILL.md")):
+        text = path.read_text(encoding="utf-8")
+        assert "status: accepted" not in text, path
+        assert "status: rejected" not in text, path
 
 
 def test_product_agents_template_defers_to_core(repo_root: Path):

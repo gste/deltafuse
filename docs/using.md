@@ -97,7 +97,7 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process.
+`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate.
 
 Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 

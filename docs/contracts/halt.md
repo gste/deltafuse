@@ -46,6 +46,7 @@ deltafuse decide <change-dir> --spec --status accepted
 | Non-null `command` | Starts with `deltafuse decide `. Host MUST NOT treat `prompt` as a command. |
 | `id: inspect` | `command` is JSON `null`. Stop through-mode. |
 | Side effects of `next` | Zero product writes. `decide` is the only Core write for a Human Gate click. |
+| `check-gate` | `accepted` / `rejected` on a DEC or `spec-delta.md` without a `.deltafuse/gate-journal.jsonl` click MUST fail. Editing markdown is not a click. |
 
 ## Compatibility
 

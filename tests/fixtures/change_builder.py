@@ -190,7 +190,10 @@ class MockChangeBuilder:
             f"---\n\n# Spec Delta\nDetails\n"
         )
         (self.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
-        self._update_change_yaml({"status": "specified"})
+        self._update_change_yaml({"status": "specification-proposed"})
+        from deltafuse.core.decide import apply_decision
+
+        apply_decision(self.change_dir, status="accepted", spec=True)
         return self
 
     def step_decompose(self, tasks: list[dict[str, Any]] | None = None) -> MockChangeBuilder:

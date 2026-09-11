@@ -31,7 +31,7 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-Stdout при `--json` — один JSON. `next` не пишет продукт. `decide` — единственная запись клика Human Gate.
+Stdout при `--json` — один JSON. `next` не пишет продукт. `decide` — единственная запись клика Human Gate. `check-gate` отвергает `accepted`/`rejected` без записи в `.deltafuse/gate-journal.jsonl`.
 
 ## Запреты
 

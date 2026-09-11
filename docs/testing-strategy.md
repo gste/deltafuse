@@ -117,7 +117,7 @@ delta-fuse/
   - Path containment: `spec_refs` / `design_ref` after `resolve()` must stay inside the product repository root (`../` is rejected).
   - Spec-root guard (N10): если `docs/spec` отсутствует при наличии `spec_refs`, генерируется ошибка валидации, а не тихий пропуск.
 * **2.3. Decision Anchors**:
-  - Ссылка `design_ref: docs/decisions/DEC-...` требует статус решения `accepted`. Статусы `proposed` и `rejected` блокируют прохождение гейта `analyzed`/`specified`.
+  - Ссылка `design_ref: docs/decisions/DEC-...` требует статус решения `accepted`, записанный `deltafuse decide`. Статусы `proposed` и `rejected`, и ручной `accepted` без журнала, блокируют гейт `analyzed`/`specified`.
 
 ---
 

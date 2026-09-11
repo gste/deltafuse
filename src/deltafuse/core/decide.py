@@ -9,6 +9,7 @@ import yaml
 
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.gate_journal import append_click
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 
@@ -79,6 +80,26 @@ def _unblock_change_if_decisions_resolved(product_root: Path, change_id: str, ch
     return "analyzing"
 
 
+def _change_id_from_dir(change_dir: Path) -> str | None:
+    change_file = change_dir / "change.yaml"
+    if not change_file.is_file():
+        return None
+    try:
+        data = _load_yaml_mapping(change_file)
+    except DecideError:
+        return None
+    raw = data.get("id")
+    return raw if isinstance(raw, str) and raw.strip() else None
+
+
+def _optional_change_id(raw: Any) -> str | None:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    raise DecideError("change: must be a Change id or null")
+
+
 def apply_decision(
     start: Path | str,
     *,
@@ -107,6 +128,15 @@ def apply_decision(
             raise DecideError(f"spec-delta.md: {ex}") from ex
         delta.write_text(text, encoding="utf-8")
         written = [_rel(product_root, delta)]
+        change_id = _change_id_from_dir(change_dir)
+        append_click(
+            product_root,
+            kind="spec",
+            status=status,
+            rel_path=written[0],
+            artifact_id=change_id or change_dir.name,
+            change=change_id,
+        )
         change_status = None
         if status == "accepted":
             change_file = change_dir / "change.yaml"
@@ -137,18 +167,25 @@ def apply_decision(
         raise DecideError(
             f"{dec_path.name} status is '{meta.get('status')}', expected proposed"
         )
-    change_id = meta.get("change")
-    if not isinstance(change_id, str) or not change_id:
-        raise DecideError(f"{dec_path.name} has no change: field")
+    change_id = _optional_change_id(meta.get("change"))
     dec_path.write_text(
         replace_frontmatter(dec_path.read_text(encoding="utf-8"), {"status": status}),
         encoding="utf-8",
     )
     written = [_rel(product_root, dec_path)]
+    dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
+    append_click(
+        product_root,
+        kind="decision",
+        status=status,
+        rel_path=written[0],
+        artifact_id=dec_id,
+        change=change_id,
+    )
     change_dir = None
-    if (start_path / "change.yaml").is_file():
+    if change_id and (start_path / "change.yaml").is_file():
         change_dir = start_path
-    else:
+    elif change_id:
         changes = product_root / "docs" / "changes"
         if changes.is_dir():
             for pkg in sorted(p.parent for p in changes.glob("*/change.yaml")):
@@ -157,7 +194,7 @@ def apply_decision(
                     change_dir = pkg
                     break
     change_status = None
-    if change_dir is not None:
+    if change_dir is not None and change_id:
         change_status = _unblock_change_if_decisions_resolved(product_root, change_id, change_dir)
         if change_status:
             written.append(_rel(product_root, change_dir / "change.yaml"))
@@ -165,7 +202,7 @@ def apply_decision(
         "ok": True,
         "gate": "decision",
         "status": status,
-        "decision": meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem,
+        "decision": dec_id,
         "written": written,
         "change_status": change_status,
         "gate_errors": [],

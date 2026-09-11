@@ -133,7 +133,6 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
     errs = check_gate(change_dir, "analyzed")
     assert any("blocked-on-decision" in e and "DEC-0001" in e for e in errs)
 
-    # Transition decision to accepted -> gate unblocked
     dec_file.write_text(
         "---\n"
         "id: DEC-0001\n"
@@ -146,7 +145,26 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
         "---\n# Decision details\n",
         encoding="utf-8"
     )
+    forged = check_gate(change_dir, "analyzed")
+    assert any("without deltafuse decide" in e for e in forged)
+
+    dec_file.write_text(
+        "---\n"
+        "id: DEC-0001\n"
+        "title: DB Choice\n"
+        "kind: architecture\n"
+        "status: proposed\n"
+        "owner: ghost\n"
+        "change: CHG-001\n"
+        "affects: {capabilities: [system.core], spec_refs: []}\n"
+        "---\n# Decision details\n",
+        encoding="utf-8"
+    )
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(tmp_path, status="accepted", decision="DEC-0001")
     assert not any("blocked-on-decision" in e for e in check_gate(change_dir, "analyzed"))
+    assert not any("without deltafuse decide" in e for e in check_gate(change_dir, "analyzed"))
 
 
 def test_is_change_id_archived(tmp_path: Path):
@@ -156,10 +174,12 @@ def test_is_change_id_archived(tmp_path: Path):
     assert not is_change_id_archived("CHG-888", tmp_path)
 
 
-def test_task_design_ref_validation(tmp_path: Path):
+def test_task_design_ref_validation(tmp_path: Path, repo_root: Path):
     from tests.fixtures.change_builder import MockChangeBuilder
     from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.installer import install
 
+    install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-005", title="Design Ref Test")
         .step_intake()
@@ -186,13 +206,12 @@ def test_task_design_ref_validation(tmp_path: Path):
     errs = validate_change_package(builder.change_dir)
     assert any("must be 'accepted'" in e for e in errs)
 
-    # 3. DEC file in accepted status
-    dec_file.write_text(
-        "---\nid: DEC-0005\ntitle: D\nkind: architecture\nstatus: accepted\nowner: ghost\nchange: CHG-005\naffects: {capabilities: [c], spec_refs: []}\n---\n# D\n",
-        encoding="utf-8"
-    )
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(tmp_path, status="accepted", decision="DEC-0005")
     errs = validate_change_package(builder.change_dir)
     assert not any("Referenced decision" in e for e in errs)
+    assert not any("without deltafuse decide" in e for e in errs)
 
 
 def _write_security_ratelimit_catalog(root: Path) -> None:
@@ -280,7 +299,7 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
     spec_delta = (
         "---\n"
         f"change: {builder.change_id}\n"
-        "status: proposed\n"
+        "status: accepted\n"
         "slices: [SLICE-01]\n"
         "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
         "modified: []\n"
