@@ -14,7 +14,7 @@ Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defa
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `check-gate`.
 
 1. If the caller asked to continue existing work without an id, run `deltafuse next` and follow that step instead of creating another Change. Use this skill only to start a new Change.
-2. Write only this step's artifacts (see Procedure).
+2. Write only this step's artifacts (see Procedure). Do not write `src/**`.
 3. Close with `deltafuse check-gate <change-dir> --gate intake`. Halt if it exits non-zero.
 4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
@@ -42,4 +42,4 @@ Later clarification is appended as a revision or superseding claim. Never silent
 
 ## Gate
 
-Every material input statement is represented by a claim or explicitly excluded. Product artifacts remain unread and unchanged.
+Every material input statement is represented by a claim or explicitly excluded. Product artifacts remain unread and unchanged. Do not write `src/**`.

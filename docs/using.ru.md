@@ -124,7 +124,7 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 ## Конверт записи
 
-`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` — orphan, команда падает. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0. `enforce` ставит git hook и (по желанию) CI; `off` — нет.
+`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). Хост MUST резать write-tools по `envelope.write`. Если не умеет — `/run` всё равно зовёт `deltafuse leash` перед концом шага (не замена hook). `deltafuse leash` сверяет git-дифф (или `--file`) с готовыми envelope. Intake не пишет `src/**`. `envelope: null` плюс грязный `src/**` / `tests/**` — orphan, команда падает. При `halt.kind` `decision` или `spec` envelope пустой, запись в код продукта выключена. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan. `workflow.leash: advisory` — те же нарушения, exit 0. `enforce` ставит git hook и (по желанию) CI; `off` — нет. UI fuse-map и кнопки Cursor живут вне `src/deltafuse/**`.
 
 ```text
 deltafuse leash <product-root>

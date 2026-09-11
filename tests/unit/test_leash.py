@@ -160,6 +160,15 @@ def test_next_json_implement_envelope_uses_task_allowed_paths(
     assert "src/**" not in envelope["write"]
 
 
+def test_leash_contract_requires_host_must(repo_root: Path):
+    text = (repo_root / "docs" / "contracts" / "leash.md").read_text(encoding="utf-8")
+    assert "## Host MUST" in text
+    assert "MUST restrict write tools to `envelope.write`" in text
+    assert "src/deltafuse/**" in text
+    halt = (repo_root / "docs" / "contracts" / "halt.md").read_text(encoding="utf-8")
+    assert "envelope` is JSON `null`" in halt
+
+
 def test_next_json_done_halt_has_null_envelope(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     ret, data = _next_json(tmp_path, capsys)

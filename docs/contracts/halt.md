@@ -28,7 +28,8 @@ Producer command: `deltafuse next --json`. Python: `deltafuse.core.queue.build_h
 | What to run on click | `halt.choices[].command` | Non-null: run that string as-is from the product root. `null` (`id: inspect`): stop. Do not call `decide`. |
 | Who may click | Human | Wait. Do not let the Worker select a choice from chat. `decide` records the click; it is not auto-accept. |
 | Bench pack | Judge host / `--pack` / `DELTAFUSE_BENCH_PACK` | Keep oracle and hidden suite off the Worker sandbox and off generated adapter skills. |
-| Board UI | Other repository | Read `deltafuse board --json` ([board-snapshot](board-snapshot.md)). Do not draw a board in this repo. |
+| Board UI | Other repository | Read `deltafuse board --json` ([board-snapshot](board-snapshot.md)). Do not draw a board in this repo. Fuse-map UI and Cursor buttons live outside `src/deltafuse/**`. |
+| Write envelope at Human Gate | `envelope` on the same `next --json` | When `kind` is `decision` or `spec`, `envelope` is JSON `null`. MUST NOT enable product-code write tools while these buttons are showing. See [leash.md](leash.md). |
 
 ## Transport
 

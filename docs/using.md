@@ -124,7 +124,7 @@ See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
 ## Write envelope
 
-`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). `deltafuse leash` compares the git diff (or `--file`) to ready envelopes. Intake must not write `src/**`. A null envelope plus a dirty `src/**` / `tests/**` is an orphan and fails. `docs/spec/**` is an orphan only after `project.baseline: accepted`. `docs/intake/**` and `AGENTS.md` are not orphans. `workflow.leash: advisory` reports the same violations and exits 0. `enforce` installs a git hook and (optional) CI job; `off` does not.
+`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). The host MUST restrict write-tools to `envelope.write`. If it cannot, `/run` still calls `deltafuse leash` before leaving the step (not a substitute for the git hook). `deltafuse leash` compares the git diff (or `--file`) to ready envelopes. Intake must not write `src/**`. A null envelope plus a dirty `src/**` / `tests/**` is an orphan and fails. When `halt.kind` is `decision` or `spec`, `envelope` is null and product-code write tools stay off. `docs/spec/**` is an orphan only after `project.baseline: accepted`. `docs/intake/**` and `AGENTS.md` are not orphans. `workflow.leash: advisory` reports the same violations and exits 0. `enforce` installs a git hook and (optional) CI job; `off` does not. Fuse-map UI and Cursor buttons live outside `src/deltafuse/**`.
 
 ```text
 deltafuse leash <product-root>

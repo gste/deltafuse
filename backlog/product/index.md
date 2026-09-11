@@ -4,7 +4,7 @@
 
 Программа: [leash.md](leash.md) — железный поводок (envelope, `leash`, hook/CI, decide, evidence stamp, хост).
 
-Брать в работу: **LS-007**.
+Брать в работу: нет. Программа [leash.md](leash.md) закрыта.
 
 | ID | Статус | Зачем |
 |---|---|---|
@@ -14,7 +14,7 @@
 | [LS-004](LS-004.md) | `done` | Hook + CI, `workflow.leash` |
 | [LS-005](LS-005.md) | `done` | `accepted`/`rejected` только через `decide` |
 | [LS-006](LS-006.md) | `done` | Evidence без штампа ядра не закрывает гейт |
-| [LS-007](LS-007.md) | `planned` | Хост MUST резать writes по envelope |
+| [LS-007](LS-007.md) | `done` | Хост MUST резать writes по envelope |
 
 Закрыто в этой ветке (не брать):
 

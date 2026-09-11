@@ -16,7 +16,7 @@ Producer: `deltafuse next --json` (`deltafuse.core.leash.build_envelope` via `qu
 |---|---|---|
 | Producer | DeltaFuse Core | Emit `envelope` that validates when a Worker step is selected. Own `write[]`. |
 | Guard | `deltafuse leash` | Compare git diff (or `--file`) to `envelope.write`. No product writes. |
-| Host | Cursor, IDE, fuse-map | MAY restrict write tools to `envelope.write`. MUST NOT invent extra globs. |
+| Host | Cursor, IDE, fuse-map | MUST restrict write tools to `envelope.write`. MUST NOT invent extra globs. Fuse-map UI and Cursor buttons live outside `src/deltafuse/**`. |
 | Worker | LLM or human | Write only inside `write[]`. Does not choose the envelope. |
 
 ## Transport
@@ -36,6 +36,24 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 | Declare/Implement | Declare keeps `tests/**` and Red evidence globs, not `src/**`. Implement keeps `tests/**` and shrinks product paths to task `allowed_paths`. |
 | `leash` side effects | Zero product writes. Diagnostics on stderr unless `--json`. |
 | `workflow.leash` | Fresh `init` writes `off` (no hook). `advisory`: same violations, exit `0` (hook does not block commit). Missing/`enforce`: exit `≠ 0` when a path is outside `write`. `enforce` and `advisory` install a local `pre-commit` that runs `deltafuse leash`. The hook MUST NOT `git push`. |
+| Halt + envelope | When `halt.kind` is `decision` or `spec`, `envelope` is JSON `null`. Product-code write tools MUST stay off while those buttons are showing. |
+
+## Host MUST
+
+| Need | Source | MUST |
+|---|---|---|
+| Write allow-list | `envelope.write` | Restrict agent write-tools (ApplyPatch, write, edit) to these globs. MUST NOT invent extra globs. |
+| Null envelope + `leash: enforce` | `envelope` is JSON `null` | No ready Worker step (Human Gate, blocked, or `halt.kind: done`). MUST NOT enable product globs (`src/**`, `tests/**`, ops/deploy). `docs/spec/**` after `project.baseline: accepted` is the same. Wait / inspect is allowed. |
+| Halt + envelope | `halt.kind` `decision` or `spec` | Envelope is null. MUST NOT open product-code writes while the Human Gate buttons are showing. |
+| Host cannot cut tools | `/run` | Still run `deltafuse leash` at the product root before leaving the step. That is not a substitute for the git hook. |
+| Board / buttons | Other repository | Fuse-map UI and Cursor button chrome live outside `src/deltafuse/**`. Pin this schema there. This repo MUST NOT ship that UI. |
+
+## Host MUST NOT
+
+- Enable write tools outside `envelope.write`.
+- Treat a null envelope as "write anything" when `workflow.leash` is `enforce`.
+- Auto-accept Decisions, spec, merge, or `git push`.
+- Implement a Cursor plugin, MCP write-gate, or fuse-map board inside `src/deltafuse/**`.
 
 ## Example (Analyze)
 

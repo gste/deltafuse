@@ -4,7 +4,7 @@
 
 Тезис текущей программы: [product/leash.md](product/leash.md).
 
-Брать в работу:
+Брать в работу: нет. Программа [product/leash.md](product/leash.md) закрыта.
 
 | ID | Статус | Слой |
 |---|---|---|
@@ -14,7 +14,7 @@
 | [LS-004](product/LS-004.md) | `done` | hook/CI + `workflow.leash` |
 | [LS-005](product/LS-005.md) | `done` | Gate только через `decide` |
 | [LS-006](product/LS-006.md) | `done` | штамп `deltafuse evidence` |
-| [LS-007](product/LS-007.md) | `planned` | контракт хоста (writes + halt) |
+| [LS-007](product/LS-007.md) | `done` | контракт хоста (writes + halt) |
 
 Сводка: [product/index.md](product/index.md).
 

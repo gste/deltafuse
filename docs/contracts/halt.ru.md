@@ -21,7 +21,7 @@
 
 ## Хост обязан
 
-Кнопки — только `halt.choices[].label`. Ненулевой `command` — запустить как есть из корня продукта (`deltafuse decide …`). `id: inspect` / `command: null` — стоп, не `decide`. Ждать человека. Пак бенча (`oracle.yaml`, `hidden_suite`) не класть в песочницу воркера и не в адаптеры skills. Доска — другой репозиторий, читает [снимок](board-snapshot.ru.md).
+Кнопки — только `halt.choices[].label`. Ненулевой `command` — запустить как есть из корня продукта (`deltafuse decide …`). `id: inspect` / `command: null` — стоп, не `decide`. Ждать человека. Пак бенча (`oracle.yaml`, `hidden_suite`) не класть в песочницу воркера и не в адаптеры skills. Доска — другой репозиторий, читает [снимок](board-snapshot.ru.md). UI fuse-map и кнопки Cursor **вне** `src/deltafuse/**`. При `kind` `decision` или `spec` `envelope` на том же `next --json` — JSON `null`: не открывать запись в код продукта, пока кнопки на экране ([leash.ru.md](leash.ru.md)).
 
 ## Транспорт
 

@@ -70,6 +70,7 @@ def test_next_json_decision_halt_matches_contract(tmp_path: Path, repo_root: Pat
     halt = data["halt"]
     assert halt["kind"] == "decision"
     _assert_valid_halt(halt, repo_root)
+    assert data["envelope"] is None
     assert any("deltafuse decide" in (row["command"] or "") and "--decision" in (row["command"] or "") for row in halt["choices"])
 
 
@@ -82,6 +83,7 @@ def test_next_json_spec_halt_matches_contract(tmp_path: Path, repo_root: Path, c
     halt = data["halt"]
     assert halt["kind"] == "spec"
     _assert_valid_halt(halt, repo_root)
+    assert data["envelope"] is None
     assert any("--spec" in (row["command"] or "") for row in halt["choices"])
 
 

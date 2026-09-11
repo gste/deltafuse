@@ -66,7 +66,7 @@ delta-fuse/
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_halt_contract.py     # HS-001: next --json halt — кнопки хоста; pack не в адаптерах
-│   │   ├── test_leash.py             # LS-001–003: write envelope, deltafuse leash, orphan
+│   │   ├── test_leash.py             # LS-001–003, LS-007: write envelope, deltafuse leash, orphan, host MUST
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
 │   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
 │   │   ├── test_first_write.py       # SK-001: шаблон Intake/Analyze/Decompose проходит check-gate; синонимы YAML
@@ -152,6 +152,7 @@ delta-fuse/
   - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
   - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
   - **LS-006 / targeting, implemented, converged**: schema-valid evidence без штампа ядра (`recorded_by` + hash прогона) не закрывает гейт; `deltafuse evidence` штампует файл. syntax-error по-прежнему не authentic Red.
+  - **LS-007 / host**: контракт leash Host MUST режет write-tools по `envelope.write`; generated Intake skill не учит писать `src/**`. Fuse-map UI и кнопки Cursor вне `src/deltafuse/**`.
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
 
