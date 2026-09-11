@@ -66,6 +66,7 @@ delta-fuse/
 │   │   ├── test_queue.py             # Производная очередь и deltafuse next
 │   │   ├── test_board.py             # Снимок доски fuse-map (schema_version 1)
 │   │   ├── test_halt_contract.py     # HS-001: next --json halt — кнопки хоста; pack не в адаптерах
+│   │   ├── test_leash.py             # LS-001/LS-002: write envelope и deltafuse leash
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
 │   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
 │   │   ├── test_first_write.py       # SK-001: шаблон Intake/Analyze/Decompose проходит check-gate; синонимы YAML

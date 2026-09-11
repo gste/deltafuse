@@ -120,6 +120,15 @@ deltafuse bench compare ../scores/opus.json ../scores/flash.json
 
 `deltafuse next --json` `halt` — контракт кнопок хоста ([halt.ru.md](./contracts/halt.ru.md)). Показать каждый `choices[].label`. Выполнить только `choice.command` из корня продукта. `inspect` (`command: null`) — стоп. Не добавлять кнопки merge / `git push`. Ядро UI не рисует.
 
+## Конверт записи
+
+`deltafuse next --json` `envelope` — список путей, куда воркер может писать ([leash.ru.md](./contracts/leash.ru.md)). `deltafuse leash` сверяет git-дифф (или `--file`) с `envelope.write`. Intake не пишет `src/**`. `envelope: null` — нет готового шага; `leash` тогда пропускает (orphan — отдельное правило). `workflow.leash: advisory` — те же нарушения, exit 0.
+
+```text
+deltafuse leash <product-root>
+deltafuse leash <product-root> --file src/foo.py
+```
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя. Этот репозиторий UI доски не содержит.

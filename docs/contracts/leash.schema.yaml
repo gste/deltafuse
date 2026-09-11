@@ -1,0 +1,37 @@
+# Canonical write envelope on `deltafuse next --json` (producer).
+# Hosts and `deltafuse leash` pin this schema. Not a product artifact schema.
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/contracts/leash/v1
+title: DeltaFuse next write envelope
+description: >
+  The `envelope` property of `deltafuse next --json` when a ready Worker
+  step is selected. JSON null envelope (Human Gate / empty queue / no
+  ready step) is not this schema. Unknown properties are allowed; hosts
+  MUST ignore them.
+type: object
+additionalProperties: true
+required: [step, write]
+properties:
+  step:
+    type: string
+    minLength: 1
+    description: Lifecycle step the Worker may execute (intake, analyze, …).
+  change:
+    type: [string, 'null']
+    description: Change id when the step is bound to a Change; null for pending intake.
+  task:
+    type: [string, 'null']
+    description: Task id for Declare/Implement; null otherwise.
+  write:
+    type: array
+    minItems: 1
+    items:
+      type: string
+      minLength: 1
+    description: POSIX globs or paths the Worker may write. Sole LS-002 allow-list.
+  read:
+    type: array
+    items:
+      type: string
+      minLength: 1
+    description: Optional read globs from the step contract. Not enforced by leash v1.

@@ -37,6 +37,7 @@ WORKER_CMDS = (
     "validate-layout",
     "lint-context",
     "board",
+    "leash",
 )
 
 

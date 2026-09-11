@@ -24,6 +24,7 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
+from deltafuse.core.leash import LeashError, check_paths, git_dirty_paths, load_leash_mode
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import validate_context_budget, validate_task_context_budget
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -185,6 +186,25 @@ def main(argv: list[str] | None = None) -> int:
     # lint-context command (P7.6)
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
+
+    leash_parser = subparsers.add_parser(
+        "leash",
+        help="Check git diff against the current write envelope (no LLM)",
+    )
+    leash_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Product root (default: current dir)",
+    )
+    leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+    leash_parser.add_argument(
+        "--file",
+        action="append",
+        default=[],
+        dest="files",
+        help="Relative path to check instead of git diff (repeatable)",
+    )
 
     bench_parser = subparsers.add_parser(
         "bench",
@@ -448,6 +468,61 @@ def main(argv: list[str] | None = None) -> int:
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0
+
+    elif args.command == "leash":
+        target = Path(args.path)
+        try:
+            only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
+            root = load_product_root(target if only is None else only)
+            queue = build_work_queue(target, only_change=only)
+            selected = select_next(queue)
+            snapshot = queue_snapshot(queue, selected=selected, product_root=root)
+            envelope = snapshot.get("envelope")
+            if args.files:
+                dirty = list(args.files)
+            else:
+                dirty = git_dirty_paths(root)
+            errors = check_paths(envelope if isinstance(envelope, dict) else None, dirty)
+            mode = load_leash_mode(root)
+            skipped = envelope is None
+            ok = not errors
+            _journal(
+                root,
+                cmd="leash",
+                ok=ok,
+                errors=errors,
+                n_errors=len(errors),
+                skipped=skipped,
+            )
+            payload = {
+                "ok": ok,
+                "skipped": skipped,
+                "mode": mode,
+                "envelope": envelope,
+                "paths": dirty,
+                "violations": errors,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            elif skipped:
+                print("leash: no write envelope (no ready Worker step)")
+            elif errors:
+                print(f"leash: {len(errors)} path(s) outside the write envelope", file=sys.stderr)
+                for err in errors:
+                    print(f"  - {err}", file=sys.stderr)
+            else:
+                print("leash: diff is inside the write envelope")
+            if errors and mode != "advisory":
+                return 1
+            return 0
+        except QueueError as ex:
+            _journal(target, cmd="leash", ok=False, errors=[str(ex)])
+            print(f"Leash failed: {ex}", file=sys.stderr)
+            return 2
+        except LeashError as ex:
+            _journal(target, cmd="leash", ok=False, errors=[str(ex)])
+            print(f"Leash failed: {ex}", file=sys.stderr)
+            return 2
 
     elif args.command == "board":
         target = Path(args.product_path)

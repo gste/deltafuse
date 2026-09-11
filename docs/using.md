@@ -120,6 +120,15 @@ See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
 
 `deltafuse next --json` `halt` is the host button contract ([halt.md](./contracts/halt.md)). Render every `choices[].label`. Run only `choice.command` from the product root. `inspect` (`command: null`) means stop. Do not add merge or `git push` buttons. Core does not draw UI.
 
+## Write envelope
+
+`deltafuse next --json` `envelope` is the allow-list of paths the Worker may write ([leash.md](./contracts/leash.md)). `deltafuse leash` compares the git diff (or `--file`) to `envelope.write`. Intake must not write `src/**`. A null envelope means there is no ready Worker step; `leash` then skips (orphan product edits are a later rule). `workflow.leash: advisory` reports the same violations and exits 0.
+
+```text
+deltafuse leash <product-root>
+deltafuse leash <product-root> --file src/foo.py
+```
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository. This framework does not ship a board UI.
