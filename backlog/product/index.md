@@ -2,7 +2,7 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [DF3-001](DF3-001.md) — v3 contracts, threat model и adversarial baseline.
+Брать в работу: [DF3-001](DF3-001.md) — v3 contracts, threat model и абсолютные acceptance thresholds.
 
 Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
@@ -10,14 +10,14 @@
 
 | ID | Статус | Зачем |
 |---|---|---|
-| [DF3-001](DF3-001.md) | `ready` | V3 contracts и adversarial baseline |
+| [DF3-001](DF3-001.md) | `ready` | V3 contracts и абсолютные acceptance thresholds |
 | [DF3-002](DF3-002.md) | `blocked` | Archive bypass и route convergence |
 | [DF3-003](DF3-003.md) | `blocked` | CI leash и framework manifest |
 | [DF3-004](DF3-004.md) | `blocked` | Core-owned lifecycle transitions |
 | [DF3-005](DF3-005.md) | `blocked` | Distribution, scaffolding и upgrade |
 | [DF3-006](DF3-006.md) | `blocked` | Evidence и envelope authority |
 | [DF3-007](DF3-007.md) | `blocked` | Human Gate receipts и integrity profiles |
-| [DF3-008](DF3-008.md) | `blocked` | Schema v3 и Declare migration |
+| [DF3-008](DF3-008.md) | `blocked` | Schema v3 и Declare contracts |
 | [DF3-009](DF3-009.md) | `blocked` | Bench, docs и release qualification |
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |

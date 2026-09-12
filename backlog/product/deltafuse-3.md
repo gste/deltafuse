@@ -19,8 +19,8 @@ DeltaFuse 3.0 — breaking-линия, в которой Core становитс
 8. Локальный hash chain защищает только от случайной порчи. Защита от подделки требует подписи доверенного host broker с ключом вне Worker write/read surface.
 9. Официально поддерживаются nested source checkout и wheel. Wheel содержит сгенерированный при build immutable runtime bundle; канонический источник остаётся в `process/**`, а `docs/**` не копируется в продукт.
 10. `check-gate` и `next` остаются read-only. Изменение lifecycle state выполняет отдельный Core command.
-11. `init --force` не переставляет evidence stamps. Upgrade при активных Changes останавливается до явной миграции и повторного evidence run.
-12. v3 пишет только новую терминологию Declare; чтение v2 допускается только миграционным слоем.
+11. `init --force` не переставляет evidence stamps. Update между несовместимыми v3 contract revisions при активных Changes останавливается до явного закрытия или переноса Change и повторного evidence run.
+12. v3 поддерживает только contracts и терминологию v3. Совместимость, миграция и qualification предыдущих версий не входят в эту программу.
 
 ## Small-LLM Quality Contract
 
@@ -30,7 +30,7 @@ DeltaFuse 3.0 — breaking-линия, в которой Core становитс
 - Receipts, manifests, полные журналы и длинные command outputs не входят в Worker context без явной диагностической необходимости; Core отдаёт краткое структурированное резюме.
 - При превышении token/file budget работа декомпозируется. Обрезание обязательного контекста и молчаливое продолжение запрещены.
 - Качество измеряется disk-based bench: correctness, завершённые stages, retries, context tokens, уникальные файлы, выдуманные пути и envelope violations.
-- DF3-001 фиксирует воспроизводимый v2 baseline и численные release thresholds до изменения реализации. Порог нельзя ослабить без отдельного maintainer Decision.
+- DF3-001 фиксирует абсолютные численные release thresholds для v3 до изменения реализации. Порог выводится из требований к качеству и context envelope, а не из результатов предыдущей версии; ослабление требует отдельного maintainer Decision.
 
 ## Threat model
 
@@ -47,7 +47,7 @@ DeltaFuse защищается от ошибочного или враждебн
 | 5 | [DF3-005](DF3-005.md) | Wheel/runtime bundle и безопасный upgrade | DF3-003 |
 | 6 | [DF3-006](DF3-006.md) | Evidence command/path authority и task envelope | DF3-004 |
 | 7 | [DF3-007](DF3-007.md) | Подписанные Human Gate receipts | DF3-004 |
-| 8 | [DF3-008](DF3-008.md) | Schema v3 и Declare migration | DF3-004, DF3-006, DF3-007 |
+| 8 | [DF3-008](DF3-008.md) | Schema v3 и Declare contracts | DF3-004, DF3-006, DF3-007 |
 | 9 | [DF3-009](DF3-009.md) | 35B/32k qualification, adversarial bench, docs и release | DF3-005, DF3-008 |
 
 ## Disposition аудита
@@ -64,7 +64,7 @@ DeltaFuse защищается от ошибочного или враждебн
 | C-03 | Scaffolding принят; `validate` уже существует; DF3-005 |
 | B-04, SEC-04 | Приняты с Core-derived paths; DF3-006 |
 | C-06 | Не дефект Linux CI; clean-checkout проверка в DF3-009 |
-| F-05 | Принят как breaking migration; DF3-008 |
+| F-05 | Принят как чистый breaking contract v3 без compatibility layer; DF3-008 |
 | F-06 | Переформулирован как taxonomy drift; DF3-007/DF3-009 |
 | B-06 | Отклонён: halt уже versioned через contract `$id` |
 | B-07 | Отложен до профилирования FuseMap refresh |
@@ -88,6 +88,6 @@ DeltaFuse защищается от ошибочного или враждебн
 - Docs/code/ops routes проходят полный lifecycle и archive.
 - Wheel проходит установку и полный smoke в чистом окружении.
 - Human Gate receipt проверяется согласно integrity profile.
-- v2 product мигрирует либо получает точную blocking diagnostic.
+- v3 installation не принимает artifacts неподдерживаемой версии как действующие contracts и выдаёт точную blocking diagnostic вместо неявной совместимости.
 - Bench включает adversarial Worker и не награждает gate spam.
-- Три чистых прогона каждого release case на reference 35B A3B profile помещаются в 32k; медианные метрики не ниже зафиксированных DF3-001 thresholds и v2 baseline на сопоставимых cases.
+- Три чистых v3-прогона каждого release case на reference 35B A3B profile помещаются в 32k; каждый прогон и медианные метрики достигают абсолютных thresholds из DF3-001.
