@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -381,3 +382,59 @@ def test_envelope_gated_write_rejected(tmp_path):
     # empty envelope (Worker must not write) still allows exempt/Core paths only
     io2 = qualify.SandboxIO(tmp_path)
     assert "OK" in io2.write_file("docs/spec/x.md", "# x")
+
+
+def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):
+    """Step 6 acceptance: 3 synthetic runs, one failure -> non-zero exit,
+    all three reports plus the campaign verdict saved; manifest.yaml format."""
+    import yaml
+
+    monkeypatch.setattr(sys, "argv", ["qualify.py"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(
+        qualify, "provenance",
+        lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
+    )
+    _patch_probe(monkeypatch)
+
+    calls = {"n": 0}
+
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+        calls["n"] += 1
+        return {
+            "run_id": f"{campaign_id}-{case_id}-run{index}",
+            "case": case_id,
+            "verdict": "pass" if index != 2 else "fail",
+            "threshold_failures": [] if index != 2 else ["T1 correctness_failed=2"],
+            "stages": {}, "correctness": 90.0, "gate_retries": 0,
+            "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
+            "max_unique_files": 10, "hallucinated_paths": 0, "envelope_violations": 0,
+            "calls": [],
+        }
+
+    monkeypatch.setattr(qualify, "run_case", fake_run_case)
+    exit_code = qualify.main()
+    assert exit_code == 1
+
+    campaign_dir = next(tmp_path.iterdir())  # RUNS_DIR/<campaign-id>
+    manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["verdict"] == "fail"
+    assert len(manifest["runs"]) == 9  # default: 3 cases x 3 runs
+    assert manifest["framework"]["commit"] == "a" * 40
+    assert manifest["thresholds"]["revision"] == "abc123"
+    case_dir_runs = list(campaign_dir.glob("*/report.yaml"))
+    assert len(case_dir_runs) == 9
+    # run with failure preserved
+    failed = yaml.safe_load(
+        next(p for p in case_dir_runs if p.name.endswith("M01-cooldown-run2")).read_text(encoding="utf-8")
+    )
+    assert failed["verdict"] == "fail"
+
+
+def test_dirty_tree_aborts_campaign(tmp_path, monkeypatch):
+    """Step 6: a dirty working tree must abort before any run."""
+    monkeypatch.setattr(sys, "argv", ["qualify.py"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(qualify, "tree_dirty", lambda: [" M scripts/x.py"])
+    exit_code = qualify.main()
+    assert exit_code == 3

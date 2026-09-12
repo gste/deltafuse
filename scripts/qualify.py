@@ -558,6 +558,7 @@ def medians(runs: list[dict]) -> dict:
     return {
         "correctness": med("correctness"),
         "context_peak_tokens": med("context_peak_tokens"),
+        "framework_input_tokens_max": med("framework_input_tokens_max"),
         "gate_retries": med("gate_retries"),
         "max_unique_files": med("max_unique_files"),
     }
@@ -566,12 +567,63 @@ def medians(runs: list[dict]) -> dict:
 # ------------------------------------------------------------------- runner
 
 
-def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, commit: str) -> dict:
+def thresholds_revision() -> str:
+    proc = subprocess.run(
+        ["git", "hash-object", str(THRESHOLDS_DOC)],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise QualificationError("cannot hash thresholds.md for the manifest revision")
+    return proc.stdout.strip()[:12]
+
+
+def framework_lock_hash() -> str:
+    from deltafuse.core.hasher import compute_framework_content_hash
+
+    return f"sha256:{compute_framework_content_hash(REPO)}"
+
+
+def tree_dirty() -> list[str]:
+    proc = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=REPO
+    )
+    return [line for line in proc.stdout.splitlines() if line.strip()]
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def _atomic_write_yaml(path: Path, data: dict) -> None:
+    import yaml
+
+    _atomic_write_text(path, yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+
+
+def provenance() -> dict:
+    """Step 6: full, fail-closed campaign provenance."""
+    dirty = tree_dirty()
+    if dirty:
+        raise QualificationError(
+            "working tree is not clean; qualification must run on a fixed commit: "
+            + "; ".join(dirty[:5])
+        )
+    return {
+        "commit": framework_commit(),
+        "lock_hash": framework_lock_hash(),
+        "thresholds_revision": thresholds_revision(),
+    }
+
+
+def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, provenance_info: dict) -> dict:
     """One clean run: sandbox -> worker loop -> score -> thresholds."""
     from deltafuse.bench.init_product import init_bench_product, format_worker_start_prompt
     from deltafuse.bench.loader import load_case
     from deltafuse.bench.score import score_product
 
+    commit = provenance_info["commit"]
     run_id = f"{campaign_id}-{case_id}-run{index}"
     sandbox = RUNS_DIR / campaign_id / run_id / "sandbox"
     if sandbox.exists():
@@ -618,9 +670,9 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, comm
     }
     run_dir = RUNS_DIR / campaign_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "report.json").write_text(
-        json.dumps(per_run, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    # Step 6: report.yaml per thresholds.md format; every run (also failures)
+    # is preserved; writes are atomic.
+    _atomic_write_yaml(run_dir / "report.yaml", per_run)
     return per_run
 
 
@@ -632,8 +684,16 @@ def main() -> int:
     ap.add_argument("--campaign-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     args = ap.parse_args()
 
-    commit = framework_commit()
+    # Step 6: provenance is fail-closed — a dirty tree aborts the campaign.
+    try:
+        provenance_info = provenance()
+    except QualificationError as ex:
+        print(f"QUALIFICATION ERROR: {ex}", file=sys.stderr)
+        return 3
+    commit = provenance_info["commit"]
     print(f"framework commit: {commit}")
+    print(f"framework lock: {provenance_info['lock_hash'][:19]}...")
+    print(f"thresholds revision: {provenance_info['thresholds_revision']}")
 
     try:
         model_probe = probe_host(args.host)
@@ -645,7 +705,10 @@ def main() -> int:
             "and re-run this script."
         )
         return 2
-    print(f"host probe ok: {model_probe}")
+    print(
+        f"host probe ok: model={model_probe['id']} "
+        f"context={model_probe['context_window_tokens_measured']}"
+    )
 
     campaign_dir = RUNS_DIR / args.campaign_id
     campaign_dir.mkdir(parents=True, exist_ok=True)
@@ -653,29 +716,81 @@ def main() -> int:
         "schema_version": 1,
         "campaign_id": args.campaign_id,
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "framework": {"commit": commit},
+        "framework": {
+            "commit": commit,
+            "lock_hash": provenance_info["lock_hash"],
+        },
         "model": model_probe,
-        "thresholds": {"source": "backlog/product/v3/thresholds.md", "absolute": ABSOLUTE},
+        "thresholds": {
+            "source": "backlog/product/v3/thresholds.md",
+            "revision": provenance_info["thresholds_revision"],
+            "absolute": ABSOLUTE,
+        },
         "cases": args.cases,
         "runs": [],
+        "case_verdicts": {},
+        "verdict": "pending",
     }
+    runs_ok = True
+    write_error: str | None = None
     for case in args.cases:
         case_runs: list[dict] = []
         for index in range(1, args.runs + 1):
             try:
-                run = run_case(case, index, args.campaign_id, model_probe, commit)
+                run = run_case(case, index, args.campaign_id, model_probe, provenance_info)
             except QualificationError as ex:
                 print(f"run failed: {ex}")
+                manifest["verdict"] = "incomplete"
+                _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
                 return 3
             manifest["runs"].append(run)
             case_runs.append(run)
             print(f"{run['run_id']}: {run['verdict']} {run['threshold_failures'] or ''}")
-        print(f"{case} medians: {medians(case_runs)}")
-    (campaign_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+            if run["verdict"] != "pass":
+                runs_ok = False
+            # Atomic manifest refresh after EVERY run: partial results survive.
+            try:
+                _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
+            except OSError as ex:
+                write_error = str(ex)
+        med = medians(case_runs)
+        # Step 6: thresholds apply to the medians as well — the metric
+        # boundaries (T4/T5/T6/T7) on median values; stage aggregates are
+        # per-run facts and are carried as all-completed.
+        median_metrics = {
+            "context_peak_tokens": med["context_peak_tokens"],
+            "framework_input_tokens_max": med["framework_input_tokens_max"],
+            "max_unique_files": med["max_unique_files"],
+            "hallucinated_paths": 0 if all(r["hallucinated_paths"] == 0 for r in case_runs) else 1,
+            "envelope_violations": 0 if all(r["envelope_violations"] == 0 for r in case_runs) else 1,
+        }
+        carrier_stages = {
+            name: {"pass": True, "checks_passed": 0, "checks_total": 0, "gate_retries": 0}
+            for name in ("intake", "analyze", "specify", "decompose", "declare", "implement", "verify")
+        }
+        median_ok, median_failures = apply_thresholds(
+            {"pass": True, "first_fail": None, "stages": carrier_stages, "retries": {}, "defense_checks": {}},
+            median_metrics,
+        )
+        case_verdict = "pass" if runs_ok and median_ok else "fail"
+        manifest["case_verdicts"][case] = {
+            "verdict": case_verdict,
+            "medians": med,
+            "median_failures": median_failures,
+        }
+        print(f"{case} medians: {med} verdict={case_verdict}")
+    complete = len(manifest["runs"]) == len(args.cases) * args.runs
+    manifest["verdict"] = "pass" if runs_ok and complete else "fail"
+    try:
+        _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
+    except OSError as ex:
+        write_error = str(ex)
+    print(f"campaign verdict: {manifest['verdict']}")
     print(f"campaign recorded under {campaign_dir}")
-    return 0
+    if write_error:
+        print(f"manifest write error: {write_error}", file=sys.stderr)
+        return 4
+    return 0 if manifest["verdict"] == "pass" else 1
 
 
 if __name__ == "__main__":
