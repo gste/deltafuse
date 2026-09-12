@@ -1,12 +1,16 @@
 # DeltaFuse 3.0 — план исправления qualification
 
-- **Статус:** `ready`
+- **Статус:** `implemented-needs-correction`
 - **Основание:** независимая повторная проверка 2026-09-12
 - **Заменяет для исправлений:** [completion-plan.md](completion-plan.md)
 - **Инструкции исполнителя:** [qualification-fixes/](qualification-fixes/README.md) —
   по одной папке на QF-пакет (порядок, Red-тесты, acceptance, evidence)
 - **Цель:** сделать доказательным qualification слабого Worker класса 35B A3B
   при полном окне от 32k, не ослабляя T1–T8 и не используя baseline v2
+
+> QF-001–QF-011 реализованы, QF-012 заблокирован reference host. Независимая
+> приёмка открыла дополнительные блокеры; продолжение вынесено в отдельный
+> [qualification-fix-plan-wave-2.md](qualification-fix-plan-wave-2.md).
 
 План разбит на небольшие последовательные пакеты. Каждый пакет завершается
 отдельным reviewable commit, собственным Red/Green-тестом и проверкой регрессий.

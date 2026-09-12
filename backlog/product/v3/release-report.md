@@ -1,10 +1,10 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `engineering-passed / pending reference runs`
+- **Статус:** `engineering-failed / correction wave 2`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-12 (инженерная переквалификация QF-011; см.
-  [qualification fix plan](qualification-fix-plan.md))
+- **Обновлён:** 2026-09-13 (независимая приёмка QF-001–QF-012; см.
+  [qualification fix plan wave 2](qualification-fix-plan-wave-2.md))
 
 ## 1. Референсная конфигурация
 
@@ -27,10 +27,10 @@
 | M02-policy-stats | _pending_ | _pending_ | _pending_ | — | — | pending |
 | M03-adversarial | _pending_ | _pending_ | _pending_ | — | — | pending |
 
-**Прогоны ещё не выполнялись.** Сначала требуется закрыть инженерные блокеры из
-[qualification fix plan](qualification-fix-plan.md); референсный host с моделью
-также недоступен на машине разработки. Данные заполняются только фактическими
-результатами.
+**Прогоны ещё не выполнялись.** Сначала требуется закрыть QF-013–QF-018 из
+[qualification fix plan wave 2](qualification-fix-plan-wave-2.md);
+референсный host с моделью также недоступен на машине разработки. Данные
+заполняются только фактическими результатами.
 
 ## 3. Независимая инженерная перепроверка без модели (2026-09-12)
 
@@ -97,9 +97,12 @@ POSIX-платформенная ветка (native Linux/`validate-layout.sh` �
 выполнена через Git Bash; отдельная Linux-машина недоступна — native-прогон
 не выполнен (не блокер, зафиксировано).
 
-**Инженерный блокер снят.** Все обязательные проверки зелёные на чистом
-commit. Оставшаяся работа — reference runs (QF-012) на LM Studio host с
-`ornith-1.5-35b-a3b`; карточка DF3-009 остаётся `blocked` до их выполнения.
+Зелёный suite подтверждён, но независимая приёмка обнаружила не покрытые им
+контрактные дефекты: отсутствие обязательной OS-изоляции Worker, неточный T2,
+не fail-closed tokenizer fallback, небезопасное crash recovery assets и
+неполную schema disk artifacts. Поэтому инженерный статус снова `failed` до
+выполнения QF-013–QF-018. Reference runs QF-012 после этого по-прежнему требуют
+LM Studio с `ornith-1.5-35b-a3b`.
 
 ## 4. Критерии закрытия DF3-009
 
