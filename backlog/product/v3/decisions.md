@@ -1,8 +1,9 @@
-# DeltaFuse 3.0 — decision records (DF3-001)
+# DeltaFuse 3.0 — decision records
 
 Canonical v3 decision records. Каждый DR сформулирован до implementation-коммитов
-DF3-002+ и меняется только отдельным maintainer Decision. Источник: [audit-report](../audit-report.md),
-disposition в [deltafuse-3](../deltafuse-3.md).
+реализации v3 и меняется только отдельным maintainer Decision. Исходный аудит
+и завершённые карточки сохранены в Git history. Текущее состояние программы —
+в [deltafuse-3](../deltafuse-3.md).
 
 ## DR-3.0-1 — Transition authority (Core-owned transitions)
 

@@ -1,7 +1,8 @@
-# DeltaFuse 3.0 — contract matrix (DF3-001)
+# DeltaFuse 3.0 — contract matrix
 
 v3-контракты артефактов и то, кто какой инвариант проверяет. Никакой реализации
-в DF3-001 нет: строки матрицы — обязательства для карточек DF3-002…DF3-009.
+Завершённые implementation-карточки сохранены в Git history; строки матрицы
+остаются обязательствами действующей реализации и release qualification.
 Терминология и lifecycle — как в [deltafuse-3](../deltafuse-3.md).
 
 Колонки:

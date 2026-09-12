@@ -1,7 +1,7 @@
-# DeltaFuse 3.0 — absolute release thresholds и run manifest (DF3-001)
+# DeltaFuse 3.0 — absolute release thresholds и run manifest
 
-Абсолютные численные пороги качества v3, зафиксированные до implementation-коммитов
-DF3-002+. Их использует DF3-009 (qualification). Пороги выведены из Small-LLM Quality
+Абсолютные численные пороги качества v3, зафиксированные до implementation-коммитов.
+Их использует DF3-009 (qualification). Пороги выведены из Small-LLM Quality
 Contract ([deltafuse-3](../deltafuse-3.md)) и context envelope, а не из результатов
 прогонов предыдущей версии. Ослабление любого порога — отдельный maintainer Decision
 с записью в [decisions.md](decisions.md).

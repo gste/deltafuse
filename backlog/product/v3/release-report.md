@@ -1,9 +1,9 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `pending-reference-runs`
+- **Статус:** `blocked-engineering`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-12 (после стабилизации After Audit #2: runner реализован — V3-FIX-001/023/024; статусы строк таблицы остаются `pending` до прогонов)
+- **Обновлён:** 2026-09-12 (повторная проверка; см. [completion plan](completion-plan.md))
 
 ## 1. Референсная конфигурация
 
@@ -26,18 +26,16 @@
 | M02-policy-stats | _pending_ | _pending_ | _pending_ | — | — | pending |
 | M03-adversarial | _pending_ | _pending_ | _pending_ | — | — | pending |
 
-**Прогоны ещё не выполнялись: референсный host с моделью недоступен на машине
-разработки.** Данные строки заполняются только фактическими результатами
-`scripts/qualify.py`; Fabricating results запрещён правилами программы.
+**Прогоны ещё не выполнялись.** Сначала требуется закрыть инженерные блокеры
+runner из completion plan; референсный host с моделью также недоступен на машине
+разработки. Данные заполняются только фактическими результатами.
 
 ## 3. Что уже проверено без модели (2026-09-12)
 
-- Полный сьют: **336 passed, 1 skipped** — включая fail-closed тесты DF3-008
-  (unknown version, legacy vocabulary), receipt-профили DF3-007 и
-  unique-forward-transitions scoring (C-01 закрыт, тест перевёрнут в зелёный).
-- Wheel smoke: `pip wheel` → установка в чистый venv → `deltafuse validate-config`
-  на свежем продукте — rc 0; asset bundle с manifest едет внутри wheel.
-- Оба smoke-теста (bash + PowerShell) и layout validation — зелёные.
+- Полный сьют: **370 passed, 1 skipped** (`no local PBT runner`).
+- Wheel smoke: `pip wheel` → установка в чистый venv → запуск CLI и `init` на
+  свежем продукте — rc 0; asset bundle с manifest едет внутри wheel.
+- Оба smoke-теста (Git Bash + PowerShell) и layout validation — зелёные.
 - Negative test: артефакт `schema_version` вне v3 получает blocking diagnostic
   и не конвертируется (`test_contract_v3.py`).
 
