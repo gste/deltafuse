@@ -5,20 +5,32 @@
 - **Источник:** [AU-001](AU-001.md) и [audit-report.md](audit-report.md)
 - **Следующий шаг:** [DF3-001](DF3-001.md)
 
-DeltaFuse 3.0 — breaking-линия, в которой Core становится единственным авторитетом lifecycle-переходов, доказательств и Human Gate receipts. Это не повод ослаблять Process или переносить продуктовые требования во framework.
+DeltaFuse 3.0 — breaking-линия, в которой Core становится единственным авторитетом lifecycle-переходов, доказательств и Human Gate receipts. Главная задача framework — обеспечивать качественную реализацию на локальных LLM класса 35B A3B и выше даже при полном context window от 32k. Это не повод ослаблять Process или переносить продуктовые требования во framework.
 
 ## Зафиксированные решения
 
-1. Lifecycle остаётся `Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> Verify`.
-2. `Red` и `Green` остаются evidence states, не lifecycle steps.
-3. Worker пишет содержательные Change-артефакты, но не подтверждает собственный прогресс.
-4. Core валидирует gate, выполняет переход и выдаёт проверяемый receipt. Ручная смена status без соответствующего receipt не принимается.
-5. Human Gates: Decision, spec accept и merge. Core журналирует Decision/spec; merge остаётся внешней обязанностью host/человека.
-6. Локальный hash chain защищает только от случайной порчи. Защита от подделки требует подписи доверенного host broker с ключом вне Worker write/read surface.
-7. Официально поддерживаются nested source checkout и wheel. Wheel содержит сгенерированный при build immutable runtime bundle; канонический источник остаётся в `process/**`, а `docs/**` не копируется в продукт.
-8. `check-gate` и `next` остаются read-only. Изменение lifecycle state выполняет отдельный Core command.
-9. `init --force` не переставляет evidence stamps. Upgrade при активных Changes останавливается до явной миграции и повторного evidence run.
-10. v3 пишет только новую терминологию Declare; чтение v2 допускается только миграционным слоем.
+1. Референсный нижний класс Worker — локальная LLM 35B A3B; первая qualification model — `ornith-1.5-35b-a3b` через LM Studio. Cloud или более крупная модель не требуется для корректного прохождения Process.
+2. Полный вызов должен помещаться в context window 32k. Framework-controlled input по умолчанию ограничен 16k токенов и 24 уникальными файлами, оставляя запас host/system instructions, tool exchange и ответа.
+3. Lifecycle остаётся `Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> Verify`.
+4. `Red` и `Green` остаются evidence states, не lifecycle steps.
+5. Worker пишет содержательные Change-артефакты, но не подтверждает собственный прогресс.
+6. Core валидирует gate, выполняет переход и выдаёт проверяемый receipt. Ручная смена status без соответствующего receipt не принимается.
+7. Human Gates: Decision, spec accept и merge. Core журналирует Decision/spec; merge остаётся внешней обязанностью host/человека.
+8. Локальный hash chain защищает только от случайной порчи. Защита от подделки требует подписи доверенного host broker с ключом вне Worker write/read surface.
+9. Официально поддерживаются nested source checkout и wheel. Wheel содержит сгенерированный при build immutable runtime bundle; канонический источник остаётся в `process/**`, а `docs/**` не копируется в продукт.
+10. `check-gate` и `next` остаются read-only. Изменение lifecycle state выполняет отдельный Core command.
+11. `init --force` не переставляет evidence stamps. Upgrade при активных Changes останавливается до явной миграции и повторного evidence run.
+12. v3 пишет только новую терминологию Declare; чтение v2 допускается только миграционным слоем.
+
+## Small-LLM Quality Contract
+
+- Один Worker-вызов решает одну capability, один artifact layer и один проверяемый outcome.
+- `next` передаёт точные bounded reads; ни один шаг не требует загрузки всего репозитория, всего `docs/spec/**` или соседних Changes.
+- Core выполняет routing mechanics, transition checks, diff calculation и evidence bookkeeping вне prompt модели.
+- Receipts, manifests, полные журналы и длинные command outputs не входят в Worker context без явной диагностической необходимости; Core отдаёт краткое структурированное резюме.
+- При превышении token/file budget работа декомпозируется. Обрезание обязательного контекста и молчаливое продолжение запрещены.
+- Качество измеряется disk-based bench: correctness, завершённые stages, retries, context tokens, уникальные файлы, выдуманные пути и envelope violations.
+- DF3-001 фиксирует воспроизводимый v2 baseline и численные release thresholds до изменения реализации. Порог нельзя ослабить без отдельного maintainer Decision.
 
 ## Threat model
 
@@ -36,7 +48,7 @@ DeltaFuse защищается от ошибочного или враждебн
 | 6 | [DF3-006](DF3-006.md) | Evidence command/path authority и task envelope | DF3-004 |
 | 7 | [DF3-007](DF3-007.md) | Подписанные Human Gate receipts | DF3-004 |
 | 8 | [DF3-008](DF3-008.md) | Schema v3 и Declare migration | DF3-004, DF3-006, DF3-007 |
-| 9 | [DF3-009](DF3-009.md) | Adversarial bench, docs и release qualification | DF3-005, DF3-008 |
+| 9 | [DF3-009](DF3-009.md) | 35B/32k qualification, adversarial bench, docs и release | DF3-005, DF3-008 |
 
 ## Disposition аудита
 
@@ -63,6 +75,7 @@ DeltaFuse защищается от ошибочного или враждебн
 - Одна карточка — один reviewable commit или короткая последовательность связанных commits.
 - Сначала Red/adversarial acceptance, затем implementation и Green.
 - При изменении контракта синхронно обновлять docs, skills, schemas, templates, installers, validators и tests.
+- Для каждой карточки проверять влияние на размер Worker packet; security metadata не должна раздувать prompt.
 - После каждой карточки запускать `tests/smoke-test.ps1`, `tests/smoke-test.sh`, pytest и layout validation на изолированном продукте.
 - Не делать `git push`, merge, auto-accept или автоматический re-stamp evidence.
 - Очередь и следующий шаг всегда отражать в `backlog/product/index.md`.
@@ -77,3 +90,4 @@ DeltaFuse защищается от ошибочного или враждебн
 - Human Gate receipt проверяется согласно integrity profile.
 - v2 product мигрирует либо получает точную blocking diagnostic.
 - Bench включает adversarial Worker и не награждает gate spam.
+- Три чистых прогона каждого release case на reference 35B A3B profile помещаются в 32k; медианные метрики не ниже зафиксированных DF3-001 thresholds и v2 baseline на сопоставимых cases.
