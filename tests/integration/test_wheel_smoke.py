@@ -72,26 +72,34 @@ def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
     )
     assert validate.returncode == 0, validate.stdout + validate.stderr
 
-    # 4. Durable build manifest evidence, kept after the test in the
-    # configured output directory (default: bench/builds under the repo).
+    # 4. QF-010: the test itself never writes outside tmp_path. The evidence
+    # object is validated for shape and dumped into tmp_path only; durable
+    # release evidence is created by the explicit scripts/wheel_evidence.py.
     import hashlib
+    import json as _json
 
-    wheel_hash = hashlib.sha256(wheel.read_bytes()).hexdigest()
-    evidence_dir = Path(
-        os.environ.get("DELTAFUSE_WHEEL_EVIDENCE_DIR", REPO_ROOT / "bench" / "builds")
-    )
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    evidence = evidence_dir / f"{wheel.stem}-build-manifest.json"
-    evidence.write_text(
-        json.dumps(
-            {
-                "wheel": wheel.name,
-                "sha256": wheel_hash,
-                "python": sys.version.split()[0],
-                "platform": sys.platform,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    assert evidence.is_file()
+    evidence = {
+        "schema_version": 1,
+        "wheel": wheel.name,
+        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "python": sys.version.split()[0],
+        "platform": sys.platform,
+    }
+    evidence_path = tmp_path / f"{wheel.stem}-build-manifest.json"
+    evidence_path.write_text(_json.dumps(evidence, indent=2), encoding="utf-8")
+    assert evidence_path.is_file()
+    assert evidence["sha256"]
+    assert evidence["wheel"].endswith(".whl")
+
+
+def test_wheel_smoke_leaves_working_tree_clean(tmp_path: Path, monkeypatch):
+    """QF-010: a full wheel smoke leaves `git status --porcelain` identical."""
+    before = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=REPO_ROOT
+    ).stdout
+    monkeypatch.setenv("DELTAFUSE_WHEEL_EVIDENCE_DIR", str(tmp_path))
+    test_wheel_build_install_and_cli_smoke(tmp_path)
+    after = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=REPO_ROOT
+    ).stdout
+    assert after == before
