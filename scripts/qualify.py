@@ -29,6 +29,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import qualify_executor
+from qualify_executor import apply_executor_verdict_cap, resolve_executor
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
@@ -1377,31 +1380,12 @@ def provenance() -> dict:
     }
 
 
-def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, provenance_info: dict) -> dict:
-    """One clean run: sandbox -> worker loop -> score -> thresholds."""
-    from deltafuse.bench.init_product import init_bench_product, format_worker_start_prompt
-    from deltafuse.bench.loader import load_case
-    from deltafuse.bench.score import score_product
+def _system_prompt(sandbox: Path) -> str:
+    """Worker system prompt, built only from files inside the sandbox."""
+    from deltafuse.bench.init_product import format_worker_start_prompt
 
-    commit = provenance_info["commit"]
-    run_id = f"{campaign_id}-{case_id}-run{index}"
-    sandbox = RUNS_DIR / campaign_id / run_id / "sandbox"
-    if sandbox.exists():
-        raise QualificationError(f"sandbox already exists: {sandbox}")
-    init_bench_product(case_id, sandbox, framework_root=REPO)
-
-    # QF-004: Worker commands execute inside a staging work copy (no judge
-    # pack, minimal env); the tree is brought back for scoring afterwards.
-    from qualify_staging import StagingRoot
-
-    staging = StagingRoot.create(
-        RUNS_DIR / campaign_id / "staging", build_venv=False, framework_root=REPO
-    )
-    work = staging.new_workdir(run_id, sandbox)
-
-    case = load_case(case_id, str(CASES_ROOT), oracle=True)
     bench_md = (sandbox / "BENCH.md").read_text(encoding="utf-8")
-    system = (
+    return (
         "You are the DeltaFuse Worker, an autonomous agent completing a "
         "software change end to end. You act only through JSON tool calls.\n\n"
         "Available tools:\n"
@@ -1415,9 +1399,80 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "reports nothing ready or a done halt.\n\n"
         f"Worker start prompt:\n{format_worker_start_prompt(json.loads((sandbox / '.deltafuse' / 'bench.yaml').read_text(encoding='utf-8')))}\n\n{bench_md}"
     )
-    metrics = drive_worker(work, model_probe["host_base_url"]["value"], model_probe["id"]["value"], case_id, system, staging=staging)
-    staging.collect_workdir(run_id, sandbox)
-    staging.teardown()
+
+
+def _run_worker_in_boundary(executor, sandbox: Path, model_probe: dict, case_id: str) -> dict:
+    """QF-013: run the Worker phase INSIDE the isolated boundary container.
+
+    Mounts: the run sandbox read/write plus the single runner script
+    read-only. The judge pack and the framework checkout are never mounted;
+    the endpoint is reached through the host gateway alias.
+    """
+    base_url = model_probe["host_base_url"]["value"].replace(
+        "127.0.0.1", "host.docker.internal"
+    )
+    qual_script = Path(__file__).resolve()
+    cmd = [
+        executor.runtime, "run", "--rm",
+        "--add-host", "host.docker.internal:host-gateway",
+        "-v", f"{sandbox}:/sandbox",
+        "-v", f"{qual_script}:/opt/qualify.py:ro",
+        "-w", "/sandbox",
+        executor.image,
+        "python", "/opt/qualify.py",
+        "--boundary-run",
+        "--sandbox", "/sandbox",
+        "--base-url", base_url,
+        "--model", model_probe["id"]["value"],
+        "--case", case_id,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    metrics_path = sandbox / ".qual-metrics.json"
+    if proc.returncode != 0 or not metrics_path.is_file():
+        raise HostError(
+            f"boundary worker run failed (exit {proc.returncode}): "
+            f"{((proc.stderr or '') + (proc.stdout or ''))[-400:]}"
+        )
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics_path.unlink()
+    return metrics
+
+
+def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
+             provenance_info: dict, executor_kind: str = "local-dev",
+             executor=None) -> dict:
+    """One clean run: sandbox -> worker loop -> score -> thresholds."""
+    from deltafuse.bench.init_product import init_bench_product
+    from deltafuse.bench.score import score_product
+
+    commit = provenance_info["commit"]
+    run_id = f"{campaign_id}-{case_id}-run{index}"
+    sandbox = RUNS_DIR / campaign_id / run_id / "sandbox"
+    if sandbox.exists():
+        raise QualificationError(f"sandbox already exists: {sandbox}")
+    init_bench_product(case_id, sandbox, framework_root=REPO)
+
+    if executor_kind == "isolated":
+        # QF-013: release campaigns execute the Worker inside the system
+        # boundary; the in-process runner would violate the isolation
+        # invariant and is never used here.
+        metrics = _run_worker_in_boundary(executor, sandbox, model_probe, case_id)
+    else:
+        # local-dev only (QF-013): L1 staging work copy, capped at
+        # non-release verdicts by the executor.
+        from qualify_staging import StagingRoot
+
+        staging = StagingRoot.create(
+            RUNS_DIR / campaign_id / "staging", build_venv=False, framework_root=REPO
+        )
+        work = staging.new_workdir(run_id, sandbox)
+        system = _system_prompt(sandbox)
+        metrics = drive_worker(
+            work, model_probe["host_base_url"]["value"],
+            model_probe["id"]["value"], case_id, system, staging=staging,
+        )
+        staging.collect_workdir(run_id, sandbox)
+        staging.teardown()
     try:
         scorecard = score_product(sandbox, pack_root=str(CASES_ROOT))
     except Exception as ex:
@@ -1527,13 +1582,38 @@ def _write_failure_report(
     return report
 
 
-def main() -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="lm-studio")
-    ap.add_argument("--cases", nargs="+", default=["M01-cooldown", "M02-policy-stats", "M03-adversarial"])
+    # QF-013: release campaigns require the isolated executor; the default is
+    # fail-closed (PENDING without a boundary), never in-process execution.
+    ap.add_argument("--executor", choices=qualify_executor.EXECUTOR_KINDS,
+                    default="isolated")
+    ap.add_argument("--cases", nargs="+",
+                    default=["M01-cooldown", "M02-policy-stats", "M03-adversarial"])
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--campaign-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
-    args = ap.parse_args()
+    # QF-013: internal mode — executed INSIDE the boundary container only.
+    ap.add_argument("--boundary-run", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--sandbox", help=argparse.SUPPRESS)
+    ap.add_argument("--base-url", help=argparse.SUPPRESS)
+    ap.add_argument("--model", help=argparse.SUPPRESS)
+    ap.add_argument("--case", help=argparse.SUPPRESS)
+    return ap
+
+
+def _boundary_run_main(args) -> int:
+    """QF-013: Worker phase inside the isolated boundary; writes metrics."""
+    sandbox = Path(args.sandbox)
+    metrics = drive_worker(sandbox, args.base_url, args.model, args.case, _system_prompt(sandbox))
+    (sandbox / ".qual-metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    return 0
+
+
+def main_with_args(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    if args.boundary_run:
+        return _boundary_run_main(args)
 
     # Step 6: provenance is fail-closed — a dirty tree aborts the campaign.
     try:
@@ -1545,6 +1625,20 @@ def main() -> int:
     print(f"framework commit: {commit}")
     print(f"framework lock: {provenance_info['lock_hash'][:19]}...")
     print(f"thresholds revision: {provenance_info['thresholds_revision']}")
+
+    # QF-013: the executor gate comes BEFORE the host probe and any Worker
+    # call: without an isolated boundary the campaign stays PENDING.
+    try:
+        executor = resolve_executor(args.executor)
+    except qualify_executor.ExecutorError as ex:
+        print(
+            f"PENDING: {ex}\n"
+            "Release qualification does not execute Worker-authored code "
+            "outside an isolated boundary. Provide a container runtime and "
+            "DELTAFUSE_QUAL_IMAGE, or run --executor local-dev for "
+            "development only (verdict capped at non-release)."
+        )
+        return 2
 
     try:
         model_probe = probe_host(args.host)
@@ -1568,6 +1662,36 @@ def main() -> int:
 
     campaign_dir = RUNS_DIR / args.campaign_id
     campaign_dir.mkdir(parents=True, exist_ok=True)
+    executor_attestation = executor.attest()
+    if executor.kind == "isolated":
+        # QF-013: the adversarial boundary probe runs INSIDE the actual
+        # boundary before the first Worker call; any leak blocks the campaign.
+        import secrets
+        import socket as _socket
+        import tempfile
+
+        sentinel = campaign_dir / ".judge-sentinel"
+        sentinel.write_text(secrets.token_hex(32), encoding="utf-8")
+        with _socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            forbidden_peer = f"127.0.0.1:{listener.getsockname()[1]}"
+        try:
+            probe = executor.boundary_probe(
+                campaign_dir, sentinel,
+                search_roots=["/"],
+                write_roots=[str(REPO), tempfile.gettempdir(), str(Path.home())],
+                forbidden_peer=forbidden_peer,
+            )
+            qualify_executor.assert_boundary_clean(probe)
+        except (qualify_executor.BoundaryViolation, qualify_executor.ExecutorError) as ex:
+            print(f"PENDING: release boundary not clean: {ex}", file=sys.stderr)
+            return 2
+        finally:
+            sentinel.unlink(missing_ok=True)
+        executor_attestation = executor.attest(probe_report=probe)
+        print("boundary probe ok: sentinel/pack/write/network all blocked")
+
     manifest = {
         "schema_version": 1,
         "campaign_id": args.campaign_id,
@@ -1576,6 +1700,7 @@ def main() -> int:
             "commit": commit,
             "lock_hash": provenance_info["lock_hash"],
         },
+        "executor": executor_attestation,
         "model": model_probe,
         "thresholds": {
             "source": "backlog/product/v3/thresholds.md",
@@ -1594,7 +1719,9 @@ def main() -> int:
         for index in range(1, args.runs + 1):
             run_id = f"{args.campaign_id}-{case}-run{index}"
             try:
-                run = run_case(case, index, args.campaign_id, model_probe, provenance_info)
+                run = run_case(case, index, args.campaign_id, model_probe,
+                               provenance_info, executor_kind=executor.kind,
+                               executor=executor)
             except Exception as ex:  # QF-008: classify, persist, keep going
                 error_class = classify_exception(ex)
                 detail = f"{type(ex).__name__}: {ex}"
@@ -1647,6 +1774,8 @@ def main() -> int:
             v["verdict"] == "pass" for v in manifest["case_verdicts"].values()
         )
         manifest["verdict"] = "pass" if all_cases_pass and complete else "fail"
+    # QF-013: a non-isolated campaign can never produce a release pass.
+    apply_executor_verdict_cap(manifest, executor.kind)
     try:
         _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
     except (SchemaValidationError, OSError) as ex:
@@ -1658,7 +1787,14 @@ def main() -> int:
         return 4
     if aborted:
         return 3
+    if manifest["verdict"] == "non-release":
+        print("verdict is non-release: local-dev evidence is not release evidence")
+        return 1
     return 0 if manifest["verdict"] == "pass" else 1
+
+
+def main() -> int:
+    return main_with_args()
 
 
 if __name__ == "__main__":

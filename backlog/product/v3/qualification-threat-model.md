@@ -1,6 +1,6 @@
 # Qualification threat model (QF-004)
 
-- **Статус:** актуален для runner `scripts/qualify.py` + `scripts/qualify_staging.py`
+- **Статус:** актуален для runner `scripts/qualify.py` + `scripts/qualify_executor.py` (QF-013)
 - **Scope:** qualification кампании DF3-009 (reference Worker 35B A3B), не
   продукционный runtime DeltaFuse.
 
@@ -15,42 +15,43 @@
 
 ## Границы и гарантии
 
-### L1 — политика runner (реализовано, тестируется на Windows и POSIX)
+### Release-граница — isolated executor (QF-013, обязателен для release/reference)
 
-1. **argv-политика** (`parse_shell_command`): allowlist head-команд
-   (`deltafuse`, `pytest`, `python -m pytest`, `git status|diff|log|show`),
-   точный список флагов. Запрещены: любые git-опции (закрывает `--output`,
-   `--ext-diff`, `-O`, `--textconv`), pytest plugin/config/ini/import
-   (`-p`, `-c`, `-o`, `--rootdir`, `--pyargs`, `--import-mode`), response
-   files (`@`), `--`, UNC/сетевые/absolute пути, traversal, env-подстановки,
-   shell-операторы и иные интерпретаторы. Причина отказа журналируется.
-2. **Staging root** (`StagingRoot`): команды Worker исполняются в
-   `work/<run_id>` — копии sandbox вне framework-репозитория. Judge pack в
-   staging **физически отсутствует**: он не копируется, и переменные
-   окружения, ссылающиеся на framework root, не передаются. Критерий DF3-009
-   — отсутствие pack, а не полная OS-изоляция.
-3. **Минимальное окружение**: PATH = контролируемый интерпретатор + git +
-   системные пути; все `PYTHON*` и framework-ссылки вырезаны. Токен `python`
-   исполняется контролируемым интерпретатором staging (`StagingRoot.interpreter`),
-   а не случайным PATH-элементом (дефект QF-005).
-4. **Сверка фактического diff** (QF-003): inventory (`git status --porcelain
-   -uall`) до/после каждой команды и на границе стадии; всё, что изменилось
-   вне журнала — `unjournaled_change`; всё, что появилось в staging вне
-   work-каталога — `staging_escape`; сдвиг HEAD — `inventory_tampered`. Все
-   три — нарушения T7 (fail).
+1. **Режимы исполнителя** (`scripts/qualify_executor.py`): `isolated` —
+   единственный режим, который может дать release-verdict `pass`;
+   `local-dev` — только для разработки, его кампании всегда получают
+   итоговый verdict `non-release` (cap в runner, schema допускает значение).
+2. **Граница**: Worker-фаза исполняется внутри контейнера. Внутрь
+   передаются только: run sandbox (read/write) и сам runner-скрипт
+   (read-only). Judge pack (`process/bench/cases/**`) и framework checkout
+   **не монтируются**. Сеть probe-контейнера — `none`.
+3. **Adversarial boundary probe** выполняется внутри фактической границы до
+   первого Worker-вызова: чтение judge-sentinel по абсолютному пути, поиск
+   `cases`/`hidden_suite`/`oracle` по mount roots, записи за пределами
+   sandbox, сетевое обращение. Любая утечка — `BoundaryViolation`,
+   кампания завершается `PENDING` (exit 2) без release-артефактов.
+4. **Attestation** в manifest: executor kind, runtime, image, mounts,
+   network policy, отчёт probe — каждое поле с provenance. Отсутствие
+   доказательства isolated-режима блокирует release pass.
+5. **Fail-closed default**: `--executor isolated` по умолчанию; без
+   docker/podman + `DELTAFUSE_QUAL_IMAGE` кампания завершается `PENDING` до
+   первого Worker-вызова.
 
-### L2 — OS-изоляция (опция, не требуется по умолчанию)
+### L1 — политика runner (local-dev helper, НЕ release-граница)
 
-Контейнер/VM/read-only host полностью закрывают доступ Worker-authored
-Python к host FS. **Без L2 Worker-authored тестовый код в принципе может
-обращаться к host filesystem** (например, по абсолютному пути, известному
-из training data). Это приемлемо для qualification, потому что:
-(a) judge pack отсутствует в staging физически — читать нечего;
-(b) каждая команда сопровождается inventory/escape-сверкой — изменения
-фиксируются и классифицируются;
-(c) критерии DF3-009 требуют отсутствия pack, а не OS-изоляции.
-L2 рекомендуется перед любым использованием runner за пределами
-контролируемой машины разработчика.
+L1 (argv-политика, staging root, минимальное окружение, inventory-сверка —
+см. историю QF-001–QF-008) остаётся включённой только в режиме `local-dev`.
+**Ранее этот документ трактовал доступ Worker-authored тестового кода к host
+filesystem как приемлемый для release qualification — это утверждение
+неверно и удалено (дефект QF-013).** L1 не изолирует: `python -m pytest`
+исполняет Worker-код с правами процесса runner, исходный checkout и judge
+pack читаемы по абсолютному пути. L1-артефакты не являются release
+evidence; verdict `local-dev`-кампании всегда `non-release`.
+
+Ограничение сети Worker-контейнера только LM Studio endpoint на уровне
+runtime (firewall/nftables) не гарантируется bridge-сетью; attestation
+помечает network policy как declared, и при выполнении QF-018 требуется
+либо image-level ограничение, либо зафиксированное исключение.
 
 ## Платформенные гарантии
 
@@ -65,10 +66,13 @@ L2 рекомендуется перед любым использованием
 
 ## Известные ограничения
 
-- `pytest`/`python -m pytest` исполняет Worker-authored код с правами
-  процесса runner (см. L2). Гарантия L1: pack недоступен, все изменения
-  измеряются, интерпретатор контролируем.
+- L1 staging не изолирует Worker-код от host filesystem; он допустим только
+  в `local-dev` (verdict `non-release`). Release-кампании требуют
+  isolated executor (см. Release-граница выше).
 - Tamper-guard обнаруживает сдвиг HEAD, но не физическую защиту `.git`;
-  полная изоляция — L2/QF-004 §2.2.
+  физическая защита даётся только release-границей.
 - Symmetric: runner сам готовит и убирает staging; конкурентный доступ
   двух кампаний к одному staging-каталогу не поддерживается (base per campaign).
+- Worker-контейнер использует bridge-сеть с host-gateway alias до LM
+  Studio; полная egress-изоляция до единственного endpoint требует
+  image/runtime-level firewall и проверяется при QF-018.

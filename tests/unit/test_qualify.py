@@ -1155,7 +1155,7 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
     all three reports plus the campaign verdict saved; manifest.yaml format."""
     import yaml
 
-    monkeypatch.setattr(sys, "argv", ["qualify.py"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(
         qualify, "provenance",
@@ -1165,7 +1165,7 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
 
     calls = {"n": 0}
 
-    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info, **kwargs):
         calls["n"] += 1
         verdict = "pass" if index != 2 else "fail"
         run_id = f"{campaign_id}-{case_id}-run{index}"
@@ -1207,7 +1207,7 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
 
 def test_dirty_tree_aborts_campaign(tmp_path, monkeypatch):
     """Step 6: a dirty working tree must abort before any run."""
-    monkeypatch.setattr(sys, "argv", ["qualify.py"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(qualify, "tree_dirty", lambda: [" M scripts/x.py"])
     exit_code = qualify.main()
@@ -1340,7 +1340,7 @@ def _campaign(cases):
 
 def test_case_verdicts_isolated(tmp_path, monkeypatch):
     """QF-008: a failed M01 run does not fail M02's own verdict."""
-    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(
         qualify, "provenance",
@@ -1348,7 +1348,7 @@ def test_case_verdicts_isolated(tmp_path, monkeypatch):
     )
     _patch_probe(monkeypatch, tokens=[1, 2])
 
-    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info, **kwargs):
         run_id = f"{campaign_id}-{case_id}-run{index}"
         return {
             "schema_version": 1, "run_id": run_id, "case": case_id,
@@ -1378,7 +1378,7 @@ def test_case_verdicts_isolated(tmp_path, monkeypatch):
 
 def test_failed_run_saves_failure_report(tmp_path, monkeypatch):
     """QF-008: a run that raises still gets a validated failure report."""
-    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "--runs", "2"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev", "--cases", "M01-cooldown", "--runs", "2"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(
         qualify, "provenance",
@@ -1387,7 +1387,7 @@ def test_failed_run_saves_failure_report(tmp_path, monkeypatch):
     _patch_probe(monkeypatch, tokens=[1, 2])
     state = {"n": 0}
 
-    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info, **kwargs):
         state["n"] += 1
         if state["n"] == 2:
             raise qualify.ScoreError("score_product failed: bench pack exploded")
@@ -1436,7 +1436,7 @@ def test_failed_run_saves_failure_report(tmp_path, monkeypatch):
 
 def test_host_error_aborts_with_reports(tmp_path, monkeypatch):
     """QF-008: a host error stops the campaign, keeps the report, exit != 0."""
-    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(
         qualify, "provenance",
@@ -1444,7 +1444,7 @@ def test_host_error_aborts_with_reports(tmp_path, monkeypatch):
     )
     _patch_probe(monkeypatch, tokens=[1, 2])
 
-    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info, **kwargs):
         raise qualify.HostError("host probe failed: connection refused")
 
     monkeypatch.setattr(qualify, "run_case", fake_run_case)
@@ -1463,7 +1463,7 @@ def test_host_error_aborts_with_reports(tmp_path, monkeypatch):
 
 def test_manifest_valid_against_schema(tmp_path, monkeypatch):
     """QF-008: the manifest written by main validates against its schema."""
-    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "--runs", "1"])
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--executor", "local-dev", "--cases", "M01-cooldown", "--runs", "1"])
     monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(
         qualify, "provenance",
@@ -1481,8 +1481,12 @@ def test_manifest_valid_against_schema(tmp_path, monkeypatch):
         "envelope_violations": 0, "t7_breakdown": {}, "stage_leash": [],
         "calls": [], "tool_events": [], "evidence_authentic": True,
     })
-    assert qualify.main() == 0
+    # QF-013: a green local-dev campaign is capped at non-release (exit 1);
+    # the manifest still validates, including the executor attestation.
+    assert qualify.main() == 1
     campaign_dir = next(tmp_path.iterdir())
     import yaml
     manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["verdict"] == "non-release"
+    assert manifest["executor"]["kind"]["value"] == "local-dev"
     qualify.validate_document("run-manifest", manifest)  # must not raise

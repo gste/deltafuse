@@ -1,4 +1,9 @@
-"""QF-004: staging root for isolated Worker command execution.
+"""QF-004/QF-013: staging root for local-dev Worker command execution.
+
+L1 staging is a LOCAL-DEV helper only (`--executor local-dev`); it does not
+isolate Worker-authored code from the host filesystem and its artifacts are
+capped at the ``non-release`` verdict (QF-013). Release campaigns run the
+Worker inside the isolated boundary (``scripts/qualify_executor.py``).
 
 The qualification Worker never runs commands inside the framework repository.
 The judge side prepares a staging directory once per campaign:

@@ -4,7 +4,7 @@
   "title": "DeltaFuse v3 qualification campaign manifest",
   "type": "object",
   "required": [
-    "schema_version", "campaign_id", "created", "framework", "model",
+    "schema_version", "campaign_id", "created", "framework", "executor", "model",
     "thresholds", "cases", "runs", "case_verdicts", "verdict"
   ],
   "properties": {
@@ -17,6 +17,21 @@
       "properties": {
         "commit": { "type": "string" },
         "lock_hash": { "type": "string" }
+      }
+    },
+    "executor": {
+      "type": "object",
+      "description": "QF-013: attestation of the execution boundary that ran the Worker.",
+      "required": ["kind", "boundary", "network_policy"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/attested" },
+        "boundary": { "$ref": "#/$defs/attested" },
+        "network_policy": { "$ref": "#/$defs/attested" },
+        "runtime": { "$ref": "#/$defs/attested" },
+        "image": { "$ref": "#/$defs/attested" },
+        "mounts": { "$ref": "#/$defs/attested" },
+        "release_cap": { "$ref": "#/$defs/attested" },
+        "boundary_probe": { "$ref": "#/$defs/attested" }
       }
     },
     "model": {
@@ -82,7 +97,20 @@
         }
       }
     },
-    "verdict": { "enum": ["pass", "fail", "incomplete", "pending"] }
+    "verdict": { "enum": ["pass", "fail", "incomplete", "pending", "non-release"] }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "attested": {
+      "type": "object",
+      "description": "QF-007: provenance-tagged manifest field.",
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {},
+        "provenance": { "enum": ["measured", "declared", "derived"] },
+        "method": { "type": "string" },
+        "basis": { "type": "string" }
+      }
+    }
+  }
 }
