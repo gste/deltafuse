@@ -191,7 +191,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 
 При нормализации Change в `change.yaml` фиксируются:
 ```yaml
-schema_version: 2
+schema_version: 3
 framework:
   version: 3.0.0
   content_hash: sha256:...

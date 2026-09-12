@@ -36,15 +36,15 @@ The AI is **strictly forbidden** from:
 
 ## Human Gates
 
-A Human Gate is a stop in the Process. Passing it is not Worker work. Humans remain the final arbiters at five key gates:
+A Human Gate is a stop in the Process. Passing it is not Worker work. v3 fixes exactly three Human Gates:
 
 | Human Gate | Description of Human Responsibility | Artifact |
 |---|---|---|
-| **Capability Boundary** | Approval of the initial capability map or capability catalog changes (`catalog delta`). | `docs/spec/_capabilities.yaml` |
 | **Decision** | Acceptance or rejection of architectural, product, integration, or infrastructure decisions. | `docs/decisions/DEC-NNNN-*.md` (`status: accepted`) |
-| **Specification** | Acceptance of baseline specification or updates to existing requirements (`spec delta`). | `docs/spec/**` (PR / merge) |
-| **Scope Expansion** | Authorizing significant scope expansion or splitting a Change into multiple independent units. | `change.yaml`, `routing.yaml` |
-| **Final Integration** | Final code review, merge conflict resolution, merging into `main`, and performing `git push`. | Git commit / PR merge / push |
+| **Specification acceptance** | Acceptance of baseline specification or updates to existing requirements (`spec delta`). | `docs/spec/**` (`spec-delta.md` accepted via `deltafuse decide`) |
+| **Merge** | Final code review, merge conflict resolution, merging into `main`, and performing `git push`. | Git commit / PR merge / push |
+
+Other maintainer responsibilities are not Human Gates: approving the initial capability map or a capability catalog change happens through the Decision gate (a `catalog delta` Decision), and authorizing scope expansion or splitting a Change happens through normal maintainer review of `change.yaml` / `routing.yaml` — neither opens a separate stop in the Process.
 
 ---
 

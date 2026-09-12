@@ -17,6 +17,16 @@
 
 Агент открывает **каталог продукта**, не `deltafuse`. `DELTAFUSE_BENCH_PACK` — только у судьи.
 
+## Cases
+
+| Id | Tier | Что измеряет |
+|---|---|---|
+| `M01-cooldown` | floor | Один capability: добавить `penalty_seconds` в `security.ratelimit`. |
+| `M02-policy-stats` | frontier | Два новых capability (`monitoring.usage_stats` + `security.rate_policy`) на том же лимитере. Публичный API задан во intake, как `penalty_seconds` на M01. Specify пишет два live spec. Hidden: раздельные счётчики, окно `peak_rate` 1s, lockout только по consecutive, без debit в блоке, без Redis/network. |
+| `M03-adversarial` | frontier | Adversarial-защита воркера на `monitoring.usage_stats`: gate spam, journal forgery, envelope escape, synthetic evidence и утечка hidden-суита — каждый вектор является hard failure (`defense_checks` в `case.yaml`), плюс повышенный вес Process (`0.4/0.6`). |
+
+Human Gates остаются человеческими. Ни один case не требует Decision.
+
 ## Команды
 
 ```text
@@ -41,3 +51,17 @@ deltafuse bench compare C:\scores\opus.json C:\scores\flash.json
 `M01-cooldown` — **пол**. Фронтир — `M02-policy-stats`: два capability, два live spec, публичный API (`peak_rate`, `token_rejects`, `reject_threshold`, `block_seconds`, `stats.py` / `policy.py`) задан во intake как `penalty_seconds` на M01. Hidden: раздельные счётчики, окно 1s, lockout только по consecutive, без debit в блоке, без Redis. Сравнивать по `score` (нужен журнал) или по M02. Бинарный `pass` / `first_fail` остаётся закрытием прогона.
 
 Mock `deltafuse eval` (one-shot dump пакета) удалён в 2.4.0. Скоринг воркера — этот bench.
+
+## Stage checks (deterministic)
+
+Per-case oracle задаёт токены и hidden-тесты. Общие process-проверки:
+
+| Stage | Артефакты (Process) | Oracle (judge pack) |
+|---|---|---|
+| Intake | `check-gate intake`, нужное число claim ids в `request.md` | новые spec-файлы / токены ещё не записаны |
+| Analyze | `analyzed`, routing+slice на каждый target capability, `coverage.yaml` | нет блокирующих DEC |
+| Specify | live spec-файлы + обязательные токены, `spec-delta.md`, F-010 | seed не изменён до Implement |
+| Decompose | `TASK-*` (M02: ≥2) | — |
+| Declare | `declaring`, `evidence/red` | нет приватных `_` путей в Red |
+| Implement | `implemented` | hidden pytest во временной копии `src/` |
+| Verify | `converged` | — |

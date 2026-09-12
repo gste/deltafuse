@@ -226,7 +226,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
-   schema_version: 2
+   schema_version: 3
    change: CHG-001-user-auth
    task: TASK-001
    phase: red

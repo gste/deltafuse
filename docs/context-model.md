@@ -36,7 +36,7 @@ DeltaFuse addresses this by mandating that:
 The accepted capability catalog serves as the authoritative normative source for routing:
 
 ```yaml
-schema_version: 2
+schema_version: 3
 
 domains:
   identity:

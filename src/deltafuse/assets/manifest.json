@@ -22,7 +22,7 @@
     "templates/.deltafuse/config.yaml": "c6fc6aa90a9b48748cb8b43342490ff2cdc7237983af513dee14fd03b21b3db0",
     "templates/.github/workflows/deltafuse-leash.yml": "ca451867b3b09414ff1bedcdbba30bd5911cfa1121e9533efb72748ff96dc52c",
     "templates/AGENTS.md": "9455850a9372dac6ef9f29bad173ad8b688aa52e0fa513c5b9e577305445e510",
-    "templates/CHANGELOG.md": "599937e0fae185f11a6b746191d1baf23f2feb8a3a7595defb1f58bcbe5c2c06",
+    "templates/CHANGELOG.md": "1e46288bafd1705c48e498ff9faa0a0f49de54f3af5d143b169be4c967b3d697",
     "templates/change/analysis.md": "a28eb3a820d145e73c3acd90c31060b7121c71e1352fcf13071a9b87498e6a1f",
     "templates/change/change.yaml": "3aa299129011a95c4d206d70967f6c1f05bd62310fef699a8ec5edba360d1ab0",
     "templates/change/coverage.yaml": "8c9188529cbbdcb9e3058141fe9115dcf3f20bf83dd1742a95c01c334fd02e4d",
