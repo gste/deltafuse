@@ -9,17 +9,10 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError, framework_root
+from deltafuse.core.lifecycle import LIFECYCLE
 
-
-STAGES = (
-    "intake",
-    "analyze",
-    "specify",
-    "decompose",
-    "declare",
-    "implement",
-    "verify",
-)
+# QF-014: the bench pack reuses the canonical lifecycle contract verbatim.
+STAGES = LIFECYCLE
 
 PACK_ENV = "DELTAFUSE_BENCH_PACK"
 

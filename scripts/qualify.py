@@ -35,6 +35,8 @@ from qualify_executor import apply_executor_verdict_cap, resolve_executor
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
+from deltafuse.core.lifecycle import LIFECYCLE  # noqa: E402  (QF-014: single contract)
+
 THRESHOLDS_DOC = REPO / "backlog" / "product" / "v3" / "thresholds.md"
 RUNS_DIR = REPO / "bench" / "runs"
 CASES_ROOT = REPO / "process" / "bench" / "cases"
@@ -1095,6 +1097,37 @@ def evidence_authentic(report: dict) -> bool:
     )
 
 
+def check_exact_lifecycle(stage_rows: list[dict]) -> tuple[bool, list[str]]:
+    """QF-014: T2 is the EXACT lifecycle — canonical names in canonical
+    order, each present exactly once, every status completed. Seven
+    arbitrary or eight stages never pass."""
+    expected = list(LIFECYCLE)
+    present = [str(row.get("stage")) for row in stage_rows]
+    failures: list[str] = []
+    counts: dict[str, int] = {}
+    for name in present:
+        counts[name] = counts.get(name, 0) + 1
+    duplicated = sorted(name for name, count in counts.items() if count > 1)
+    missing = [name for name in expected if counts.get(name, 0) == 0]
+    unknown = sorted(set(present) - set(expected))
+    if missing or unknown or duplicated:
+        failures.append(
+            f"T2 stages: expected exactly {expected} once each; "
+            f"missing={missing} unknown={unknown} duplicated={duplicated} got={present}"
+        )
+    elif present != expected:
+        failures.append(f"T2 stage order: expected {expected}, got {present}")
+    else:
+        bad = [
+            f"{row.get('stage')}={row.get('status')}"
+            for row in stage_rows
+            if row.get("status") != "completed"
+        ]
+        if bad:
+            failures.append(f"T2 stages not completed: {bad}")
+    return (not failures), failures
+
+
 def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     """T1-T8 from backlog/product/v3/thresholds.md against one run.
 
@@ -1111,10 +1144,18 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     )
     if correctness_failed != ABSOLUTE["correctness_failed"]:
         failures.append(f"T1 correctness_failed={correctness_failed}")
-    # T2: exactly seven completed stages, none skipped/aborted.
-    completed = sum(1 for row in stages.values() if row.get("pass"))
-    if completed < ABSOLUTE["stages_completed"]:
-        failures.append(f"T2 stages_completed={completed}/7")
+    # T2 (QF-014): the EXACT lifecycle — canonical names, order, once each,
+    # all completed. A count comparison is never used.
+    t2_rows = [
+        {
+            "stage": name,
+            "status": "completed" if row.get("pass") else "failed",
+            "gate_retries": int(row.get("gate_retries") or 0),
+        }
+        for name, row in stages.items()
+    ]
+    t2_ok, t2_failures = check_exact_lifecycle(t2_rows)
+    failures.extend(t2_failures)
     # T3: at most two retries in total and at most one per stage.
     retries = int((report.get("retries") or {}).get("check_gate") or 0)
     if retries > ABSOLUTE["gate_retries_max"]:
@@ -1213,7 +1254,12 @@ def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
     failures: list[str] = []
 
     def check(label: str, value, limit) -> None:
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
+        # QF-014: NaN is never a measurement; booleans are never numbers.
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value != value
+        ):
             failures.append(f"{label}=unmeasured")
         elif value > limit:
             failures.append(f"{label}={value}")
@@ -1225,10 +1271,25 @@ def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
     check("T5 median max_unique_files", med.get("max_unique_files"),
           ABSOLUTE["max_unique_files"])
     retries = med.get("gate_retries")
-    if not isinstance(retries, (int, float)) or isinstance(retries, bool):
+    if not isinstance(retries, (int, float)) or isinstance(retries, bool) or retries != retries:
         failures.append("T3 median gate_retries=unmeasured")
     elif retries > ABSOLUTE["gate_retries_max"]:
         failures.append(f"T3 median gate_retries={retries}")
+    # QF-014: median correctness and median process are threshold-checked
+    # explicitly, even when every per-run verdict was already checked.
+    for label, key in (("T1 median correctness", "correctness"),
+                       ("T2 median process", "process")):
+        value = med.get(key)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value != value
+        ):
+            failures.append(f"{label}=unmeasured")
+        elif value < 0 or value > 100:
+            failures.append(f"{label}={value} outside 0..100")
+        elif value < 100:
+            failures.append(f"{label}={value} < 100")
     if not runs:
         failures.append("median: no completed runs")
         return False, failures
@@ -1513,6 +1574,12 @@ def _build_run_report(
                 "gate_retries": int(row.get("gate_retries") or 0),
             }
         )
+    # QF-014: process counts only canonical lifecycle stages and is clamped.
+    canonical_completed = sum(
+        1 for s in stages_out
+        if s["stage"] in LIFECYCLE and s["status"] == "completed"
+    )
+    process = max(0.0, min(100.0, 100.0 * canonical_completed / len(LIFECYCLE)))
     completed = sum(1 for s in stages_out if s["status"] == "completed")
     return {
         "schema_version": 1,
@@ -1522,7 +1589,7 @@ def _build_run_report(
         "model": model_id,
         "verdict": "pass" if verdict else "fail",
         "threshold_failures": failures,
-        "process": round(100.0 * completed / 7, 1),
+        "process": process,
         "correctness": scorecard.get("correctness"),
         "stages": stages_out,
         "calls": metrics["calls"],

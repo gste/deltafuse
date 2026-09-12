@@ -1355,7 +1355,7 @@ def test_case_verdicts_isolated(tmp_path, monkeypatch):
             "framework_commit": "a" * 40, "model": qualify.REFERENCE_MODEL_ID,
             "verdict": "fail" if case_id.startswith("M01") else "pass",
             "threshold_failures": [] if case_id.startswith("M02") else ["T1 correctness_failed=2"],
-            "process": 100.0, "correctness": 90.0, "gate_retries": 0,
+            "process": 100.0, "correctness": 100.0, "gate_retries": 0,
             "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
             "framework_input_chars_max": 40000,
             "framework_input_tokens_method": "chars-div-4",
