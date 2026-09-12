@@ -2,7 +2,7 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [DF3-001](DF3-001.md) — v3 contracts, threat model и абсолютные acceptance thresholds.
+Брать в работу: [DF3-002](DF3-002.md) — archive bypass и docs/ops convergence.
 
 Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
@@ -10,8 +10,8 @@
 
 | ID | Статус | Зачем |
 |---|---|---|
-| [DF3-001](DF3-001.md) | `ready` | V3 contracts и абсолютные acceptance thresholds |
-| [DF3-002](DF3-002.md) | `blocked` | Archive bypass и route convergence |
+| [DF3-001](DF3-001.md) | `done` | V3 contracts и абсолютные acceptance thresholds ([v3/](v3/)) |
+| [DF3-002](DF3-002.md) | `ready` | Archive bypass и route convergence |
 | [DF3-003](DF3-003.md) | `blocked` | CI leash и framework manifest |
 | [DF3-004](DF3-004.md) | `blocked` | Core-owned lifecycle transitions |
 | [DF3-005](DF3-005.md) | `blocked` | Distribution, scaffolding и upgrade |
