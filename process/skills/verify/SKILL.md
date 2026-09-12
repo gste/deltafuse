@@ -31,9 +31,9 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.
 5. If automated full-suite verification is executed at the Change level, record execution evidence under `evidence/verification/run.yaml` (`phase: verification`) with `base_revision` matching the current `docs/spec/**` and `src/**` tree.
 6. The `converged` gate checks that `spec-delta.md` `added`/`modified` paths still exist under `docs/spec/**` and that `removed` paths are gone; do not treat archive as a spec merge.
-7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Set implemented tasks to `verified`. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
+7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Record `deltafuse state <change-dir> --task <task-id> --status verified` for each implemented task. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
 8. For a gap, stop; do not repair it silently.
-9. After `deltafuse check-gate <change-dir> --gate converged` passes, archive with `deltafuse archive <change-dir>`. Do not invent a second archive process.
+9. After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse advance <change-dir> --gate converged`, then archive with `deltafuse archive <change-dir>`. Do not invent a second archive process.
 
 Archive is provenance, not default implementation context. Do not delete completed task history.
 

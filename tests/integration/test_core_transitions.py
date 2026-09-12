@@ -180,3 +180,35 @@ def test_partial_receipt_chain_does_not_satisfy_advanced_status(
 
     with pytest.raises(ArchivalError, match="transition chain invalid"):
         archive_change(builder.change_dir, repo_root=tmp_path)
+
+def test_state_command_writes_core_owned_task_status(
+    tmp_path: Path, repo_root: Path
+):
+    """V3-FIX-010: `deltafuse state` journals the task status write and
+    rejects disallowed transitions."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-960")
+    result = advance_change(builder.change_dir, GATE)
+    assert result["to"] == "analyzed"
+    builder.step_decompose()  # creates TASK-001, Core-advanced to decomposed
+
+    # declare step: pending -> declared via the Core
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    text = task_file.read_text(encoding="utf-8")
+    assert "status: pending" in text
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    assert "status: declared" in task_file.read_text(encoding="utf-8")
+
+    # disallowed jump is rejected
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "verified"]) == 1
+
+    # slice writes
+    assert main(["state", str(builder.change_dir), "--slice", "SLICE-01", "--status", "specified"]) == 0
+
+    # Change-level in-flight status through the Core, from analyzed
+    builder2 = _analyze_ready(tmp_path, repo_root, "CHG-961")
+    advance_change(builder2.change_dir, GATE)
+    assert main(["state", str(builder2.change_dir), "--change", "--status", "specification-proposed"]) == 0
+    assert _read_status(builder2.change_dir) == "specification-proposed"
+
+    # receipt-backed statuses stay Core-gated
+    assert main(["state", str(builder2.change_dir), "--change", "--status", "implemented"]) == 1

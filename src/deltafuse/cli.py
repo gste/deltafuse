@@ -93,6 +93,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     advance_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
+    # V3-FIX-010: Core-owned artifact status writes
+    state_parser = subparsers.add_parser(
+        "state", help="Set a Core-owned task/slice/Change in-flight status (never hand-edit status)"
+    )
+    state_parser.add_argument("change_path", help="Path to Change package directory")
+    group = state_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--task", help="Task id like TASK-001")
+    group.add_argument("--slice", dest="slice_id", help="Slice id like SLICE-01")
+    group.add_argument("--change", action="store_true", help="Target the Change itself (in-flight status)")
+    state_parser.add_argument("--status", required=True, help="New status")
+    state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
+
     # validate-layout command (P6.1)
     # new command (DF3-005 / C-03): deterministic Change scaffolding
     new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
@@ -375,6 +387,32 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"advance: gate '{result['gate']}' applied: "
                 f"{result['from']} -> {result['to']} "
+                f"(receipt {result['receipt'][:12]})"
+            )
+        return 0
+
+    elif args.command == "state":
+        from deltafuse.core.transitions import TransitionError, set_artifact_status
+
+        target = Path(args.change_path)
+        try:
+            result = set_artifact_status(
+                target,
+                status=args.status,
+                task_id=args.task,
+                slice_id=args.slice_id,
+                change_status=args.change,
+            )
+        except TransitionError as te:
+            _journal(target, cmd="state", status=args.status, ok=False, errors=[str(te)])
+            print(f"state failed: {te}", file=sys.stderr)
+            return 1
+        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"state: {result['artifact']} status {result['from']} -> {result['to']} "
                 f"(receipt {result['receipt'][:12]})"
             )
         return 0

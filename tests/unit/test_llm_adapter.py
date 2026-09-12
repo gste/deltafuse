@@ -52,7 +52,7 @@ def test_specify_skill_follows_next_pass(repo_root: Path):
     assert "specify_pass" in text
     assert "do not call `check-gate --gate specified`" in text
     assert "spec_refs" in text
-    assert "Do not set `specified` yourself" in text
+    assert "Never set `specified` or any other status by hand" in text
     assert "status: accepted" not in text
 
 

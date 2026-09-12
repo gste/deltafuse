@@ -225,12 +225,13 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             f"status '{status}' is not a receipted or in-flight state and must "
             "not be set by hand"
         )
-    if all_receipts and all_receipts[-1].get("to") not in (status, current):
+    status_receipts = [r for r in all_receipts if r.get("kind") in ("transition", "unblock")]
+    if status_receipts and status_receipts[-1].get("to") not in (status, current):
         if status in RECEIPTED_TARGETS:
             errors.append(
                 f"status '{status}' does not match the last transition "
-                f"receipt '{all_receipts[-1].get('to')}' "
-                f"({all_receipts[-1].get('receipt', '')[:12]}); re-run: deltafuse advance"
+                f"receipt '{status_receipts[-1].get('to')}' "
+                f"({status_receipts[-1].get('receipt', '')[:12]}); re-run: deltafuse advance"
             )
     return errors
 
@@ -352,3 +353,102 @@ def advance_change(
         "receipt": entry["receipt"],
         "resumed": resumed is not None,
     }
+
+
+# V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
+# (`deltafuse state`) instead of hand-editing task/slice/Change frontmatter.
+TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"declaring", "declared", "blocked", "cancelled"},
+    "declaring": {"declared", "blocked"},
+    "declared": {"implementing", "implemented", "blocked", "cancelled"},
+    "implementing": {"implemented", "blocked"},
+    "implemented": {"verified", "blocked"},
+}
+SLICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"specified"},
+}
+# Change-level in-flight statuses the Worker may request through the Core.
+CHANGE_INFLIGHT_STATUSES = {"specification-proposed"}
+
+
+def set_artifact_status(
+    start: Path | str,
+    *,
+    status: str,
+    task_id: str | None = None,
+    slice_id: str | None = None,
+    change_status: bool = False,
+) -> dict[str, Any]:
+    """Core-owned write of one artifact status (V3-FIX-010).
+
+    Exactly one of task_id / slice_id / change_status selects the artifact.
+    The transition must be allowed, the Change receipt chain must be intact,
+    and the write is journaled like every other Core status write.
+    """
+    if sum(bool(x) for x in (task_id, slice_id, change_status)) != 1:
+        raise TransitionError("choose exactly one of --task, --slice, or --change")
+    change_path = Path(start).resolve()
+    if not change_path.is_dir():
+        raise TransitionError(f"Change directory not found: {change_path}")
+    product_root = find_repo_root(change_path)
+
+    chain_errors = receipt_chain_errors(product_root, change_path)
+    if chain_errors:
+        raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
+
+    if task_id:
+        allowed = TASK_STATUS_TRANSITIONS
+        file = change_path / "tasks" / f"{task_id}.md"
+        if not file.is_file():
+            raise TransitionError(f"task file not found: {file}")
+    elif slice_id:
+        allowed = SLICE_STATUS_TRANSITIONS
+        file = change_path / "slices" / f"{slice_id}.md"
+        if not file.is_file():
+            raise TransitionError(f"slice file not found: {file}")
+    else:
+        allowed = None  # change-level, handled below
+        file = change_path / "change.yaml"
+
+    if file.name == "change.yaml":
+        data = _load_change_yaml(change_path)
+        change_id = data.get("id") or change_path.name
+        current = data.get("status")
+        if status not in CHANGE_INFLIGHT_STATUSES:
+            raise TransitionError(
+                f"Change status '{status}' is Core-gated; use deltafuse advance"
+            )
+        if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
+            raise TransitionError(
+                f"cannot set Change status '{status}' from '{current}'"
+            )
+        _write_change_status(change_path, data, status)
+    else:
+        data = _load_change_yaml(change_path)
+        change_id = data.get("id") or change_path.name
+        from deltafuse.core.frontmatter import parse_frontmatter
+
+        meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
+        current = meta.get("status")
+        if current not in allowed or status not in allowed[current]:
+            raise TransitionError(
+                f"cannot set status '{status}' from '{current}' for {file.name}"
+            )
+        meta["status"] = status
+        file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+    entry: dict[str, Any] = {
+        "kind": "artifact-status",
+        "change": change_id,
+        "artifact": "change" if change_status else ("task" if task_id else "slice"),
+        "artifact_id": task_id or slice_id,
+        "from": current,
+        "to": status,
+        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    entry["receipt"] = _receipt(entry)
+    path = transitions_path(product_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}
