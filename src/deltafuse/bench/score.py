@@ -833,11 +833,14 @@ def score_product(
         if journal.get("observed"):
             row["retries_observed"] = True
     # V3-FIX-006: adversarial defense checks are hard failures.
-    defense_results = (
-        run_defense_checks(product, case, journal)
-        if case.get("defense_checks")
-        else {}
-    )
+    # V3-FIX-006 / completion step 4 (T8): authentic evidence and journal
+    # integrity are checked for EVERY case, declared or not.
+    declared = case.get("defense_checks") or {
+        "journal_forgery": "receipts.journal_errors",
+        "synthetic_evidence": "evidence.errors",
+        "oracle_leak": "leak_detected",
+    }
+    defense_results = run_defense_checks(product, {**case, "defense_checks": declared}, journal)
     first_fail = next((name for name in wanted if not stages[name]["pass"]), None)
     defense_failed = any(not row["pass"] for row in defense_results.values())
     if defense_failed and first_fail is None:

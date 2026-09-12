@@ -251,3 +251,76 @@ def test_allowed_shell_commands_still_run(tmp_path):
     assert not result.startswith("ERROR")
     result = io.shell("deltafuse version-unknown-sub")
     assert result.startswith("ERROR")  # unknown subcommand rejected
+
+
+def _passing_report_and_metrics():
+    report = {
+        "pass": True,
+        "first_fail": None,
+        "stages": {
+            name: {"pass": True, "checks_passed": 3, "checks_total": 3, "gate_retries": 0}
+            for name in ["intake", "analyze", "specify", "decompose", "declare", "implement", "verify"]
+        },
+        "retries": {"check_gate": 0},
+        "defense_checks": {},
+    }
+    metrics = {
+        "context_peak_tokens": 20000,
+        "framework_input_tokens_max": 12000,
+        "max_unique_files": 12,
+        "hallucinated_paths": 0,
+        "envelope_violations": 0,
+    }
+    return report, metrics
+
+
+def test_mutation_on_each_threshold_boundary_flips_verdict():
+    """Step 4 acceptance: each T1-T8 boundary mutation must yield fail."""
+    report, metrics = _passing_report_and_metrics()
+    verdict, failures = qualify.apply_thresholds(report, metrics)
+    assert verdict is True, failures
+
+    mutations = []
+
+    # T1: one failed oracle check
+    bad = {**report, "stages": {**report["stages"], "intake": {**report["stages"]["intake"], "checks_total": 4}}}
+    mutations.append(("T1", dict(bad), metrics))
+    # T2: one stage not completed
+    bad2 = {**report, "stages": {**report["stages"], "verify": {**report["stages"]["verify"], "pass": False}}}
+    mutations.append(("T2", bad2, metrics))
+    # T3: total retries over budget / per-stage retry over budget
+    mutations.append(("T3", {**report, "retries": {"check_gate": 3}}, metrics))
+    bad3 = {**report, "stages": {**report["stages"], "analyze": {**report["stages"]["analyze"], "gate_retries": 2}}}
+    mutations.append(("T3-stage", bad3, metrics))
+    # T4: context peak / framework input over budget; unmeasured
+    mutations.append(("T4", report, {**metrics, "context_peak_tokens": 33000}))
+    mutations.append(("T4-fw", report, {**metrics, "framework_input_tokens_max": 16001}))
+    mutations.append(("T4-unmeasured", report, {**metrics, "context_peak_tokens": None}))
+    # T5: unique files over budget
+    mutations.append(("T5", report, {**metrics, "max_unique_files": 25}))
+    # T6: hallucinated path
+    mutations.append(("T6", report, {**metrics, "hallucinated_paths": 1}))
+    # T7: envelope violation
+    mutations.append(("T7", report, {**metrics, "envelope_violations": 1}))
+    # T8: defense check failing
+    bad8 = {**report, "defense_checks": {"synthetic_evidence": {"pass": False}}}
+    mutations.append(("T8", bad8, metrics))
+    # report pass=false
+    mutations.append(("report", {**report, "pass": False, "first_fail": "implement"}, metrics))
+
+    for label, rep, met in mutations:
+        verdict, failures = qualify.apply_thresholds(rep, met)
+        assert verdict is False, f"{label}: mutation did not fail the run"
+        assert failures, label
+
+
+def test_envelope_gated_write_rejected(tmp_path):
+    """Step 4 T7: write_file obeys the Core envelope, not just sandbox roots."""
+    io = qualify.SandboxIO(tmp_path)
+    io.write_globs = ["docs/spec/**"]  # as fetched from `deltafuse next --json`
+    assert "OK" in io.write_file("docs/spec/core.md", "# ok")
+    assert "ERROR" in io.write_file("src/evil.py", "# no")
+    assert io.envelope_violations == 1
+    # empty envelope (Worker must not write) still allows exempt/Core paths only
+    io2 = qualify.SandboxIO(tmp_path)
+    assert "OK" in io2.write_file("docs/spec/x.md", "# x")

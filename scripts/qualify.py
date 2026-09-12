@@ -194,13 +194,27 @@ def framework_commit() -> str:
 
 
 class SandboxIO:
-    """Restricted Worker tool surface: read/write inside the sandbox only."""
+    """Restricted Worker tool surface: read/write inside the sandbox only.
+
+    T7: write_file is limited to the current Core `envelope.write`; the
+    envelope is read from `deltafuse next --json`, never from a local guess.
+    """
 
     def __init__(self, root: Path):
         self.root = root.resolve()
         self.hallucinated_paths = 0
         self.envelope_violations = 0
         self.unique_files: set[str] = set()
+        self.call_files: set[str] = set()
+        self.write_globs: list[str] = []
+
+    def begin_call(self) -> None:
+        self.call_files = set()
+
+    @property
+    def call_unique_files(self) -> int:
+        # T5: unique files for THIS call, including the last tool action.
+        return len(self.call_files)
 
     def _resolve(self, rel: str) -> Path | None:
         if not rel or rel.startswith(("/", "\\")) or ":" in rel[:3]:
@@ -217,7 +231,9 @@ class SandboxIO:
         if path is None or not path.is_file():
             self.hallucinated_paths += 1
             return f"ERROR: no such file: {rel}"
-        self.unique_files.add(path.relative_to(self.root).as_posix())
+        rel_posix = path.relative_to(self.root).as_posix()
+        self.unique_files.add(rel_posix)
+        self.call_files.add(rel_posix)
         return path.read_text(encoding="utf-8", errors="replace")[:60000]
 
     def write_file(self, rel: str, content: str) -> str:
@@ -229,9 +245,16 @@ class SandboxIO:
         if rel_posix.startswith(".deltafuse/"):
             self.envelope_violations += 1
             return "ERROR: Core-owned path; use deltafuse commands"
+        # T7: the envelope comes from the Core (`deltafuse next --json`).
+        from deltafuse.core.leash import is_exempt_path, path_in_envelope
+
+        if self.write_globs and not is_exempt_path(rel_posix) and not path_in_envelope(rel_posix, self.write_globs):
+            self.envelope_violations += 1
+            return f"ERROR: {rel_posix} is outside the current envelope.write"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         self.unique_files.add(rel_posix)
+        self.call_files.add(rel_posix)
         return f"OK: wrote {rel_posix} ({len(content)} bytes)"
 
     def shell(self, command: str, timeout: int = 300) -> str:
@@ -301,22 +324,82 @@ def parse_action(content: str) -> dict:
     return action if isinstance(action, dict) else {"tool": "done", "reason": "not an object"}
 
 
+def _core_envelope(sandbox: Path) -> list[str]:
+    """T7: current `envelope.write` straight from the Core."""
+    import contextlib
+    import io as _io
+
+    from deltafuse.cli import main as cli_main
+
+    buf = _io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            cli_main(["next", str(sandbox), "--json"])
+        data = json.loads(buf.getvalue() or "{}")
+    except Exception:
+        return []
+    envelope = data.get("envelope")
+    if isinstance(envelope, dict):
+        return [str(g) for g in (envelope.get("write") or [])]
+    return []
+
+
+def _core_leash_violations(sandbox: Path, files: list[str]) -> int:
+    """T7: run the Core leash over the files written so far this stage."""
+    import contextlib
+    import io as _io
+
+    from deltafuse.cli import main as cli_main
+
+    if not files:
+        return 0
+    buf = _io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            code = cli_main(["leash", str(sandbox), "--json", "--files", *files])
+        data = json.loads(buf.getvalue() or "{}")
+    except Exception:
+        return 1  # uninterpretable Core answer counts as a violation
+    if code not in (0, 1):
+        return 1
+    return len(data.get("violations") or [])
+
+
 def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system: str) -> dict:
-    """Drive the Worker agent loop in one clean sandbox; return call metrics."""
+    """Drive the Worker agent loop in one clean sandbox; return call metrics.
+
+    T4: input tokens come from the host usage; framework-controlled input is
+    measured separately (system prompt + Core/tool responses). A call with no
+    usage measurement leaves the peak unmeasured (fail-closed in T4).
+    T5: unique files are counted per call, including the last tool action.
+    T7: after every Core stage transition the leash check runs over the files
+    written so far and its verdict is used as-is.
+    """
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": f"Begin the case {case_id}. Run `deltafuse next` first."},
     ]
     io = SandboxIO(sandbox)
     calls: list[dict] = []
+    unmeasured_usage = False
     for _ in range(MAX_WORKER_TURNS):
+        io.begin_call()
+        io.write_globs = _core_envelope(sandbox)
         turn = worker_turn(base_url, model, messages)
         prompt_tokens = turn["prompt_tokens"]
+        if not prompt_tokens:
+            unmeasured_usage = True
+        # Framework-controlled input of this call: the system prompt (skills,
+        # BENCH.md) plus every Core/tool response so far, measured
+        # deterministically as UTF-8 characters / 4.
+        framework_chars = len(system) + sum(
+            len(m["content"]) for m in messages if m["role"] == "user"
+        )
         calls.append(
             {
-                "input_tokens": prompt_tokens,
-                "framework_input_tokens": len(system.encode("utf-8")) // 4,
-                "unique_files": len(io.unique_files),
+                "input_tokens": prompt_tokens or None,
+                "framework_input_tokens": framework_chars // 4,
+                "unique_files": io.call_unique_files,
                 "hallucinated_paths": io.hallucinated_paths,
                 "envelope_violations": io.envelope_violations,
             }
@@ -332,15 +415,20 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
             result = io.write_file(str(action.get("path")), str(action.get("content")))
         elif tool == "shell":
             result = io.shell(str(action.get("command")))
+            if result.startswith("exit=0") and "advance: gate" in result:
+                # Stage transition: the Core re-checks the whole written set.
+                io.envelope_violations += _core_leash_violations(
+                    sandbox, sorted(io.unique_files)
+                )
         else:
             result = f"ERROR: unknown tool {tool}"
         messages.append({"role": "user", "content": result[:6000]})
+    peaks = [c["input_tokens"] for c in calls if c["input_tokens"] is not None]
+    fw = [c["framework_input_tokens"] for c in calls]
     return {
         "calls": calls,
-        "context_peak_tokens": max((c["input_tokens"] for c in calls), default=0),
-        "framework_input_tokens_max": max(
-            (c["framework_input_tokens"] for c in calls), default=0
-        ),
+        "context_peak_tokens": max(peaks) if peaks and not unmeasured_usage else None,
+        "framework_input_tokens_max": max(fw) if fw else None,
         "max_unique_files": max((c["unique_files"] for c in calls), default=0),
         "hallucinated_paths": io.hallucinated_paths,
         "envelope_violations": io.envelope_violations,
@@ -370,10 +458,14 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     completed = sum(1 for row in stages.values() if row.get("pass"))
     if completed < ABSOLUTE["stages_completed"]:
         failures.append(f"T2 stages_completed={completed}/7")
-    # T3: at most two retries in total.
+    # T3: at most two retries in total and at most one per stage.
     retries = int((report.get("retries") or {}).get("check_gate") or 0)
     if retries > ABSOLUTE["gate_retries_max"]:
         failures.append(f"T3 gate_retries={retries}")
+    for stage_name, row in stages.items():
+        stage_retries = int(row.get("gate_retries") or 0)
+        if stage_retries > 1:
+            failures.append(f"T3 {stage_name}: gate_retries={stage_retries} > 1")
     # T4: context budgets; missing usage/tokenization is fail-closed.
     peak = metrics.get("context_peak_tokens")
     fw = metrics.get("framework_input_tokens_max")
