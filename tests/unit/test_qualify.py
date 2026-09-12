@@ -299,15 +299,21 @@ def test_adversarial_shell_commands_are_rejected(tmp_path):
 
 
 def test_allowed_shell_commands_still_run(tmp_path):
-    """Step 2: allowed DeltaFuse/pytest/git read-only commands keep working."""
+    """QF-004: allowed commands keep working under the staging environment
+    (controlled interpreter on PATH, work dir is a git repo)."""
+    from qualify_staging import StagingRoot
+
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    qualify.init_sandbox_git(tmp_path)
     io = qualify.SandboxIO(tmp_path)
+    io.exec_env = staging.env()
+    io.interpreter = staging.interpreter()
     result = io.shell("pytest --version")
     assert result.startswith("exit=0"), result
     result = io.shell("python -m pytest --version")
     assert result.startswith("exit=0"), result
     result = io.shell("git status")
-    assert result.startswith("exit="), result  # not a sandbox repo; may be nonzero
-    assert not result.startswith("ERROR")
+    assert result.startswith("exit=0"), result
     result = io.shell("deltafuse version-unknown-sub")
     assert result.startswith("ERROR")  # unknown subcommand rejected
 
@@ -634,13 +640,31 @@ def _stub_advance(monkeypatch, order=None, before_advance=None):
 def test_shell_created_file_outside_envelope_fails_t7(tmp_path, monkeypatch):
     """QF-003: a shell-created file outside the envelope is found by the
     inventory diff, enters the stage write-set, and fails T7 via the Core."""
+    from qualify_staging import StagingRoot
+
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    (tmp_path / "leaky_test.py").write_text(
+        "from pathlib import Path\n\n"
+        "def test_leak():\n"
+        "    Path('leak.txt').write_text('leak')\n",
+        encoding="utf-8",
+    )
     leash_files_seen = []
     _fake_core(monkeypatch, leash_files_seen, violate=lambda f: f == "leak.txt")
+
+    real_shell = qualify.SandboxIO.shell
+
+    def shell_with_staging_env(self, command, timeout=300):
+        self.exec_env = staging.env()
+        self.interpreter = staging.interpreter()
+        return real_shell(self, command, timeout=timeout)
+
+    monkeypatch.setattr(qualify.SandboxIO, "shell", shell_with_staging_env)
     _stub_advance(monkeypatch)
     monkeypatch.setattr(
         qualify, "worker_turn",
         _scripted_turns([
-            '{"tool": "shell", "command": "git diff --output=leak.txt"}',
+            '{"tool": "shell", "command": "python -m pytest -q leaky_test.py"}',
             '{"tool": "shell", "command": "deltafuse advance"}',
             '{"tool": "done", "reason": "ok"}',
         ]),
@@ -766,6 +790,115 @@ def test_unjournaled_change_detected(tmp_path, monkeypatch):
     )
     assert verdict is False
     assert any(f.startswith("T7") for f in failures)
+
+
+# --------------------------------------------- QF-004: execution boundary
+
+
+def test_git_output_option_rejected(tmp_path):
+    """QF-004: `git diff --output=...` can no longer write files."""
+    io = qualify.SandboxIO(tmp_path)
+    assert "ERROR" in io.shell("git diff --output=leak.txt")
+    assert "ERROR" in io.shell("git diff --output leak.txt")
+    assert not (tmp_path / "leak.txt").exists()
+
+
+def test_git_any_option_rejected(tmp_path):
+    """QF-004: git read-only subcommands take no options at all."""
+    for command in ("git log --oneline", "git status --porcelain", "git diff --stat HEAD"):
+        io = qualify.SandboxIO(tmp_path)
+        assert "ERROR" in io.shell(command), command
+    # positional revs: only the exact token HEAD
+    io = qualify.SandboxIO(tmp_path)
+    assert not io.shell("git diff HEAD").startswith("ERROR")
+
+
+def test_pytest_plugin_and_config_options_rejected(tmp_path):
+    """QF-004: pytest plugin/config/ini/injection options are rejected."""
+    for command in (
+        "pytest -p evilmod",
+        "pytest -c cfg.ini",
+        "pytest -o addopts=-p:evil",
+        "pytest --rootdir ..",
+        "pytest --override-ini=evil=1",
+        "pytest @args.txt",
+        "pytest --pyargs evilpkg",
+        "pytest --import-mode=importlib",
+    ):
+        io = qualify.SandboxIO(tmp_path)
+        assert "ERROR" in io.shell(command), command
+
+
+def test_pytest_allowed_subset_still_runs(tmp_path):
+    """QF-004: the sanctioned pytest subset keeps executing (staging env)."""
+    from qualify_staging import StagingRoot
+
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    io = qualify.SandboxIO(tmp_path)
+    io.exec_env = staging.env()
+    io.interpreter = staging.interpreter()
+    result = io.shell("pytest -q")
+    assert result.startswith("exit=") and not result.startswith("ERROR"), result
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "smoke.py").write_text(
+        "def test_ok():\n    assert True\n", encoding="utf-8"
+    )
+    result = io.shell("pytest --tb=line tests/smoke.py")
+    assert result.startswith("exit=0"), result
+
+
+def test_deltafuse_flag_policy():
+    """QF-004: deltafuse flags are exactly --json, --gate <name>, --human."""
+    argv, reason = qualify.parse_shell_command("deltafuse next --json")
+    assert argv is not None and reason is None
+    argv, reason = qualify.parse_shell_command("deltafuse advance --gate implement")
+    assert argv is not None and reason is None
+    argv, reason = qualify.parse_shell_command("deltafuse next --human")
+    assert argv is not None and reason is None
+    argv, reason = qualify.parse_shell_command("deltafuse next --evil")
+    assert argv is None and reason
+    argv, reason = qualify.parse_shell_command("deltafuse next -- --json")
+    assert argv is None and reason
+
+
+def test_response_file_and_dashdash_rejected():
+    """QF-004: response files and end-of-options separators are rejected."""
+    for command in ("pytest @args.txt", "pytest --", "git status --", "git log -- HEAD"):
+        argv, reason = qualify.parse_shell_command(command)
+        assert argv is None, command
+        assert reason, command
+
+
+def test_unc_and_network_paths_rejected():
+    """QF-004: UNC/network/drive paths never reach a command line."""
+    for command in (
+        "pytest //server/share/x",
+        "pytest Z:/x",
+    ):
+        argv, reason = qualify.parse_shell_command(command)
+        assert argv is None, command
+        assert reason, command
+
+
+def test_symlink_and_junction_escape_rejected(tmp_path):
+    """QF-004: links inside the sandbox never widen read/write access."""
+    io = qualify.SandboxIO(tmp_path)
+    io.write_envelope = qualify.EnvelopeState("ok", ["**"])
+    outside = tmp_path.parent / "qf004-outside"
+    outside.mkdir(exist_ok=True)
+    (outside / "secret.txt").write_text("secret", encoding="utf-8")
+    link = tmp_path / "lnk"
+    if sys.platform == "win32":
+        import _winapi
+
+        _winapi.CreateJunction(str(outside), str(link))
+    else:
+        import os
+
+        os.symlink(outside, link, target_is_directory=True)
+    assert "ERROR" in io.write_file("lnk/escape.txt", "x")
+    assert not (outside / "escape.txt").exists()
+    assert "ERROR" in io.read_file("lnk/secret.txt")
 
 
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):

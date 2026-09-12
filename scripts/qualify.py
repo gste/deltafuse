@@ -67,51 +67,118 @@ DELTAFUSE_SUBCOMMANDS = {
 }
 GIT_READ_ONLY_SUBCOMMANDS = {"status", "diff", "log", "show"}
 
+# QF-004: exact option policy. Any token not explicitly allowed is a refusal.
+DELTA_BREAK_GATES = None  # gate names are validated by the Core itself
+PYTEST_FLAGS = {
+    "-q", "-x", "-v", "-s", "-rA", "--tb=line", "--tb=short", "--tb=no",
+    "--co", "--collect-only", "--version",
+}
+PYTEST_VALUE_FLAGS = {"-k", "-m"}
 
-def parse_shell_argv(command: str) -> list[str] | None:
-    """Parse a Worker command into argv; None when it is not safe to run.
 
-    Rejects shell operators, absolute paths, traversal, environment/command
-    substitution and arbitrary interpreters before anything executes.
+def _reject(reason: str) -> tuple[None, str]:
+    return None, reason
+
+
+def parse_shell_command(command: str) -> tuple[list[str] | None, str | None]:
+    """Parse a Worker command into argv under the QF-004 option policy.
+
+    Returns (argv, None) when the command is allowed, or (None, reason) with
+    the classified refusal reason (journaled by SandboxIO for QF-006).
     """
     import shlex
 
     text = command.strip()
     if not text or "\n" in text or "\r" in text:
-        return None
+        return _reject("empty or multiline command")
     for ch in SHELL_FORBIDDEN_CHARS:
         if ch in text:
-            return None
+            return _reject(f"forbidden shell character {ch!r}")
     try:
         argv = shlex.split(text, posix=True)
-    except ValueError:
-        return None
+    except ValueError as ex:
+        return _reject(f"unparseable command: {ex}")
     if not argv:
-        return None
+        return _reject("empty command")
     for index, token in enumerate(argv):
         low = token.lower()
         if low in SHELL_FORBIDDEN_TOKENS:
             # `python -m pytest` is the one sanctioned interpreter invocation.
             if not (index == 0 and low == "python" and argv[1:3] == ["-m", "pytest"]):
-                return None
+                return _reject(f"forbidden interpreter/tool token: {token}")
+        if token.startswith("@"):
+            return _reject(f"response file not allowed: {token}")
+        if token == "--":
+            return _reject("end-of-options separator not allowed")
+        if token.startswith("//") or token.startswith("\\\\"):
+            return _reject(f"UNC/network path not allowed: {token}")
         if token.startswith(("/", "\\")) or (len(token) >= 2 and token[1] == ":"):
-            return None  # absolute path
+            return _reject(f"absolute path not allowed: {token}")
         if token == ".." or "/.." in token or "\\.." in token:
-            return None  # traversal
+            return _reject(f"path traversal not allowed: {token}")
         if token.startswith("%") and token.endswith("%") and len(token) > 2:
-            return None  # environment variable reference
+            return _reject(f"environment variable reference not allowed: {token}")
     head = argv[0].lower()
     if head == "deltafuse":
         if len(argv) < 2 or argv[1].lower() not in DELTAFUSE_SUBCOMMANDS:
-            return None
-        return argv
+            return _reject("deltafuse subcommand not allowed")
+        sub = argv[1].lower()
+        rest = argv[2:]
+        i = 0
+        while i < len(rest):
+            tok = rest[i].lower()
+            if tok == "--json":
+                i += 1
+                continue
+            if tok == "--human" and sub == "next":
+                i += 1
+                continue
+            if tok == "--gate" and sub == "advance":
+                if i + 1 >= len(rest) or rest[i + 1].startswith("-"):
+                    return _reject("--gate requires a gate name")
+                i += 2
+                continue
+            return _reject(f"deltafuse option not allowed: {rest[i]}")
+        return argv, None
     if head == "pytest":
-        return argv
+        return _check_pytest_args(argv, 1)
     if head == "python" and len(argv) >= 3 and argv[1] == "-m" and argv[2] == "pytest":
-        return argv
-    if head == "git" and len(argv) >= 2 and argv[1].lower() in GIT_READ_ONLY_SUBCOMMANDS:
-        return argv
-    return None
+        return _check_pytest_args(argv, 3)
+    if head == "python":
+        return _reject("python is only allowed as `python -m pytest`")
+    if head == "git":
+        if len(argv) < 2 or argv[1].lower() not in GIT_READ_ONLY_SUBCOMMANDS:
+            return _reject("git subcommand not allowed")
+        for token in argv[2:]:
+            if token.startswith("-"):
+                return _reject(f"git options are not allowed: {token}")
+            if token != "HEAD":
+                return _reject(f"git positional not allowed: {token}")
+        return argv, None
+    return _reject(f"unknown command: {argv[0]}")
+
+
+def _check_pytest_args(argv: list[str], start: int) -> tuple[list[str] | None, str | None]:
+    i = start
+    while i < len(argv):
+        token = argv[i]
+        if token.startswith("-"):
+            if token in PYTEST_FLAGS:
+                i += 1
+                continue
+            if token in PYTEST_VALUE_FLAGS:
+                if i + 1 >= len(argv) or argv[i + 1].startswith("-"):
+                    return _reject(f"{token} requires a value")
+                i += 2
+                continue
+            return _reject(f"pytest option not allowed: {token}")
+        i += 1  # positional test id / relative path (global rules applied)
+    return argv, None
+
+
+def parse_shell_argv(command: str) -> list[str] | None:
+    """Compat wrapper: argv when allowed, else None."""
+    return parse_shell_command(command)[0]
 
 
 class QualificationError(Exception):
@@ -279,6 +346,7 @@ class SandboxIO:
         self.hallucinated_paths = 0
         self.envelope_violations = 0
         self.envelope_errors = 0
+        self.staging_escapes = 0
         self.unique_files: set[str] = set()
         self.events: list[ToolEvent] = []
         self._seq = 0
@@ -289,6 +357,12 @@ class SandboxIO:
         # QF-003: injected by drive_worker; returns the changed-path inventory
         # so shell side effects are attributed to the shell event.
         self.inventory_fn = None
+        # QF-004: staging hooks — minimal command environment, the controlled
+        # interpreter (substituted for the `python` token) and the escape
+        # walker (new files in staging outside the work dir since last call).
+        self.exec_env: dict | None = None
+        self.interpreter: str | None = None
+        self.escape_check_fn = None
 
     def begin_call(self) -> None:
         self._call_index += 1
@@ -386,11 +460,15 @@ class SandboxIO:
 
     def shell(self, command: str, timeout: int = 300) -> str:
         """Run a Worker command with NO shell: structured argv or nothing."""
-        argv = parse_shell_argv(command)
+        argv, reason = parse_shell_command(command)
         if argv is None:
             self.envelope_violations += 1
-            self._record("shell", f"rejected: command not allowed: {command[:120]}", command=command[:200])
-            return f"ERROR: command not allowed: {command[:120]}"
+            self._record("shell", f"rejected: {reason}", command=command[:200])
+            return f"ERROR: command not allowed: {reason}"
+        # QF-004: the `python` token is executed with the controlled staging
+        # interpreter, never with whatever a stray PATH entry provides.
+        if argv[0].lower() == "python" and self.interpreter:
+            argv = [self.interpreter, *argv[1:]]
         before = dict(self.inventory_fn()) if self.inventory_fn else {}
         try:
             proc = subprocess.run(
@@ -400,6 +478,7 @@ class SandboxIO:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=self.exec_env,
             )
         except subprocess.TimeoutExpired:
             self._record("shell", f"error: timed out after {timeout}s",
@@ -414,7 +493,14 @@ class SandboxIO:
         if self.inventory_fn:
             after = dict(self.inventory_fn())
             changed = sorted(p for p in after if before.get(p) != after.get(p))
-        self._record("shell", "ok" if proc.returncode == 0 else f"error: exit {proc.returncode}",
+        outcome = "ok" if proc.returncode == 0 else f"error: exit {proc.returncode}"
+        # QF-004: anything appearing in staging outside the work dir is an
+        # escape, whatever the command's own exit code.
+        escaped = self.escape_check_fn() if self.escape_check_fn else []
+        if escaped:
+            self.staging_escapes += len(escaped)
+            outcome += f"; staging_escape: {','.join(escaped[:5])}"
+        self._record("shell", outcome,
                      paths_written=changed, command=" ".join(argv), exit_code=proc.returncode)
         out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
         return f"exit={proc.returncode}\n{out}"
@@ -518,7 +604,10 @@ def _core_leash_violations(sandbox: Path, files: list[str]) -> tuple[int, list[s
     return len(violations), violations
 
 
-def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system: str) -> dict:
+def drive_worker(
+    sandbox: Path, base_url: str, model: str, case_id: str, system: str,
+    staging=None,
+) -> dict:
     """Drive the Worker agent loop in one clean sandbox; return call metrics.
 
     T4: input tokens come from the host usage; framework-controlled input is
@@ -535,6 +624,9 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
     stage's envelope — the false-classification defect this avoids. After the
     advance, journal-vs-inventory reconciliation catches unjournaled changes,
     then the runner makes a bookkeeping commit for the next stage.
+    QF-004: when `staging` is given, commands run with the staging's minimal
+    environment and the escape walker counts files appearing outside the work
+    dir (`staging_escape`); see backlog/product/v3/qualification-threat-model.md.
     """
     messages = [
         {"role": "system", "content": system},
@@ -544,6 +636,10 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
     expected_head = init_sandbox_git(sandbox)
     head = {"sha": expected_head}
     io.inventory_fn = lambda: inventory(sandbox, head["sha"])
+    if staging is not None:
+        io.exec_env = staging.env()
+        io.interpreter = staging.interpreter()
+        io.escape_check_fn = staging.escape_walker()
     calls: list[dict] = []
     unmeasured_usage = False
     stage_writes: set[str] = set()
@@ -553,6 +649,7 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         "leash_violations": 0,
         "unjournaled_change": 0,
         "inventory_tampered": 0,
+        "staging_escape": 0,
     }
     for _ in range(MAX_WORKER_TURNS):
         io.begin_call()
@@ -645,6 +742,7 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         if tool == "done":
             break
     breakdown["write_denied"] = io.envelope_violations
+    breakdown["staging_escape"] = io.staging_escapes
     return _final_metrics(
         io, calls, unmeasured_usage, breakdown=breakdown, stage_leash=stage_leash
     )
@@ -666,15 +764,11 @@ def _final_metrics(
             "leash_violations": 0,
             "unjournaled_change": 0,
             "inventory_tampered": 0,
+            "staging_escape": io.staging_escapes,
         }
     peaks = [c["input_tokens"] for c in calls if c["input_tokens"] is not None]
     fw = [c["framework_input_tokens"] for c in calls]
-    total_t7 = (
-        breakdown["write_denied"]
-        + breakdown["leash_violations"]
-        + breakdown["unjournaled_change"]
-        + breakdown["inventory_tampered"]
-    )
+    total_t7 = sum(int(v) for v in breakdown.values())
     metrics = {
         "calls": calls,
         "context_peak_tokens": max(peaks) if peaks and not unmeasured_usage else None,
@@ -758,7 +852,8 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     # QF-003: any nonzero inventory/leash component fails, independently.
     breakdown = metrics.get("t7_breakdown")
     if breakdown and any(
-        breakdown.get(k) for k in ("leash_violations", "unjournaled_change", "inventory_tampered")
+        breakdown.get(k)
+        for k in ("leash_violations", "unjournaled_change", "inventory_tampered", "staging_escape")
     ):
         failures.append(f"T7 stage_inventory={breakdown}")
     # T8: authentic evidence for every case (defense checks always run).
@@ -880,7 +975,7 @@ def inventory(sandbox: Path, expected_head: str | None = None) -> dict[str, str]
 
 def _bookkeeping_commit(sandbox: Path, message: str) -> str:
     _git(["add", "-A"], sandbox)
-    _git(["commit", "-q", "-m", message], sandbox)
+    _git(["commit", "-q", "--allow-empty", "-m", message], sandbox)
     return _git(["rev-parse", "HEAD"], sandbox).strip()
 
 
@@ -931,6 +1026,15 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         raise QualificationError(f"sandbox already exists: {sandbox}")
     init_bench_product(case_id, sandbox, framework_root=REPO)
 
+    # QF-004: Worker commands execute inside a staging work copy (no judge
+    # pack, minimal env); the tree is brought back for scoring afterwards.
+    from qualify_staging import StagingRoot
+
+    staging = StagingRoot.create(
+        RUNS_DIR / campaign_id / "staging", build_venv=False, framework_root=REPO
+    )
+    work = staging.new_workdir(run_id, sandbox)
+
     case = load_case(case_id, str(CASES_ROOT), oracle=True)
     bench_md = (sandbox / "BENCH.md").read_text(encoding="utf-8")
     system = (
@@ -947,7 +1051,9 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "reports nothing ready or a done halt.\n\n"
         f"Worker start prompt:\n{format_worker_start_prompt(json.loads((sandbox / '.deltafuse' / 'bench.yaml').read_text(encoding='utf-8')))}\n\n{bench_md}"
     )
-    metrics = drive_worker(sandbox, model_probe["host_base_url"], model_probe["id"], case_id, system)
+    metrics = drive_worker(work, model_probe["host_base_url"], model_probe["id"], case_id, system, staging=staging)
+    staging.collect_workdir(run_id, sandbox)
+    staging.teardown()
     report = score_product(sandbox, pack_root=str(CASES_ROOT))
     verdict, failures = apply_thresholds(report, metrics)
 
