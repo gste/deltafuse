@@ -123,12 +123,16 @@ def main(argv: list[str] | None = None) -> int:
         pip = venv_dir / "Scripts" / "python.exe"
         if not pip.is_file():
             pip = venv_dir / "bin" / "python"
-        # The wheel is built by the host interpreter's setuptools; fresh
-        # venvs no longer ship setuptools, so query the build environment.
-        backend_version = _run(
-            [sys.executable, "-c",
-             "import importlib.metadata as m;print(m.version('setuptools'))"]
-        ).stdout.strip()
+        # The backend version is measured from the built wheel itself: pip's
+        # build isolation uses its own setuptools, not ours.
+        with __import__("zipfile").ZipFile(wheel) as zf:
+            wheel_meta_name = next(n for n in zf.namelist() if n.endswith(".dist-info/WHEEL"))
+            wheel_meta = zf.read(wheel_meta_name).decode("utf-8")
+        backend_version = next(
+            line.split("(", 1)[1].rstrip(")")
+            for line in wheel_meta.splitlines()
+            if line.startswith("Generator:")
+        )
         pip_version = _run([str(pip), "-m", "pip", "--version"]).stdout.split()[1]
 
         install = _run([str(pip), "-I", "-m", "pip", "install", str(wheel)])
