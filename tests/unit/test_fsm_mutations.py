@@ -253,7 +253,12 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path, repo_root: Path):
     archived_dir = archive_change(builder.change_dir, repo_root=tmp_path)
     assert archived_dir.is_dir()
 
-    # Recreate the same change directory
+    # Recreate the same change directory. Its receipts replay on top of the
+    # first lifecycle in the shared journal, so start the second lifecycle
+    # from a fresh journal.
+    from deltafuse.core.transitions import transitions_path
+
+    transitions_path(tmp_path).write_text("", encoding="utf-8")
     builder2 = (
         MockChangeBuilder(tmp_path, change_id="CHG-208", title="T8 Collision Test")
         .step_intake()

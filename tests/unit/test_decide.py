@@ -15,6 +15,8 @@ from tests.unit.test_queue import _write_proposed_dec
 def test_decide_accepts_decision_and_unblocks(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-071", title="Decide").step_intake()
+    # Real flow: a Change reaches blocked-on-decision only after the intake gate.
+    builder._core_advance("intake")
     builder._update_change_yaml({"status": "blocked-on-decision"})
     dec = _write_proposed_dec(tmp_path, "CHG-071")
     rel = str(builder.change_dir)
@@ -80,6 +82,7 @@ def test_bootstrap_decision_with_null_change(tmp_path: Path, repo_root: Path):
 def test_hand_written_spec_accepted_does_not_close_specified(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-075", title="Forge spec").step_intake().step_analyze()
+    builder._core_advance("analyzed")
     spec_delta = (
         f"---\nchange: {builder.change_id}\nstatus: accepted\nslices: [SLICE-01]\n"
         "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n"
@@ -94,4 +97,5 @@ def test_hand_written_spec_accepted_does_not_close_specified(tmp_path: Path, rep
     spec_delta_proposed = spec_delta.replace("status: accepted", "status: proposed")
     (builder.change_dir / "spec-delta.md").write_text(spec_delta_proposed, encoding="utf-8")
     assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 0
+    builder._core_advance("specified")
     assert check_gate(builder.change_dir, "specified") == []

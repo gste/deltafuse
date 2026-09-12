@@ -109,7 +109,7 @@ def test_board_two_changes_and_no_side_effects(tmp_path: Path, repo_root: Path):
     assert by_id["CHG-030"]["has_red"] is True
     assert by_id["CHG-030"]["has_green"] is False
     assert by_id["CHG-030"]["slice_count"] == 0
-    assert by_id["CHG-031"]["status"] == "analyzed"
+    assert by_id["CHG-031"]["status"] == "analyzing"
     assert by_id["CHG-031"]["slice_count"] == 1
     assert "request.md" not in json.dumps(snapshot)
     assert "CR-001" not in json.dumps(snapshot)

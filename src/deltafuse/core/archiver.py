@@ -59,6 +59,17 @@ def archive_change(
     # DF3-002 / F-01: a hand-set terminal status is not evidence. `converged`
     # is always re-verified against the gate; only explicit non-converged
     # terminal outcomes archive without gate replay.
+    # V3-FIX-009: archive is a Core action; it refuses a Change whose status
+    # is not backed by the full receipt chain.
+    from deltafuse.core.transitions import find_repo_root as _find_repo_root
+    from deltafuse.core.transitions import receipt_chain_errors as _chain_errors
+
+    chain_errs = _chain_errors(_find_repo_root(cpath), cpath)
+    if chain_errs:
+        raise ArchivalError(
+            f"Cannot archive Change '{cid}': transition chain invalid: {'; '.join(chain_errs)}"
+        )
+
     bypass_gate = {"rejected", "duplicate", "not-reproduced", "superseded"}
     if current_status not in bypass_gate:
         gate_errs = check_gate(cpath, "converged")

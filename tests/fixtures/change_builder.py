@@ -75,6 +75,40 @@ class MockChangeBuilder:
 
         write_stamped_evidence(dest, payload, self.root_dir)
 
+    def _core_advance(self, gate: str) -> None:
+        """V3-FIX-009: simulate the Core applying a gate transition.
+
+        Appends a genuine transitions.jsonl receipt and moves change.yaml to
+        the gate target, the way `deltafuse advance` does — test fixtures must
+        not hand-edit receipted statuses.
+        """
+        import json as _json
+        from datetime import datetime, timezone
+
+        from deltafuse.core.transitions import (
+            GATE_TARGETS,
+            _receipt,
+            transitions_path,
+        )
+
+        cfile = self.change_dir / "change.yaml"
+        data = yaml.safe_load(cfile.read_text(encoding="utf-8")) or {}
+        entry: dict[str, Any] = {
+            "kind": "transition",
+            "change": data.get("id", self.change_id),
+            "gate": gate,
+            "from": data.get("status"),
+            "to": GATE_TARGETS[gate],
+            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        entry["receipt"] = _receipt(entry)
+        path = transitions_path(self.root_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline=chr(10)) as handle:
+            handle.write(_json.dumps(entry, ensure_ascii=False) + chr(10))
+        data["status"] = GATE_TARGETS[gate]
+        cfile.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
     def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
         if claims is None:
             claims = ["CR-001"]
@@ -177,10 +211,12 @@ class MockChangeBuilder:
         }
         (self.change_dir / "coverage.yaml").write_text(yaml.safe_dump(cov), encoding="utf-8")
         self._update_change_yaml({
-            "status": "analyzed",
             "analysis": {"routing": "routing.yaml", "summary": "analysis.md"},
             "slices": slice_objs,
         })
+        # Core owns the transition; the intake receipt leaves the Change
+        # Worker-held in `analyzing`.
+        self._core_advance("intake")
         return self
 
     def step_specify(self) -> MockChangeBuilder:
@@ -199,6 +235,9 @@ class MockChangeBuilder:
         from deltafuse.core.decide import apply_decision
 
         apply_decision(self.change_dir, status="accepted", spec=True)
+        # Human Gate accepted: Core records the analyzed + specified transitions.
+        self._core_advance("analyzed")
+        self._core_advance("specified")
         return self
 
     def step_decompose(self, tasks: list[dict[str, Any]] | None = None) -> MockChangeBuilder:
@@ -253,9 +292,9 @@ class MockChangeBuilder:
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
         self._update_change_yaml({
-            "status": "decomposed",
             "tasks": task_ids,
         })
+        self._core_advance("decomposed")
         return self
 
     def step_declare(self, task_id: str = "TASK-001") -> MockChangeBuilder:
@@ -435,7 +474,9 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["evidence"]["regression"] = f"evidence/regression/{task_id}.yaml"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        self._update_change_yaml({"status": "implemented"})
+        # Core records declaring (Red accepted) and implemented (Green accepted).
+        self._core_advance("declaring")
+        self._core_advance("implemented")
         return self
 
     def step_verify(self) -> MockChangeBuilder:
@@ -477,5 +518,5 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["status"] = "verified"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        self._update_change_yaml({"status": "converged"})
+        self._core_advance("converged")
         return self

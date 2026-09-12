@@ -71,5 +71,5 @@ def test_force_cannot_skip_converged_gate_on_hand_set_converged(
     )
     builder._update_change_yaml({"status": "converged"})
 
-    with pytest.raises(Exception, match="gate errors"):
+    with pytest.raises(Exception, match="gate errors|transition chain invalid"):
         archive_change(builder.change_dir, repo_root=tmp_path, force=True)

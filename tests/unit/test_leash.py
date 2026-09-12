@@ -280,11 +280,13 @@ def test_leash_implement_covers_allowed_src(tmp_path: Path, repo_root: Path, cap
 def test_leash_docs_route_allows_spec_rejects_src(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     _set_baseline(tmp_path)
-    (
+    docs_change = (
         MockChangeBuilder(tmp_path, change_id="CHG-095", title="Docs route", route="docs")
         .step_intake()
         .step_analyze()
     )
+    # The specify envelope opens only after the Core analyzed receipt.
+    docs_change._core_advance("analyzed")
     ret_ok, data_ok = _leash_json(tmp_path, capsys, files=["docs/spec/core.md"])
     assert ret_ok == 0
     assert data_ok["ok"] is True

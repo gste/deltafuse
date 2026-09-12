@@ -28,6 +28,7 @@ def test_next_specify_pass_names_first_slice(tmp_path: Path, repo_root: Path):
         .step_intake()
         .step_analyze()
     )
+    builder._core_advance("analyzed")
     cursor = next_specify_pass(builder.change_dir, tmp_path)
     assert cursor is not None
     assert cursor.pass_name == "slice"
@@ -48,6 +49,7 @@ def test_next_specify_pass_second_slice_then_close(tmp_path: Path, repo_root: Pa
         .step_intake()
         .step_analyze(slices=["SLICE-01", "SLICE-02"])
     )
+    builder._core_advance("analyzed")
     cursor = next_specify_pass(builder.change_dir, tmp_path)
     assert cursor.pass_name == "slice"
     assert cursor.slice_id == "SLICE-01"
@@ -72,6 +74,7 @@ def test_next_after_analyze_selects_specify_slice(tmp_path: Path, repo_root: Pat
         .step_intake()
         .step_analyze()
     )
+    builder._core_advance("analyzed")
     selected = select_next(build_work_queue(tmp_path))
     assert selected is not None
     assert selected.skill == "specify"
@@ -91,6 +94,7 @@ def test_next_specify_json_omits_spec_tree(tmp_path: Path, repo_root: Path, caps
         .step_intake()
         .step_analyze()
     )
+    builder._core_advance("analyzed")
     import json
 
     before = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
@@ -114,6 +118,7 @@ def test_next_specify_close_when_slices_specified(tmp_path: Path, repo_root: Pat
         .step_intake()
         .step_analyze()
     )
+    builder._core_advance("analyzed")
     _set_slice_status(builder.change_dir, "SLICE-01", "specified")
     selected = select_next(build_work_queue(tmp_path))
     assert selected is not None
@@ -123,7 +128,12 @@ def test_next_specify_close_when_slices_specified(tmp_path: Path, repo_root: Pat
 
 def test_next_human_specify_slice_skips_specified_gate(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
-    MockChangeBuilder(tmp_path, change_id="CHG-075", title="Human specify").step_intake().step_analyze()
+    (
+        MockChangeBuilder(tmp_path, change_id="CHG-075", title="Human specify")
+        .step_intake()
+        .step_analyze()
+        ._core_advance("analyzed")
+    )
     ret = main(["next", str(tmp_path), "--human", "--step", "specify"])
     out, _ = capsys.readouterr()
     assert ret == 0

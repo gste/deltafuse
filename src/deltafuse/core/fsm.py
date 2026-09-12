@@ -837,6 +837,12 @@ def check_gate(
     errors = validate_change_package(change_path, registry=registry)
 
     repo_root = find_repo_root(change_path)
+
+    # V3-FIX-009: a gate may only be evaluated on top of an intact Core
+    # receipt chain; hand-edited statuses halt before gate logic.
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    errors.extend(receipt_chain_errors(repo_root, change_path))
     req_file = change_path / "request.md"
     spec_delta_file = change_path / "spec-delta.md"
     tasks_dir = change_path / "tasks"

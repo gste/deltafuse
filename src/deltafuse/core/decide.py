@@ -76,8 +76,28 @@ def _unblock_change_if_decisions_resolved(product_root: Path, change_id: str, ch
         return None
     if data.get("status") != "blocked-on-decision":
         return None
+    from deltafuse.core.transitions import _receipt, transitions_path
+
+    import json as _json
+    from datetime import datetime, timezone
+
     data["status"] = "analyzing"
     _write_yaml_mapping(change_file, data)
+    # V3-FIX-009: decide is a Core command, so its unblock transition is
+    # journaled like any other Core status write.
+    entry = {
+        "kind": "unblock",
+        "change": data.get("id") or change_dir.name,
+        "gate": "decide",
+        "from": "blocked-on-decision",
+        "to": "analyzing",
+        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    entry["receipt"] = _receipt(entry)
+    path = transitions_path(product_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline=chr(10)) as handle:
+        handle.write(_json.dumps(entry, ensure_ascii=False) + chr(10))
     return "analyzing"
 
 

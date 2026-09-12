@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from deltafuse.cli import main
+from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue, select_next
 from deltafuse.core.transitions import (
@@ -98,7 +99,7 @@ def test_hand_edited_status_without_receipt_halts_the_queue(
     queue = build_work_queue(tmp_path)
     assert queue.blocked, "hand-edited status must halt the Change"
     blocked = queue.blocked[0]
-    assert "receipt" in blocked.reason
+    assert "chain" in blocked.reason or "receipt" in blocked.reason
 
 
 def test_crash_between_receipt_and_status_write_is_resumable(
@@ -130,3 +131,52 @@ def test_full_analyze_cycle_advances_and_hands_off_to_specify(
     assert _read_status(builder.change_dir) == "analyzed"
     item = select_next(build_work_queue(tmp_path))
     assert item is not None and item.skill == "specify"
+
+def test_hand_set_advanced_status_is_rejected_in_every_state(
+    tmp_path: Path, repo_root: Path
+):
+    """V3-FIX-009: a hand-edited status without receipts halts `next`,
+    `check-gate`, `advance` and `archive` for every advanced state."""
+    hand_statuses = [
+        "analyzing",
+        "analyzed",
+        "specification-proposed",
+        "specified",
+        "decomposed",
+        "declaring",
+        "declared",
+        "implementing",
+        "implemented",
+        "verifying",
+        "converged",
+    ]
+    for status in hand_statuses:
+        builder = _analyze_ready(tmp_path, repo_root, f"CHG-{900 + hand_statuses.index(status)}")
+        # start from a pristine normalized package
+        _write_status(builder.change_dir, "normalized")
+        (builder.change_dir.parent.parent.parent / ".deltafuse" / "transitions.jsonl").unlink(missing_ok=True)
+        _write_status(builder.change_dir, status)
+
+        assert receipt_mismatch(tmp_path, builder.change_dir) is not None, status
+        queue = build_work_queue(tmp_path)
+        assert queue.blocked, status
+        with pytest.raises(TransitionError, match="chain invalid"):
+            advance_change(builder.change_dir, "intake")
+        assert check_gate(builder.change_dir, "intake"), status
+
+
+def test_partial_receipt_chain_does_not_satisfy_advanced_status(
+    tmp_path: Path, repo_root: Path
+):
+    """V3-FIX-009: receipts must cover the whole chain, not just the last gate."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-950")
+    advance_change(builder.change_dir, GATE)  # analyzed
+    _write_status(builder.change_dir, "converged")
+
+    assert receipt_mismatch(tmp_path, builder.change_dir) is not None
+    with pytest.raises(TransitionError, match="chain invalid"):
+        advance_change(builder.change_dir, "converged")
+    from deltafuse.core.archiver import ArchivalError, archive_change
+
+    with pytest.raises(ArchivalError, match="transition chain invalid"):
+        archive_change(builder.change_dir, repo_root=tmp_path)
