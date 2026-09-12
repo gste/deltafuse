@@ -24,6 +24,7 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
+from deltafuse.core.transitions import TransitionError, advance_change
 from deltafuse.core.leash import (
     LeashError,
     check_paths,
@@ -80,6 +81,17 @@ def main(argv: list[str] | None = None) -> int:
     arch_parser = subparsers.add_parser("archive", help="Archive a converged Change package")
     arch_parser.add_argument("change_path", help="Path to Change package directory")
     arch_parser.add_argument("--force", "-f", action="store_true", help="Force archive without converged check")
+
+    # advance command (DF3-004): Core-owned gate validation + transition
+    advance_parser = subparsers.add_parser(
+        "advance", help="Apply a gate transition: Core validates, writes status, records a receipt"
+    )
+    advance_parser.add_argument("change_path", help="Path to Change package directory")
+    advance_parser.add_argument(
+        "--gate", "-g", required=True,
+        help="Gate to apply (intake, analyzed, specified, decomposed, targeting, implemented, converged)",
+    )
+    advance_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
     # validate-layout command (P6.1)
     layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
@@ -330,6 +342,27 @@ def main(argv: list[str] | None = None) -> int:
             _journal(target, cmd="archive", ok=False, errors=[str(ex)])
             print(f"Unexpected error during archival: {ex}", file=sys.stderr)
             return 2
+
+    elif args.command == "advance":
+        target = Path(args.change_path)
+        try:
+            result = advance_change(target, args.gate)
+        except TransitionError as te:
+            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=[str(te)])
+            print(f"advance failed: {te}", file=sys.stderr)
+            return 1
+        receipt = dict(result)
+        receipt.pop("ok", None)
+        _journal(target, cmd="advance", ok=True, errors=[], n_errors=0, **receipt)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"advance: gate '{result['gate']}' applied: "
+                f"{result['from']} -> {result['to']} "
+                f"(receipt {result['receipt'][:12]})"
+            )
+        return 0
 
     elif args.command == "validate-layout":
         target = Path(args.product_path)

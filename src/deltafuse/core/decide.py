@@ -148,6 +148,17 @@ def apply_decision(
                     _write_yaml_mapping(change_file, data)
                     change_status = "specified"
                     written.append(_rel(product_root, change_file))
+        else:
+            # DF3-004: rejection loops the Change back to `analyzed` so the
+            # Worker gets Specify work again; the rejected proposal stays on
+            # disk (spec-delta.md status 'rejected') for the record.
+            change_file = change_dir / "change.yaml"
+            data = _load_yaml_mapping(change_file)
+            if data.get("status") == "specification-proposed":
+                data["status"] = "analyzed"
+                _write_yaml_mapping(change_file, data)
+                change_status = "analyzed"
+                written.append(_rel(product_root, change_file))
         return {
             "ok": True,
             "gate": "spec",

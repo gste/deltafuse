@@ -15,7 +15,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 2. If `selected` names a ready step other than intake, load that skill and execute it in this same session. Do not choose the next slash command yourself.
 3. If `selected.skill` is `intake` and `intake_pending` is true, load `/intake` and execute it in this same session.
 4. If `selected.skill` is `intake` and `intake_pending` is false: only run `/intake` when the human already stated a new Change in this chat. Otherwise stop. Do not invent a Change. Merge/push is a Human Gate. Do not git push.
-5. After each step's `check-gate` passes, run `deltafuse leash` at the product root if the host cannot restrict write-tools to `envelope.write`. That is not a substitute for the git hook. Then go back to step 1. Do not wait for a pasted slash command.
+5. After each step's `check-gate` passes, run `deltafuse advance <change> --gate <gate>` so the Core stamps the transition (never edit `change.yaml` status yourself). Then run `deltafuse leash` at the product root if the host cannot restrict write-tools to `envelope.write`. That is not a substitute for the git hook. Then go back to step 1. Do not wait for a pasted slash command.
 6. If `next` exits non-zero, read `halt`:
    - `decision` or `spec`: present `halt.choices` in the host multiple-choice UI. Wait. Do not pick. After the human clicks, run only `choice.command` (never invent accepted/rejected). `inspect` (`command` null) means stop. Then go back to step 1.
    - `blocked`: stop. Show the reason. The human inspects and restarts through-mode.

@@ -60,7 +60,7 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
     "blocked-on-decision": {"analyzing"},
     "analyzed": {"specification-proposed", "specified", "targeting"},  # targeting for bugfix
-    "specification-proposed": {"specified"},
+    "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
     "decomposed": {"targeting"},
     "targeting": {"target-confirmed", "not-reproduced"},

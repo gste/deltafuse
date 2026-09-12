@@ -2,7 +2,7 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [DF3-004](DF3-004.md) — Core-owned lifecycle transitions и spec rejection loop.
+Брать в работу: [DF3-005](DF3-005.md) — wheel/runtime bundle и безопасный upgrade.
 
 Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
@@ -13,8 +13,8 @@
 | [DF3-001](DF3-001.md) | `done` | V3 contracts и абсолютные acceptance thresholds ([v3/](v3/)) |
 | [DF3-002](DF3-002.md) | `done` | Archive bypass и route convergence |
 | [DF3-003](DF3-003.md) | `done` | CI leash и framework manifest |
-| [DF3-004](DF3-004.md) | `ready` | Core-owned lifecycle transitions |
-| [DF3-005](DF3-005.md) | `blocked` | Distribution, scaffolding и upgrade |
+| [DF3-004](DF3-004.md) | `done` | Core-owned lifecycle transitions |
+| [DF3-005](DF3-005.md) | `ready` | Distribution, scaffolding и upgrade |
 | [DF3-006](DF3-006.md) | `blocked` | Evidence и envelope authority |
 | [DF3-007](DF3-007.md) | `blocked` | Human Gate receipts и integrity profiles |
 | [DF3-008](DF3-008.md) | `blocked` | Schema v3 и Declare contracts |

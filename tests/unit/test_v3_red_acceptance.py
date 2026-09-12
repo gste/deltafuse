@@ -35,7 +35,9 @@ import yaml
 from deltafuse.bench.journal import collect_attempts
 from deltafuse.core.archiver import ArchivalError, archive_change
 from deltafuse.core.decide import apply_decision
+from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.cli import main
 from deltafuse.core.queue import build_work_queue, select_next
 from tests.fixtures.change_builder import MockChangeBuilder
 
@@ -91,8 +93,7 @@ def test_f02_converged_gate_does_not_demand_regression_for_docs_route(
 # ---------------------------------------------------------------- F-03 (P0)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
-def test_f03_spec_rejection_moves_change_out_of_specification_proposed(
+def test_f03_spec_rejection_returns_change_to_analyzed(
     tmp_path: Path, repo_root: Path
 ):
     """accidental_misuse: after a human rejects the spec, change.yaml must leave
@@ -124,32 +125,42 @@ def test_f03_spec_rejection_moves_change_out_of_specification_proposed(
     data = yaml.safe_load(
         (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     )
-    assert data["status"] != "specification-proposed"
+    assert data["status"] == "analyzed"
+    delta_meta, _ = parse_frontmatter(
+        (builder.change_dir / "spec-delta.md").read_text(encoding="utf-8")
+    )
+    assert delta_meta["status"] == "rejected"
 
 
 # ---------------------------------------------------------------- F-04 (P1)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_f04_passing_analyzed_gate_advances_status_out_of_draft(
     tmp_path: Path, repo_root: Path
 ):
-    """accidental_misuse: once gate ``analyzed`` passes, change.yaml must carry
-    ``status: analyzed`` (Core-owned) so through-mode does not re-run Analyze."""
+    """accidental_misuse: once gate ``analyzed`` passes, only Core stamps the
+    transition; the queue points at advance and Specify follows."""
     install = pytest.importorskip("deltafuse.core.installer").install
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(
         tmp_path, change_id="CHG-904", title="Analyzed loop"
     ).step_intake().step_analyze()
-    builder._update_change_yaml({"status": "draft"})
+    builder._update_change_yaml({"status": "analyzing"})
 
-    assert check_gate(builder.change_dir, "analyzed") == []
-    selected = select_next(build_work_queue(tmp_path))
-    assert selected is not None and selected.skill == "specify"
+    from deltafuse.core.queue import build_work_queue, select_next
+
+    item = select_next(build_work_queue(tmp_path))
+    assert item is not None and item.step == "analyze", (
+        "stale analyzing with a passing gate must surface the advance step"
+    )
+
+    assert main(["advance", str(builder.change_dir), "--gate", "analyzed"]) == 0
     data = yaml.safe_load(
         (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     )
     assert data["status"] == "analyzed"
+    item = select_next(build_work_queue(tmp_path))
+    assert item is not None and item.skill == "specify"
 
 
 # ---------------------------------------------------------------- B-01 (P0)
