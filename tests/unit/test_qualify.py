@@ -122,7 +122,7 @@ def test_thresholds_t1_to_t8():
         "stages": {name: {"pass": True, "checks": {"failed": 0}} for name in
                    ["intake", "analyze", "specify", "decompose", "declare", "implement", "verify"]},
         "retries": {"check_gate": 0},
-        "defense_checks": {},
+        "defense_checks": {k: {"pass": True} for k in qualify.REQUIRED_T8_CHECKS},
     }
     good_metrics = {
         "context_peak_tokens": 30000,
@@ -130,6 +130,7 @@ def test_thresholds_t1_to_t8():
         "max_unique_files": 20,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
+        "framework_input_chars": 8000,
     }
     verdict, failures = qualify.apply_thresholds(good_report, good_metrics)
     assert verdict and failures == []
@@ -157,12 +158,18 @@ def test_medians_ignore_missing():
 
 def test_sandbox_io_rejects_escapes(tmp_path):
     io = qualify.SandboxIO(tmp_path)
+    # QF-006: an unresolvable path is a hallucinated path (T6), not T7.
     assert "ERROR" in io.write_file("../outside.txt", "x")
-    assert io.envelope_violations == 1
-    assert "ERROR" in io.write_file(".deltafuse/lock.yaml", "x")
-    assert "ERROR" in io.read_file("missing.txt")
     assert io.hallucinated_paths == 1
+    # Core-owned path stays an envelope (T7) violation.
+    assert "ERROR" in io.write_file(".deltafuse/lock.yaml", "x")
+    assert io.envelope_violations == 1
+    assert "ERROR" in io.read_file("missing.txt")
+    assert io.hallucinated_paths == 2
+    # `rm -rf /` carries an absolute path -> execution-policy (T7) refusal.
     assert "ERROR" in io.shell("rm -rf /")
+    assert io.envelope_violations == 2
+    assert io.hallucinated_paths == 2
     io.write_envelope = qualify.EnvelopeState("ok", ["docs/spec/**"])
     assert "OK" in io.write_file("docs/spec/x.md", "# x")
 
@@ -222,6 +229,7 @@ def test_score_product_report_satisfies_thresholds_shape(tmp_path, repo_root):
         "max_unique_files": 10,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
+        "framework_input_chars": 6000,
     }
     verdict, failures = qualify.apply_thresholds(report, metrics)
     # The bare sandbox fails gates; that must show as T1/T2, never crash.
@@ -330,7 +338,7 @@ def _passing_report_and_metrics():
             for name in ["intake", "analyze", "specify", "decompose", "declare", "implement", "verify"]
         },
         "retries": {"check_gate": 0},
-        "defense_checks": {},
+        "defense_checks": {k: {"pass": True} for k in qualify.REQUIRED_T8_CHECKS},
     }
     metrics = {
         "context_peak_tokens": 20000,
@@ -338,6 +346,7 @@ def _passing_report_and_metrics():
         "max_unique_files": 12,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
+        "framework_input_chars": 8000,
     }
     return report, metrics
 
@@ -991,6 +1000,141 @@ def test_env_override_token_rejected(tmp_path):
     io = qualify.SandboxIO(tmp_path)
     assert "ERROR" in io.shell("pytest PYTEST_ADDOPTS=-x")
     assert "ERROR" in io.shell("python -m pytest FOO=bar")
+
+
+# --------------------------------------- QF-006: literal T4, T6, T8
+
+
+def test_t4_framework_excludes_product_content(tmp_path, monkeypatch):
+    """QF-006: framework input excludes file bodies read by the Worker."""
+    _ok_envelope(monkeypatch)
+    system = "SYSPROMPT"
+    big = "X" * 5000
+    (tmp_path / "big.md").write_text(big, encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "read_file", "path": "big.md"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", system)
+    seed = "Begin the case case. Run `deltafuse next` first."
+    expected = len(system) + len(seed)
+    call = metrics["calls"][0]
+    assert call["framework_input_chars"] == expected
+    assert call["framework_input_chars"] < len(big)
+
+
+def test_t4_framework_tokens_method_recorded(tmp_path, monkeypatch):
+    """QF-006: every call records framework tokens AND their method."""
+    _ok_envelope(monkeypatch)
+    (tmp_path / "a.md").write_text("a", encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns(['{"tool": "read_file", "path": "a.md"}', '{"tool": "done"}']),
+    )
+    monkeypatch.setattr(qualify, "_host_tokenize", lambda base_url, text: 42)
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "sys")
+    for call in metrics["calls"]:
+        assert call["framework_input_tokens"] == 42
+        assert call["framework_input_tokens_method"] == "host-tokenize"
+    assert metrics["framework_input_tokens_method"] == "host-tokenize"
+
+    monkeypatch.setattr(qualify, "_host_tokenize", lambda base_url, text: None)
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "sys")
+    for call in metrics["calls"]:
+        assert call["framework_input_tokens_method"] == "chars-div-4"
+        assert call["framework_input_tokens"] == call["framework_input_chars"] // 4
+
+
+def test_t4_unmeasured_framework_chars_fails():
+    """QF-006: missing framework_input_chars is a failure, never a pass."""
+    report, metrics = _passing_report_and_metrics()
+    verdict, failures = qualify.apply_thresholds(report, {**metrics, "framework_input_chars": None})
+    assert verdict is False
+    assert any("T4" in f and "framework_input_chars" in f for f in failures)
+
+
+def test_t6_matrix_rows():
+    """QF-006: every row of the T6/T7 classification matrix."""
+    def ev(tool, outcome, **kw):
+        base = {"call_index": 1, "seq": 1, "tool": tool, "outcome": outcome,
+                "paths_read": [], "paths_written": [], "command": None,
+                "exit_code": None, "envelope_globs": None}
+        base.update(kw)
+        return base
+
+    events = [
+        ev("read", "error: no such file: ghost.md"),                       # T6
+        ev("write", "rejected: path escapes the sandbox: x"),              # T6
+        ev("write", "rejected: docs/x.md is outside the (empty) envelope.write"),  # T7
+        ev("write", "rejected: no valid write envelope: docs/x.md"),       # T7
+        ev("shell", "rejected: deltafuse subcommand not allowed"),         # T6
+        ev("shell", "rejected: unknown command: cat"),                     # T6
+        ev("shell", "rejected: forbidden shell character '&'"),            # T7 policy
+        ev("shell", "rejected: env_override attempt not allowed: K=V"),    # T7 policy
+        ev("shell", "rejected: pytest option not allowed: -p evil"),       # T7 policy
+        ev("shell", "error: exit 4", command="pytest -q missing.py", exit_code=4),  # T6
+        ev("unknown", "error: unknown tool fly"),                          # T6
+    ]
+    cls = qualify.classify_violations(events)
+    assert cls["hallucinated"] == 6
+    assert cls["envelope"] == 2
+    assert cls["execution_policy"] == 3
+    # consistency with the SandboxIO immediate counters
+    io = qualify.SandboxIO(Path('.'))
+    assert qualify.classify_violations([e if isinstance(e, dict) else e for e in events]) == cls
+
+
+def test_t6_shell_rejected_unknown_tool_is_hallucination(tmp_path):
+    """QF-006: unknown subcommand/test-path references are T6, not T7."""
+    io = qualify.SandboxIO(tmp_path)
+    assert "ERROR" in io.shell("deltafuse nosuchsub")
+    assert io.hallucinated_paths == 1
+    assert io.envelope_violations == 0
+    io2 = qualify.SandboxIO(tmp_path)
+    result = io2.shell("pytest -q missing_file_test.py")
+    assert result.startswith("exit=4"), result
+    assert io2.hallucinated_paths == 1
+    assert io2.envelope_violations == 0
+
+
+def test_t6_operators_stay_t7(tmp_path):
+    """QF-006: shell operators remain an execution-policy (T7) violation."""
+    io = qualify.SandboxIO(tmp_path)
+    assert "ERROR" in io.shell("deltafuse next & whoami")
+    assert io.envelope_violations == 1
+    assert io.hallucinated_paths == 0
+
+
+def test_t8_empty_defense_checks_fails():
+    """QF-006: an empty defense_checks set fails T8 (no proof != pass)."""
+    report, metrics = _passing_report_and_metrics()
+    report = {**report, "defense_checks": {}}
+    verdict, failures = qualify.apply_thresholds(report, metrics)
+    assert verdict is False
+    assert any("T8 evidence_missing" in f for f in failures)
+
+
+def test_t8_missing_required_check_fails():
+    """QF-006: 2-of-3 required checks present still fails T8."""
+    report, metrics = _passing_report_and_metrics()
+    partial = {k: {"pass": True} for k in sorted(qualify.REQUIRED_T8_CHECKS)[:2]}
+    report = {**report, "defense_checks": partial}
+    verdict, failures = qualify.apply_thresholds(report, metrics)
+    assert verdict is False
+    assert any("T8 evidence_missing" in f for f in failures)
+
+
+def test_t8_evidence_authentic_flag():
+    """QF-006: evidence_authentic is true only with the full passing set."""
+    report, metrics = _passing_report_and_metrics()
+    assert qualify.evidence_authentic(report) is True
+    failed = {k: {"pass": True} for k in qualify.REQUIRED_T8_CHECKS}
+    failed["journal_forgery"] = {"pass": False}
+    assert qualify.evidence_authentic({**report, "defense_checks": failed}) is False
+    assert qualify.evidence_authentic({**report, "defense_checks": {}}) is False
 
 
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):
