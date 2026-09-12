@@ -148,6 +148,32 @@ def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
         raise QualificationError(
             f"reference model {REFERENCE_MODEL_ID!r} is not loaded; loaded: {ids}"
         )
+
+    # Measured model parameters (LM Studio v0 REST API). Fail-closed: without
+    # them the campaign is blocked — a constant is never written as if measured.
+    try:
+        v0 = _get_json(f"{base_url}/api/v0/models")
+    except Exception as ex:
+        raise QualificationError(f"model parameter probe failed (/api/v0/models): {ex}") from ex
+    info = next(
+        (row for row in v0.get("data", []) if str(row.get("id")) == REFERENCE_MODEL_ID),
+        None,
+    )
+    if info is None:
+        raise QualificationError(
+            f"reference model {REFERENCE_MODEL_ID!r} has no /api/v0/models entry"
+        )
+    context_length = info.get("max_context_length") or info.get("context_length")
+    if not isinstance(context_length, int) or context_length < CONTEXT_WINDOW_TOKENS:
+        raise QualificationError(
+            f"measured context limit {context_length!r} does not cover "
+            f"{CONTEXT_WINDOW_TOKENS}; configure the model context and re-run"
+        )
+    state = str(info.get("state") or "unknown")
+    if state not in ("loaded", "unknown"):
+        raise QualificationError(f"reference model is not loaded (state={state!r})")
+
+    # Diagnostic completion must return a real usage/tokenization result.
     try:
         probe = _post_json(
             f"{base_url}/v1/chat/completions",
@@ -162,13 +188,28 @@ def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
     except Exception as ex:
         raise QualificationError(f"diagnostic completion failed: {ex}") from ex
     usage = probe.get("usage") or {}
+    prompt_tokens = usage.get("prompt_tokens")
+    if not isinstance(prompt_tokens, int) or prompt_tokens <= 0:
+        raise QualificationError(
+            f"diagnostic completion returned no valid tokenization result: usage={usage!r}"
+        )
+
     return {
         "id": REFERENCE_MODEL_ID,
         "host": host,
         "host_base_url": base_url,
-        "context_window_tokens": CONTEXT_WINDOW_TOKENS,
+        # measured, not assumed:
+        "context_window_tokens_measured": context_length,
+        "context_window_tokens_required": CONTEXT_WINDOW_TOKENS,
+        "model_state": state,
+        "model_params": {
+            k: info.get(k)
+            for k in ("type", "publisher", "arch", "quantization", "state")
+            if info.get(k) is not None
+        },
+        "cloud_fallback": False,  # runner construction: single local endpoint only
         "loaded_models": ids,
-        "probe_prompt_tokens": usage.get("prompt_tokens"),
+        "probe_prompt_tokens": prompt_tokens,
     }
 
 

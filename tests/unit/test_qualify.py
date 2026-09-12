@@ -20,11 +20,60 @@ def test_framework_commit_fail_closed(tmp_path):
     assert len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
 
 
+V0_PARAMS = {
+    "id": qualify.REFERENCE_MODEL_ID,
+    "state": "loaded",
+    "max_context_length": 32768,
+    "arch": "llama",
+    "quantization": "Q4_K_M",
+}
+
+
+def _patch_probe(monkeypatch, v0_entry=None, usage=None, ids=None):
+    ids = ids if ids is not None else [qualify.REFERENCE_MODEL_ID]
+    monkeypatch.setattr(
+        qualify, "_get_json",
+        lambda url: (
+            {"data": [{"id": i} for i in ids]}
+            if url.endswith("/v1/models")
+            else {"data": [v0_entry if v0_entry is not None else V0_PARAMS]}
+        ),
+    )
+    monkeypatch.setattr(
+        qualify, "_post_json", lambda url, payload, timeout: {"usage": usage or {"prompt_tokens": 7}}
+    )
+
+
 def test_probe_host_requires_exact_model(monkeypatch):
-    """V3-FIX-024: the exact reference model id must be loaded."""
-    models = {"data": [{"id": "some-other-model"}]}
-    monkeypatch.setattr(qualify, "_get_json", lambda url: models)
+    """Step 5: the exact reference model id must be loaded."""
+    _patch_probe(monkeypatch, ids=["some-other-model"])
     with pytest.raises(qualify.QualificationError, match="not loaded"):
+        qualify.probe_host("lm-studio")
+
+
+def test_probe_host_requires_measured_context(monkeypatch):
+    """Step 5: context limit is measured, not assumed; a short window blocks."""
+    _patch_probe(monkeypatch, v0_entry={**V0_PARAMS, "max_context_length": 8192})
+    with pytest.raises(qualify.QualificationError, match="context limit"):
+        qualify.probe_host("lm-studio")
+
+
+def test_probe_host_requires_param_endpoint(monkeypatch):
+    """Step 5: without the parameter endpoint the campaign is blocked."""
+    def no_v0(url):
+        if "/api/v0/" in url:
+            raise OSError("not found")
+        return {"data": [{"id": qualify.REFERENCE_MODEL_ID}]}
+
+    monkeypatch.setattr(qualify, "_get_json", no_v0)
+    with pytest.raises(qualify.QualificationError, match="parameter probe"):
+        qualify.probe_host("lm-studio")
+
+
+def test_probe_host_requires_usage_result(monkeypatch):
+    """Step 5: the diagnostic completion must return a valid usage result."""
+    _patch_probe(monkeypatch, usage={"prompt_tokens": 0})
+    with pytest.raises(qualify.QualificationError, match="tokenization"):
         qualify.probe_host("lm-studio")
 
 
@@ -32,8 +81,10 @@ def test_probe_host_diagnostic_completion(monkeypatch):
     calls = []
 
     def fake_get(url):
-        calls.append("/v1/models")
-        return {"data": [{"id": qualify.REFERENCE_MODEL_ID}]}
+        calls.append(url.rsplit("/", 2)[-2])
+        if url.endswith("/v1/models"):
+            return {"data": [{"id": qualify.REFERENCE_MODEL_ID}]}
+        return {"data": [V0_PARAMS]}
 
     def fake_post(url, payload, timeout):
         calls.append("/v1/chat/completions")
@@ -44,7 +95,10 @@ def test_probe_host_diagnostic_completion(monkeypatch):
     probe = qualify.probe_host("lm-studio")
     assert "/v1/chat/completions" in calls
     assert probe["id"] == qualify.REFERENCE_MODEL_ID
-    assert probe["context_window_tokens"] == 32768
+    assert probe["context_window_tokens_measured"] == 32768
+    assert probe["context_window_tokens_required"] == 32768
+    assert probe["model_params"]["quantization"] == "Q4_K_M"
+    assert probe["cloud_fallback"] is False
     assert probe["probe_prompt_tokens"] == 7
 
 
@@ -112,7 +166,10 @@ def test_live_http_probe():
     """Full HTTP path against a stub LM Studio server."""
     class Stub(BaseHTTPRequestHandler):
         def do_GET(self):
-            body = json.dumps({"data": [{"id": qualify.REFERENCE_MODEL_ID}]}).encode()
+            if "/api/v0/" in self.path:
+                body = json.dumps({"data": [V0_PARAMS]}).encode()
+            else:
+                body = json.dumps({"data": [{"id": qualify.REFERENCE_MODEL_ID}]}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
