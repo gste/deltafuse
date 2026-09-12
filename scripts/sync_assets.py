@@ -10,6 +10,13 @@ ships inside the wheel and is re-verified at runtime. Run before building:
 V3-FIX-022: `--check` is read-only. It generates the bundle into a temporary
 directory, compares the manifest with the committed one and reports drift
 without ever touching src/deltafuse/assets.
+
+QF-009: `sync` is atomic. The new bundle is generated into a temporary
+sibling directory, self-verified (manifest + SHA-256 per file) and only then
+swapped in via renames with rollback. Any failure — generation, verification
+or swap — leaves the previous bundle byte-for-byte intact; stale
+`assets.next-*` / `assets.prev-*` directories from crashed runs are cleaned
+at startup and never swapped in without verification.
 """
 
 from __future__ import annotations
@@ -17,9 +24,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -59,22 +68,73 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
     return files, problems
 
 
+# QF-009: module-level alias so tests can inject rename failures.
+_rename = os.rename
+
+
+def _cleanup_stale(parent: Path) -> None:
+    """Remove temp dirs left behind by crashed runs."""
+    for pattern in ("assets.next-*", "assets.prev-*"):
+        for stale in parent.glob(pattern):
+            shutil.rmtree(stale, ignore_errors=True)
+
+
+def _verify_bundle(bundle: Path) -> None:
+    """Self-check the generated bundle: manifest parses, files match hashes."""
+    manifest_path = bundle / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for rel, digest in sorted(manifest["files"].items()):
+        path = bundle / rel
+        if not path.is_file():
+            raise RuntimeError(f"generated bundle is missing {rel}")
+        if _hash(path) != digest:
+            raise RuntimeError(f"generated bundle hash mismatch: {rel}")
+
+
+def _swap_in(new_dir: Path, target: Path) -> None:
+    """Atomic directory swap with rollback (QF-009).
+
+    os.replace cannot replace a non-empty directory on Windows, so the swap
+    is: target -> prev, new -> target; on failure prev -> target restores the
+    previous bundle byte-for-byte.
+    """
+    prev = target.parent / f"assets.prev-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    had_previous = target.exists()
+    if had_previous:
+        _rename(target, prev)
+    try:
+        _rename(new_dir, target)
+    except Exception as ex:
+        if had_previous and prev.exists():
+            _rename(prev, target)  # rollback
+        raise RuntimeError(f"bundle swap failed; previous bundle restored: {ex}") from ex
+    if had_previous:
+        shutil.rmtree(prev, ignore_errors=True)
+
+
 def sync() -> list[str]:
-    problems: list[str] = []
-    if ASSETS.exists():
-        shutil.rmtree(ASSETS)
-    files, problems = _generate(ASSETS)
-    manifest = {
-        "schema_version": SCHEMA_VERSION,
-        "generated_by": "scripts/sync_assets.py",
-        "canonical": "process/**",
-        "files": files,
-    }
-    manifest_path = ASSETS / "manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8"
-    )
-    print(f"bundle: {len(files)} assets -> {manifest_path.relative_to(REPO)}")
+    parent = ASSETS.parent
+    _cleanup_stale(parent)
+    next_dir = parent / f"assets.next-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        files, problems = _generate(next_dir)
+        if problems:
+            shutil.rmtree(next_dir, ignore_errors=True)
+            return problems
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "generated_by": "scripts/sync_assets.py",
+            "canonical": "process/**",
+            "files": files,
+        }
+        manifest_text = json.dumps(manifest, sort_keys=True, indent=2) + "\n"
+        (next_dir / "manifest.json").write_text(manifest_text, encoding="utf-8")
+        _verify_bundle(next_dir)  # never swap an unverified bundle
+        _swap_in(next_dir, ASSETS)
+    except Exception:
+        shutil.rmtree(next_dir, ignore_errors=True)  # no temp garbage
+        raise
+    print(f"bundle: {len(files)} assets -> {ASSETS.relative_to(REPO)}")
     return problems
 
 
