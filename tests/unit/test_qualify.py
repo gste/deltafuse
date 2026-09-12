@@ -168,6 +168,10 @@ def test_score_product_report_satisfies_thresholds_shape(tmp_path, repo_root):
     assert all("unmeasured" not in f for f in failures)
 
     # One failing check must surface in T1 with the exact count.
+    failing_before = sum(
+        int(row.get("checks_total") or 0) - int(row.get("checks_passed") or 0)
+        for row in (report.get("stages") or {}).values()
+    )
     forged = dict(report)
     stages = dict(report.get("stages") or {})
     first = next(iter(stages))
@@ -179,7 +183,7 @@ def test_score_product_report_satisfies_thresholds_shape(tmp_path, repo_root):
     forged["stages"] = stages
     verdict2, failures2 = qualify.apply_thresholds(forged, metrics)
     t1 = next(f for f in failures2 if f.startswith("T1"))
-    assert "correctness_failed=1" in t1
+    assert f"correctness_failed={failing_before + 1}" in t1
 
 
 def test_missing_measurement_fails_closed():
