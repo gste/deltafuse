@@ -76,43 +76,84 @@ def _attest(value, provenance: str, method: str | None = None,
 
 
 def _probe_tokenizer(base_url: str) -> dict:
-    """QF-007: discover the host tokenize endpoint and fingerprint it.
+    """QF-015: fail-closed tokenizer probe — a release campaign REQUIRES a
+    working host tokenize endpoint.
 
-    - endpoint absent (connection error / HTTP 404): honest documented
-      fallback (`chars-div-4-fallback`, fingerprint null);
-    - endpoint present but failing/garbage: blocking QualificationError —
-      the campaign must not silently degrade its T4 measurement.
+    - endpoint absent (connection error / timeout / HTTP 404) and endpoint
+      present but failing/garbage/invalid-count all raise QualificationError:
+      the campaign stays PENDING before the first Worker call. The old
+      `chars-div-4-fallback` path is gone; an estimate can never support a
+      release pass.
     """
     import urllib.error
+
+    def blocked(reason: str) -> QualificationError:
+        return QualificationError(
+            f"tokenizer endpoint unavailable: {reason}; release qualification "
+            f"requires a measured host tokenizer (POST {base_url}/api/v0/tokenize)"
+        )
 
     try:
         data = _post_json(
             f"{base_url}/api/v0/tokenize", {"input": CALIBRATION_TEXT}, timeout=20
         )
     except urllib.error.HTTPError as ex:
-        if ex.code == 404:
-            return _attest(
-                "chars-div-4-fallback", "measured",
-                method="POST /api/v0/tokenize (endpoint absent: HTTP 404)",
-                fingerprint=None,
-            )
-        raise QualificationError(f"tokenizer endpoint failed: HTTP {ex.code}") from ex
+        raise blocked(f"HTTP {ex.code}") from ex
     except Exception as ex:
-        return _attest(
-            "chars-div-4-fallback", "measured",
-            method=f"POST /api/v0/tokenize (endpoint absent: {type(ex).__name__})",
-            fingerprint=None,
-        )
+        raise blocked(f"{type(ex).__name__}") from ex
     tokens = data.get("tokens") if isinstance(data, dict) else None
-    if not isinstance(tokens, list):
-        raise QualificationError(
-            f"tokenizer endpoint returned garbage: {str(data)[:120]}"
-        )
-    fingerprint = hashlib.sha256(json.dumps(tokens).encode("utf-8")).hexdigest()
+    if isinstance(tokens, list):
+        count = len(tokens)
+    elif isinstance(tokens, int) and not isinstance(tokens, bool) and tokens >= 0:
+        count = tokens
+    else:
+        raise blocked(f"garbage or invalid token answer: {str(data)[:120]}")
+    fingerprint = hashlib.sha256(
+        json.dumps(tokens if isinstance(tokens, list) else count).encode("utf-8")
+    ).hexdigest()
     return _attest(
         "host-tokenize", "measured",
         method="POST /api/v0/tokenize (endpoint discovered)",
         fingerprint=fingerprint,
+        calibration_tokens=count,
+    )
+
+
+# QF-015: documented consistency allowance between the raw tokenizer count of
+# CALIBRATION_TEXT and the diagnostic completion usage on the same text; the
+# chat template adds the difference (see backlog/product/v3/thresholds.md).
+TOKENIZER_CONSISTENCY_ALLOWANCE = 48
+
+
+def _assert_tokenizer_consistency(base_url: str, model: str, calibration_tokens: int) -> None:
+    """QF-015: the diagnostic completion usage must agree with the tokenizer."""
+    probe = _post_json(
+        f"{base_url}/v1/chat/completions",
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": CALIBRATION_TEXT}],
+            "max_tokens": 1,
+            "temperature": 0,
+        },
+        timeout=60,
+    )
+    usage = (probe.get("usage") or {}).get("prompt_tokens")
+    low = calibration_tokens
+    high = calibration_tokens + TOKENIZER_CONSISTENCY_ALLOWANCE
+    if not isinstance(usage, int) or isinstance(usage, bool) or not low <= usage <= high:
+        raise QualificationError(
+            f"tokenizer consistency check failed: tokenizer counted "
+            f"{calibration_tokens} tokens but completion usage was {usage!r} "
+            f"(allowed {low}..{high})"
+        )
+
+
+def tokenizer_fingerprint_matches(expected, actual) -> bool:
+    """QF-015: tokenizer drift invalidates the campaign."""
+    return (
+        isinstance(expected, str)
+        and isinstance(actual, str)
+        and expected == actual
     )
 
 
@@ -188,7 +229,7 @@ def _host_tokenize(base_url: str, text: str) -> int | None:
         tokens = data.get("tokens") if isinstance(data, dict) else None
         if isinstance(tokens, list):
             count = len(tokens)
-        elif isinstance(tokens, int):
+        elif isinstance(tokens, int) and not isinstance(tokens, bool) and tokens >= 0:
             count = tokens
         else:
             return None
@@ -489,6 +530,13 @@ def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
             f"diagnostic completion returned no valid tokenization result: usage={usage!r}"
         )
 
+    # QF-015: the tokenizer is probed fail-closed (absent = blocked) and its
+    # counts must agree with the completion usage on the calibration text.
+    tokenizer = _probe_tokenizer(base_url)
+    _assert_tokenizer_consistency(
+        base_url, REFERENCE_MODEL_ID, tokenizer["calibration_tokens"]
+    )
+
     return {
         # QF-007: every mandatory field is provenance-tagged (measured /
         # declared), attested by attest_manifest_model before the manifest
@@ -513,7 +561,7 @@ def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
         ),
         "probe_prompt_tokens": _attest(prompt_tokens, "measured",
                                        method="diagnostic completion usage"),
-        "tokenizer": _probe_tokenizer(base_url),
+        "tokenizer": tokenizer,
         # The absence of a cloud fallback is proved by runner construction,
         # not by a measurement (test_no_second_transport). It is published as
         # a declared invariant, never as a fact.
@@ -942,11 +990,16 @@ def drive_worker(
         framework_text = system + "".join(
             m["content"] for m in message_meta if m["origin"] == "framework"
         )
+        # QF-015: framework measurement states — host-tokenize (measured) or
+        # estimated-nonrelease (diagnostics only, never a pass). `unavailable`
+        # is a blocking state handled by the probe before any Worker call.
         host_tokens = _host_tokenize(base_url, framework_text)
-        framework_tokens = (
-            host_tokens if host_tokens is not None else framework_chars // 4
-        )
-        framework_method = "host-tokenize" if host_tokens is not None else "chars-div-4"
+        if isinstance(host_tokens, int) and host_tokens > 0:
+            framework_tokens, framework_method = host_tokens, "host-tokenize"
+        else:
+            framework_tokens, framework_method = (
+                framework_chars // 4, "estimated-nonrelease"
+            )
         messages.append({"role": "assistant", "content": turn["content"]})
         action = parse_action(turn["content"])
         tool = str(action.get("tool"))
@@ -1067,8 +1120,9 @@ def _final_metrics(
         "framework_input_chars_max": max(fw_chars) if fw_chars else None,
         "framework_input_tokens_method": (
             "host-tokenize" if fw_methods == {"host-tokenize"}
-            else "mixed" if len(fw_methods) > 1 and "host-tokenize" in fw_methods
-            else "chars-div-4"
+            else "estimated-nonrelease" if fw_methods == {"estimated-nonrelease"}
+            else "unavailable" if fw_methods == {"unavailable"}
+            else "mixed"
         ),
         "max_unique_files": max((c["unique_files"] for c in calls), default=0),
         "hallucinated_paths": classification["hallucinated"],
@@ -1181,6 +1235,14 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     # QF-006: exact framework characters must be present (provenance-based).
     if not isinstance(fw_chars, int):
         failures.append("T4 framework_input_chars=unmeasured")
+    # QF-015: the framework token measurement must come from the host
+    # tokenizer; estimates and unavailable states never support a pass.
+    method = metrics.get("framework_input_tokens_method")
+    if method != "host-tokenize":
+        failures.append(
+            f"T4 framework_input_tokens={method or 'unmeasured'} "
+            "(release requires a measured host tokenizer)"
+        )
     # T5: unique files per call (max across calls).
     unique = metrics.get("max_unique_files")
     if not isinstance(unique, int):
@@ -1841,6 +1903,20 @@ def main_with_args(argv: list[str] | None = None) -> int:
             v["verdict"] == "pass" for v in manifest["case_verdicts"].values()
         )
         manifest["verdict"] = "pass" if all_cases_pass and complete else "fail"
+    # QF-015: tokenizer fingerprint drift invalidates the campaign.
+    expected_fp = (model_probe.get("tokenizer") or {}).get("fingerprint")
+    try:
+        actual_fp = _probe_tokenizer(HOST_BASE_URL).get("fingerprint")
+    except QualificationError:
+        actual_fp = None
+    fingerprint_ok = tokenizer_fingerprint_matches(expected_fp, actual_fp)
+    manifest["tokenizer_fingerprint_match"] = _attest(
+        fingerprint_ok, "measured",
+        method="POST /api/v0/tokenize calibration before vs after campaign",
+    )
+    if not fingerprint_ok:
+        manifest["verdict"] = "fail"
+        print("tokenizer fingerprint drifted; campaign invalidated", file=sys.stderr)
     # QF-013: a non-isolated campaign can never produce a release pass.
     apply_executor_verdict_cap(manifest, executor.kind)
     try:

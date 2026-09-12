@@ -106,6 +106,7 @@ def _clean_metrics():
         "context_peak_tokens": 1000,
         "framework_input_tokens_max": 100,
         "framework_input_chars_max": 400,
+        "framework_input_tokens_method": "host-tokenize",
         "max_unique_files": 1,
         "hallucinated_paths": 0,
         "envelope_violations": 0,

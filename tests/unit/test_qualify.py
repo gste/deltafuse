@@ -136,6 +136,7 @@ def test_thresholds_t1_to_t8():
     good_metrics = {
         "context_peak_tokens": 30000,
         "framework_input_tokens_max": 16000,
+        "framework_input_tokens_method": "host-tokenize",
         "max_unique_files": 20,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
@@ -239,6 +240,7 @@ def test_score_product_report_satisfies_thresholds_shape(tmp_path, repo_root):
     metrics = {
         "context_peak_tokens": 10000,
         "framework_input_tokens_max": 8000,
+        "framework_input_tokens_method": "host-tokenize",
         "max_unique_files": 10,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
@@ -356,6 +358,7 @@ def _passing_report_and_metrics():
     metrics = {
         "context_peak_tokens": 20000,
         "framework_input_tokens_max": 12000,
+        "framework_input_tokens_method": "host-tokenize",
         "max_unique_files": 12,
         "hallucinated_paths": 0,
         "envelope_violations": 0,
@@ -1057,7 +1060,8 @@ def test_t4_framework_tokens_method_recorded(tmp_path, monkeypatch):
     monkeypatch.setattr(qualify, "_host_tokenize", lambda base_url, text: None)
     metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "sys")
     for call in metrics["calls"]:
-        assert call["framework_input_tokens_method"] == "chars-div-4"
+        # QF-015: the estimate survives only as estimated-nonrelease
+        assert call["framework_input_tokens_method"] == "estimated-nonrelease"
         assert call["framework_input_tokens"] == call["framework_input_chars"] // 4
 
 
@@ -1161,7 +1165,7 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
         qualify, "provenance",
         lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
     )
-    _patch_probe(monkeypatch)
+    _patch_probe(monkeypatch, tokens=[1, 2])
 
     calls = {"n": 0}
 
@@ -1285,12 +1289,12 @@ def test_tokenizer_endpoint_garbage_blocks_campaign(monkeypatch):
         qualify.probe_host("lm-studio")
 
 
-def test_tokenizer_absent_records_fallback(monkeypatch):
-    """QF-007: absent endpoint -> honest fallback, fingerprint null, no error."""
-    probe = _full_probe(monkeypatch, tokens=None)
-    tokenizer = probe["tokenizer"]
-    assert tokenizer["value"] == "chars-div-4-fallback"
-    assert tokenizer["fingerprint"] is None
+def test_tokenizer_absent_blocks_campaign(monkeypatch):
+    """QF-015: an absent tokenize endpoint blocks the campaign — the old
+    `chars-div-4-fallback` (labelled `measured`) is removed."""
+    _patch_probe(monkeypatch, tokens=None)
+    with pytest.raises(qualify.QualificationError, match="tokenizer"):
+        qualify.probe_host("lm-studio")
 
 
 def test_no_second_transport():
