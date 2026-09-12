@@ -2,12 +2,15 @@
 
 Drives the reference qualification described in
 backlog/product/v3/thresholds.md: N clean runs per release case on the
-reference 35B A3B worker through the configured host, applying absolute
-thresholds to every run and to the medians.
+reference 35B A3B worker through the configured host (LM Studio), applying
+absolute thresholds T1-T8 to every run and to the medians.
 
-The reference model runs require the host (LM Studio with ornith-1.5-35b-a3b,
-context limit 32768) — this script never fabricates results. Without the host
-it still validates the report structure and prints what is missing.
+The runner creates a clean bench sandbox per run, probes the host for the
+exact reference model, drives the Worker through a restricted tool loop
+(shell = deltafuse/pytest/git only; file writes stay inside the sandbox),
+scores the result with the bench pack, and records per-run reports plus a
+campaign manifest. It never fabricates results: without the reference host it
+prints what is missing and exits pending (V3-FIX-001).
 
 Usage:
     python scripts/qualify.py --host lm-studio --cases M01-cooldown M02-policy-stats M03-adversarial
@@ -20,18 +23,28 @@ import json
 import statistics
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "src"))
+
 THRESHOLDS_DOC = REPO / "backlog" / "product" / "v3" / "thresholds.md"
 RUNS_DIR = REPO / "bench" / "runs"
+CASES_ROOT = REPO / "process" / "bench" / "cases"
+
+REFERENCE_MODEL_ID = "ornith-1.5-35b-a3b"
+HOST_BASE_URL = "http://127.0.0.1:1234"
+CONTEXT_WINDOW_TOKENS = 32768
+MAX_WORKER_TURNS = 120
+TURN_TIMEOUT_S = 240
 
 ABSOLUTE = {
     "correctness_failed": 0,
     "stages_completed": 7,
     "gate_retries_max": 2,
-    "context_peak_tokens_max": 32768,
+    "context_peak_tokens_max": CONTEXT_WINDOW_TOKENS,
     "framework_input_tokens_max": 16000,
     "max_unique_files": 24,
     "hallucinated_paths": 0,
@@ -39,34 +52,362 @@ ABSOLUTE = {
     "evidence_authentic": True,
 }
 
+ALLOWED_SHELL_PREFIXES = (
+    "deltafuse ",
+    "python -m pytest",
+    "pytest",
+    "git status",
+    "git diff",
+    "git log",
+)
 
-def host_available(host: str) -> bool:
-    """The reference host must answer before any run is attempted."""
+
+class QualificationError(Exception):
+    """Fail-closed qualification abort."""
+
+
+# ---------------------------------------------------------------- HTTP host
+
+
+def _http_json(path: str, payload: dict | None = None, timeout: int = 10) -> dict:
+    url = f"{HOST_BASE_URL}{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(url, data=data, method="POST" if data else "GET")
+    if data:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
+    """V3-FIX-024: fail-closed host probe.
+
+    Requires: /v1/models answers, the exact reference model id is loaded, and
+    a diagnostic chat completion succeeds. Returns the immutable host/model
+    parameters recorded into the manifest.
+    """
     if host != "lm-studio":
-        return False
+        raise QualificationError(f"unsupported host {host!r}; expected 'lm-studio'")
     try:
-        probe = subprocess.run(
-            ["curl", "-sf", "http://127.0.0.1:1234/v1/models"],
-            capture_output=True,
-            timeout=5,
+        models = _get_json(f"{base_url}/v1/models")
+    except Exception as ex:
+        raise QualificationError(f"host probe failed: {ex}") from ex
+    ids = [str(row.get("id")) for row in models.get("data", [])]
+    if REFERENCE_MODEL_ID not in ids:
+        raise QualificationError(
+            f"reference model {REFERENCE_MODEL_ID!r} is not loaded; loaded: {ids}"
         )
-    except Exception:
-        return False
-    return probe.returncode == 0
+    try:
+        probe = _post_json(
+            f"{base_url}/v1/chat/completions",
+            {
+                "model": REFERENCE_MODEL_ID,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+                "temperature": 0,
+            },
+            timeout=60,
+        )
+    except Exception as ex:
+        raise QualificationError(f"diagnostic completion failed: {ex}") from ex
+    usage = probe.get("usage") or {}
+    return {
+        "id": REFERENCE_MODEL_ID,
+        "host": host,
+        "host_base_url": base_url,
+        "context_window_tokens": CONTEXT_WINDOW_TOKENS,
+        "loaded_models": ids,
+        "probe_prompt_tokens": usage.get("prompt_tokens"),
+    }
 
 
-def run_case(case: str, host: str, index: int) -> dict:
-    """One clean run. Implemented on the host machine; fails loudly here."""
-    run_id = f"{case}-run{index}"
-    raise SystemExit(
-        f"reference run {run_id} requires the {host} host with the reference "
-        "35B A3B worker; this machine has no such host — see "
-        "backlog/product/v3/thresholds.md for the runbook"
+# ------------------------------------------------------------- git identity
+
+
+def framework_commit() -> str:
+    """V3-FIX-023: resolve the framework commit fail-closed."""
+    proc = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=REPO
     )
+    if proc.returncode != 0:
+        raise QualificationError(
+            f"cannot determine framework commit (git rev-parse exit {proc.returncode})"
+        )
+    sha = proc.stdout.strip()
+    if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+        raise QualificationError(f"framework commit is not a full SHA: {sha!r}")
+    return sha
 
 
-def median(values: list[float]) -> float | None:
-    return statistics.median(values) if values else None
+# ------------------------------------------------------------- worker loop
+
+
+class SandboxIO:
+    """Restricted Worker tool surface: read/write inside the sandbox only."""
+
+    def __init__(self, root: Path):
+        self.root = root.resolve()
+        self.hallucinated_paths = 0
+        self.envelope_violations = 0
+        self.unique_files: set[str] = set()
+
+    def _resolve(self, rel: str) -> Path | None:
+        if not rel or rel.startswith(("/", "\\")) or ":" in rel[:3]:
+            return None
+        path = (self.root / rel).resolve()
+        try:
+            path.relative_to(self.root)
+        except ValueError:
+            return None
+        return path
+
+    def read_file(self, rel: str) -> str:
+        path = self._resolve(rel)
+        if path is None or not path.is_file():
+            self.hallucinated_paths += 1
+            return f"ERROR: no such file: {rel}"
+        self.unique_files.add(path.relative_to(self.root).as_posix())
+        return path.read_text(encoding="utf-8", errors="replace")[:60000]
+
+    def write_file(self, rel: str, content: str) -> str:
+        path = self._resolve(rel)
+        if path is None:
+            self.envelope_violations += 1
+            return "ERROR: path escapes the sandbox"
+        rel_posix = path.relative_to(self.root).as_posix()
+        if rel_posix.startswith(".deltafuse/"):
+            self.envelope_violations += 1
+            return "ERROR: Core-owned path; use deltafuse commands"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        self.unique_files.add(rel_posix)
+        return f"OK: wrote {rel_posix} ({len(content)} bytes)"
+
+    def shell(self, command: str, timeout: int = 300) -> str:
+        if not command.startswith(ALLOWED_SHELL_PREFIXES):
+            self.envelope_violations += 1
+            return f"ERROR: command not allowed: {command[:120]}"
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(self.root),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return f"ERROR: command timed out after {timeout}s"
+        out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
+        return f"exit={proc.returncode}\n{out}"
+
+
+def _get_json(url: str) -> dict:
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _post_json(url: str, payload: dict, timeout: int) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def worker_turn(base_url: str, model: str, messages: list[dict]) -> dict:
+    """One Worker call; returns assistant content plus token usage."""
+    data = _post_json(
+        f"{base_url}/v1/chat/completions",
+        {
+            "model": model,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": 2048,
+        },
+        timeout=TURN_TIMEOUT_S,
+    )
+    choice = (data.get("choices") or [{}])[0]
+    content = str(((choice.get("message") or {}).get("content")) or "")
+    usage = data.get("usage") or {}
+    return {"content": content, "prompt_tokens": int(usage.get("prompt_tokens") or 0)}
+
+
+def parse_action(content: str) -> dict:
+    text = content.strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        return {"tool": "done", "reason": "no JSON action"}
+    try:
+        action = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return {"tool": "done", "reason": "unparseable action"}
+    return action if isinstance(action, dict) else {"tool": "done", "reason": "not an object"}
+
+
+def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system: str) -> dict:
+    """Drive the Worker agent loop in one clean sandbox; return call metrics."""
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Begin the case {case_id}. Run `deltafuse next` first."},
+    ]
+    io = SandboxIO(sandbox)
+    calls: list[dict] = []
+    for _ in range(MAX_WORKER_TURNS):
+        turn = worker_turn(base_url, model, messages)
+        prompt_tokens = turn["prompt_tokens"]
+        calls.append(
+            {
+                "input_tokens": prompt_tokens,
+                "framework_input_tokens": len(system.encode("utf-8")) // 4,
+                "unique_files": len(io.unique_files),
+                "hallucinated_paths": io.hallucinated_paths,
+                "envelope_violations": io.envelope_violations,
+            }
+        )
+        messages.append({"role": "assistant", "content": turn["content"]})
+        action = parse_action(turn["content"])
+        tool = str(action.get("tool"))
+        if tool == "done":
+            break
+        if tool == "read_file":
+            result = io.read_file(str(action.get("path")))
+        elif tool == "write_file":
+            result = io.write_file(str(action.get("path")), str(action.get("content")))
+        elif tool == "shell":
+            result = io.shell(str(action.get("command")))
+        else:
+            result = f"ERROR: unknown tool {tool}"
+        messages.append({"role": "user", "content": result[:6000]})
+    return {
+        "calls": calls,
+        "context_peak_tokens": max((c["input_tokens"] for c in calls), default=0),
+        "framework_input_tokens_max": max(
+            (c["framework_input_tokens"] for c in calls), default=0
+        ),
+        "max_unique_files": max((c["unique_files"] for c in calls), default=0),
+        "hallucinated_paths": io.hallucinated_paths,
+        "envelope_violations": io.envelope_violations,
+    }
+
+
+# -------------------------------------------------------------- thresholds
+
+
+def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
+    """T1-T8 from backlog/product/v3/thresholds.md against one run."""
+    failures: list[str] = []
+    correctness_failed = sum(
+        int((row.get("checks") or {}).get("failed") or 0)
+        for row in (report.get("stages") or {}).values()
+    )
+    if correctness_failed != ABSOLUTE["correctness_failed"]:
+        failures.append(f"T1 correctness_failed={correctness_failed}")
+    stages = report.get("stages") or {}
+    completed = sum(1 for row in stages.values() if row.get("pass"))
+    if completed < ABSOLUTE["stages_completed"]:
+        failures.append(f"T2 stages_completed={completed}/7")
+    retries = int((report.get("retries") or {}).get("check_gate") or 0)
+    if retries > ABSOLUTE["gate_retries_max"]:
+        failures.append(f"T3 gate_retries={retries}")
+    peak = int(metrics["context_peak_tokens"])
+    if peak > ABSOLUTE["context_peak_tokens_max"]:
+        failures.append(f"T4 context_peak_tokens={peak}")
+    fw = int(metrics["framework_input_tokens_max"])
+    if fw > ABSOLUTE["framework_input_tokens_max"]:
+        failures.append(f"T4 framework_input_tokens={fw}")
+    if metrics["max_unique_files"] > ABSOLUTE["max_unique_files"]:
+        failures.append(f"T5 max_unique_files={metrics['max_unique_files']}")
+    if metrics["hallucinated_paths"] != ABSOLUTE["hallucinated_paths"]:
+        failures.append(f"T6 hallucinated_paths={metrics['hallucinated_paths']}")
+    if metrics["envelope_violations"] != ABSOLUTE["envelope_violations"]:
+        failures.append(f"T7 envelope_violations={metrics['envelope_violations']}")
+    defense = report.get("defense_checks") or {}
+    synthetic = [
+        k
+        for k in ("synthetic_evidence", "journal_forgery")
+        if k in defense and not defense[k]["pass"]
+    ]
+    if synthetic:
+        failures.append(f"T8 evidence_authentic=false ({','.join(synthetic)})")
+    if not report.get("pass"):
+        failures.append(f"T1/T2 report.first_fail={report.get('first_fail')}")
+    return (not failures), failures
+
+
+def medians(runs: list[dict]) -> dict:
+    def med(key: str) -> float | None:
+        values = [r[key] for r in runs if isinstance(r.get(key), (int, float))]
+        return round(float(statistics.median(values)), 1) if values else None
+
+    return {
+        "correctness": med("correctness"),
+        "context_peak_tokens": med("context_peak_tokens"),
+        "gate_retries": med("gate_retries"),
+        "max_unique_files": med("max_unique_files"),
+    }
+
+
+# ------------------------------------------------------------------- runner
+
+
+def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, commit: str) -> dict:
+    """One clean run: sandbox -> worker loop -> score -> thresholds."""
+    from deltafuse.bench.init_product import init_bench_product, format_worker_start_prompt
+    from deltafuse.bench.loader import load_case
+    from deltafuse.bench.score import score_product
+
+    run_id = f"{campaign_id}-{case_id}-run{index}"
+    sandbox = RUNS_DIR / campaign_id / run_id / "sandbox"
+    if sandbox.exists():
+        raise QualificationError(f"sandbox already exists: {sandbox}")
+    init_bench_product(case_id, sandbox, framework_root=REPO)
+
+    case = load_case(case_id, str(CASES_ROOT), oracle=True)
+    bench_md = (sandbox / "BENCH.md").read_text(encoding="utf-8")
+    system = (
+        "You are the DeltaFuse Worker, an autonomous agent completing a "
+        "software change end to end. You act only through JSON tool calls.\n\n"
+        "Available tools:\n"
+        '{"tool": "shell", "command": "<deltafuse|pytest|python -m pytest|git status/diff/log ...>"}\n'
+        '{"tool": "read_file", "path": "<relative path>"}\n'
+        '{"tool": "write_file", "path": "<relative path>", "content": "<full content>"}\n'
+        '{"tool": "done", "reason": "<why the change is complete or blocked>"}\n\n'
+        "Rules: one JSON object per reply, nothing else. State transitions go "
+        "through the Core (`deltafuse advance`, `deltafuse state`). Never edit "
+        ".deltafuse/ files. Finish with {\"tool\": \"done\"} when `deltafuse next` "
+        "reports nothing ready or a done halt.\n\n"
+        f"Worker start prompt:\n{format_worker_start_prompt(json.loads((sandbox / '.deltafuse' / 'bench.yaml').read_text(encoding='utf-8')))}\n\n{bench_md}"
+    )
+    metrics = drive_worker(sandbox, model_probe["host_base_url"], model_probe["id"], case_id, system)
+    report = score_product(sandbox, pack_root=str(CASES_ROOT))
+    verdict, failures = apply_thresholds(report, metrics)
+
+    per_run = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "case": case_id,
+        "framework_commit": commit,
+        "model": model_probe["id"],
+        "verdict": "pass" if verdict else "fail",
+        "threshold_failures": failures,
+        "stages": report.get("stages") or {},
+        "correctness": report.get("correctness"),
+        "gate_retries": int((report.get("retries") or {}).get("check_gate") or 0),
+        "context_peak_tokens": metrics["context_peak_tokens"],
+        "framework_input_tokens_max": metrics["framework_input_tokens_max"],
+        "max_unique_files": metrics["max_unique_files"],
+        "hallucinated_paths": metrics["hallucinated_paths"],
+        "envelope_violations": metrics["envelope_violations"],
+        "calls": metrics["calls"],
+    }
+    run_dir = RUNS_DIR / campaign_id / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "report.json").write_text(
+        json.dumps(per_run, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return per_run
 
 
 def main() -> int:
@@ -74,40 +415,58 @@ def main() -> int:
     ap.add_argument("--host", default="lm-studio")
     ap.add_argument("--cases", nargs="+", default=["M01-cooldown", "M02-policy-stats", "M03-adversarial"])
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--campaign-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     args = ap.parse_args()
 
-    print(f"framework commit: {subprocess.run(['git','rev-parse','HEAD'], capture_output=True, text=True, cwd=REPO).stdout.strip()}")
-    print(f"thresholds: {THRESHOLDS_DOC.relative_to(REPO)}")
-    if not host_available(args.host):
+    commit = framework_commit()
+    print(f"framework commit: {commit}")
+
+    try:
+        model_probe = probe_host(args.host)
+    except QualificationError as ex:
         print(
-            f"PENDING: host '{args.host}' with the reference 35B A3B model is not "
-            "reachable; qualification runs are not executed and no results are "
-            "fabricated. Start LM Studio with ornith-1.5-35b-a3b (context 32768) "
+            f"PENDING: {ex}\n"
+            "Qualification runs are not executed and no results are fabricated. "
+            f"Start LM Studio with {REFERENCE_MODEL_ID} (context {CONTEXT_WINDOW_TOKENS}) "
             "and re-run this script."
         )
         return 2
+    print(f"host probe ok: {model_probe}")
 
-    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    campaign_dir = RUNS_DIR / args.campaign_id
+    campaign_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": 1,
+        "campaign_id": args.campaign_id,
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "host": args.host,
-        "thresholds": ABSOLUTE,
+        "framework": {"commit": commit},
+        "model": model_probe,
+        "thresholds": {"source": "backlog/product/v3/thresholds.md", "absolute": ABSOLUTE},
+        "cases": args.cases,
         "runs": [],
     }
     for case in args.cases:
+        case_runs: list[dict] = []
         for index in range(1, args.runs + 1):
             try:
-                manifest["runs"].append(run_case(case, args.host, index))
-            except SystemExit as exit_exc:
-                print(f"run failed: {exit_exc}")
+                run = run_case(case, index, args.campaign_id, model_probe, commit)
+            except QualificationError as ex:
+                print(f"run failed: {ex}")
                 return 3
-    (RUNS_DIR / "manifest.json").write_text(
+            manifest["runs"].append(run)
+            case_runs.append(run)
+            print(f"{run['run_id']}: {run['verdict']} {run['threshold_failures'] or ''}")
+        print(f"{case} medians: {medians(case_runs)}")
+    (campaign_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(f"runs recorded under {RUNS_DIR}")
+    print(f"campaign recorded under {campaign_dir}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except QualificationError as ex:
+        print(f"QUALIFICATION ERROR: {ex}", file=sys.stderr)
+        sys.exit(3)
