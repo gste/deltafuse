@@ -1,6 +1,35 @@
 {
+  "build_backend": "setuptools 84.0.0",
+  "build_frontend": "pip wheel 25.0.1",
+  "commands": [
+    {
+      "command": "C:\\Users\\ghost\\workspace\\gste\\deltafuse\\.venv\\Scripts\\python.exe -m pip wheel --no-deps -w C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\dist C:\\Users\\ghost\\workspace\\gste\\deltafuse",
+      "rc": 0
+    },
+    {
+      "command": "C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\venv\\Scripts\\python.exe -I -m pip install C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\dist\\deltafuse-3.0.0-py3-none-any.whl",
+      "rc": 0
+    },
+    {
+      "command": "C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\venv\\Scripts\\python.exe -m deltafuse --help",
+      "rc": 0
+    },
+    {
+      "command": "C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\venv\\Scripts\\python.exe -m deltafuse init C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\clean\\product",
+      "rc": 0
+    },
+    {
+      "command": "C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\venv\\Scripts\\python.exe -m deltafuse validate-config C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp61xv7l8r\\clean\\product",
+      "rc": 0
+    }
+  ],
+  "commit": "141c2ae92fdf1ae8689a795a36a83490f19c1688",
+  "created": "2026-09-12T19:51:08Z",
+  "platform": "win32",
+  "python": "3.12.14 (cpython)",
+  "schema_version": 1,
+  "sha256": "bad5ada36c8b8df3e7aad51684a289ef4b737b40bde1e907d66697568635968c",
+  "tree_clean": true,
   "wheel": "deltafuse-3.0.0-py3-none-any.whl",
-  "sha256": "c4bd9ee6bcfca24034683473b91914a8e9bfdbaf516a8c973cfa6cfc7e1043a5",
-  "python": "3.14.3",
-  "platform": "win32"
+  "wheel_size_bytes": 146252
 }

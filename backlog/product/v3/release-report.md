@@ -1,9 +1,9 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `engineering-failed`
+- **Статус:** `engineering-passed / pending reference runs`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-12 (независимая проверка №3; см.
+- **Обновлён:** 2026-09-12 (инженерная переквалификация QF-011; см.
   [qualification fix plan](qualification-fix-plan.md))
 
 ## 1. Референсная конфигурация
@@ -63,6 +63,43 @@ tokenizer provenance не измеряются полностью.
 [qualification-fix-plan.md](qualification-fix-plan.md). Кампания
 `scripts/qualify.py` не принимается для reference qualification до выполнения
 QF-001–QF-011; отсутствие LM Studio отдельно блокирует QF-012.
+
+## 3.1 Инженерная переквалификация после QF-001–QF-010 (2026-09-12)
+
+Все 10 fix-пакетов выполнены отдельными коммитами на ветке
+`feature/2026-09-11-audit`. Переквалификация выполнена на чистом commit
+`141c2ae92fdf1ae8689a795a36a83490f19c1688` (рабочее дерево чистое до и после,
+кроме явно сгенерированного wheel evidence). В ходе переквалификации
+обнаружены и исправлены двумя fix-коммитами два дефекта wheel-install пути:
+
+- `4b17138` installer: forward bundle skills dir in wheel installs —
+  wheel-установка оставляла adapter roots пустыми, `deltafuse validate-layout`
+  падал с 24 missing-skill ошибками;
+- `141c2ae` installer: write generated skills with LF endings — CRLF ломал
+  PowerShell-валидатор (`$`-якорь не совпадает перед `\r\n`).
+
+Окружение: Python 3.12.14 (CPython, uv venv), pip 26.2.1 (venv сборки:
+25.0.1), git 2.45.1.windows.1, Windows 11 10.0.26200 (platform:
+`Windows-11-10.0.26200-SP0`).
+
+| # | Проверка | Команда | Результат |
+|---|---|---|---|
+| 1 | Полный pytest-сьют | `.venv/Scripts/python.exe -m pytest tests` | **449 passed, 0 failed, 1 skipped** (~283s). Skip: `tests/unit/test_spec_style.py::test_optional_pbt_skips_without_local_runner` — RM-031: PBT опционален, Hypothesis не установлен |
+| 2 | PowerShell smoke | `pwsh -File tests/smoke-test.ps1` | rc 0 |
+| 3 | POSIX smoke (Git Bash) | `bash tests/smoke-test.sh` | rc 0 |
+| 4 | Wheel smoke | `pytest tests/integration/test_wheel_smoke.py` | 2 passed; `git status --porcelain` до/после идентичен (QF-010 acceptance) |
+| 5 | Wheel release evidence | `python scripts/wheel_evidence.py --output-dir bench/builds --force` | rc 0; commit `141c2ae…`, wheel sha256 `bad5ada3…`, pip wheel 25.0.1, setuptools 84.0.0 |
+| 6 | Layout validation свежего v3-продукта | wheel `deltafuse init` (tmp) + `deltafuse validate-layout` / `validate-config` / `tests/validate-layout.sh` / `tests/validate-layout.ps1` | все rc 0 |
+| 7 | Legacy runtime paths | `git grep -nE "docs/(init\|todo)/\|schema_version: *2\|compat" -- src scripts process docs` | только intentional: отрицательные формулировки в docs/README, using, bench-кейсы backward-compat (требования кейсов, не adapters) |
+| 8 | Asset bundle drift | `python scripts/sync_assets.py --check` | rc 0 (44 assets) |
+
+POSIX-платформенная ветка (native Linux/`validate-layout.sh` под Linux)
+выполнена через Git Bash; отдельная Linux-машина недоступна — native-прогон
+не выполнен (не блокер, зафиксировано).
+
+**Инженерный блокер снят.** Все обязательные проверки зелёные на чистом
+commit. Оставшаяся работа — reference runs (QF-012) на LM Studio host с
+`ornith-1.5-35b-a3b`; карточка DF3-009 остаётся `blocked` до их выполнения.
 
 ## 4. Критерии закрытия DF3-009
 
