@@ -344,8 +344,20 @@ def check_paths(
     errors: list[str] = []
     steps = [str(env.get("step") or "?") for env in env_list]
     step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
+    core_owned = {
+        "gate-journal.jsonl",
+        "journal-head",
+        "transitions.jsonl",
+        "trusted-keys.yaml",
+    }
     for raw in _unique(rel_paths):
         if raw.startswith(".git/") or is_exempt_path(raw):
+            continue
+        head, _, tail = raw.partition("/")
+        if head == ".deltafuse" and tail in core_owned:
+            errors.append(
+                f"leash: '{raw}' is Core-owned; mutate it only through the deltafuse CLI (DF3-007)"
+            )
             continue
         if _covered_by(raw, env_list) is not None:
             continue

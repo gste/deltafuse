@@ -308,6 +308,9 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
         "---\n\n# Spec Delta\n"
     )
     (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
 
@@ -346,6 +349,9 @@ def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Pat
         .step_analyze()
         .step_specify()
     )
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
 
     _set_slice_capability(builder.change_dir, "system.core", spec_refs=["docs/spec/core.md"])
@@ -856,6 +862,9 @@ def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "targeting") == []
@@ -925,6 +934,9 @@ def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
+    from deltafuse.core.decide import apply_decision
+
+    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "targeting") == []

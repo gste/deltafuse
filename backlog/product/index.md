@@ -2,7 +2,7 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [DF3-007](DF3-007.md) — Human Gate receipts и integrity profiles.
+Брать в работу: [DF3-008](DF3-008.md) — schema v3 и Declare contracts.
 
 Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
@@ -16,8 +16,8 @@
 | [DF3-004](DF3-004.md) | `done` | Core-owned lifecycle transitions |
 | [DF3-005](DF3-005.md) | `done` | Distribution, scaffolding и upgrade |
 | [DF3-006](DF3-006.md) | `done` | Evidence и envelope authority |
-| [DF3-007](DF3-007.md) | `ready` | Human Gate receipts и integrity profiles |
-| [DF3-008](DF3-008.md) | `blocked` | Schema v3 и Declare contracts |
+| [DF3-007](DF3-007.md) | `done` | Human Gate receipts и integrity profiles |
+| [DF3-008](DF3-008.md) | `ready` | Schema v3 и Declare contracts |
 | [DF3-009](DF3-009.md) | `blocked` | Bench, docs и release qualification |
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |

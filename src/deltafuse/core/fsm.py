@@ -738,6 +738,9 @@ def _human_gate_errors(
     spec_delta_file: Path,
 ) -> list[str]:
     errors: list[str] = []
+    from deltafuse.core.receipts import journal_errors as receipt_journal_errors
+
+    errors.extend(receipt_journal_errors(repo_root))
     unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
     if unresolved:
         errors.append(
@@ -751,12 +754,15 @@ def _human_gate_errors(
     spec_status = _spec_delta_status(spec_delta_file)
     if spec_status in TERMINAL_STATUSES:
         rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
-        if not has_click(
+        from deltafuse.core.receipts import has_valid_receipt
+
+        if not has_valid_receipt(
             repo_root,
             kind="spec",
             status=spec_status,
             artifact_id=change_id,
             rel_path=rel,
+            artifact=spec_delta_file,
         ):
             errors.append(
                 f"Gate specified: spec-delta.md is {spec_status} without deltafuse decide"

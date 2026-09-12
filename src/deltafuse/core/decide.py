@@ -9,7 +9,8 @@ import yaml
 
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
-from deltafuse.core.gate_journal import append_click
+from deltafuse.core.gate_journal import TERMINAL_STATUSES
+from deltafuse.core import receipts
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 
@@ -129,13 +130,14 @@ def apply_decision(
         delta.write_text(text, encoding="utf-8")
         written = [_rel(product_root, delta)]
         change_id = _change_id_from_dir(change_dir)
-        append_click(
+        receipts.record_receipt(
             product_root,
             kind="spec",
             status=status,
             rel_path=written[0],
             artifact_id=change_id or change_dir.name,
             change=change_id,
+            artifact=delta,
         )
         change_status = None
         if status == "accepted":
@@ -185,13 +187,14 @@ def apply_decision(
     )
     written = [_rel(product_root, dec_path)]
     dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
-    append_click(
+    receipts.record_receipt(
         product_root,
         kind="decision",
         status=status,
         rel_path=written[0],
         artifact_id=dec_id,
         change=change_id,
+        artifact=dec_path,
     )
     change_dir = None
     if change_id and (start_path / "change.yaml").is_file():

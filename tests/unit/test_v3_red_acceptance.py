@@ -244,7 +244,6 @@ def test_sec02_framework_hash_covers_core_source(tmp_path: Path):
 # ---------------------------------------------------------------- SEC-03 (P0)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec03_gate_journal_is_inside_the_worker_write_boundary():
     """adversarial_worker: a Worker write to ``.deltafuse/gate-journal.jsonl``
     must be a leash violation; today the path is neither exempt nor covered by
