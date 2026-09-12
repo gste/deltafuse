@@ -73,7 +73,7 @@ Analyze повторяется, пока все blocking Decisions не полу
 Этот репозиторий является каноническим framework package:
 
 ```text
-delta-fuse/
+deltafuse/
 ├── docs/             # канонический lifecycle, роли, контекстная модель и rationale
 ├── process/          # исполняемые ресурсы фреймворка
 │   ├── schemas/      # Change, capability, Decision, task, evidence

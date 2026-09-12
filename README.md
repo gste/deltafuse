@@ -73,7 +73,7 @@ Analyze repeats until all blocking Decisions are terminal and global reconciliat
 This repository is the canonical framework package:
 
 ```text
-delta-fuse/
+deltafuse/
 ├── docs/             # canonical lifecycle, roles, context model, and rationale
 ├── process/          # executable framework assets
 │   ├── schemas/      # Change, capability, Decision, task, evidence

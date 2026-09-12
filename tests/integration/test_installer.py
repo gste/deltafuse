@@ -40,6 +40,7 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert cfg["workflow"]["leash"] == "off"
     assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
     workflow = (tmp_path / ".github" / "workflows" / "deltafuse-leash.yml").read_text(encoding="utf-8")
+    assert "vendor/deltafuse" in workflow
     assert "deltafuse leash" in workflow
     assert "pytest" in workflow
     assert "docs/contracts" not in workflow
@@ -78,7 +79,7 @@ def test_idempotent_upgrade_preserves_custom_files(tmp_path: Path, repo_root: Pa
     custom_agents = "# Custom User Agent Config\n"
     (tmp_path / "AGENTS.md").write_text(custom_agents, encoding="utf-8")
 
-    custom_capabilities = """schema_version: 2
+    custom_capabilities = """schema_version: 3
 domains:
   custom_domain:
     summary: Custom user domain
@@ -97,7 +98,7 @@ def test_force_upgrade_with_modified_lock(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
 
     lock_file = tmp_path / ".deltafuse" / "lock.yaml"
-    lock_file.write_text("schema_version: 2\nframework:\n  version: 1.0.0\n  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000\n", encoding="utf-8")
+    lock_file.write_text("schema_version: 3\nframework:\n  version: 1.0.0\n  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000\n", encoding="utf-8")
 
     # Without force: must raise InstallationError
     with pytest.raises(InstallationError, match="A different DeltaFuse lock already exists"):
@@ -133,7 +134,7 @@ def test_install_rejects_invalid_call_width(tmp_path: Path, repo_root: Path):
 
 def _nested_product(tmp_path: Path, repo_root: Path) -> tuple[Path, Path]:
     product = tmp_path / "product"
-    vendor = product / "vendor" / "delta-fuse"
+    vendor = product / "vendor" / "deltafuse"
     (vendor / "docs").mkdir(parents=True)
     (vendor / "scripts").mkdir()
     (vendor / "tests").mkdir()
@@ -158,7 +159,7 @@ def test_nested_checkout_links_adapter_skills(tmp_path: Path, repo_root: Path):
     marker = (product / ".cursor" / "skills" / ".deltafuse-generated.yaml").read_text(encoding="utf-8")
     assert "mode: link" in marker
     lock = yaml.safe_load((product / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["framework"]["source"] == "vendor/delta-fuse"
+    assert lock["framework"]["source"] == "vendor/deltafuse"
     from deltafuse.core.layout import validate_product_layout
     assert validate_product_layout(product) == []
 

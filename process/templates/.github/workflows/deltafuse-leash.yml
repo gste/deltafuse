@@ -23,10 +23,15 @@ jobs:
       - name: Install pinned DeltaFuse
         run: |
           set -e
-          if [ -d delta-fuse ]; then
-            python -m pip install -e ./delta-fuse
+          # Canonical nested path is vendor/deltafuse. Hyphenated dirs are leftover checkouts.
+          if [ -d vendor/deltafuse ]; then
+            python -m pip install -e ./vendor/deltafuse
           elif [ -d vendor/delta-fuse ]; then
             python -m pip install -e ./vendor/delta-fuse
+          elif [ -d deltafuse ]; then
+            python -m pip install -e ./deltafuse
+          elif [ -d delta-fuse ]; then
+            python -m pip install -e ./delta-fuse
           else
             echo "Checkout the framework version pinned in .deltafuse/lock.yaml (submodule or vendor path), then re-run." >&2
             exit 1

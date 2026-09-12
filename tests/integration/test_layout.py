@@ -43,7 +43,7 @@ def test_missing_generated_skill_detected(tmp_path: Path, repo_root: Path):
 
 def test_linked_skill_not_a_symlink_detected(tmp_path: Path, repo_root: Path):
     product = tmp_path / "product"
-    vendor = product / "vendor" / "delta-fuse"
+    vendor = product / "vendor" / "deltafuse"
     (vendor / "docs").mkdir(parents=True)
     (vendor / "scripts").mkdir()
     (vendor / "tests").mkdir()
