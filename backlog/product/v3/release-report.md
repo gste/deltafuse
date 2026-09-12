@@ -30,14 +30,28 @@
 runner из completion plan; референсный host с моделью также недоступен на машине
 разработки. Данные заполняются только фактическими результатами.
 
-## 3. Что уже проверено без модели (2026-09-12)
+## 3. Инженерная квалификация без модели (2026-09-12, completion plan шаг 8)
 
-- Полный сьют: **370 passed, 1 skipped** (`no local PBT runner`).
-- Wheel smoke: `pip wheel` → установка в чистый venv → запуск CLI и `init` на
-  свежем продукте — rc 0; asset bundle с manifest едет внутри wheel.
-- Оба smoke-теста (Git Bash + PowerShell) и layout validation — зелёные.
-- Negative test: артефакт `schema_version` вне v3 получает blocking diagnostic
-  и не конвертируется (`test_contract_v3.py`).
+Выполнено на чистом commit `25551473ad4c07a4c5b1e2fabdd782792f7e6975`
+(ветка `feature/2026-09-11-audit`), platform `win32 / Python 3.14`:
+
+1. Полный pytest-сьют: **~384 passed, 1 skipped** (`no local PBT runner` —
+   Hypothesis не установлен, skip обоснован в тесте).
+2. `tests/smoke-test.ps1` — rc 0.
+3. `tests/smoke-test.sh` (Git Bash) — rc 0.
+4. Wheel smoke: `pip wheel` → установка в чистый venv → CLI `--help`, `init`,
+   `validate-config` без checkout — rc 0; durable build manifest в
+   `bench/builds/`; drift bundle = явный fail, дерево тест не чинит.
+5. Layout validation чистого v3-продукта (sh-валидатор) — rc 0.
+6. Поиск legacy runtime paths: остались только намеренные negative-фикстуры
+   (`schema_version: 2` в тестах fail-closed); bench seed catalogs переведены
+   на v3.
+
+Исключения/skips: один — отсутствие локального PBT runner'а; блокеров нет.
+
+**Инженерный блокер снят:** шаги 1–7 completion plan выполнены и закрыты
+тестами; кампания `scripts/qualify.py` ожидает только референсный host
+(шаг 9).
 
 ## 4. Критерии закрытия DF3-009
 
