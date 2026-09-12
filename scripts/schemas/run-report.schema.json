@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deltafuse.invalid/schemas/run-report.schema.json",
+  "title": "DeltaFuse v3 per-run qualification report",
+  "description": "Per-run disk report per backlog/product/v3/thresholds.md (QF-008).",
+  "type": "object",
+  "required": [
+    "schema_version", "run_id", "case", "verdict", "framework_commit",
+    "model", "threshold_failures", "stages", "calls", "tool_events", "totals"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run_id": { "type": "string" },
+    "case": { "type": "string" },
+    "verdict": { "enum": ["pass", "fail"] },
+    "framework_commit": { "type": "string" },
+    "model": { "type": "string" },
+    "threshold_failures": { "type": "array", "items": { "type": "string" } },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "status", "checks", "gate_retries"],
+        "properties": {
+          "stage": { "type": "string" },
+          "status": { "enum": ["completed", "failed", "skipped", "aborted"] },
+          "checks": {
+            "type": "object",
+            "required": ["passed", "failed"],
+            "properties": {
+              "passed": { "type": "integer" },
+              "failed": { "type": "integer" }
+            }
+          },
+          "gate_retries": { "type": "integer" }
+        }
+      }
+    },
+    "calls": { "type": "array", "items": { "type": "object" } },
+    "tool_events": { "type": "array", "items": { "type": "object" } },
+    "totals": {
+      "type": "object",
+      "required": [
+        "correctness", "gate_retries", "context_peak_tokens",
+        "framework_input_tokens_max", "max_unique_files",
+        "hallucinated_paths", "envelope_violations", "evidence_authentic"
+      ],
+      "properties": {
+        "correctness": {
+          "type": "object",
+          "required": ["passed", "failed"],
+          "properties": {
+            "passed": { "type": ["integer", "null"] },
+            "failed": { "type": ["integer", "null"] }
+          }
+        },
+        "gate_retries": { "type": ["integer", "null"] },
+        "context_peak_tokens": { "type": ["integer", "null"] },
+        "framework_input_tokens_max": { "type": ["integer", "null"] },
+        "max_unique_files": { "type": ["integer", "null"] },
+        "hallucinated_paths": { "type": ["integer", "null"] },
+        "envelope_violations": { "type": ["integer", "null"] },
+        "evidence_authentic": { "type": "boolean" }
+      }
+    },
+    "t7_breakdown": { "type": "object" },
+    "hallucinated_breakdown": { "type": "object" },
+    "framework_input_tokens_method": { "type": "string" },
+    "error": {
+      "type": "object",
+      "required": ["class", "detail"],
+      "properties": {
+        "class": { "enum": ["host_error", "score_error", "io_error", "schema_error", "internal_error"] },
+        "detail": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": true
+}

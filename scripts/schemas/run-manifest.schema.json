@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deltafuse.invalid/schemas/run-manifest.schema.json",
+  "title": "DeltaFuse v3 qualification campaign manifest",
+  "type": "object",
+  "required": [
+    "schema_version", "campaign_id", "created", "framework", "model",
+    "thresholds", "cases", "runs", "case_verdicts", "verdict"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "campaign_id": { "type": "string" },
+    "created": { "type": "string" },
+    "framework": {
+      "type": "object",
+      "required": ["commit", "lock_hash"],
+      "properties": {
+        "commit": { "type": "string" },
+        "lock_hash": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "description": "QF-007 attested host model block: provenance-tagged fields.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "provenance"],
+        "properties": {
+          "value": {},
+          "provenance": { "enum": ["measured", "declared", "derived"] },
+          "method": { "type": "string" },
+          "basis": { "type": "string" }
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["source", "revision", "absolute"],
+      "properties": {
+        "source": { "type": "string" },
+        "revision": { "type": "string" },
+        "absolute": { "type": "object" }
+      }
+    },
+    "cases": { "type": "array", "items": { "type": "string" } },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["run_id", "case", "verdict", "threshold_failures"],
+        "properties": {
+          "run_id": { "type": "string" },
+          "case": { "type": "string" },
+          "verdict": { "enum": ["pass", "fail"] },
+          "threshold_failures": { "type": "array", "items": { "type": "string" } },
+          "error": {
+            "type": "object",
+            "required": ["class", "detail"],
+            "properties": {
+              "class": { "enum": ["host_error", "score_error", "io_error", "schema_error", "internal_error"] },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "case_verdicts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["verdict", "medians", "median_failures"],
+        "properties": {
+          "verdict": { "enum": ["pass", "fail"] },
+          "medians": {
+            "type": "object",
+            "required": [
+              "correctness", "process", "context_peak_tokens",
+              "framework_input_tokens_max", "gate_retries", "max_unique_files"
+            ]
+          },
+          "median_failures": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "verdict": { "enum": ["pass", "fail", "incomplete", "pending"] }
+  },
+  "additionalProperties": true
+}

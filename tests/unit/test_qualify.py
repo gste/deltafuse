@@ -1312,3 +1312,177 @@ def test_cloud_fallback_is_declared_not_measured(monkeypatch):
     assert field_def["value"] is False
     assert field_def["provenance"] == "declared"
     assert field_def["basis"].strip()
+
+
+# ------------------------------------- QF-008: schema, medians, isolation
+
+
+def test_medians_include_process():
+    """QF-008: medians cover process; empty medians never pass evaluation."""
+    med = qualify.medians([
+        {"correctness": 100.0, "process": 70.0, "gate_retries": 0, "max_unique_files": 5},
+        {"correctness": 90.0, "process": 80.0, "gate_retries": 1, "max_unique_files": 6},
+        {"correctness": 80.0, "process": 90.0, "gate_retries": 2, "max_unique_files": 7},
+    ])
+    assert med["process"] == 80.0
+    med_none = qualify.medians([{"correctness": 100.0, "gate_retries": 0}])
+    assert med_none["process"] is None
+    # empty/missing medians fail the evaluation
+    ok, failures = qualify.evaluate_medians(med_none, [])
+    assert ok is False and failures
+
+
+def _campaign(cases):
+    from collections import namedtuple
+    Args = namedtuple("Args", "host cases runs campaign_id")
+    return Args("lm-studio", cases, 1, "camp")
+
+
+def test_case_verdicts_isolated(tmp_path, monkeypatch):
+    """QF-008: a failed M01 run does not fail M02's own verdict."""
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(
+        qualify, "provenance",
+        lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
+    )
+    _patch_probe(monkeypatch, tokens=[1, 2])
+
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+        run_id = f"{campaign_id}-{case_id}-run{index}"
+        return {
+            "schema_version": 1, "run_id": run_id, "case": case_id,
+            "framework_commit": "a" * 40, "model": qualify.REFERENCE_MODEL_ID,
+            "verdict": "fail" if case_id.startswith("M01") else "pass",
+            "threshold_failures": [] if case_id.startswith("M02") else ["T1 correctness_failed=2"],
+            "process": 100.0, "correctness": 90.0, "gate_retries": 0,
+            "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
+            "framework_input_chars_max": 40000,
+            "framework_input_tokens_method": "chars-div-4",
+            "max_unique_files": 10,
+            "hallucinated_paths": 0, "hallucinated_breakdown": {"hallucinated": 0},
+            "envelope_violations": 0, "t7_breakdown": {}, "stage_leash": [],
+            "calls": [], "tool_events": [], "evidence_authentic": True,
+        }
+
+    monkeypatch.setattr(qualify, "run_case", fake_run_case)
+    exit_code = qualify.main()
+    assert exit_code == 1
+    campaign_dir = next(tmp_path.iterdir())
+    import yaml
+    manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["case_verdicts"]["M01-cooldown"]["verdict"] == "fail"
+    assert manifest["case_verdicts"]["M02-policy-stats"]["verdict"] == "pass"
+    assert manifest["verdict"] == "fail"
+
+
+def test_failed_run_saves_failure_report(tmp_path, monkeypatch):
+    """QF-008: a run that raises still gets a validated failure report."""
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "--runs", "2"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(
+        qualify, "provenance",
+        lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
+    )
+    _patch_probe(monkeypatch, tokens=[1, 2])
+    state = {"n": 0}
+
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+        state["n"] += 1
+        if state["n"] == 2:
+            raise qualify.ScoreError("score_product failed: bench pack exploded")
+        # like the real run_case, a successful run writes its validated report
+        d = {
+            "schema_version": 1, "run_id": f"{campaign_id}-{case_id}-run{index}",
+            "case": case_id, "framework_commit": "a" * 40,
+            "model": qualify.REFERENCE_MODEL_ID, "verdict": "pass",
+            "threshold_failures": [], "process": 100.0, "correctness": 100.0,
+            "stages": [{"stage": "intake", "status": "completed",
+                        "checks": {"passed": 3, "failed": 0}, "gate_retries": 0}],
+            "gate_retries": 0, "context_peak_tokens": 20000,
+            "framework_input_tokens_max": 10000, "framework_input_chars_max": 40000,
+            "framework_input_tokens_method": "chars-div-4", "max_unique_files": 10,
+            "hallucinated_paths": 0, "hallucinated_breakdown": {"hallucinated": 0},
+            "envelope_violations": 0, "t7_breakdown": {}, "stage_leash": [],
+            "calls": [], "tool_events": [], "evidence_authentic": True,
+            "totals": {
+                "correctness": {"passed": 3, "failed": 0}, "gate_retries": 0,
+                "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
+                "max_unique_files": 10, "hallucinated_paths": 0,
+                "envelope_violations": 0, "evidence_authentic": True,
+            },
+        }
+        run_dir = tmp_path / campaign_id / d["run_id"]
+        run_dir.mkdir(parents=True, exist_ok=True)
+        qualify._atomic_write_yaml_validated(run_dir / "report.yaml", "run-report", d)
+        return d
+
+    monkeypatch.setattr(qualify, "run_case", fake_run_case)
+    exit_code = qualify.main()
+    assert exit_code == 1
+    campaign_dir = next(tmp_path.iterdir())
+    import yaml
+    reports = sorted(campaign_dir.glob("*/report.yaml"))
+    assert len(reports) == 2  # both started runs preserved
+    failed = yaml.safe_load(
+        next(p for p in reports if "run2" in str(p)).read_text(encoding="utf-8")
+    )
+    assert failed["verdict"] == "fail"
+    assert failed["error"]["class"] == "score_error"
+    assert failed["threshold_failures"] == ["run_error:score_error"]
+    manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert len(manifest["runs"]) == 2
+
+
+def test_host_error_aborts_with_reports(tmp_path, monkeypatch):
+    """QF-008: a host error stops the campaign, keeps the report, exit != 0."""
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "M02-policy-stats", "--runs", "1"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(
+        qualify, "provenance",
+        lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
+    )
+    _patch_probe(monkeypatch, tokens=[1, 2])
+
+    def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
+        raise qualify.HostError("host probe failed: connection refused")
+
+    monkeypatch.setattr(qualify, "run_case", fake_run_case)
+    exit_code = qualify.main()
+    assert exit_code == 3
+    campaign_dir = next(tmp_path.iterdir())
+    import yaml
+    manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["verdict"] == "incomplete"
+    assert len(manifest["runs"]) == 1
+    failed = yaml.safe_load(
+        next(campaign_dir.glob("*/report.yaml")).read_text(encoding="utf-8")
+    )
+    assert failed["error"]["class"] == "host_error"
+
+
+def test_manifest_valid_against_schema(tmp_path, monkeypatch):
+    """QF-008: the manifest written by main validates against its schema."""
+    monkeypatch.setattr(sys, "argv", ["qualify.py", "--cases", "M01-cooldown", "--runs", "1"])
+    monkeypatch.setattr(qualify, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(
+        qualify, "provenance",
+        lambda: {"commit": "a" * 40, "lock_hash": "sha256:" + "0" * 64, "thresholds_revision": "abc123"},
+    )
+    _patch_probe(monkeypatch, tokens=[1, 2])
+    monkeypatch.setattr(qualify, "run_case", lambda *a, **k: {
+        "schema_version": 1, "run_id": "x", "case": "M01-cooldown",
+        "framework_commit": "a" * 40, "model": qualify.REFERENCE_MODEL_ID,
+        "verdict": "pass", "threshold_failures": [], "process": 100.0,
+        "correctness": 100.0, "gate_retries": 0, "context_peak_tokens": 20000,
+        "framework_input_tokens_max": 10000, "framework_input_chars_max": 40000,
+        "framework_input_tokens_method": "chars-div-4", "max_unique_files": 10,
+        "hallucinated_paths": 0, "hallucinated_breakdown": {},
+        "envelope_violations": 0, "t7_breakdown": {}, "stage_leash": [],
+        "calls": [], "tool_events": [], "evidence_authentic": True,
+    })
+    assert qualify.main() == 0
+    campaign_dir = next(tmp_path.iterdir())
+    import yaml
+    manifest = yaml.safe_load((campaign_dir / "manifest.yaml").read_text(encoding="utf-8"))
+    qualify.validate_document("run-manifest", manifest)  # must not raise

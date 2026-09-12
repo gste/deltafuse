@@ -353,6 +353,60 @@ class QualificationError(Exception):
     """Fail-closed qualification abort."""
 
 
+class HostError(QualificationError):
+    """Reference host unavailable / misbehaving (QF-008)."""
+
+
+class ScoreError(QualificationError):
+    """score_product / bench pack failure (QF-008)."""
+
+
+class IoError(QualificationError):
+    """Disk I/O failure (QF-008)."""
+
+
+class SchemaValidationError(QualificationError):
+    """Artifact failed its JSON Schema (QF-008): the document is not written."""
+
+
+SCHEMA_DIR = REPO / "scripts" / "schemas"
+
+
+def validate_document(kind: str, doc: dict) -> None:
+    """QF-008: validate an artifact against its JSON Schema (draft 2020-12)."""
+    import jsonschema
+
+    schema = json.loads((SCHEMA_DIR / f"{kind}.schema.json").read_text(encoding="utf-8"))
+    errors = sorted(
+        jsonschema.Draft202012Validator(schema).iter_errors(doc),
+        key=lambda e: list(e.path),
+    )
+    if errors:
+        details = "; ".join(
+            f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}"
+            for e in errors[:5]
+        )
+        raise SchemaValidationError(f"{kind} validation failed: {details}")
+
+
+def classify_exception(ex: BaseException) -> str:
+    """QF-008: map an exception to a run-error class."""
+    import socket
+    import urllib.error
+
+    if isinstance(ex, SchemaValidationError):
+        return "schema_error"
+    if isinstance(ex, ScoreError):
+        return "score_error"
+    if isinstance(ex, HostError):
+        return "host_error"
+    if isinstance(ex, (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError)):
+        return "host_error"
+    if isinstance(ex, OSError):
+        return "io_error"
+    return "internal_error"
+
+
 # ---------------------------------------------------------------- HTTP host
 
 
@@ -1136,12 +1190,54 @@ def medians(runs: list[dict]) -> dict:
 
     return {
         "correctness": med("correctness"),
+        "process": med("process"),
         "context_peak_tokens": med("context_peak_tokens"),
         "framework_input_tokens_max": med("framework_input_tokens_max"),
         "framework_input_chars_max": med("framework_input_chars_max"),
         "gate_retries": med("gate_retries"),
         "max_unique_files": med("max_unique_files"),
+        "hallucinated_paths": med("hallucinated_paths"),
+        "envelope_violations": med("envelope_violations"),
     }
+
+
+def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
+    """QF-008: median boundaries T3-T7 plus T8 completeness over actual runs.
+
+    T1/T2 are per-run facts (a case with a failed run is already failed);
+    carrier stubs are not used any more.
+    """
+    failures: list[str] = []
+
+    def check(label: str, value, limit) -> None:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            failures.append(f"{label}=unmeasured")
+        elif value > limit:
+            failures.append(f"{label}={value}")
+
+    check("T4 median context_peak_tokens", med.get("context_peak_tokens"),
+          ABSOLUTE["context_peak_tokens_max"])
+    check("T4 median framework_input_tokens", med.get("framework_input_tokens_max"),
+          ABSOLUTE["framework_input_tokens_max"])
+    check("T5 median max_unique_files", med.get("max_unique_files"),
+          ABSOLUTE["max_unique_files"])
+    retries = med.get("gate_retries")
+    if not isinstance(retries, (int, float)) or isinstance(retries, bool):
+        failures.append("T3 median gate_retries=unmeasured")
+    elif retries > ABSOLUTE["gate_retries_max"]:
+        failures.append(f"T3 median gate_retries={retries}")
+    if not runs:
+        failures.append("median: no completed runs")
+        return False, failures
+    for label, key in (("T6", "hallucinated_paths"), ("T7", "envelope_violations")):
+        values = [r.get(key) for r in runs]
+        if any(v is None for v in values):
+            failures.append(f"{label} median {key}=unmeasured")
+        elif sum(int(v or 0) for v in values) > 0:
+            failures.append(f"{label} median {key}>0")
+    if not all(r.get("evidence_authentic") for r in runs):
+        failures.append("T8 median evidence_authentic=false")
+    return not failures, failures
 
 
 # ------------------------------------------------------------------- runner
@@ -1258,6 +1354,14 @@ def _atomic_write_yaml(path: Path, data: dict) -> None:
     _atomic_write_text(path, yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
 
 
+def _atomic_write_yaml_validated(path: Path, kind: str, data: dict) -> None:
+    """QF-008: a document that fails its schema is never written."""
+    import yaml
+
+    validate_document(kind, data)
+    _atomic_write_yaml(path, data)
+
+
 def provenance() -> dict:
     """Step 6: full, fail-closed campaign provenance."""
     dirty = tree_dirty()
@@ -1314,40 +1418,113 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
     metrics = drive_worker(work, model_probe["host_base_url"]["value"], model_probe["id"]["value"], case_id, system, staging=staging)
     staging.collect_workdir(run_id, sandbox)
     staging.teardown()
-    report = score_product(sandbox, pack_root=str(CASES_ROOT))
-    verdict, failures = apply_thresholds(report, metrics)
+    try:
+        scorecard = score_product(sandbox, pack_root=str(CASES_ROOT))
+    except Exception as ex:
+        raise ScoreError(f"score_product failed: {ex}") from ex
+    verdict, failures = apply_thresholds(scorecard, metrics)
 
-    per_run = {
+    per_run = _build_run_report(
+        run_id, case_id, commit, model_probe["id"]["value"],
+        scorecard, metrics, verdict, failures,
+    )
+    run_dir = RUNS_DIR / campaign_id / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    # QF-008: report.yaml per thresholds.md format, schema-validated; the raw
+    # scorecard is kept next to it as diagnostics; writes are atomic.
+    _atomic_write_yaml(run_dir / "scorecard.yaml", scorecard)
+    _atomic_write_yaml_validated(run_dir / "report.yaml", "run-report", per_run)
+    return per_run
+
+
+def _build_run_report(
+    run_id: str, case_id: str, commit: str, model_id: str,
+    scorecard: dict, metrics: dict, verdict: bool, failures: list[str],
+) -> dict:
+    """QF-008: scorecard + metrics -> per-run report per thresholds.md."""
+    stages_out = []
+    checks_passed = 0
+    checks_total = 0
+    for name, row in (scorecard.get("stages") or {}).items():
+        passed = int(row.get("checks_passed") or 0)
+        total = int(row.get("checks_total") or 0)
+        checks_passed += passed
+        checks_total += total
+        stages_out.append(
+            {
+                "stage": name,
+                "status": "completed" if row.get("pass") else "failed",
+                "checks": {"passed": passed, "failed": total - passed},
+                "gate_retries": int(row.get("gate_retries") or 0),
+            }
+        )
+    completed = sum(1 for s in stages_out if s["status"] == "completed")
+    return {
         "schema_version": 1,
         "run_id": run_id,
         "case": case_id,
         "framework_commit": commit,
-        "model": model_probe["id"]["value"],
+        "model": model_id,
         "verdict": "pass" if verdict else "fail",
         "threshold_failures": failures,
-        "stages": report.get("stages") or {},
-        "correctness": report.get("correctness"),
-        "gate_retries": int((report.get("retries") or {}).get("check_gate") or 0),
-        "context_peak_tokens": metrics["context_peak_tokens"],
-        "framework_input_tokens_max": metrics["framework_input_tokens_max"],
-        "framework_input_chars_max": metrics["framework_input_chars_max"],
-        "framework_input_tokens_method": metrics["framework_input_tokens_method"],
-        "max_unique_files": metrics["max_unique_files"],
-        "hallucinated_paths": metrics["hallucinated_paths"],
-        "hallucinated_breakdown": metrics["hallucinated_breakdown"],
-        "evidence_authentic": evidence_authentic(report),
-        "envelope_violations": metrics["envelope_violations"],
-        "t7_breakdown": metrics["t7_breakdown"],
-        "stage_leash": metrics["stage_leash"],
+        "process": round(100.0 * completed / 7, 1),
+        "correctness": scorecard.get("correctness"),
+        "stages": stages_out,
         "calls": metrics["calls"],
         "tool_events": metrics["tool_events"],
+        "totals": {
+            "correctness": {"passed": checks_passed, "failed": checks_total - checks_passed},
+            "gate_retries": int((scorecard.get("retries") or {}).get("check_gate") or 0),
+            "context_peak_tokens": metrics["context_peak_tokens"],
+            "framework_input_tokens_max": metrics["framework_input_tokens_max"],
+            "max_unique_files": metrics["max_unique_files"],
+            "hallucinated_paths": metrics["hallucinated_paths"],
+            "envelope_violations": metrics["envelope_violations"],
+            "evidence_authentic": evidence_authentic(scorecard),
+        },
+        "framework_input_tokens_method": metrics["framework_input_tokens_method"],
+        "t7_breakdown": metrics["t7_breakdown"],
+        "hallucinated_breakdown": metrics["hallucinated_breakdown"],
+        "stage_leash": metrics["stage_leash"],
+    }
+
+
+def _write_failure_report(
+    run_id: str, case_id: str, campaign_id: str, commit: str, model_id: str,
+    error_class: str, detail: str,
+) -> dict:
+    """QF-008: a run that started is never lost — write a validated failure
+    report before exiting."""
+    report = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "case": case_id,
+        "framework_commit": commit,
+        "model": model_id,
+        "verdict": "fail",
+        "threshold_failures": [f"run_error:{error_class}"],
+        "stages": [],
+        "calls": [],
+        "tool_events": [],
+        "totals": {
+            "correctness": {"passed": None, "failed": None},
+            "gate_retries": None,
+            "context_peak_tokens": None,
+            "framework_input_tokens_max": None,
+            "max_unique_files": None,
+            "hallucinated_paths": None,
+            "envelope_violations": None,
+            "evidence_authentic": False,
+        },
+        "error": {"class": error_class, "detail": detail[:400]},
     }
     run_dir = RUNS_DIR / campaign_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    # Step 6: report.yaml per thresholds.md format; every run (also failures)
-    # is preserved; writes are atomic.
-    _atomic_write_yaml(run_dir / "report.yaml", per_run)
-    return per_run
+    try:
+        _atomic_write_yaml_validated(run_dir / "report.yaml", "run-report", report)
+    except Exception as write_ex:  # best effort: never mask the original error
+        print(f"failure report write failed: {write_ex}", file=sys.stderr)
+    return report
 
 
 def main() -> int:
@@ -1410,50 +1587,52 @@ def main() -> int:
         "case_verdicts": {},
         "verdict": "pending",
     }
-    runs_ok = True
+    aborted = False
     write_error: str | None = None
     for case in args.cases:
         case_runs: list[dict] = []
         for index in range(1, args.runs + 1):
+            run_id = f"{args.campaign_id}-{case}-run{index}"
             try:
                 run = run_case(case, index, args.campaign_id, model_probe, provenance_info)
-            except QualificationError as ex:
-                print(f"run failed: {ex}")
-                manifest["verdict"] = "incomplete"
-                _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
-                return 3
+            except Exception as ex:  # QF-008: classify, persist, keep going
+                error_class = classify_exception(ex)
+                detail = f"{type(ex).__name__}: {ex}"
+                print(f"run failed ({error_class}): {detail}")
+                if isinstance(ex, SchemaValidationError):
+                    print("  note: failing artifact was NOT written", file=sys.stderr)
+                run = _write_failure_report(
+                    run_id, case, args.campaign_id, commit,
+                    model_probe["id"]["value"], error_class, detail,
+                )
+                manifest["runs"].append(run)
+                case_runs.append(run)
+                try:
+                    _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
+                except (SchemaValidationError, OSError) as write_ex:
+                    write_error = str(write_ex)
+                if error_class == "host_error":
+                    # One host per campaign: a host error aborts everything.
+                    aborted = True
+                    break
+                continue
             manifest["runs"].append(run)
             case_runs.append(run)
             print(f"{run['run_id']}: {run['verdict']} {run['threshold_failures'] or ''}")
-            if run["verdict"] != "pass":
-                runs_ok = False
             # Atomic manifest refresh after EVERY run: partial results survive.
             try:
-                _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
-            except OSError as ex:
+                _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
+            except (SchemaValidationError, OSError) as ex:
                 write_error = str(ex)
+        if aborted:
+            break
+        # QF-008: per-case verdict isolation — no cross-case state.
         med = medians(case_runs)
-        # Step 6: thresholds apply to the medians as well — the metric
-        # boundaries (T4/T5/T6/T7) on median values; stage aggregates are
-        # per-run facts and are carried as all-completed.
-        median_metrics = {
-            "context_peak_tokens": med["context_peak_tokens"],
-            "framework_input_tokens_max": med["framework_input_tokens_max"],
-            "framework_input_chars_max": med.get("framework_input_chars_max"),
-            "max_unique_files": med["max_unique_files"],
-            "hallucinated_paths": 0 if all(r["hallucinated_paths"] == 0 for r in case_runs) else 1,
-            "envelope_violations": 0 if all(r["envelope_violations"] == 0 for r in case_runs) else 1,
-        }
-        carrier_stages = {
-            name: {"pass": True, "checks_passed": 0, "checks_total": 0, "gate_retries": 0}
-            for name in ("intake", "analyze", "specify", "decompose", "declare", "implement", "verify")
-        }
-        carrier_defense = {k: {"pass": True} for k in REQUIRED_T8_CHECKS}
-        median_ok, median_failures = apply_thresholds(
-            {"pass": True, "first_fail": None, "stages": carrier_stages, "retries": {}, "defense_checks": carrier_defense},
-            median_metrics,
+        median_ok, median_failures = evaluate_medians(med, case_runs)
+        case_ok = bool(case_runs) and all(
+            r.get("verdict") == "pass" and not r.get("error") for r in case_runs
         )
-        case_verdict = "pass" if runs_ok and median_ok else "fail"
+        case_verdict = "pass" if case_ok and median_ok else "fail"
         manifest["case_verdicts"][case] = {
             "verdict": case_verdict,
             "medians": med,
@@ -1461,16 +1640,24 @@ def main() -> int:
         }
         print(f"{case} medians: {med} verdict={case_verdict}")
     complete = len(manifest["runs"]) == len(args.cases) * args.runs
-    manifest["verdict"] = "pass" if runs_ok and complete else "fail"
+    if aborted:
+        manifest["verdict"] = "incomplete"
+    else:
+        all_cases_pass = bool(manifest["case_verdicts"]) and all(
+            v["verdict"] == "pass" for v in manifest["case_verdicts"].values()
+        )
+        manifest["verdict"] = "pass" if all_cases_pass and complete else "fail"
     try:
-        _atomic_write_yaml(campaign_dir / "manifest.yaml", manifest)
-    except OSError as ex:
+        _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
+    except (SchemaValidationError, OSError) as ex:
         write_error = str(ex)
     print(f"campaign verdict: {manifest['verdict']}")
     print(f"campaign recorded under {campaign_dir}")
     if write_error:
         print(f"manifest write error: {write_error}", file=sys.stderr)
         return 4
+    if aborted:
+        return 3
     return 0 if manifest["verdict"] == "pass" else 1
 
 
