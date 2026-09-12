@@ -852,6 +852,12 @@ def check_gate(
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
 
+        # DF3-006 / SEC-04: a task cannot widen its write envelope by
+        # editing YAML; allowed_paths must stay inside slice target_paths.
+        from deltafuse.core.leash import task_envelope_errors
+
+        errors.extend(task_envelope_errors(change_path))
+
     elif gate_lower == "targeting":
         route, route_errs = load_change_route(change_path)
         errors.extend(route_errs)
@@ -885,6 +891,16 @@ def check_gate(
                     change_path, "regression", "implement", gate="implemented", route=route
                 )
             )
+
+
+        # DF3-006: Red and Green are bound to one test oracle — a Green stamp
+        # without the task's own Red evidence does not close the gate.
+        if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
+            for green_file in sorted(green_dir.glob("*.yaml")):
+                if not (change_path / "evidence" / "red" / green_file.name).is_file():
+                    errors.append(
+                        f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+                    )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"

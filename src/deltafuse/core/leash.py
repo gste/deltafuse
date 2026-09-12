@@ -246,6 +246,80 @@ def _covered_by(rel_path: str, envelopes: list[dict[str, Any]]) -> dict[str, Any
     return None
 
 
+
+DEFAULT_CAPABILITY_ROOTS = ("src/**", "tests/**", "docs/spec/**")
+
+
+def capability_roots(product_root: Path | None) -> tuple[str, ...]:
+    """Capability catalog roots (DF3-006): config workflow.code_roots wins."""
+    if product_root is None:
+        return DEFAULT_CAPABILITY_ROOTS
+    try:
+        data = yaml.safe_load(
+            (product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
+        ) or {}
+    except Exception:
+        return DEFAULT_CAPABILITY_ROOTS
+    workflow = data.get("workflow") if isinstance(data, dict) else None
+    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
+    if isinstance(roots, list) and roots:
+        return tuple(str(r) for r in roots)
+    return DEFAULT_CAPABILITY_ROOTS
+
+
+def _glob_covers(task_glob: str, slice_glob: str) -> bool:
+    """True when task_glob is bounded by slice_glob (path-prefix semantics)."""
+    norm = lambda g: g.replace("\\", "/").strip().lstrip("/")
+    task, sl = norm(task_glob), norm(slice_glob)
+    if task == sl:
+        return True
+    base = sl[:-3] if sl.endswith("/**") else sl
+    if sl.endswith("/**"):
+        return task == base or task.startswith(base + "/")
+    return task == sl
+
+
+def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[str]:
+    """SEC-04 / DF3-006: task allowed_paths must stay inside their slice
+    target_paths (or the capability-catalog roots when the slice declares
+    none). A task cannot widen its write envelope by editing YAML."""
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return []
+    slice_bounds: dict[str, list[str]] = {}
+    slices_dir = change_path / "slices"
+    if slices_dir.is_dir():
+        for sf in sorted(list(slices_dir.glob("*.md")) + list(slices_dir.glob("*.yaml"))):
+            try:
+                meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            bounds = [str(g) for g in meta.get("target_paths") or []]
+            if bounds:
+                slice_bounds[str(meta.get("id") or sf.stem)] = bounds
+
+    errors: list[str] = []
+    for tf in sorted(tasks_dir.glob("*.md")):
+        try:
+            meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        tid = str(meta.get("id") or tf.stem)
+        if task_id is not None and tid != task_id:
+            continue
+        sid = str(meta.get("slice") or "")
+        bounds = slice_bounds.get(sid) or list(DEFAULT_CAPABILITY_ROOTS)
+        for raw in meta.get("allowed_paths") or []:
+            task_glob = str(raw)
+            if not any(_glob_covers(task_glob, g) for g in bounds):
+                errors.append(
+                    f"Task {tid}: allowed_paths '{task_glob}' escapes slice '{sid}' target_paths"
+                )
+    return errors
+
+
 def check_paths(
     rel_paths: list[str],
     envelopes: list[dict[str, Any]] | dict[str, Any] | None = None,

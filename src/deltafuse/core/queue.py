@@ -293,6 +293,10 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         ]
 
     tasks = _load_tasks(change_path)
+    from deltafuse.core.leash import task_envelope_errors
+
+    envelope_faults = task_envelope_errors(change_path)
+
     for tid, tstatus, tfile in tasks:
         if tstatus == "blocked":
             return [], [
@@ -306,6 +310,22 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason=f"Task {tid} is blocked",
+                    halt_kind="blocked",
+                )
+            ]
+        faults = [e for e in envelope_faults if e.startswith(f"Task {tid}:")]
+        if faults:
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="; ".join(faults),
                     halt_kind="blocked",
                 )
             ]

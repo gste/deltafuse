@@ -142,12 +142,16 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
     status_before = yaml.safe_load(
         (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     )["status"]
+    # DF3-006/B-04: green must come from a real runner script, not `python -c`.
+    runner_file = tmp_path / "tests" / "test_task-001.py"
+    runner_file.parent.mkdir(parents=True, exist_ok=True)
+    runner_file.write_text("raise SystemExit(0)\n", encoding="utf-8")
     outcome = run_evidence(
         builder.change_dir,
         phase="green",
         task="TASK-001",
-        argv=[sys.executable, "-c", "raise SystemExit(0)"],
-        changed_paths=["src/core.py"],
+        argv=_run_file_cmd("tests/test_task-001.py"),
+        changed_paths=["tests/test_task-001.py", "src/core.py"],
     )
     assert outcome.authentic
     assert outcome.payload["result"] == "passed"

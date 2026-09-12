@@ -189,7 +189,6 @@ def test_b01_installed_wheel_ships_schemas_and_templates():
 # ---------------------------------------------------------------- B-04 (P1)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_b04_synthetic_green_command_is_not_authentic_evidence(
     tmp_path: Path, repo_root: Path
 ):
@@ -259,7 +258,6 @@ def test_sec03_gate_journal_is_inside_the_worker_write_boundary():
 # ---------------------------------------------------------------- SEC-04 (P1)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path):
     """adversarial_worker: task ``allowed_paths`` outside the slice
     ``target_paths`` must be rejected, not merged into the write envelope."""
@@ -274,10 +272,12 @@ def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path
     )
     task_file = next((builder.change_dir / "tasks").glob("*.md"))
     meta_text = task_file.read_text(encoding="utf-8")
-    assert "docs/changes/" in meta_text  # fixture sanity
+    assert "allowed_paths:" in meta_text  # fixture sanity
 
+    # The Worker widens the write envelope by editing task YAML only.
     expanded = meta_text.replace(
-        "allowed_paths:", "allowed_paths:\n    - src/**\n    - ."
+        "allowed_paths:",
+        "allowed_paths:\n    - docs/intake/**\n    - .",
     )
     task_file.write_text(expanded, encoding="utf-8")
 
