@@ -160,6 +160,7 @@ def test_sandbox_io_rejects_escapes(tmp_path):
     assert "ERROR" in io.read_file("missing.txt")
     assert io.hallucinated_paths == 1
     assert "ERROR" in io.shell("rm -rf /")
+    io.write_envelope = qualify.EnvelopeState("ok", ["docs/spec/**"])
     assert "OK" in io.write_file("docs/spec/x.md", "# x")
 
 
@@ -375,13 +376,105 @@ def test_mutation_on_each_threshold_boundary_flips_verdict():
 def test_envelope_gated_write_rejected(tmp_path):
     """Step 4 T7: write_file obeys the Core envelope, not just sandbox roots."""
     io = qualify.SandboxIO(tmp_path)
-    io.write_globs = ["docs/spec/**"]  # as fetched from `deltafuse next --json`
+    io.write_envelope = qualify.EnvelopeState("ok", ["docs/spec/**"])  # from `deltafuse next --json`
     assert "OK" in io.write_file("docs/spec/core.md", "# ok")
     assert "ERROR" in io.write_file("src/evil.py", "# no")
     assert io.envelope_violations == 1
-    # empty envelope (Worker must not write) still allows exempt/Core paths only
-    io2 = qualify.SandboxIO(tmp_path)
-    assert "OK" in io2.write_file("docs/spec/x.md", "# x")
+
+
+def test_write_envelope_ok_empty_denies_product_writes(tmp_path):
+    """QF-001: an ok-but-empty envelope forbids every product write."""
+    io = qualify.SandboxIO(tmp_path)
+    io.write_envelope = qualify.EnvelopeState("ok", [])
+    assert "ERROR" in io.write_file("docs/spec/x.md", "# x")
+    assert "ERROR" in io.write_file("src/evil.py", "# evil")
+    assert io.envelope_violations == 2
+    assert not (tmp_path / "src" / "evil.py").exists()
+    # exempt path stays writable
+    assert "OK" in io.write_file("README.md", "# readme")
+
+
+def test_write_envelope_error_denies_and_flags(tmp_path):
+    """QF-001: an envelope error denies writes AND is tracked separately."""
+    io = qualify.SandboxIO(tmp_path)
+    io.write_envelope = qualify.EnvelopeState("error", [], detail="core crashed")
+    assert "ERROR" in io.write_file("docs/spec/x.md", "# x")
+    assert io.envelope_errors == 1
+    assert io.envelope_violations == 0  # unavailability is not a Worker violation
+    assert not (tmp_path / "docs" / "spec" / "x.md").exists()
+
+
+def test_write_envelope_missing_is_fail_closed(tmp_path):
+    """QF-001: no envelope fetched yet -> no writes at all."""
+    io = qualify.SandboxIO(tmp_path)
+    assert io.write_envelope is None
+    assert "ERROR" in io.write_file("docs/spec/x.md", "# x")
+    assert io.envelope_violations == 1
+
+
+def test_core_envelope_malformed_json_is_error(monkeypatch, tmp_path):
+    """QF-001: garbage Core output is an error state, never `[]`."""
+    from deltafuse import cli as cli_mod
+
+    def bad_main(argv):
+        print("<<<not json>>>")
+        return 0
+
+    monkeypatch.setattr(cli_mod, "main", bad_main)
+    state = qualify._core_envelope(tmp_path)
+    assert state.status == "error"
+    assert state.detail
+    assert state.globs == []
+
+
+def test_core_envelope_nonzero_exit_is_error(monkeypatch, tmp_path):
+    """QF-001: a Core failure exit is an error state, never `[]`."""
+    from deltafuse import cli as cli_mod
+
+    monkeypatch.setattr(cli_mod, "main", lambda argv: 2)
+    state = qualify._core_envelope(tmp_path)
+    assert state.status == "error"
+    assert "2" in (state.detail or "")
+
+
+def test_core_envelope_ok_responses(monkeypatch, tmp_path):
+    """QF-001: exit=0 + valid JSON keeps ok semantics (globs and ok-empty)."""
+    from deltafuse import cli as cli_mod
+
+    monkeypatch.setattr(
+        cli_mod, "main",
+        lambda argv: print(json.dumps({"envelope": {"write": ["docs/spec/**"]}})) or 0,
+    )
+    state = qualify._core_envelope(tmp_path)
+    assert state.status == "ok" and state.globs == ["docs/spec/**"]
+
+    monkeypatch.setattr(cli_mod, "main", lambda argv: print("{}") or 0)
+    state = qualify._core_envelope(tmp_path)
+    assert state.status == "ok" and state.globs == []
+
+
+def test_drive_worker_fails_closed_when_envelope_unavailable(tmp_path, monkeypatch):
+    """QF-001: an unavailable envelope aborts the run with a T7 failure,
+    it never continues the loop with full write access."""
+    from deltafuse import cli as cli_mod
+
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        lambda base_url, model, messages: {
+            "content": '{"tool": "write_file", "path": "docs/spec/x.md", "content": "# x"}',
+            "prompt_tokens": 100,
+        },
+    )
+    monkeypatch.setattr(cli_mod, "main", lambda argv: 2)  # Core unavailable
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert metrics.get("envelope_error")
+    verdict, failures = qualify.apply_thresholds(
+        {"pass": True, "first_fail": None, "stages": {}, "retries": {}, "defense_checks": {}},
+        metrics,
+    )
+    assert verdict is False
+    assert any(f.startswith("T7 envelope_unavailable") for f in failures)
+    assert not (tmp_path / "docs" / "spec" / "x.md").exists()
 
 
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):

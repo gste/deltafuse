@@ -24,6 +24,7 @@ import statistics
 import subprocess
 import sys
 import urllib.request
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -234,20 +235,40 @@ def framework_commit() -> str:
 # ------------------------------------------------------------- worker loop
 
 
+@dataclass
+class EnvelopeState:
+    """QF-001: write envelope as a first-class, fail-closed state.
+
+    status="ok" always means the Core answered (exit=0, valid JSON):
+    globs may still be empty (nothing is writable). status="error" means the
+    envelope could not be obtained at all — no product write is allowed and
+    the stage is blocked.
+    """
+
+    status: str  # "ok" | "error"
+    globs: list[str]
+    detail: str | None = None
+
+
 class SandboxIO:
     """Restricted Worker tool surface: read/write inside the sandbox only.
 
     T7: write_file is limited to the current Core `envelope.write`; the
     envelope is read from `deltafuse next --json`, never from a local guess.
+    Fail-closed (QF-001): with no envelope, an empty envelope or an envelope
+    error, product writes are denied — a Core failure never widens access.
     """
 
     def __init__(self, root: Path):
         self.root = root.resolve()
         self.hallucinated_paths = 0
         self.envelope_violations = 0
+        self.envelope_errors = 0
         self.unique_files: set[str] = set()
         self.call_files: set[str] = set()
-        self.write_globs: list[str] = []
+        self.write_envelope: EnvelopeState | None = None
+        # globs that authorized the most recent successful write (QF-003 hook)
+        self.last_write_envelope_globs: list[str] = []
 
     def begin_call(self) -> None:
         self.call_files = set()
@@ -286,14 +307,27 @@ class SandboxIO:
         if rel_posix.startswith(".deltafuse/"):
             self.envelope_violations += 1
             return "ERROR: Core-owned path; use deltafuse commands"
-        # T7: the envelope comes from the Core (`deltafuse next --json`).
+        # T7/QF-001: the envelope comes from the Core (`deltafuse next --json`).
         from deltafuse.core.leash import is_exempt_path, path_in_envelope
 
-        if self.write_globs and not is_exempt_path(rel_posix) and not path_in_envelope(rel_posix, self.write_globs):
+        state = self.write_envelope
+        if state is not None and state.status == "error":
+            self.envelope_errors += 1
+            return f"ERROR: write envelope unavailable: {state.detail}"
+        if state is None or state.status != "ok":
+            self.envelope_violations += 1
+            return "ERROR: no valid write envelope; writing is disabled"
+        if not state.globs:
+            # QF-001: empty envelope = nothing writable except exempt paths.
+            if not is_exempt_path(rel_posix):
+                self.envelope_violations += 1
+                return f"ERROR: {rel_posix} is outside the current envelope.write"
+        elif not is_exempt_path(rel_posix) and not path_in_envelope(rel_posix, state.globs):
             self.envelope_violations += 1
             return f"ERROR: {rel_posix} is outside the current envelope.write"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+        self.last_write_envelope_globs = list(state.globs)
         self.unique_files.add(rel_posix)
         self.call_files.add(rel_posix)
         return f"OK: wrote {rel_posix} ({len(content)} bytes)"
@@ -365,24 +399,36 @@ def parse_action(content: str) -> dict:
     return action if isinstance(action, dict) else {"tool": "done", "reason": "not an object"}
 
 
-def _core_envelope(sandbox: Path) -> list[str]:
-    """T7: current `envelope.write` straight from the Core."""
+def _core_envelope(sandbox: Path) -> EnvelopeState:
+    """T7/QF-001: current `envelope.write` straight from the Core, fail-closed.
+
+    A Core failure (exception, non-zero exit, invalid JSON) is an error state,
+    never an empty allow-list.
+    """
     import contextlib
     import io as _io
 
     from deltafuse.cli import main as cli_main
 
     buf = _io.StringIO()
+    code: int | None
     try:
         with contextlib.redirect_stdout(buf):
-            cli_main(["next", str(sandbox), "--json"])
+            code = cli_main(["next", str(sandbox), "--json"])
+    except Exception as ex:
+        return EnvelopeState("error", [], detail=f"core exception: {type(ex).__name__}: {ex}")
+    if code != 0:
+        return EnvelopeState("error", [], detail=f"non-zero exit {code}")
+    try:
         data = json.loads(buf.getvalue() or "{}")
-    except Exception:
-        return []
+    except json.JSONDecodeError as ex:
+        return EnvelopeState("error", [], detail=f"invalid JSON from Core: {ex}")
+    if not isinstance(data, dict):
+        return EnvelopeState("error", [], detail="invalid Core payload: not an object")
     envelope = data.get("envelope")
-    if isinstance(envelope, dict):
-        return [str(g) for g in (envelope.get("write") or [])]
-    return []
+    if not isinstance(envelope, dict):
+        return EnvelopeState("ok", [], detail="no envelope key")
+    return EnvelopeState("ok", [str(g) for g in (envelope.get("write") or [])])
 
 
 def _core_leash_violations(sandbox: Path, files: list[str]) -> int:
@@ -425,7 +471,12 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
     unmeasured_usage = False
     for _ in range(MAX_WORKER_TURNS):
         io.begin_call()
-        io.write_globs = _core_envelope(sandbox)
+        envelope = _core_envelope(sandbox)
+        io.write_envelope = envelope
+        if envelope.status == "error":
+            # QF-001: a Core failure blocks the stage; the run aborts instead
+            # of continuing with unrestricted writes.
+            return _final_metrics(io, calls, unmeasured_usage, envelope_error=envelope.detail)
         turn = worker_turn(base_url, model, messages)
         prompt_tokens = turn["prompt_tokens"]
         if not prompt_tokens:
@@ -464,9 +515,15 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         else:
             result = f"ERROR: unknown tool {tool}"
         messages.append({"role": "user", "content": result[:6000]})
+    return _final_metrics(io, calls, unmeasured_usage)
+
+
+def _final_metrics(
+    io: SandboxIO, calls: list[dict], unmeasured_usage: bool, envelope_error: str | None = None
+) -> dict:
     peaks = [c["input_tokens"] for c in calls if c["input_tokens"] is not None]
     fw = [c["framework_input_tokens"] for c in calls]
-    return {
+    metrics = {
         "calls": calls,
         "context_peak_tokens": max(peaks) if peaks and not unmeasured_usage else None,
         "framework_input_tokens_max": max(fw) if fw else None,
@@ -474,6 +531,9 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         "hallucinated_paths": io.hallucinated_paths,
         "envelope_violations": io.envelope_violations,
     }
+    if envelope_error:
+        metrics["envelope_error"] = envelope_error
+    return metrics
 
 
 # -------------------------------------------------------------- thresholds
@@ -536,6 +596,10 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
         failures.append("T7 envelope_violations=unmeasured")
     elif envelope != ABSOLUTE["envelope_violations"]:
         failures.append(f"T7 envelope_violations={envelope}")
+    # QF-001: an unavailable envelope blocks the run regardless of counters.
+    envelope_error = metrics.get("envelope_error")
+    if envelope_error:
+        failures.append(f"T7 envelope_unavailable={envelope_error}")
     # T8: authentic evidence for every case (defense checks always run).
     defense = report.get("defense_checks") or {}
     synthetic = [
