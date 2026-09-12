@@ -3,6 +3,8 @@
 - **Статус:** `ready`
 - **Основание:** независимая повторная проверка 2026-09-12
 - **Заменяет для исправлений:** [completion-plan.md](completion-plan.md)
+- **Инструкции исполнителя:** [qualification-fixes/](qualification-fixes/README.md) —
+  по одной папке на QF-пакет (порядок, Red-тесты, acceptance, evidence)
 - **Цель:** сделать доказательным qualification слабого Worker класса 35B A3B
   при полном окне от 32k, не ослабляя T1–T8 и не используя baseline v2
 
