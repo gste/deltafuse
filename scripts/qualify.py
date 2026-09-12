@@ -52,14 +52,65 @@ ABSOLUTE = {
     "evidence_authentic": True,
 }
 
-ALLOWED_SHELL_PREFIXES = (
-    "deltafuse ",
-    "python -m pytest",
-    "pytest",
-    "git status",
-    "git diff",
-    "git log",
-)
+# Step 2: structured argv allowlist. No shell, no string prefixes.
+SHELL_FORBIDDEN_CHARS = set('&|;<>()`$*?[]{}~!"\'\n\r')
+SHELL_FORBIDDEN_TOKENS = {
+    "powershell", "pwsh", "cmd", "cmd.exe", "bash", "sh", "zsh", "fish",
+    "python", "python3", "pythonw", "node", "ruby", "perl",
+    "sudo", "start", "call", "invoke-expression", "iex",
+}
+DELTAFUSE_SUBCOMMANDS = {
+    "next", "check-gate", "advance", "state", "evidence", "coverage",
+    "decide", "archive", "validate", "validate-layout", "lint-context",
+    "leash", "board", "new", "init",
+}
+GIT_READ_ONLY_SUBCOMMANDS = {"status", "diff", "log", "show"}
+
+
+def parse_shell_argv(command: str) -> list[str] | None:
+    """Parse a Worker command into argv; None when it is not safe to run.
+
+    Rejects shell operators, absolute paths, traversal, environment/command
+    substitution and arbitrary interpreters before anything executes.
+    """
+    import shlex
+
+    text = command.strip()
+    if not text or "\n" in text or "\r" in text:
+        return None
+    for ch in SHELL_FORBIDDEN_CHARS:
+        if ch in text:
+            return None
+    try:
+        argv = shlex.split(text, posix=True)
+    except ValueError:
+        return None
+    if not argv:
+        return None
+    for index, token in enumerate(argv):
+        low = token.lower()
+        if low in SHELL_FORBIDDEN_TOKENS:
+            # `python -m pytest` is the one sanctioned interpreter invocation.
+            if not (index == 0 and low == "python" and argv[1:3] == ["-m", "pytest"]):
+                return None
+        if token.startswith(("/", "\\")) or (len(token) >= 2 and token[1] == ":"):
+            return None  # absolute path
+        if token == ".." or "/.." in token or "\\.." in token:
+            return None  # traversal
+        if token.startswith("%") and token.endswith("%") and len(token) > 2:
+            return None  # environment variable reference
+    head = argv[0].lower()
+    if head == "deltafuse":
+        if len(argv) < 2 or argv[1].lower() not in DELTAFUSE_SUBCOMMANDS:
+            return None
+        return argv
+    if head == "pytest":
+        return argv
+    if head == "python" and len(argv) >= 3 and argv[1] == "-m" and argv[2] == "pytest":
+        return argv
+    if head == "git" and len(argv) >= 2 and argv[1].lower() in GIT_READ_ONLY_SUBCOMMANDS:
+        return argv
+    return None
 
 
 class QualificationError(Exception):
@@ -184,13 +235,15 @@ class SandboxIO:
         return f"OK: wrote {rel_posix} ({len(content)} bytes)"
 
     def shell(self, command: str, timeout: int = 300) -> str:
-        if not command.startswith(ALLOWED_SHELL_PREFIXES):
+        """Run a Worker command with NO shell: structured argv or nothing."""
+        argv = parse_shell_argv(command)
+        if argv is None:
             self.envelope_violations += 1
             return f"ERROR: command not allowed: {command[:120]}"
         try:
             proc = subprocess.run(
-                command,
-                shell=True,
+                argv,
+                shell=False,
                 cwd=str(self.root),
                 capture_output=True,
                 text=True,
@@ -198,6 +251,8 @@ class SandboxIO:
             )
         except subprocess.TimeoutExpired:
             return f"ERROR: command timed out after {timeout}s"
+        except OSError as ex:
+            return f"ERROR: cannot execute: {ex}"
         out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
         return f"exit={proc.returncode}\n{out}"
 

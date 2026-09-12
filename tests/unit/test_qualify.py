@@ -195,3 +195,59 @@ def test_missing_measurement_fails_closed():
     assert any("T5" in f for f in failures)
     assert any("T6" in f for f in failures)
     assert any("T7" in f for f in failures)
+
+
+ADVERSARIAL_COMMANDS = [
+    "deltafuse next & whoami",
+    "deltafuse next && whoami",
+    "deltafuse next | cat",
+    "deltafuse next; whoami",
+    "deltafuse next > ../out.txt",
+    "deltafuse next < ../in.txt",
+    "deltafuse next 2> err.txt",
+    "deltafuse next $(whoami)",
+    "deltafuse next `whoami`",
+    "powershell -c Get-ChildItem",
+    "pwsh -Command ls",
+    "cmd /c dir",
+    "bash -c 'ls'",
+    "sh -c ls",
+    "python -c 'import os'",
+    "python exploit.py",
+    "node -e 1",
+    "deltafuse ../../etc/passwd",
+    "cat C:\Windows\win.ini",
+    "cat /etc/passwd",
+    "git push origin main",
+    "deltafuse bench score .",
+    "deltafuse",
+    "",
+    "pytest; rm x",
+]
+
+
+def test_adversarial_shell_commands_are_rejected(tmp_path):
+    """Step 2: shell operators, interpreters, absolute paths never execute."""
+    io = qualify.SandboxIO(tmp_path)
+    outside = tmp_path.parent / "outside-probe.txt"
+    for command in ADVERSARIAL_COMMANDS:
+        result = io.shell(command)
+        assert result.startswith("ERROR"), command
+        assert io.envelope_violations >= 1
+    assert not outside.exists()
+    # nothing executed outside the sandbox
+    assert not (tmp_path / "err.txt").exists()
+
+
+def test_allowed_shell_commands_still_run(tmp_path):
+    """Step 2: allowed DeltaFuse/pytest/git read-only commands keep working."""
+    io = qualify.SandboxIO(tmp_path)
+    result = io.shell("pytest --version")
+    assert result.startswith("exit=0"), result
+    result = io.shell("python -m pytest --version")
+    assert result.startswith("exit=0"), result
+    result = io.shell("git status")
+    assert result.startswith("exit="), result  # not a sandbox repo; may be nonzero
+    assert not result.startswith("ERROR")
+    result = io.shell("deltafuse version-unknown-sub")
+    assert result.startswith("ERROR")  # unknown subcommand rejected
