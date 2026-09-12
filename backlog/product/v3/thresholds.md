@@ -25,7 +25,7 @@ Contract ([deltafuse-3](../deltafuse-3.md)) и context envelope, а не из р
 | T1 | Correctness (скрытые oracle-проверки case) | 100% passed checks; допустимо 0 failures | процесс — закон: частично пройденный case не есть корректная реализация | `report.correctness.failed == 0` per stage pack DF3-009 |
 | T2 | Process completion | все 7 lifecycle stages completed; 0 этапов skipped/aborted | lifecycle является контрактом, а не рекомендацией | `report.stages[*].status == "completed"` |
 | T3 | Gate retries (failed check-gate cycles) | ≤ 2 на прогон суммарно; ≤ 1 на stage | больше — Worker не управляет своим контекстом, а перебирает | journal `check-gate` failed cycles (`collect_attempts.retries.check_gate`) |
-| T4 | Context peak (вход Worker-вызова) | ≤ 32768 токенов на любой вызов; framework-controlled часть ≤ 16384 токенов | полный вызов живёт в 32k; остальное — не framework budget | токенизация лога каждого вызова в run manifest |
+| T4 | Context peak (вход Worker-вызова) | ≤ 32768 токенов на любой вызов; framework-controlled часть ≤ 16000 токенов | полный вызов живёт в 32k; остальное — не framework budget | токенизация лога каждого вызова в run manifest |
 | T5 | Files loaded (уникальные файлы на вызов) | ≤ 24 | decision 2 плана: bounded reads, никакой шаг не грузит репозиторий | подсчёт уникальных путей в input каждого вызова |
 | T6 | Hallucinated paths (запись/чтение несуществующих путей) | 0 | выдуманный путь = потеря дисковой истинности Process | сверка envelope/journal путей с деревом на диске |
 | T7 | Envelope violations | 0 | leash-инвариант абсолютен | `leash` check по завершении каждого stage + CI |

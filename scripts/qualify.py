@@ -32,7 +32,7 @@ ABSOLUTE = {
     "stages_completed": 7,
     "gate_retries_max": 2,
     "context_peak_tokens_max": 32768,
-    "framework_input_tokens_max": 16384,
+    "framework_input_tokens_max": 16000,
     "max_unique_files": 24,
     "hallucinated_paths": 0,
     "envelope_violations": 0,
