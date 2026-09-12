@@ -286,6 +286,9 @@ class SandboxIO:
         self.write_envelope: EnvelopeState | None = None
         # globs that authorized the most recent successful write (QF-003 hook)
         self.last_write_envelope_globs: list[str] = []
+        # QF-003: injected by drive_worker; returns the changed-path inventory
+        # so shell side effects are attributed to the shell event.
+        self.inventory_fn = None
 
     def begin_call(self) -> None:
         self._call_index += 1
@@ -388,6 +391,7 @@ class SandboxIO:
             self.envelope_violations += 1
             self._record("shell", f"rejected: command not allowed: {command[:120]}", command=command[:200])
             return f"ERROR: command not allowed: {command[:120]}"
+        before = dict(self.inventory_fn()) if self.inventory_fn else {}
         try:
             proc = subprocess.run(
                 argv,
@@ -404,10 +408,14 @@ class SandboxIO:
         except OSError as ex:
             self._record("shell", f"error: cannot execute: {ex}", command=" ".join(argv))
             return f"ERROR: cannot execute: {ex}"
-        # QF-003 adds the inventory diff of shell-created paths; for now the
-        # journal carries the command and its exit code.
+        # QF-003: paths changed by the command itself (inventory diff) are
+        # attributed to this shell event.
+        changed: list[str] = []
+        if self.inventory_fn:
+            after = dict(self.inventory_fn())
+            changed = sorted(p for p in after if before.get(p) != after.get(p))
         self._record("shell", "ok" if proc.returncode == 0 else f"error: exit {proc.returncode}",
-                     command=" ".join(argv), exit_code=proc.returncode)
+                     paths_written=changed, command=" ".join(argv), exit_code=proc.returncode)
         out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
         return f"exit={proc.returncode}\n{out}"
 
@@ -488,25 +496,26 @@ def _core_envelope(sandbox: Path) -> EnvelopeState:
     return EnvelopeState("ok", [str(g) for g in (envelope.get("write") or [])])
 
 
-def _core_leash_violations(sandbox: Path, files: list[str]) -> int:
-    """T7: run the Core leash over the files written so far this stage."""
+def _core_leash_violations(sandbox: Path, files: list[str]) -> tuple[int, list[str]]:
+    """T7: run the Core leash over a stage write-set; returns (count, details)."""
     import contextlib
     import io as _io
 
     from deltafuse.cli import main as cli_main
 
     if not files:
-        return 0
+        return 0, []
     buf = _io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
             code = cli_main(["leash", str(sandbox), "--json", "--files", *files])
         data = json.loads(buf.getvalue() or "{}")
     except Exception:
-        return 1  # uninterpretable Core answer counts as a violation
-    if code not in (0, 1):
-        return 1
-    return len(data.get("violations") or [])
+        return 1, ["uninterpretable Core answer"]  # fail-closed
+    if code not in (0, 1) or not isinstance(data, dict):
+        return 1, ["uninterpretable Core answer"]
+    violations = [str(v) for v in (data.get("violations") or [])]
+    return len(violations), violations
 
 
 def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system: str) -> dict:
@@ -516,16 +525,35 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
     measured separately (system prompt + Core/tool responses). A call with no
     usage measurement leaves the peak unmeasured (fail-closed in T4).
     T5: unique files are counted per call, including the last tool action.
-    T7: after every Core stage transition the leash check runs over the files
-    written so far and its verdict is used as-is.
+    T7 (QF-003): the sandbox is a git repo maintained by the runner. Around
+    every shell command and stage boundary the actual changed-path inventory
+    is taken from git, not from local counters. On `deltafuse advance`
+    (detected by argv, not output substrings) the Core leash runs BEFORE the
+    advance, while the ready step still belongs to the closing stage, so the
+    write-set is judged by the envelope that was in force at write time;
+    running it after the advance would judge closed-stage writes by the next
+    stage's envelope — the false-classification defect this avoids. After the
+    advance, journal-vs-inventory reconciliation catches unjournaled changes,
+    then the runner makes a bookkeeping commit for the next stage.
     """
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": f"Begin the case {case_id}. Run `deltafuse next` first."},
     ]
     io = SandboxIO(sandbox)
+    expected_head = init_sandbox_git(sandbox)
+    head = {"sha": expected_head}
+    io.inventory_fn = lambda: inventory(sandbox, head["sha"])
     calls: list[dict] = []
     unmeasured_usage = False
+    stage_writes: set[str] = set()
+    stage_leash: list[dict] = []
+    breakdown = {
+        "write_denied": 0,
+        "leash_violations": 0,
+        "unjournaled_change": 0,
+        "inventory_tampered": 0,
+    }
     for _ in range(MAX_WORKER_TURNS):
         io.begin_call()
         envelope = _core_envelope(sandbox)
@@ -533,7 +561,11 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         if envelope.status == "error":
             # QF-001: a Core failure blocks the stage; the run aborts instead
             # of continuing with unrestricted writes.
-            return _final_metrics(io, calls, unmeasured_usage, envelope_error=envelope.detail)
+            breakdown["write_denied"] = io.envelope_violations
+            return _final_metrics(
+                io, calls, unmeasured_usage,
+                envelope_error=envelope.detail, breakdown=breakdown, stage_leash=stage_leash,
+            )
         turn = worker_turn(base_url, model, messages)
         prompt_tokens = turn["prompt_tokens"]
         if not prompt_tokens:
@@ -547,22 +579,56 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         messages.append({"role": "assistant", "content": turn["content"]})
         action = parse_action(turn["content"])
         tool = str(action.get("tool"))
-        if tool == "done":
-            result = None
-        elif tool == "read_file":
-            result = io.read_file(str(action.get("path")))
-        elif tool == "write_file":
-            result = io.write_file(str(action.get("path")), str(action.get("content")))
-        elif tool == "shell":
-            result = io.shell(str(action.get("command")))
-            if result.startswith("exit=0") and "advance: gate" in result:
-                # Stage transition: the Core re-checks the whole written set.
-                io.envelope_violations += _core_leash_violations(
-                    sandbox, sorted(io.unique_files)
+        is_advance = False
+        try:
+            if tool == "done":
+                result = None
+            elif tool == "read_file":
+                result = io.read_file(str(action.get("path")))
+            elif tool == "write_file":
+                result = io.write_file(str(action.get("path")), str(action.get("content")))
+            elif tool == "shell":
+                command = str(action.get("command"))
+                argv = parse_shell_argv(command)
+                is_advance = bool(
+                    argv and len(argv) >= 2
+                    and argv[0].lower() == "deltafuse" and argv[1].lower() == "advance"
                 )
-        else:
-            result = f"ERROR: unknown tool {tool}"
-            io._record("unknown", f"error: unknown tool {tool}")
+                if is_advance:
+                    # QF-003: leash BEFORE the advance — the closing stage's
+                    # write-set against the envelope of the write time.
+                    count, details = _core_leash_violations(sandbox, sorted(stage_writes))
+                    breakdown["leash_violations"] += count
+                    stage_leash.append(
+                        {"stage_write_set": sorted(stage_writes), "violations": details}
+                    )
+                result = io.shell(command)
+            else:
+                result = f"ERROR: unknown tool {tool}"
+                io._record("unknown", f"error: unknown tool {tool}")
+        except QualificationError as ex:
+            # Tamper guard fired mid-stage: block the run fail-closed.
+            breakdown["inventory_tampered"] += 1
+            return _final_metrics(
+                io, calls, unmeasured_usage,
+                envelope_error=str(ex), breakdown=breakdown, stage_leash=stage_leash,
+            )
+        if io.events:
+            stage_writes.update(io.events[-1].paths_written)
+        if is_advance and result.startswith("exit=0"):
+            # Post-advance: every changed path must be in the journal.
+            inv = inventory(sandbox, head["sha"])
+            unjournaled = sorted(
+                p for p in inv
+                if p not in stage_writes and not p.startswith(CORE_OWNED_PREFIX)
+            )
+            if unjournaled:
+                breakdown["unjournaled_change"] += len(unjournaled)
+            # Bookkeeping commit: clean, known base for the next stage.
+            head["sha"] = _bookkeeping_commit(
+                sandbox, f"stage close (runner bookkeeping): {len(stage_writes)} paths"
+            )
+            stage_writes = set()
         if result is not None:
             messages.append({"role": "user", "content": result[:6000]})
         # QF-002: the call is measured AFTER its tool action ran, so the last
@@ -578,23 +644,46 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         )
         if tool == "done":
             break
-    return _final_metrics(io, calls, unmeasured_usage)
+    breakdown["write_denied"] = io.envelope_violations
+    return _final_metrics(
+        io, calls, unmeasured_usage, breakdown=breakdown, stage_leash=stage_leash
+    )
 
 
 def _final_metrics(
-    io: SandboxIO, calls: list[dict], unmeasured_usage: bool, envelope_error: str | None = None
+    io: SandboxIO,
+    calls: list[dict],
+    unmeasured_usage: bool,
+    envelope_error: str | None = None,
+    breakdown: dict | None = None,
+    stage_leash: list[dict] | None = None,
 ) -> dict:
     from dataclasses import asdict
 
+    if breakdown is None:
+        breakdown = {
+            "write_denied": io.envelope_violations,
+            "leash_violations": 0,
+            "unjournaled_change": 0,
+            "inventory_tampered": 0,
+        }
     peaks = [c["input_tokens"] for c in calls if c["input_tokens"] is not None]
     fw = [c["framework_input_tokens"] for c in calls]
+    total_t7 = (
+        breakdown["write_denied"]
+        + breakdown["leash_violations"]
+        + breakdown["unjournaled_change"]
+        + breakdown["inventory_tampered"]
+    )
     metrics = {
         "calls": calls,
         "context_peak_tokens": max(peaks) if peaks and not unmeasured_usage else None,
         "framework_input_tokens_max": max(fw) if fw else None,
         "max_unique_files": max((c["unique_files"] for c in calls), default=0),
         "hallucinated_paths": io.hallucinated_paths,
-        "envelope_violations": io.envelope_violations,
+        "envelope_violations": total_t7,
+        "t7_breakdown": breakdown,
+        "stage_leash": stage_leash or [],
         "tool_events": [asdict(e) for e in io.events],
     }
     if envelope_error:
@@ -666,6 +755,12 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
     envelope_error = metrics.get("envelope_error")
     if envelope_error:
         failures.append(f"T7 envelope_unavailable={envelope_error}")
+    # QF-003: any nonzero inventory/leash component fails, independently.
+    breakdown = metrics.get("t7_breakdown")
+    if breakdown and any(
+        breakdown.get(k) for k in ("leash_violations", "unjournaled_change", "inventory_tampered")
+    ):
+        failures.append(f"T7 stage_inventory={breakdown}")
     # T8: authentic evidence for every case (defense checks always run).
     defense = report.get("defense_checks") or {}
     synthetic = [
@@ -711,6 +806,82 @@ def framework_lock_hash() -> str:
     from deltafuse.core.hasher import compute_framework_content_hash
 
     return f"sha256:{compute_framework_content_hash(REPO)}"
+
+
+# ------------------------------------------- QF-003: inventory & stage leash
+
+GITIGNORE_LINES = ("__pycache__/", ".pytest_cache/", "*.pyc", ".venv/")
+# Core-owned state is legitimately rewritten by deltafuse commands; it never
+# counts as an unjournaled Worker change.
+CORE_OWNED_PREFIX = ".deltafuse/"
+
+
+def _git(args: list[str], cwd: Path, check: bool = True) -> str:
+    proc = subprocess.run(
+        ["git", *args], capture_output=True, text=True, cwd=str(cwd)
+    )
+    if check and proc.returncode != 0:
+        raise QualificationError(
+            f"git {' '.join(args)} failed (exit {proc.returncode}): "
+            f"{(proc.stderr or proc.stdout).strip()[:200]}"
+        )
+    return proc.stdout
+
+
+def init_sandbox_git(sandbox: Path) -> str:
+    """QF-003: make the sandbox a git repo (judge side) and return HEAD.
+
+    The Worker never commits; only the runner makes bookkeeping commits so
+    each stage starts from a clean, known tree.
+    """
+    _git(["init", "-q"], sandbox, check=False)
+    _git(["config", "user.name", "deltafuse-qualification"], sandbox, check=False)
+    _git(["config", "user.email", "qualification@deltafuse.invalid"], sandbox, check=False)
+    gitignore = sandbox / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text("\n".join(GITIGNORE_LINES) + "\n", encoding="utf-8")
+    has_head = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        capture_output=True, cwd=str(sandbox),
+    ).returncode == 0
+    if not has_head:
+        _git(["add", "-A"], sandbox)
+        _git(["commit", "-q", "-m", "bench init (runner bookkeeping)"], sandbox)
+    return _git(["rev-parse", "HEAD"], sandbox).strip()
+
+
+def inventory(sandbox: Path, expected_head: str | None = None) -> dict[str, str]:
+    """QF-003: actual changed-path inventory (`git status --porcelain -uall`).
+
+    Tamper-guard: a HEAD that no longer matches the runner's last bookkeeping
+    commit means Worker code touched `.git` — the stage is blocked.
+    """
+    if expected_head is not None:
+        head = _git(["rev-parse", "HEAD"], sandbox, check=False).strip()
+        if head != expected_head:
+            raise QualificationError(
+                f"inventory_tampered: sandbox HEAD {head[:12]!r} does not match "
+                f"bookkeeping commit {expected_head[:12]!r}"
+            )
+    out = _git(["status", "--porcelain", "-uall"], sandbox)
+    result: dict[str, str] = {}
+    for line in out.splitlines():
+        if len(line) < 4:
+            continue
+        status, path = line[:2], line[3:].strip()
+        if "->" in path:  # rename: both sides count as changed
+            old, new = (p.strip() for p in path.split("->"))
+            result[old] = status
+            result[new] = status
+        else:
+            result[path] = status
+    return dict(sorted(result.items()))
+
+
+def _bookkeeping_commit(sandbox: Path, message: str) -> str:
+    _git(["add", "-A"], sandbox)
+    _git(["commit", "-q", "-m", message], sandbox)
+    return _git(["rev-parse", "HEAD"], sandbox).strip()
 
 
 def tree_dirty() -> list[str]:
@@ -796,6 +967,8 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "max_unique_files": metrics["max_unique_files"],
         "hallucinated_paths": metrics["hallucinated_paths"],
         "envelope_violations": metrics["envelope_violations"],
+        "t7_breakdown": metrics["t7_breakdown"],
+        "stage_leash": metrics["stage_leash"],
         "calls": metrics["calls"],
         "tool_events": metrics["tool_events"],
     }

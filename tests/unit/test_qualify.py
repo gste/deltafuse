@@ -589,6 +589,185 @@ def test_tool_event_journal_shape(tmp_path, monkeypatch):
     json.dumps(events)
 
 
+# ------------------------------------------- QF-003: stage leash / inventory
+
+
+def _fake_core(monkeypatch, leash_files_seen, leash_order=None, violate=None):
+    """cli stub: `next` -> envelope docs/**; `leash` -> recorded, violations
+    for any file where violate(file) is true."""
+    from deltafuse import cli as cli_mod
+
+    def fake_main(argv):
+        if argv[0] == "next":
+            print(json.dumps({"envelope": {"write": ["docs/**"]}}))
+            return 0
+        if argv[0] == "leash":
+            files = argv[argv.index("--files") + 1:]
+            leash_files_seen.append(files)
+            if leash_order is not None:
+                leash_order.append(("leash", list(files)))
+            violations = [f"uncovered: {f}" for f in files if violate and violate(f)]
+            print(json.dumps({"violations": violations}))
+            return 0
+        return 0
+
+    monkeypatch.setattr(cli_mod, "main", fake_main)
+
+
+def _stub_advance(monkeypatch, order=None, before_advance=None):
+    """Stub only the `deltafuse advance` shell command; everything else runs
+    through the real SandboxIO.shell (real git effects, real journal)."""
+    real_shell = qualify.SandboxIO.shell
+
+    def fake_shell(self, command, timeout=300):
+        if command == "deltafuse advance":
+            if before_advance:
+                before_advance(self)
+            if order is not None:
+                order.append(("advance", command))
+            return "exit=0\n"
+        return real_shell(self, command, timeout=timeout)
+
+    monkeypatch.setattr(qualify.SandboxIO, "shell", fake_shell)
+
+
+def test_shell_created_file_outside_envelope_fails_t7(tmp_path, monkeypatch):
+    """QF-003: a shell-created file outside the envelope is found by the
+    inventory diff, enters the stage write-set, and fails T7 via the Core."""
+    leash_files_seen = []
+    _fake_core(monkeypatch, leash_files_seen, violate=lambda f: f == "leak.txt")
+    _stub_advance(monkeypatch)
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "shell", "command": "git diff --output=leak.txt"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert (tmp_path / "leak.txt").exists()  # the shell effect happened
+    assert metrics["t7_breakdown"]["leash_violations"] == 1
+    assert metrics["envelope_violations"] == 1
+    assert "leak.txt" in leash_files_seen[0]
+    verdict, failures = qualify.apply_thresholds(
+        {"pass": True, "first_fail": None, "stages": {}, "retries": {}, "defense_checks": {}},
+        metrics,
+    )
+    assert verdict is False
+    assert any(f.startswith("T7") for f in failures)
+
+
+def test_reads_never_sent_to_leash(tmp_path, monkeypatch):
+    """QF-003: the Core leash receives only the stage write-set, never reads."""
+    leash_files_seen = []
+    _fake_core(monkeypatch, leash_files_seen)
+    _stub_advance(monkeypatch)
+    (tmp_path / "docs" / "spec").mkdir(parents=True)
+    (tmp_path / "docs" / "spec" / "a.md").write_text("a", encoding="utf-8")
+    (tmp_path / "docs" / "spec" / "b.md").write_text("b", encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "write_file", "path": "docs/spec/a.md", "content": "a2"}',
+            '{"tool": "read_file", "path": "docs/spec/b.md"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert leash_files_seen == [["docs/spec/a.md"]]  # b.md (read) absent
+    assert metrics["envelope_violations"] == 0
+
+
+def test_past_stage_files_not_rechecked_by_new_envelope(tmp_path, monkeypatch):
+    """QF-003: each stage's leash call sees only that stage's writes."""
+    leash_files_seen = []
+    _fake_core(monkeypatch, leash_files_seen)
+    _stub_advance(monkeypatch)
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "write_file", "path": "docs/spec/x.md", "content": "x"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "write_file", "path": "docs/changes/y.md", "content": "y"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert leash_files_seen == [["docs/spec/x.md"], ["docs/changes/y.md"]]
+    assert metrics["envelope_violations"] == 0
+    assert metrics["t7_breakdown"]["leash_violations"] == 0
+
+
+def test_leash_runs_per_advance_with_stage_writeset(tmp_path, monkeypatch):
+    """QF-003: exactly one leash call per advance, with the closing stage's
+    write-set, ordered BEFORE the advance executes."""
+    leash_files_seen = []
+    order = []
+    _fake_core(monkeypatch, leash_files_seen, leash_order=order)
+    _stub_advance(monkeypatch, order=order)
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "write_file", "path": "docs/spec/x.md", "content": "x"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "write_file", "path": "docs/changes/y.md", "content": "y"}',
+            '{"tool": "shell", "command": "deltafuse advance"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    kinds = [k for k, _ in order]
+    assert kinds == ["leash", "advance", "leash", "advance"]
+    assert order[0][1] == ["docs/spec/x.md"]
+    assert order[2][1] == ["docs/changes/y.md"]
+    assert metrics["stage_leash"]  # per-stage leash verdicts recorded
+
+
+def test_inventory_tamper_detected(tmp_path):
+    """QF-003: a sandbox HEAD shifted behind the runner's back is tamper."""
+    import subprocess
+
+    head = qualify.init_sandbox_git(tmp_path)
+    assert len(head) == 40
+    (tmp_path / "z.md").write_text("z", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-q", "--amend", "-m", "tamper"], cwd=tmp_path, capture_output=True)
+    with pytest.raises(qualify.QualificationError, match="inventory_tampered"):
+        qualify.inventory(tmp_path, expected_head=head)
+
+
+def test_unjournaled_change_detected(tmp_path, monkeypatch):
+    """QF-003: a file created past the journal is flagged at stage close."""
+    leash_files_seen = []
+    _fake_core(monkeypatch, leash_files_seen)
+    turn_state = {"n": 0}
+
+    def fake_turn(base_url, model, messages):
+        turn_state["n"] += 1
+        if turn_state["n"] == 2:
+            # Worker-side code sneaks a file onto disk, outside the journal.
+            (tmp_path / "ghost.md").write_text("g", encoding="utf-8")
+            return {"content": '{"tool": "shell", "command": "deltafuse advance"}', "prompt_tokens": 10}
+        if turn_state["n"] == 1:
+            return {"content": '{"tool": "write_file", "path": "docs/spec/x.md", "content": "x"}', "prompt_tokens": 10}
+        return {"content": '{"tool": "done", "reason": "ok"}', "prompt_tokens": 10}
+
+    monkeypatch.setattr(qualify, "worker_turn", fake_turn)
+    _stub_advance(monkeypatch)
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert metrics["t7_breakdown"]["unjournaled_change"] == 1
+    assert metrics["envelope_violations"] == 1
+    verdict, failures = qualify.apply_thresholds(
+        {"pass": True, "first_fail": None, "stages": {}, "retries": {}, "defense_checks": {}},
+        metrics,
+    )
+    assert verdict is False
+    assert any(f.startswith("T7") for f in failures)
+
+
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):
     """Step 6 acceptance: 3 synthetic runs, one failure -> non-zero exit,
     all three reports plus the campaign verdict saved; manifest.yaml format."""
