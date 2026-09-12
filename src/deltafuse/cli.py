@@ -211,6 +211,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # lint-context command (P7.6)
+    # validate-config (DF3-009 item 5): one validator for config contracts
+    cfg_parser = subparsers.add_parser(
+        "validate-config", help="Validate .deltafuse/config.yaml as one contract"
+    )
+    cfg_parser.add_argument("product_path", nargs="?", default=".")
+    cfg_parser.add_argument("--json", action="store_true")
+
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
@@ -620,6 +627,20 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
+
+    elif args.command == "validate-config":
+        from deltafuse.core.config import validate_config
+
+        errors = validate_config(Path(args.product_path))
+        _journal(Path(args.product_path), cmd="validate-config", ok=not errors, errors=errors, n_errors=len(errors))
+        if args.json:
+            print(json.dumps({"ok": not errors, "errors": errors}, ensure_ascii=False, indent=2))
+        elif errors:
+            for e in errors:
+                print(f"config: {e}", file=sys.stderr)
+            return 1
+        print("config: .deltafuse/config.yaml is a valid v3 contract")
         return 0
 
     elif args.command == "lint-context":

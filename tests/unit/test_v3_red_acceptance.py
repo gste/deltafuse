@@ -292,7 +292,6 @@ def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path
 # ---------------------------------------------------------------- C-01 (P0)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_c01_gate_spam_does_not_inflate_process_score():
     """adversarial_worker: repeatedly querying an already-passed gate must not
     count as forward progress; bench process score rewards unique transitions."""

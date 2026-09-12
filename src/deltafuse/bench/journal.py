@@ -206,10 +206,18 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
         slot["ok" if ok else "fail"] += 1
         if cmd == "check-gate":
             gate = str(event.get("gate") or "unknown")
-            row = gates.setdefault(gate, {"n": 0, "ok": 0, "fail": 0, "last_ok": False})
+            row = gates.setdefault(
+                gate, {"n": 0, "ok": 0, "fail": 0, "last_ok": False, "redundant": 0}
+            )
             row["n"] += 1
-            row["ok" if ok else "fail"] += 1
-            row["last_ok"] = ok
+            # DF3-009 / C-01: querying an already-passed gate is not forward
+            # progress. Count it as a redundant retry so spam lowers, never
+            # raises, the process score.
+            if ok and row["last_ok"]:
+                row["redundant"] += 1
+            else:
+                row["ok" if ok else "fail"] += 1
+                row["last_ok"] = ok
         key = _cycle_key(event)
         if current is not None and (current["cmd"], current.get("key") or "") != key:
             flush()
@@ -238,6 +246,7 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
         cycle.pop("key", None)
         cycle["seq"] = [item for item in cycle["seq"] if item is not None]
     gate_fail = sum(int(row["fail"]) for row in gates.values())
+    gate_fail += sum(int(row.get("redundant") or 0) for row in gates.values())
     evidence_fail = int((commands.get("evidence") or {}).get("fail") or 0)
     coverage_fail = int((commands.get("coverage") or {}).get("fail") or 0)
     return {
@@ -263,8 +272,8 @@ def summarize_journal(events: list[dict[str, Any]]) -> dict[str, Any]:
     for gate, row in gates.items():
         stage = GATE_STAGE.get(str(gate), str(gate))
         slot = by_stage.setdefault(stage, {"attempts": 0, "retries": 0})
-        slot["attempts"] += int(row.get("n") or 0)
-        slot["retries"] += int(row.get("fail") or 0)
+        slot["attempts"] += int(row.get("n") or 0) - int(row.get("redundant") or 0)
+        slot["retries"] += int(row.get("fail") or 0) + int(row.get("redundant") or 0)
     retries = collected.get("retries") or {}
     return {
         "observed": bool(events),

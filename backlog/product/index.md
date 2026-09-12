@@ -18,7 +18,7 @@
 | [DF3-006](DF3-006.md) | `done` | Evidence и envelope authority |
 | [DF3-007](DF3-007.md) | `done` | Human Gate receipts и integrity profiles |
 | [DF3-008](DF3-008.md) | `done` | Schema v3 и Declare contracts |
-| [DF3-009](DF3-009.md) | `ready` | Bench, docs и release qualification |
+| [DF3-009](DF3-009.md) | `in-review` | Bench, docs и release qualification |
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |
 | [LS-003](LS-003.md) | `done` | Orphan-правка продукта без Change |
