@@ -158,5 +158,6 @@ Stdout — один JSON. Файлы продукта не пишутся. Не�
 - Change завис между валидацией и переходом: повторите `deltafuse advance <change> --gate <gate>` — последний receipt авторитетен, незавершённая запись статуса будет завершена.
 - Статус, расходящийся с последним receipt, останавливает очередь: закройте или мигрируйте Change, либо верните артефакт в Core через `advance`. Ручные правки не мигрируются.
 - Артефакты неподдерживаемых версий схем останавливаются с диагностикой `schema_version` и остаются нетронутыми; мигрируйте вручную на v3.
+- Версионирование артефактов (V3-FIX-013): `change`, `evidence` и каталог capabilities несут явный `schema_version: 3`. Вложенные в Change артефакты (`tasks/**`, `slices/**`, `decisions/**`, frontmatter `spec-delta`, `routing.yaml`, `coverage.yaml`) наследуют версию родительского Change — собственного `schema_version` у них нет, и они валидируются fail-closed через контракт Change.
 - Проверяйте весь продуктовый контракт в любой момент: `deltafuse validate-config .`.
 - Human Gate клики живут в `.deltafuse/gate-journal.jsonl` (Core-owned): пересборки обнаруживаются; в профиле `broker-signed` действительны только подписанные брокером receipts.

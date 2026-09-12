@@ -1,6 +1,7 @@
 $schema: https://json-schema.org/draft/2020-12/schema
-$id: https://deltafuse.dev/schemas/v2/spec-delta.schema.yaml
+$id: https://deltafuse.dev/schemas/v3/spec-delta.schema.yaml
 title: DeltaFuse Specification Delta frontmatter
+description: "Change-nested artifact (V3-FIX-013): it inherits the schema_version of its parent Change artifact and is validated fail-closed through the Change contract; it carries no schema_version of its own."
 type: object
 additionalProperties: false
 required: [change, status, added, modified, removed]

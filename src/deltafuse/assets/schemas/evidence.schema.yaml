@@ -1,5 +1,5 @@
 $schema: https://json-schema.org/draft/2020-12/schema
-$id: https://deltafuse.dev/schemas/v2/evidence.schema.yaml
+$id: https://deltafuse.dev/schemas/v3/evidence.schema.yaml
 title: DeltaFuse Test Evidence
 type: object
 additionalProperties: false

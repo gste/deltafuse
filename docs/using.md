@@ -156,5 +156,6 @@ Stdout is one JSON object. No product files are written. Missing `.deltafuse/loc
 - A Change stuck mid-transition: run `deltafuse advance <change> --gate <gate>` again — the last receipt is authoritative and the pending status write is completed.
 - A status that disagrees with the last receipt halts the queue: close or migrate the Change, or hand the artifact back to Core via `advance`. Hand edits are never migrated.
 - Artifacts from unsupported schema versions stop with a `schema_version` diagnostic and are left untouched; migrate them manually to v3.
+- Artifact versioning (V3-FIX-013): `change`, `evidence`, and the capability catalog carry an explicit `schema_version: 3`. Change-nested artifacts (`tasks/**`, `slices/**`, `decisions/**`, `spec-delta` frontmatter, `routing.yaml`, `coverage.yaml`) inherit the schema version of their parent Change artifact — they carry no version of their own and are validated fail-closed through the Change contract.
 - Verify the whole product contract any time with `deltafuse validate-config .`.
 - Human Gate clicks live in `.deltafuse/gate-journal.jsonl` (Core-owned): rebuilds are detected; in `broker-signed` profile only broker-signed receipts validate.

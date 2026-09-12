@@ -18,7 +18,7 @@ def test_all_expected_schemas_loaded(registry: SchemaRegistry):
         schema = registry.get_schema(schema_name)
         assert schema is not None
         assert schema.get("$schema") == "https://json-schema.org/draft/2020-12/schema"
-        assert f"https://deltafuse.dev/schemas/v2/{schema_name}.schema.yaml" in schema.get("$id", "")
+        assert f"https://deltafuse.dev/schemas/v3/{schema_name}.schema.yaml" in schema.get("$id", "")
 
 def test_change_schema_valid_and_invalid(registry: SchemaRegistry):
     valid_change = {
@@ -345,3 +345,24 @@ def test_bootstrap_decision_schema_validation(registry: SchemaRegistry):
         "superseded_by": None,
     }
     assert registry.validate("decision", valid_bootstrap) == []
+
+
+STANDALONE_VERSIONED = ["change", "evidence", "capability"]
+CHANGE_NESTED = ["task", "slice", "decision", "spec-delta", "routing", "coverage"]
+
+
+def test_schema_id_version_matches_declared_schema_version():
+    """V3-FIX-012 / V3-FIX-013: the $id major version and the artifact
+    versioning model must agree for every canonical schema."""
+    from deltafuse.core.schemas import SchemaRegistry
+
+    registry = SchemaRegistry()
+    for name in ALL_SCHEMAS:
+        schema = registry.get_schema(name)
+        assert "/schemas/v3/" in schema["$id"], name
+        if name in STANDALONE_VERSIONED:
+            assert schema.get("required") and "schema_version" in schema["required"], name
+            assert schema["properties"]["schema_version"]["const"] == 3, name
+        else:
+            assert "schema_version" not in schema.get("required", []), name
+            assert "V3-FIX-013" in schema.get("description", ""), name
