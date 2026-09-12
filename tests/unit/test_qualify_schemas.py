@@ -36,7 +36,7 @@ def _full_report() -> dict:
                 "input_tokens": 9120,
                 "framework_input_tokens": 6400,
                 "framework_input_chars": 25600,
-                "framework_input_tokens_method": "chars-div-4",
+                "framework_input_tokens_method": "host-tokenize",
                 "unique_files": 11,
                 "hallucinated_paths": 0,
                 "envelope_violations": 0,
@@ -53,8 +53,8 @@ def _full_report() -> dict:
             "envelope_violations": 0,
             "evidence_authentic": True,
         },
-        "t7_breakdown": {"write_denied": 0, "leash_violations": 0},
-        "hallucinated_breakdown": {"hallucinated": 0},
+        "t7_breakdown": {"write_denied": 0, "leash_violations": 0, "unjournaled_change": 0, "inventory_tampered": 0, "staging_escape": 0, "execution_policy": 0},
+        "hallucinated_breakdown": {"hallucinated": 0, "envelope": 0, "execution_policy": 0},
     }
 
 

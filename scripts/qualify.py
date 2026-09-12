@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import qualify_executor
+import qualify_semantic
 from qualify_executor import apply_executor_verdict_cap, resolve_executor
 
 REPO = Path(__file__).resolve().parent.parent
@@ -1291,7 +1292,19 @@ def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
 
 def medians(runs: list[dict]) -> dict:
     def med(key: str) -> float | None:
-        values = [r[key] for r in runs if isinstance(r.get(key), (int, float))]
+        # QF-017: prefer the top-level measurement, fall back to totals;
+        # NaN/booleans are never measurements.
+        values = []
+        for r in runs:
+            value = r.get(key)
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                value = (r.get("totals") or {}).get(key)
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value == value
+            ):
+                values.append(value)
         return round(float(statistics.median(values)), 1) if values else None
 
     return {
@@ -1355,13 +1368,20 @@ def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
     if not runs:
         failures.append("median: no completed runs")
         return False, failures
+
+    def _run_value(run: dict, key: str):
+        value = run.get(key)
+        if value is None:
+            value = (run.get("totals") or {}).get(key)
+        return value
+
     for label, key in (("T6", "hallucinated_paths"), ("T7", "envelope_violations")):
-        values = [r.get(key) for r in runs]
+        values = [_run_value(r, key) for r in runs]
         if any(v is None for v in values):
             failures.append(f"{label} median {key}=unmeasured")
         elif sum(int(v or 0) for v in values) > 0:
             failures.append(f"{label} median {key}>0")
-    if not all(r.get("evidence_authentic") for r in runs):
+    if not all(_run_value(r, "evidence_authentic") for r in runs):
         failures.append("T8 median evidence_authentic=false")
     return not failures, failures
 
@@ -1673,6 +1693,27 @@ def _build_run_report(
     }
 
 
+def _run_summary(run: dict) -> dict:
+    """QF-017: manifest carries run references, not full report bodies."""
+    summary = {k: run[k] for k in ("run_id", "case", "verdict", "threshold_failures")}
+    if run.get("error"):
+        summary["error"] = run["error"]
+    return summary
+
+
+def _write_manifest(campaign_dir: Path, manifest: dict,
+                    expected_total_runs: int | None = None) -> None:
+    """QF-017: a manifest is written only after schema AND semantic
+    validation pass; a partial campaign is a valid pending/incomplete
+    state, a contradictory one is never written."""
+    qualify_semantic.semantic_validate_manifest(
+        manifest, RUNS_DIR,
+        validate_report_fn=validate_document,
+        expected_total_runs=expected_total_runs,
+    )
+    _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
+
+
 def _write_failure_report(
     run_id: str, case_id: str, campaign_id: str, commit: str, model_id: str,
     error_class: str, detail: str,
@@ -1861,24 +1902,25 @@ def main_with_args(argv: list[str] | None = None) -> int:
                     run_id, case, args.campaign_id, commit,
                     model_probe["id"]["value"], error_class, detail,
                 )
-                manifest["runs"].append(run)
+                manifest["runs"].append(_run_summary(run))
                 case_runs.append(run)
                 try:
-                    _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
-                except (SchemaValidationError, OSError) as write_ex:
+                    _write_manifest(campaign_dir, manifest)
+                except (SchemaValidationError, OSError, qualify_semantic.SemanticValidationError) as write_ex:
                     write_error = str(write_ex)
                 if error_class == "host_error":
                     # One host per campaign: a host error aborts everything.
                     aborted = True
                     break
                 continue
-            manifest["runs"].append(run)
+            manifest["runs"].append(_run_summary(run))
             case_runs.append(run)
             print(f"{run['run_id']}: {run['verdict']} {run['threshold_failures'] or ''}")
-            # Atomic manifest refresh after EVERY run: partial results survive.
+            # QF-017: schema+semantic validated manifest refresh after EVERY
+            # run: partial results survive.
             try:
-                _atomic_write_yaml_validated(campaign_dir / "manifest.yaml", "run-manifest", manifest)
-            except (SchemaValidationError, OSError) as ex:
+                _write_manifest(campaign_dir, manifest)
+            except (SchemaValidationError, OSError, qualify_semantic.SemanticValidationError) as ex:
                 write_error = str(ex)
         if aborted:
             break
