@@ -123,8 +123,11 @@ def main(argv: list[str] | None = None) -> int:
         pip = venv_dir / "Scripts" / "python.exe"
         if not pip.is_file():
             pip = venv_dir / "bin" / "python"
+        # The wheel is built by the host interpreter's setuptools; fresh
+        # venvs no longer ship setuptools, so query the build environment.
         backend_version = _run(
-            [str(pip), "-c", "import setuptools;print(setuptools.__version__)"]
+            [sys.executable, "-c",
+             "import importlib.metadata as m;print(m.version('setuptools'))"]
         ).stdout.strip()
         pip_version = _run([str(pip), "-m", "pip", "--version"]).stdout.split()[1]
 
