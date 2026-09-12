@@ -10,19 +10,11 @@ import sys
 import venv
 from pathlib import Path
 
+import os
+
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _pip_available() -> bool:
-    return importlib.util.find_spec("pip") is not None
-
-
-pytestmark = pytest.mark.skipif(
-    not _pip_available() or sys.platform not in ("win32", "linux", "darwin"),
-    reason="wheel smoke needs pip and a supported platform",
-)
 
 
 def _run(cmd: list[str] | str, **kwargs) -> subprocess.CompletedProcess:
@@ -31,12 +23,16 @@ def _run(cmd: list[str] | str, **kwargs) -> subprocess.CompletedProcess:
 
 def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
     """build -> install (clean venv) -> CLI smoke with no source checkout."""
+    if importlib.util.find_spec("pip") is None:
+        pytest.fail("blocked: pip is unavailable; wheel smoke cannot run silently skipped")
     dist = tmp_path / "dist"
-    # 1. Build a real wheel from the repo (bundle must be current first).
+    # 1. Build a real wheel from the repo. The bundle must already be in
+    # sync: the test NEVER fixes the source tree on drift (completion step 7).
     check = _run([sys.executable, str(REPO_ROOT / "scripts" / "sync_assets.py"), "--check"])
-    if check.returncode != 0:
-        sync = _run([sys.executable, str(REPO_ROOT / "scripts" / "sync_assets.py")])
-        assert sync.returncode == 0, sync.stdout + sync.stderr
+    assert check.returncode == 0, (
+        "asset bundle drift; run scripts/sync_assets.py first: "
+        + check.stdout + check.stderr
+    )
     build = _run(
         [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist), str(REPO_ROOT)]
     )
@@ -65,16 +61,37 @@ def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
 
     init_result = _run([str(pip), "-m", "deltafuse", "init", str(workdir / "product")], cwd=str(workdir), env=env)
     assert init_result.returncode == 0, init_result.stdout + init_result.stderr
-    lock = json.loads("null") if False else (workdir / "product" / ".deltafuse" / "lock.yaml")
+    lock = workdir / "product" / ".deltafuse" / "lock.yaml"
     assert lock.is_file()
     lock_text = lock.read_text(encoding="utf-8")
     assert "schema_version: 3" in lock_text, "installed wheel must write lock contract v3"
 
-    # 4. Build manifest evidence: keep the wheel hash with the test artifacts.
+    validate = _run(
+        [str(pip), "-m", "deltafuse", "validate-config", str(workdir / "product")],
+        cwd=str(workdir), env=env,
+    )
+    assert validate.returncode == 0, validate.stdout + validate.stderr
+
+    # 4. Durable build manifest evidence, kept after the test in the
+    # configured output directory (default: bench/builds under the repo).
     import hashlib
 
     wheel_hash = hashlib.sha256(wheel.read_bytes()).hexdigest()
-    (tmp_path / "build-manifest.json").write_text(
-        json.dumps({"wheel": wheel.name, "sha256": wheel_hash}, indent=2),
+    evidence_dir = Path(
+        os.environ.get("DELTAFUSE_WHEEL_EVIDENCE_DIR", REPO_ROOT / "bench" / "builds")
+    )
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence = evidence_dir / f"{wheel.stem}-build-manifest.json"
+    evidence.write_text(
+        json.dumps(
+            {
+                "wheel": wheel.name,
+                "sha256": wheel_hash,
+                "python": sys.version.split()[0],
+                "platform": sys.platform,
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
+    assert evidence.is_file()

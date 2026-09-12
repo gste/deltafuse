@@ -103,6 +103,13 @@ def check() -> int:
             drift.append(key)
     for key in sorted(set(committed["files"]) - set(expected["files"])):
         drift.append(f"-{key} (stale bundle entry)")
+    # b) actual packaged files vs the committed manifest
+    for rel, digest in sorted(committed["files"].items()):
+        path = ASSETS / rel
+        if not path.is_file():
+            drift.append(f"missing packaged asset: {rel}")
+        elif _hash(path) != digest:
+            drift.append(f"tampered packaged asset: {rel}")
     if committed.get("schema_version") != expected["schema_version"]:
         drift.append("manifest schema_version")
     if drift:
