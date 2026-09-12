@@ -11,12 +11,22 @@ V3-FIX-022: `--check` is read-only. It generates the bundle into a temporary
 directory, compares the manifest with the committed one and reports drift
 without ever touching src/deltafuse/assets.
 
-QF-009: `sync` is atomic. The new bundle is generated into a temporary
-sibling directory, self-verified (manifest + SHA-256 per file) and only then
-swapped in via renames with rollback. Any failure — generation, verification
-or swap — leaves the previous bundle byte-for-byte intact; stale
-`assets.next-*` / `assets.prev-*` directories from crashed runs are cleaned
-at startup and never swapped in without verification.
+QF-009/QF-016: `sync` is a CRASH-SAFE TRANSACTIONAL REPLACEMENT — not a
+single-operation atomic directory replacement (Windows does not provide one
+for non-empty directories). The transaction keeps a journal next to the
+target; every phase is journalled atomically BEFORE the rename it guards:
+
+    prepared -> begin-prev -> prev-moved -> swapped -> (journal removed)
+
+On startup `recover()` runs BEFORE any cleanup:
+- valid target present: only journal-confirmed stale copies are deleted;
+- target missing, valid prev present: prev is restored byte-for-byte;
+- target missing, valid next present and the journal allows the commit:
+  the transaction is completed (next becomes the target);
+- ambiguous or invalid state: recovery STOPS WITHOUT DELETION.
+
+`_verify_bundle` checks the manifest schema, the exact file set, per-file
+SHA-256 and rejects symlink/junction entries inside the bundle.
 """
 
 from __future__ import annotations
@@ -31,10 +41,14 @@ import tempfile
 import uuid
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-ASSETS = REPO / "src" / "deltafuse" / "assets"
+# Test-only overrides (used by the crash-kill matrix); production defaults.
+REPO = Path(os.environ.get("DELTAFUSE_TEST_REPO")
+            or Path(__file__).resolve().parent.parent)
+ASSETS = Path(os.environ.get("DELTAFUSE_TEST_ASSETS")
+              or REPO / "src" / "deltafuse" / "assets")
 BUNDLE_ROOTS = ("schemas", "templates", "skills")
 SCHEMA_VERSION = 1
+JOURNAL_NAME = "assets.journal.json"
 
 
 def _hash(path: Path) -> str:
@@ -72,18 +86,36 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
 _rename = os.rename
 
 
-def _cleanup_stale(parent: Path) -> None:
-    """Remove temp dirs left behind by crashed runs."""
-    for pattern in ("assets.next-*", "assets.prev-*"):
-        for stale in parent.glob(pattern):
-            shutil.rmtree(stale, ignore_errors=True)
+def _is_reparse_point(path: Path) -> bool:
+    """True for symlinks and (on Windows) junctions inside a bundle."""
+    try:
+        return os.path.realpath(path) != str(path)
+    except OSError:
+        return True
 
 
 def _verify_bundle(bundle: Path) -> None:
-    """Self-check the generated bundle: manifest parses, files match hashes."""
+    """QF-016: full bundle verification — manifest schema, exact file set,
+    per-file hashes, no symlink/junction entries. Raises RuntimeError."""
     manifest_path = bundle / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    for rel, digest in sorted(manifest["files"].items()):
+    if manifest.get("schema_version") != SCHEMA_VERSION:
+        raise RuntimeError("bundle manifest schema_version mismatch")
+    files = manifest.get("files")
+    if not isinstance(files, dict) or not files:
+        raise RuntimeError("bundle manifest has no files map")
+    for rel, digest in files.items():
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise RuntimeError(f"bundle manifest digest malformed: {rel}")
+    expected = set(files) | {"manifest.json", "__init__.py"}
+    for path in sorted(bundle.rglob("*")):
+        rel = path.relative_to(bundle).as_posix()
+        if _is_reparse_point(path):
+            raise RuntimeError(f"bundle contains symlink/junction: {rel}")
+        if path.is_file():
+            if rel not in expected:
+                raise RuntimeError(f"extra packaged file in bundle: {rel}")
+    for rel, digest in sorted(files.items()):
         path = bundle / rel
         if not path.is_file():
             raise RuntimeError(f"generated bundle is missing {rel}")
@@ -91,29 +123,163 @@ def _verify_bundle(bundle: Path) -> None:
             raise RuntimeError(f"generated bundle hash mismatch: {rel}")
 
 
+# ------------------------------------------------------------ QF-016 journal
+
+
+def _journal_path(assets: Path) -> Path:
+    return assets.parent / JOURNAL_NAME
+
+
+def _read_journal(assets: Path) -> dict | None:
+    """Journal dict, None when absent. A CORRUPTED journal is reported as
+    {"corrupted": True} so recovery can stop without deleting anything."""
+    path = _journal_path(assets)
+    if not path.is_file():
+        return None
+    try:
+        journal = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"corrupted": True}
+    if not isinstance(journal, dict) or "target" not in journal:
+        return {"corrupted": True}
+    return journal
+
+
+def _write_journal(assets: Path, journal: dict | None) -> None:
+    """Atomic journal replacement; None removes the journal (commit)."""
+    path = _journal_path(assets)
+    if journal is None:
+        path.unlink(missing_ok=True)
+        return
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(journal, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _maybe_crash(phase: str) -> None:
+    """Test-only crash injection: hard exit at a named transaction phase."""
+    if os.environ.get("DELTAFUSE_SYNC_CRASH_AT") == phase:
+        sys.stderr.write(f"[crash injection] {phase}\n")
+        sys.stderr.flush()
+        os._exit(137)
+
+
+def recover(assets: Path | None = None) -> int:
+    assets = assets if assets is not None else ASSETS
+    """QF-016: recover the last transaction BEFORE any cleanup.
+
+    Returns 0 when the state is clean/recovered; raises RuntimeError on an
+    ambiguous or invalid state (stop WITHOUT deletion)."""
+    parent = assets.parent
+    journal = _read_journal(assets)
+    if journal is None:
+        return 0
+    if journal.get("corrupted"):
+        raise RuntimeError(
+            "asset transaction journal is corrupted; refusing to touch "
+            "assets — resolve manually, then delete the journal"
+        )
+    target_valid = prev_valid = next_valid = False
+    prev = parent / journal["prev"] if journal.get("prev") else None
+    nxt = parent / journal["next"] if journal.get("next") else None
+
+    def _valid(path: Path | None) -> bool:
+        if path is None or not path.exists():
+            return False
+        try:
+            _verify_bundle(path)
+            return True
+        except (RuntimeError, json.JSONDecodeError, OSError):
+            return False  # invalid candidate, never a reason to delete
+
+    target_valid = _valid(assets)
+    prev_valid = _valid(prev)
+    next_valid = (
+        journal.get("phase") in ("prepared", "begin-prev", "prev-moved")
+        and _valid(nxt)
+    )
+    if target_valid:
+        # only journal-confirmed stale copies may be removed
+        for stale in (prev, nxt):
+            if stale is not None and stale.exists():
+                shutil.rmtree(stale, ignore_errors=True)
+        _write_journal(assets, None)
+        print("recovery: valid target present; confirmed stale copies removed")
+        return 0
+    if prev_valid:
+        _rename(prev, assets)
+        if nxt is not None and nxt.exists():
+            shutil.rmtree(nxt, ignore_errors=True)
+        _write_journal(assets, None)
+        print("recovery: previous bundle restored")
+        return 0
+    if next_valid:
+        _rename(nxt, assets)
+        _write_journal(assets, None)
+        print("recovery: verified new bundle committed")
+        return 0
+    raise RuntimeError(
+        "asset transaction state is ambiguous (no valid target/prev/next); "
+        "refusing to delete anything — resolve manually"
+    )
+
+
+def _cleanup_stale(parent: Path) -> None:
+    """Remove temp dirs left behind by runs that never journalled them.
+
+    Only runs AFTER recover() confirmed a valid committed state, so a stale
+    directory can never be the last valid copy (QF-016)."""
+    for pattern in ("assets.next-*", "assets.prev-*"):
+        for stale in parent.glob(pattern):
+            shutil.rmtree(stale, ignore_errors=True)
+
+
 def _swap_in(new_dir: Path, target: Path) -> None:
-    """Atomic directory swap with rollback (QF-009).
+    """QF-016 crash-safe transactional replacement.
 
     os.replace cannot replace a non-empty directory on Windows, so the swap
-    is: target -> prev, new -> target; on failure prev -> target restores the
-    previous bundle byte-for-byte.
+    is journalled renames: target -> prev (journalled BEFORE and AFTER), then
+    next -> target; recovery restores prev or commits next after a crash.
     """
-    prev = target.parent / f"assets.prev-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    parent = target.parent
+    prev = parent / f"assets.prev-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    journal = _read_journal(target) or {}
+    journal.update({
+        "id": uuid.uuid4().hex,
+        "target": target.name,
+        "prev": prev.name,
+        "next": new_dir.name,
+        "files": json.loads((new_dir / "manifest.json").read_text(encoding="utf-8"))["files"],
+    })
     had_previous = target.exists()
     if had_previous:
+        journal["phase"] = "begin-prev"
+        _write_journal(target, journal)
+        _maybe_crash("begin-prev")
         _rename(target, prev)
+        journal["phase"] = "prev-moved"
+        _write_journal(target, journal)
+        _maybe_crash("prev-moved")
+    _maybe_crash("commit")
     try:
         _rename(new_dir, target)
     except Exception as ex:
         if had_previous and prev.exists():
-            _rename(prev, target)  # rollback
+            _rename(prev, target)  # rollback: restore the previous bundle
+            _write_journal(target, None)
         raise RuntimeError(f"bundle swap failed; previous bundle restored: {ex}") from ex
+    journal["phase"] = "swapped"
+    _write_journal(target, journal)
+    _maybe_crash("swapped")
     if had_previous:
         shutil.rmtree(prev, ignore_errors=True)
+    _write_journal(target, None)
 
 
-def sync() -> list[str]:
-    parent = ASSETS.parent
+def sync(assets: Path | None = None) -> list[str]:
+    assets = assets if assets is not None else ASSETS
+    parent = assets.parent
+    recover(assets)  # QF-016: recovery BEFORE cleanup, never the other way
     _cleanup_stale(parent)
     next_dir = parent / f"assets.next-{os.getpid()}-{uuid.uuid4().hex[:8]}"
     try:
@@ -130,11 +296,11 @@ def sync() -> list[str]:
         manifest_text = json.dumps(manifest, sort_keys=True, indent=2) + "\n"
         (next_dir / "manifest.json").write_text(manifest_text, encoding="utf-8")
         _verify_bundle(next_dir)  # never swap an unverified bundle
-        _swap_in(next_dir, ASSETS)
+        _swap_in(next_dir, assets)
     except Exception:
         shutil.rmtree(next_dir, ignore_errors=True)  # no temp garbage
         raise
-    print(f"bundle: {len(files)} assets -> {ASSETS.relative_to(REPO)}")
+    print(f"bundle: {len(files)} assets -> {assets}")
     return problems
 
 
@@ -188,7 +354,22 @@ if __name__ == "__main__":
         action="store_true",
         help="read-only: report bundle drift without regenerating",
     )
+    ap.add_argument(
+        "--recover-only",
+        action="store_true",
+        help="QF-016: run transaction recovery and exit without syncing",
+    )
     args = ap.parse_args()
+    if args.recover_only:
+        try:
+            sys.exit(recover())
+        except RuntimeError as ex:
+            print(f"recovery stopped: {ex}", file=sys.stderr)
+            sys.exit(5)
     if args.check:
         sys.exit(check())
-    sys.exit(1 if sync() else 0)
+    try:
+        sys.exit(1 if sync() else 0)
+    except RuntimeError as ex:
+        print(f"sync failed: {ex}", file=sys.stderr)
+        sys.exit(5)
