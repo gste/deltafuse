@@ -236,6 +236,21 @@ def framework_commit() -> str:
 
 
 @dataclass
+class ToolEvent:
+    """QF-002: typed journal of one Worker tool action, closed AFTER it runs."""
+
+    call_index: int  # 1-based Worker call number
+    seq: int  # running action number across the run
+    tool: str  # "read" | "write" | "shell" | "unknown"
+    outcome: str  # "ok" | "error ..." | "rejected ..."
+    paths_read: list[str]  # actually read sandbox-relative posix paths
+    paths_written: list[str]  # actually written sandbox-relative posix paths
+    command: str | None = None  # argv of a shell command
+    exit_code: int | None = None
+    envelope_globs: list[str] | None = None  # envelope.write in force (QF-003)
+
+
+@dataclass
 class EnvelopeState:
     """QF-001: write envelope as a first-class, fail-closed state.
 
@@ -265,18 +280,45 @@ class SandboxIO:
         self.envelope_violations = 0
         self.envelope_errors = 0
         self.unique_files: set[str] = set()
-        self.call_files: set[str] = set()
+        self.events: list[ToolEvent] = []
+        self._seq = 0
+        self._call_index = 0
         self.write_envelope: EnvelopeState | None = None
         # globs that authorized the most recent successful write (QF-003 hook)
         self.last_write_envelope_globs: list[str] = []
 
     def begin_call(self) -> None:
-        self.call_files = set()
+        self._call_index += 1
 
     @property
-    def call_unique_files(self) -> int:
-        # T5: unique files for THIS call, including the last tool action.
-        return len(self.call_files)
+    def call_index(self) -> int:
+        return self._call_index
+
+    def _record(self, tool: str, outcome: str, *, paths_read: list[str] | None = None,
+                paths_written: list[str] | None = None, command: str | None = None,
+                exit_code: int | None = None) -> None:
+        self._seq += 1
+        self.events.append(
+            ToolEvent(
+                call_index=self._call_index,
+                seq=self._seq,
+                tool=tool,
+                outcome=outcome,
+                paths_read=paths_read or [],
+                paths_written=paths_written or [],
+                command=command,
+                exit_code=exit_code,
+            )
+        )
+
+    def call_paths(self, call_index: int) -> set[str]:
+        """QF-002: unique paths touched by the events of one Worker call."""
+        paths: set[str] = set()
+        for event in self.events:
+            if event.call_index == call_index:
+                paths.update(event.paths_read)
+                paths.update(event.paths_written)
+        return paths
 
     def _resolve(self, rel: str) -> Path | None:
         if not rel or rel.startswith(("/", "\\")) or ":" in rel[:3]:
@@ -292,20 +334,23 @@ class SandboxIO:
         path = self._resolve(rel)
         if path is None or not path.is_file():
             self.hallucinated_paths += 1
+            self._record("read", f"error: no such file: {rel}", paths_read=[rel])
             return f"ERROR: no such file: {rel}"
         rel_posix = path.relative_to(self.root).as_posix()
         self.unique_files.add(rel_posix)
-        self.call_files.add(rel_posix)
+        self._record("read", "ok", paths_read=[rel_posix])
         return path.read_text(encoding="utf-8", errors="replace")[:60000]
 
     def write_file(self, rel: str, content: str) -> str:
         path = self._resolve(rel)
         if path is None:
             self.envelope_violations += 1
+            self._record("write", f"rejected: path escapes the sandbox: {rel}")
             return "ERROR: path escapes the sandbox"
         rel_posix = path.relative_to(self.root).as_posix()
         if rel_posix.startswith(".deltafuse/"):
             self.envelope_violations += 1
+            self._record("write", f"rejected: Core-owned path: {rel_posix}")
             return "ERROR: Core-owned path; use deltafuse commands"
         # T7/QF-001: the envelope comes from the Core (`deltafuse next --json`).
         from deltafuse.core.leash import is_exempt_path, path_in_envelope
@@ -313,23 +358,27 @@ class SandboxIO:
         state = self.write_envelope
         if state is not None and state.status == "error":
             self.envelope_errors += 1
+            self._record("write", f"rejected: write envelope unavailable: {state.detail}")
             return f"ERROR: write envelope unavailable: {state.detail}"
         if state is None or state.status != "ok":
             self.envelope_violations += 1
+            self._record("write", f"rejected: no valid write envelope: {rel_posix}")
             return "ERROR: no valid write envelope; writing is disabled"
         if not state.globs:
             # QF-001: empty envelope = nothing writable except exempt paths.
             if not is_exempt_path(rel_posix):
                 self.envelope_violations += 1
+                self._record("write", f"rejected: {rel_posix} is outside the (empty) envelope.write")
                 return f"ERROR: {rel_posix} is outside the current envelope.write"
         elif not is_exempt_path(rel_posix) and not path_in_envelope(rel_posix, state.globs):
             self.envelope_violations += 1
+            self._record("write", f"rejected: {rel_posix} is outside the current envelope.write")
             return f"ERROR: {rel_posix} is outside the current envelope.write"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         self.last_write_envelope_globs = list(state.globs)
         self.unique_files.add(rel_posix)
-        self.call_files.add(rel_posix)
+        self._record("write", "ok", paths_written=[rel_posix])
         return f"OK: wrote {rel_posix} ({len(content)} bytes)"
 
     def shell(self, command: str, timeout: int = 300) -> str:
@@ -337,6 +386,7 @@ class SandboxIO:
         argv = parse_shell_argv(command)
         if argv is None:
             self.envelope_violations += 1
+            self._record("shell", f"rejected: command not allowed: {command[:120]}", command=command[:200])
             return f"ERROR: command not allowed: {command[:120]}"
         try:
             proc = subprocess.run(
@@ -348,9 +398,16 @@ class SandboxIO:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
+            self._record("shell", f"error: timed out after {timeout}s",
+                         command=" ".join(argv), exit_code=None)
             return f"ERROR: command timed out after {timeout}s"
         except OSError as ex:
+            self._record("shell", f"error: cannot execute: {ex}", command=" ".join(argv))
             return f"ERROR: cannot execute: {ex}"
+        # QF-003 adds the inventory diff of shell-created paths; for now the
+        # journal carries the command and its exit code.
+        self._record("shell", "ok" if proc.returncode == 0 else f"error: exit {proc.returncode}",
+                     command=" ".join(argv), exit_code=proc.returncode)
         out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
         return f"exit={proc.returncode}\n{out}"
 
@@ -487,21 +544,12 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
         framework_chars = len(system) + sum(
             len(m["content"]) for m in messages if m["role"] == "user"
         )
-        calls.append(
-            {
-                "input_tokens": prompt_tokens or None,
-                "framework_input_tokens": framework_chars // 4,
-                "unique_files": io.call_unique_files,
-                "hallucinated_paths": io.hallucinated_paths,
-                "envelope_violations": io.envelope_violations,
-            }
-        )
         messages.append({"role": "assistant", "content": turn["content"]})
         action = parse_action(turn["content"])
         tool = str(action.get("tool"))
         if tool == "done":
-            break
-        if tool == "read_file":
+            result = None
+        elif tool == "read_file":
             result = io.read_file(str(action.get("path")))
         elif tool == "write_file":
             result = io.write_file(str(action.get("path")), str(action.get("content")))
@@ -514,13 +562,30 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
                 )
         else:
             result = f"ERROR: unknown tool {tool}"
-        messages.append({"role": "user", "content": result[:6000]})
+            io._record("unknown", f"error: unknown tool {tool}")
+        if result is not None:
+            messages.append({"role": "user", "content": result[:6000]})
+        # QF-002: the call is measured AFTER its tool action ran, so the last
+        # action of a call is included in unique_files.
+        calls.append(
+            {
+                "input_tokens": prompt_tokens or None,
+                "framework_input_tokens": framework_chars // 4,
+                "unique_files": len(io.call_paths(io.call_index)),
+                "hallucinated_paths": io.hallucinated_paths,
+                "envelope_violations": io.envelope_violations,
+            }
+        )
+        if tool == "done":
+            break
     return _final_metrics(io, calls, unmeasured_usage)
 
 
 def _final_metrics(
     io: SandboxIO, calls: list[dict], unmeasured_usage: bool, envelope_error: str | None = None
 ) -> dict:
+    from dataclasses import asdict
+
     peaks = [c["input_tokens"] for c in calls if c["input_tokens"] is not None]
     fw = [c["framework_input_tokens"] for c in calls]
     metrics = {
@@ -530,6 +595,7 @@ def _final_metrics(
         "max_unique_files": max((c["unique_files"] for c in calls), default=0),
         "hallucinated_paths": io.hallucinated_paths,
         "envelope_violations": io.envelope_violations,
+        "tool_events": [asdict(e) for e in io.events],
     }
     if envelope_error:
         metrics["envelope_error"] = envelope_error
@@ -731,6 +797,7 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "hallucinated_paths": metrics["hallucinated_paths"],
         "envelope_violations": metrics["envelope_violations"],
         "calls": metrics["calls"],
+        "tool_events": metrics["tool_events"],
     }
     run_dir = RUNS_DIR / campaign_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

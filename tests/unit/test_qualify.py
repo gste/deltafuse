@@ -477,6 +477,118 @@ def test_drive_worker_fails_closed_when_envelope_unavailable(tmp_path, monkeypat
     assert not (tmp_path / "docs" / "spec" / "x.md").exists()
 
 
+# ------------------------------------------------------- QF-002: T5 per call
+
+
+def _ok_envelope(monkeypatch):
+    """Core always answers with a valid, permissive envelope."""
+    from deltafuse import cli as cli_mod
+
+    monkeypatch.setattr(
+        cli_mod, "main",
+        lambda argv: print(json.dumps({"envelope": {"write": ["**"]}})) or 0,
+    )
+
+
+def _scripted_turns(script):
+    """worker_turn stub returning scripted contents in order."""
+    state = {"n": 0}
+
+    def fake_turn(base_url, model, messages):
+        content = script[min(state["n"], len(script) - 1)]
+        state["n"] += 1
+        return {"content": content, "prompt_tokens": 100}
+
+    return fake_turn
+
+
+def test_last_action_read_counts_in_unique_files(tmp_path, monkeypatch):
+    """QF-002: a read performed as the call's last action counts in T5."""
+    _ok_envelope(monkeypatch)
+    (tmp_path / "docs" / "spec").mkdir(parents=True)
+    (tmp_path / "docs" / "spec" / "core.md").write_text("# core", encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "read_file", "path": "docs/spec/core.md"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert metrics["calls"][0]["unique_files"] == 1, metrics["calls"][0]
+    assert metrics["max_unique_files"] == 1
+
+
+def test_repeated_path_same_call_not_double_counted(tmp_path, monkeypatch):
+    """QF-002: repeated paths inside one call form a set, not a counter."""
+    io = qualify.SandboxIO(tmp_path)
+    (tmp_path / "a.md").write_text("a", encoding="utf-8")
+    (tmp_path / "b.md").write_text("b", encoding="utf-8")
+    io.write_envelope = qualify.EnvelopeState("ok", ["**"])
+    io.begin_call()
+    io.read_file("a.md")
+    io.read_file("a.md")
+    assert len(io.call_paths(io.call_index)) == 1
+    io.begin_call()
+    io.read_file("a.md")
+    io.read_file("b.md")
+    assert len(io.call_paths(io.call_index)) == 2
+
+
+def test_multiple_actions_across_calls_accumulate_per_call(tmp_path, monkeypatch):
+    """QF-002: every call is measured by its own path set; the run maximum
+    is the maximum of the sets, never their sum."""
+    _ok_envelope(monkeypatch)
+    for rel in ("a.md", "b.md", "c.md"):
+        (tmp_path / rel).write_text(rel, encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "read_file", "path": "a.md"}',
+            '{"tool": "read_file", "path": "b.md"}',
+            '{"tool": "read_file", "path": "a.md"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    assert [c["unique_files"] for c in metrics["calls"]] == [1, 1, 1, 0]
+    assert metrics["max_unique_files"] == 1  # max of sets, not the sum (3)
+
+
+def test_tool_event_journal_shape(tmp_path, monkeypatch):
+    """QF-002: the typed tool-event journal exists with the agreed shape."""
+    from dataclasses import asdict
+
+    _ok_envelope(monkeypatch)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "x.md").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(
+        qualify, "worker_turn",
+        _scripted_turns([
+            '{"tool": "read_file", "path": "docs/x.md"}',
+            '{"tool": "write_file", "path": "docs/y.md", "content": "y"}',
+            '{"tool": "shell", "command": "pytest --version"}',
+            '{"tool": "read_file", "path": "missing-file.md"}',
+            '{"tool": "done", "reason": "ok"}',
+        ]),
+    )
+    metrics = qualify.drive_worker(tmp_path, "http://x", "m", "case", "system")
+    events = metrics["tool_events"]
+    assert len(events) == 4
+    for event in events:
+        assert set(("call_index", "seq", "tool", "outcome", "paths_read", "paths_written")) <= set(event)
+    seqs = [e["seq"] for e in events]
+    assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)  # monotonic, unique
+    assert [e["call_index"] for e in events] == [1, 2, 3, 4]
+    read_ev, write_ev, shell_ev, err_ev = events
+    assert read_ev["tool"] == "read" and read_ev["paths_read"] == ["docs/x.md"]
+    assert write_ev["tool"] == "write" and write_ev["paths_written"] == ["docs/y.md"]
+    assert shell_ev["tool"] == "shell" and shell_ev["command"] and shell_ev["exit_code"] is not None
+    assert err_ev["outcome"].startswith("error")  # rejected/failed action is journaled too
+    # journal is serializable into the per-run report
+    json.dumps(events)
+
+
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):
     """Step 6 acceptance: 3 synthetic runs, one failure -> non-zero exit,
     all three reports plus the campaign verdict saved; manifest.yaml format."""
