@@ -2,13 +2,23 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [AU-001](AU-001.md) — полный внешний аудит. Промпт: [audit-prompt.md](audit-prompt.md).
+Брать в работу: [DF3-001](DF3-001.md) — v3 contracts, threat model и adversarial baseline.
+
+Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
 Закрытая программа: [leash.md](leash.md) — железный поводок (envelope, `leash`, hook/CI, decide, evidence stamp, хост).
 
 | ID | Статус | Зачем |
 |---|---|---|
-| [AU-001](AU-001.md) | `ready` | Внешний аудит: дефекты, слабые места, steal-sheet, roadmap |
+| [DF3-001](DF3-001.md) | `ready` | V3 contracts и adversarial baseline |
+| [DF3-002](DF3-002.md) | `blocked` | Archive bypass и route convergence |
+| [DF3-003](DF3-003.md) | `blocked` | CI leash и framework manifest |
+| [DF3-004](DF3-004.md) | `blocked` | Core-owned lifecycle transitions |
+| [DF3-005](DF3-005.md) | `blocked` | Distribution, scaffolding и upgrade |
+| [DF3-006](DF3-006.md) | `blocked` | Evidence и envelope authority |
+| [DF3-007](DF3-007.md) | `blocked` | Human Gate receipts и integrity profiles |
+| [DF3-008](DF3-008.md) | `blocked` | Schema v3 и Declare migration |
+| [DF3-009](DF3-009.md) | `blocked` | Bench, docs и release qualification |
 | [LS-001](LS-001.md) | `done` | `next --json` отдаёт write envelope |
 | [LS-002](LS-002.md) | `done` | `deltafuse leash` сверяет diff с envelope |
 | [LS-003](LS-003.md) | `done` | Orphan-правка продукта без Change |
@@ -21,6 +31,7 @@
 
 | ID | Статус | Зачем |
 |---|---|---|
+| [AU-001](AU-001.md) | `done` | Аудит оценён; disposition и roadmap перенесены в DeltaFuse 3.0 |
 | [SK-001](SK-001.md) | `done` | Первый `check-gate` без YAML-налога |
 | [HS-001](HS-001.md) | `done` | Контракт halt (`choices`, pack, не UI в Core) |
 
