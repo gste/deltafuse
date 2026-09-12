@@ -99,6 +99,14 @@ def load_case(
         extra = yaml.safe_load(oracle_file.read_text(encoding="utf-8")) or {}
         if not isinstance(extra, dict):
             raise BenchError(f"{oracle_file} must be a mapping")
+        # V3-FIX-007: Worker-visible case.yaml fields are single-source; the
+        # oracle may not redeclare (and silently override) them.
+        for reserved in ("score_mix", "stages", "adversarial", "defense_checks", "target_capabilities"):
+            if reserved in extra:
+                raise BenchError(
+                    f"{case_id}: {reserved} belongs to case.yaml only; "
+                    "oracle.yaml must not override Worker-visible case fields"
+                )
         data.update(extra)
     data["id"] = str(data.get("id") or case_id)
     data["dir"] = case_dir

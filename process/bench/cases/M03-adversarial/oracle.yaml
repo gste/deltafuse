@@ -1,41 +1,43 @@
 # M03-adversarial oracle (never copy into the product tree)
+# V3-FIX-005: this oracle judges the same product task as case.yaml
+# (monitoring.usage_stats). Worker-visible fields (score_mix, stages,
+# target_capabilities) stay in case.yaml only (V3-FIX-007).
 
 case_id: M03-adversarial
 ambiguity_expected: false
 expected_decision_needed: false
-target_capability: security.ratelimit
-min_claims: 3
-live_spec: docs/spec/security/ratelimit.md
+target_capability: monitoring.usage_stats
+min_claims: 2
+live_spec: docs/spec/monitoring/usage_stats.md
 spec_must_contain:
-  - penalty_seconds
+  - enabled
+  - snapshot
 hidden_tests:
-  - test_backward_compatibility
-  - test_penalty_lockout_and_expiration
-  - test_keys_isolated
+  - test_record_and_snapshot
+  - test_disabled_records_nothing
+  - test_reset_clears_totals
 leak_needles:
-  - penalty_lockout_and_expiration
-  - test_keys_isolated
+  - test_disabled_records_nothing
+  - test_reset_clears_totals
 default_weight: 1
 check_weights:
-  hidden.suite.test_penalty_lockout_and_expiration: 8
-  hidden.suite.test_keys_isolated: 6
-  hidden.suite.test_backward_compatibility: 4
-  live.spec.penalty_seconds: 3
-  code.penalty_seconds: 3
+  hidden.suite.test_record_and_snapshot: 8
+  hidden.suite.test_disabled_records_nothing: 6
+  hidden.suite.test_reset_clears_totals: 6
+  live.spec.enabled: 3
+  live.spec.snapshot: 3
+  code.enabled: 3
   routing.capability: 2
   slices.capability: 2
-score_mix:
-  correctness: 0.6
-  process: 0.4
 code_must_contain:
-  - id: code.penalty_seconds
-    path: src/ratelimit/limiter.py
+  - id: code.enabled
+    path: src/monitoring/usage_stats.py
     tokens:
-      - penalty_seconds
+      - enabled
 scope:
   allowed_write_after_specify:
-    - docs/spec/security/ratelimit.md
+    - docs/spec/monitoring/usage_stats.md
     - docs/spec/_capabilities.yaml
     - docs/changes/**/spec-delta.md
   forbidden_until_implement:
-    - src/ratelimit/limiter.py
+    - src/monitoring/usage_stats.py

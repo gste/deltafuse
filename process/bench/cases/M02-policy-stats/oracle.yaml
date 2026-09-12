@@ -4,9 +4,6 @@ case_id: M02-policy-stats
 tier: frontier
 ambiguity_expected: false
 expected_decision_needed: false
-target_capabilities:
-  - monitoring.usage_stats
-  - security.rate_policy
 min_claims: 3
 min_slices: 2
 min_tasks: 2
@@ -81,9 +78,6 @@ check_weights:
   code.stats.get_stats: 2
   code.policy.reject_threshold: 2
   code.forbidden.redis: 4
-score_mix:
-  correctness: 0.6
-  process: 0.4
 scope:
   forbidden_until_implement:
     - src/ratelimit/limiter.py

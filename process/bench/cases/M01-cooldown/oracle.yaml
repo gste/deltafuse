@@ -24,9 +24,6 @@ check_weights:
   code.penalty_seconds: 3
   routing.capability: 2
   slices.capability: 2
-score_mix:
-  correctness: 0.6
-  process: 0.4
 code_must_contain:
   - id: code.penalty_seconds
     path: src/ratelimit/limiter.py
