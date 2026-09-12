@@ -401,10 +401,18 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
 
     def fake_run_case(case_id, index, campaign_id, model_probe, provenance_info):
         calls["n"] += 1
+        verdict = "pass" if index != 2 else "fail"
+        run_id = f"{campaign_id}-{case_id}-run{index}"
+        run_dir = tmp_path / campaign_id / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "report.yaml").write_text(
+            yaml.safe_dump({"run_id": run_id, "case": case_id, "verdict": verdict}),
+            encoding="utf-8",
+        )
         return {
-            "run_id": f"{campaign_id}-{case_id}-run{index}",
+            "run_id": run_id,
             "case": case_id,
-            "verdict": "pass" if index != 2 else "fail",
+            "verdict": verdict,
             "threshold_failures": [] if index != 2 else ["T1 correctness_failed=2"],
             "stages": {}, "correctness": 90.0, "gate_retries": 0,
             "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
@@ -426,7 +434,7 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
     assert len(case_dir_runs) == 9
     # run with failure preserved
     failed = yaml.safe_load(
-        next(p for p in case_dir_runs if p.name.endswith("M01-cooldown-run2")).read_text(encoding="utf-8")
+        next(p for p in case_dir_runs if p.name == "report.yaml" and "M01-cooldown-run2" in str(p)).read_text(encoding="utf-8")
     )
     assert failed["verdict"] == "fail"
 
