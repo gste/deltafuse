@@ -291,7 +291,18 @@ def check_paths(
 
 
 
-def git_dirty_paths(product_root: Path) -> list[str]:
+def git_dirty_paths(
+    product_root: Path,
+    *,
+    base: str | None = None,
+    head: str | None = None,
+) -> list[str]:
+    """Changed paths as repo-relative posix names.
+
+    DF3-003 / SEC-01: pass ``base`` (and optionally ``head``) with exact SHAs to
+    diff a commit range — a clean PR/push checkout has no local diff, so CI must
+    judge the committed range. Untracked files remain a separate always-on check.
+    """
     root = product_root.resolve()
     probe = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -303,8 +314,13 @@ def git_dirty_paths(product_root: Path) -> list[str]:
     if probe.returncode != 0:
         err = (probe.stderr or probe.stdout or "git rev-parse failed").strip()
         raise LeashError(f"leash needs a git repository: {err}")
+    diff_args = ["git", "diff", "--name-only"]
+    if base:
+        diff_args.append(f"{base}..{head or 'HEAD'}")
+    else:
+        diff_args.append("HEAD")
     tracked = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD"],
+        diff_args,
         cwd=root,
         capture_output=True,
         text=True,

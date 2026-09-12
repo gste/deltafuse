@@ -206,7 +206,6 @@ def test_b04_synthetic_green_command_is_not_authentic_evidence(
 # ---------------------------------------------------------------- SEC-02 (P0)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec02_framework_hash_covers_core_source(tmp_path: Path):
     """adversarial_worker: tampering with src/deltafuse/** must change the
     framework content hash (lock verification must see Core code)."""

@@ -206,6 +206,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
     leash_parser.add_argument(
+        "--base",
+        default=None,
+        help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
+    )
+    leash_parser.add_argument(
+        "--head",
+        default=None,
+        help="Exact head SHA (default: HEAD); requires --base",
+    )
+    leash_parser.add_argument(
         "--file",
         action="append",
         default=[],
@@ -477,6 +487,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "leash":
+        if args.head and not args.base:
+            print("leash: --head requires --base", file=sys.stderr)
+            return 1
         target = Path(args.path)
         try:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
@@ -490,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.files:
                 dirty = list(args.files)
             else:
-                dirty = git_dirty_paths(root)
+                dirty = git_dirty_paths(root, base=args.base, head=args.head)
             errors = check_paths(dirty, covering, baseline=load_baseline(root))
             mode = load_leash_mode(root)
             skipped = envelope is None and not errors

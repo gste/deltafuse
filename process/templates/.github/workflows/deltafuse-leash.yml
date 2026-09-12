@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # DF3-003 / SEC-01: leash diffs an exact base..head SHA range, so the
+          # runner needs history to resolve the base commit.
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-python@v5
         with:
@@ -29,7 +32,22 @@ jobs:
             exit 1
           fi
       - name: Leash
-        run: python -m deltafuse leash .
+        run: |
+          # DF3-003 / SEC-01: a clean checkout has no worktree diff; judge the
+          # committed base..head range instead. Untracked files stay checked.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.event.after }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            python -m deltafuse leash .
+          else
+            git fetch --no-tags origin "$BASE" "$HEAD" || true
+            python -m deltafuse leash . --base "$BASE" --head "$HEAD"
+          fi
       - name: Product tests
         run: |
           if [ -d tests ]; then
