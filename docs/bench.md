@@ -15,7 +15,7 @@ Two hosts stay distinct. The Worker never sees the judge pack. The judge never w
 | Sees | Intake, seed spec/code, pinned skills | `oracle.yaml`, `hidden_suite`, Core journal |
 | Must not | `bench score`, parent-repo search, self-report retries | `--out-file` inside the sandbox |
 
-Open Cursor (or any agent) **on the product directory**, not on `delta-fuse`. An editable install of this repo on the worker machine still exposes the pack via Python; use a wheel or a machine that does not have `process/bench/cases/**/oracle.yaml`.
+Open Cursor (or any agent) **on the product directory**, not on `deltafuse`. An editable install of this repo on the worker machine still exposes the pack via Python; use a wheel or a machine that does not have `process/bench/cases/**/oracle.yaml`.
 
 `DELTAFUSE_BENCH_PACK` is for the judge. Do not set it in the worker environment.
 
@@ -40,7 +40,7 @@ Work **in that directory** as the Worker until Verify (or until the Worker stops
 
 ```text
 deltafuse bench journal C:\work\m02-opus
-deltafuse bench score C:\work\m02-opus --pack C:\src\delta-fuse --json --label cursor+opus-5 --out-file C:\scores\m02-opus.json
+deltafuse bench score C:\work\m02-opus --pack C:\src\deltafuse --json --label cursor+opus-5 --out-file C:\scores\m02-opus.json
 deltafuse bench compare C:\scores\m02-opus.json C:\scores\m02-gemini.json
 ```
 
@@ -56,7 +56,7 @@ Per-case oracle drives the tokens and hidden tests. Shared process checks:
 | Analyze | `analyzed`, routing+slice per target capability, `coverage.yaml` | no blocking DEC |
 | Specify | live spec files + required tokens, `spec-delta.md`, F-010 | seed `limiter.py` unchanged |
 | Decompose | `TASK-*` (M02: ≥2) | — |
-| Declare | `targeting`, `evidence/red` | no private `_` Red paths |
+| Declare | `declaring`, `evidence/red` | no private `_` Red paths |
 | Implement | `implemented` | hidden pytest in a temp copy of `src/` |
 | Verify | `converged` | — |
 

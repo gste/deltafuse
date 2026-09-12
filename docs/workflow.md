@@ -89,7 +89,7 @@ For each capability slice:
 - If `decisions.operation` is `propose`, new decision records are drafted in `docs/decisions/DEC-*` with `status: proposed`, and the Change transitions to `blocked-on-decision` until human approval.
 
 ### Analytical Outcomes
-- **Feasible**: all claims mapped, deltas computed, ready for specification or targeting.
+- **Feasible**: all claims mapped, deltas computed, ready for specification or declaring.
 - **Decision Required**: architectural or product uncertainty identified; create `docs/decisions/DEC-NNNN-*.md` in `status: proposed` and transition Change to `blocked-on-decision`.
 - **Capability Gap**: new capability required; draft catalog delta for `_capabilities.yaml` requiring human approval.
 - **Duplicate**: Change duplicates an existing active or archived Change; mark `duplicate`.
@@ -239,14 +239,14 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
    changed_paths: []
    spec_status: unchanged
    ```
-5. Transition task status to `target-confirmed`.
+5. Transition task status to `declared`.
 6. Optional: add Hypothesis-class property tests as extra oracles. Skip if no local runner. PBT does not replace the GWT example Red test or the independent hidden suite. Do not add `.kiro` or Cucumber.
 
 ### Gate
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
-- Task status transitioned to `target-confirmed`.
+- Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.
 - Property-based tests are optional Declare extras; missing a local runner is skip, not a gate fail.
 

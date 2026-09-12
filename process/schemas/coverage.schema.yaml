@@ -42,4 +42,4 @@ properties:
             verification:
               type: string
         status:
-          enum: [pending, analyzing, analyzed, specified, decomposed, targeting, target-confirmed, implementing, implemented, verified, rejected, not-reproduced]
+          enum: [pending, analyzing, analyzed, specified, decomposed, declaring, declared, implementing, implemented, verified, rejected, not-reproduced]

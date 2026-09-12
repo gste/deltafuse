@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     # check-gate command
     gate_parser = subparsers.add_parser("check-gate", help="Check lifecycle gate preconditions")
     gate_parser.add_argument("change_path", help="Path to Change package directory")
-    gate_parser.add_argument("--gate", "-g", required=True, help="Target gate (intake, analyzed, specified, decomposed, targeting, implemented, converged)")
+    gate_parser.add_argument("--gate", "-g", required=True, help="Target gate (intake, analyzed, specified, decomposed, declaring, implemented, converged)")
 
     # archive command
     arch_parser = subparsers.add_parser("archive", help="Archive a converged Change package")
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     advance_parser.add_argument("change_path", help="Path to Change package directory")
     advance_parser.add_argument(
         "--gate", "-g", required=True,
-        help="Gate to apply (intake, analyzed, specified, decomposed, targeting, implemented, converged)",
+        help="Gate to apply (intake, analyzed, specified, decomposed, declaring, implemented, converged)",
     )
     advance_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 

@@ -14,7 +14,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_ROOT="$(mkdir -p "$TARGET_DIR" && cd "$TARGET_DIR" && pwd)"
 FRAMEWORK_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
-SCHEMA_VERSION=2
+SCHEMA_VERSION=3
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then

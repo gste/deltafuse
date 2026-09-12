@@ -31,7 +31,7 @@ class MockChangeBuilder:
 
     def _ensure_core_capability(self) -> None:
         catalog_path = self.root_dir / "docs" / "spec" / "_capabilities.yaml"
-        data: dict[str, Any] = {"schema_version": 2, "domains": {}}
+        data: dict[str, Any] = {"schema_version": 3, "domains": {}}
         if catalog_path.is_file():
             loaded = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
@@ -91,7 +91,7 @@ class MockChangeBuilder:
                 pass
 
         change_yaml = {
-            "schema_version": 2,
+            "schema_version": 3,
             "id": self.change_id,
             "title": self.title,
             "status": "normalized",
@@ -263,7 +263,7 @@ class MockChangeBuilder:
         red_dir.mkdir(parents=True, exist_ok=True)
         if self.route == "docs":
             ev = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "red",
@@ -277,7 +277,7 @@ class MockChangeBuilder:
             }
         elif self.route == "ops":
             ev = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "red",
@@ -292,7 +292,7 @@ class MockChangeBuilder:
             }
         else:
             ev = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "red",
@@ -314,7 +314,7 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["evidence"]["red"] = f"evidence/red/{task_id}.yaml"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        self._update_change_yaml({"status": "targeting"})
+        self._update_change_yaml({"status": "declaring"})
         return self
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:
@@ -322,7 +322,7 @@ class MockChangeBuilder:
         green_dir.mkdir(parents=True, exist_ok=True)
         if self.route == "docs":
             ev_green = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "green",
@@ -337,7 +337,7 @@ class MockChangeBuilder:
             }
             self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "regression",
@@ -355,7 +355,7 @@ class MockChangeBuilder:
             self._write_evidence(reg_dir / f"{task_id}.yaml", ev_reg)
         elif self.route == "ops":
             ev_green = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "green",
@@ -370,7 +370,7 @@ class MockChangeBuilder:
             }
             self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "regression",
@@ -390,7 +390,7 @@ class MockChangeBuilder:
             reg_dir = self.change_dir / "evidence" / "regression"
             reg_dir.mkdir(parents=True, exist_ok=True)
             ev_green = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "green",
@@ -405,7 +405,7 @@ class MockChangeBuilder:
             }
             self._write_evidence(green_dir / f"{task_id}.yaml", ev_green)
             ev_reg = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "change": self.change_id,
                 "task": task_id,
                 "phase": "regression",
@@ -443,7 +443,7 @@ class MockChangeBuilder:
         ver_dir = self.change_dir / "evidence" / "verification"
         ver_dir.mkdir(parents=True, exist_ok=True)
         ev_ver = {
-            "schema_version": 2,
+            "schema_version": 3,
             "change": self.change_id,
             "phase": "verification",
             "timestamp": "2026-09-05T12:20:00Z",

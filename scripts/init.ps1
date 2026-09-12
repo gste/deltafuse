@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $FrameworkRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
 $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
-$SchemaVersion = 2
+$SchemaVersion = 3
 
 function Get-FrameworkContentHash {
     $roots = @("docs", "process", "scripts", "tests", "src")

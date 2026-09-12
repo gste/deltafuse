@@ -22,7 +22,7 @@ GATE_STAGE = {
     "analyzed": "analyze",
     "specified": "specify",
     "decomposed": "decompose",
-    "targeting": "declare",
+    "declaring": "declare",
     "implemented": "implement",
     "converged": "verify",
 }

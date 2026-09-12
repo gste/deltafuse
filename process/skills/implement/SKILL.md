@@ -27,7 +27,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 
 ## Procedure
 
-1. Verify the task is `target-confirmed` and Red evidence matches the frozen target.
+1. Verify the task is `declared` and Red evidence matches the frozen target.
 2. Implement the minimum production change inside allowed scope.
 3. Record Green with the kernel, not by hand-writing YAML:
    `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <target-command>`.

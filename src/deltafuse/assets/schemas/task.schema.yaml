@@ -9,7 +9,7 @@ properties:
   change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
   slice: {type: string, pattern: '^SLICE-[0-9]{2,}$'}
   kind: {enum: [feature, bugfix, refactor, maintenance, documentation]}
-  status: {enum: [pending, targeting, target-confirmed, implementing, implemented, verified, blocked, cancelled, superseded]}
+  status: {enum: [pending, declaring, declared, implementing, implemented, verified, blocked, cancelled, superseded]}
   depends_on:
     type: array
     items: {type: string, pattern: '^TASK-[0-9]{3,}$'}

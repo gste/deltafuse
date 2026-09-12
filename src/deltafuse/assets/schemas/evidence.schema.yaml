@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [schema_version, change, phase, timestamp, command, exit_code, result, summary]
 properties:
-  schema_version: {const: 2}
+  schema_version: {const: 3}
   change: {type: string, pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'}
   task: {type: [string, 'null'], pattern: '^TASK-[0-9]{3,}$'}
   phase: {enum: [red, green, regression, verification]}

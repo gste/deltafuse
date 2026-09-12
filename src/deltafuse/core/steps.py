@@ -9,7 +9,7 @@ STEP_CONTRACTS: dict[str, dict[str, str]] = {
     "analyze": {"skill": "analyze", "gate": "analyzed", "phase": "analyze"},
     "specify": {"skill": "specify", "gate": "specified", "phase": "specify"},
     "decompose": {"skill": "decompose", "gate": "decomposed", "phase": "decompose"},
-    "declare": {"skill": "declare", "gate": "targeting", "phase": "declare"},
+    "declare": {"skill": "declare", "gate": "declaring", "phase": "declare"},
     "implement": {"skill": "implement", "gate": "implemented", "phase": "implement"},
     "verify": {"skill": "verify", "gate": "converged", "phase": "verify"},
 }

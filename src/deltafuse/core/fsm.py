@@ -3,6 +3,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
+import re
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.context import (
@@ -42,8 +43,8 @@ VALID_CHANGE_STATUSES = {
     "specification-proposed",
     "specified",
     "decomposed",
-    "targeting",
-    "target-confirmed",
+    "declaring",
+    "declared",
     "implementing",
     "implemented",
     "verifying",
@@ -59,12 +60,12 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     "normalized": {"analyzing", "rejected", "duplicate"},
     "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
     "blocked-on-decision": {"analyzing"},
-    "analyzed": {"specification-proposed", "specified", "targeting"},  # targeting for bugfix
+    "analyzed": {"specification-proposed", "specified", "declaring"},  # declaring for bugfix
     "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
-    "decomposed": {"targeting"},
-    "targeting": {"target-confirmed", "not-reproduced"},
-    "target-confirmed": {"implementing"},
+    "decomposed": {"declaring"},
+    "declaring": {"declared", "not-reproduced"},
+    "declared": {"implementing"},
     "implementing": {"implemented"},
     "implemented": {"verifying"},
     "verifying": {"converged", "analyzing", "not-reproduced"},
@@ -106,6 +107,53 @@ class GateValidationError(Exception):
         self.errors = errors
 
 
+CONTRACT_VERSION = 3
+LEGACY_TOKENS = ("target-confirmed", "targeting")  # v2 vocabulary, never auto-converted
+
+
+def _contract_version_errors(change_path: Path) -> list[str]:
+    """DF3-008: unknown or partial versions stop with exact diagnostics."""
+    errors: list[str] = []
+    for rel in ("change.yaml",):
+        path = change_path / rel
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        version = data.get("schema_version")
+        if version is not None and version != CONTRACT_VERSION:
+            errors.append(
+                f"change.yaml: schema_version {version!r} is not supported by this "
+                f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
+                "automatic conversion is performed"
+            )
+    legacy_files = ["change.yaml"] + [
+        str(p.relative_to(change_path)).replace("\\", "/")
+        for p in sorted((change_path / "tasks").glob("*.md"))
+        if (change_path / "tasks").is_dir()
+    ] + [
+        str(p.relative_to(change_path)).replace("\\", "/")
+        for p in sorted((change_path / "slices").glob("*.md"))
+        if (change_path / "slices").is_dir()
+    ]
+    for rel in legacy_files:
+        path = change_path / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for token in LEGACY_TOKENS:
+            if re.search(rf"{token}", text):
+                errors.append(
+                    f"{rel}: legacy v2 vocabulary '{token}' is not valid in v3; "
+                    "rewrite the artifact for schema v3 (no automatic conversion)"
+                )
+    return errors
+
+
 def validate_change_package(
     change_dir: Path | str,
     registry: SchemaRegistry | None = None,
@@ -118,6 +166,11 @@ def validate_change_package(
 
     if not change_path.is_dir():
         return [f"Change package directory not found: {change_path}"]
+
+    # DF3-008: fail-closed contract version and legacy-vocabulary checks.
+    version_errors = _contract_version_errors(change_path)
+    if version_errors:
+        return version_errors
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
@@ -864,15 +917,15 @@ def check_gate(
 
         errors.extend(task_envelope_errors(change_path))
 
-    elif gate_lower == "targeting":
+    elif gate_lower == "declaring":
         route, route_errs = load_change_route(change_path)
         errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
-            errors.append("Gate targeting: Red evidence in evidence/red/ is required")
+            errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(
             _validate_evidence_changed_paths_contract(
-                change_path, "red", "declare", gate="targeting", route=route
+                change_path, "red", "declare", gate="declaring", route=route
             )
         )
 

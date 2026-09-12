@@ -25,8 +25,8 @@ TERMINAL_CHANGE = {
     "not-reproduced",
     "converged",
 }
-TASK_DECLARE = {"pending", "targeting"}
-TASK_IMPLEMENT = {"target-confirmed", "implementing"}
+TASK_DECLARE = {"pending", "declaring"}
+TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
 
 

@@ -6,7 +6,7 @@ required: [schema_version, domains]
 additionalProperties: false
 properties:
   schema_version:
-    const: 2
+    const: 3
   domains:
     type: object
     additionalProperties:

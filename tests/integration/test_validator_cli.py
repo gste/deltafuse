@@ -18,7 +18,7 @@ def test_cli_validate_and_check_gate(tmp_path: Path, repo_root: Path, monkeypatc
 
     # Create change.yaml
     change_yaml_content = (
-        'schema_version: 2\n'
+        'schema_version: 3\n'
         'id: CHG-001\n'
         'title: Test change\n'
         'status: normalized\n'

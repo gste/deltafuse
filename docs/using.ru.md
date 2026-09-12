@@ -76,7 +76,7 @@ Initial capability catalog предлагается ИИ и принимаетс
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; `check-gate --gate targeting` отвергает schema-valid файл, который написали не через `deltafuse evidence`.
+Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; `check-gate --gate declaring` отвергает schema-valid файл, который написали не через `deltafuse evidence`.
 
 ## Coverage ядра
 

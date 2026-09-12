@@ -29,7 +29,7 @@
 Комплекс объединяет движок верификации (`src/deltafuse/`) и многоуровневый тестовый набор (`tests/`):
 
 ```text
-delta-fuse/
+deltafuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
 │   ├── cli.py                        # CLI: init, validate, check-gate, archive, validate-layout, evidence, next, decide, board, lint-context, bench
@@ -126,14 +126,14 @@ delta-fuse/
   - Вход: `normalized`.
   - Анализ: `analyzing`, `blocked-on-decision`, `analyzed`.
   - Спецификация и декомпозиция: `specification-proposed`, `specified`, `decomposed`.
-  - Таргетинг и разработка: `targeting`, `target-confirmed`, `implementing`, `implemented`.
+  - Таргетинг и разработка: `declaring`, `declared`, `implementing`, `implemented`.
   - Верификация и завершение: `verifying`, `converged`, `archived`.
   - Терминальные ветви: `rejected`, `duplicate`, `superseded`, `not-reproduced`.
 * **3.2. Семантические мутационные инварианты (T1–T8, N10)**:
   - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
   - **T2**: Red evidence с `result: passed` или `exit_code: 0` (кроме `not-reproduced` и `already-green`) отвергается.
-  - **F-009 / targeting**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
-  - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `targeting` и т.д.). `cancelled` и `superseded` — терминалы (F-005 / RM-005); Verify не снимается.
+  - **F-009 / declaring**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
+  - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `declaring` и т.д.). `cancelled` и `superseded` — терминалы (F-005 / RM-005); Verify не снимается.
   - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
   - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.
   - **T7**: Битая ссылка на якорь в спецификации отклоняется.
@@ -141,7 +141,7 @@ delta-fuse/
   - **N10**: Отсутствие каталога `docs/spec` при наличии ссылок на требования отвергается.
   - **F-010 / specified**: гейт `specified` требует живые файлы под `docs/spec/**`, валидный `_capabilities.yaml` и (для `none`) якоря в `spec_refs`; одного `spec-delta.md` недостаточно.
   - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
-  - **PP-06 / KI-07 / targeting**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
+  - **PP-06 / KI-07 / declaring**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
   - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage), wide не склеивает срезы; routing первым шагом. Specify для feature не снимается.
   - **AN-001 / analyzed**: каждый distinct `primary_capability` в `routing.yaml` покрыт slice-файлом с тем же полем; один `SLICE-01` на две capability валит `analyzed`.
@@ -151,7 +151,7 @@ delta-fuse/
   - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
   - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
   - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
-  - **LS-006 / targeting, implemented, converged**: schema-valid evidence без штампа ядра (`recorded_by` + hash прогона) не закрывает гейт; `deltafuse evidence` штампует файл. syntax-error по-прежнему не authentic Red.
+  - **LS-006 / declaring, implemented, converged**: schema-valid evidence без штампа ядра (`recorded_by` + hash прогона) не закрывает гейт; `deltafuse evidence` штампует файл. syntax-error по-прежнему не authentic Red.
   - **LS-007 / host**: контракт leash Host MUST режет write-tools по `envelope.write`; generated Intake skill не учит писать `src/**`. Fuse-map UI и кнопки Cursor вне `src/deltafuse/**`.
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
   - **Lock Hash**: Несовпадение `change.yaml.framework.content_hash` со значением из `.deltafuse/lock.yaml` отклоняется.
@@ -177,7 +177,7 @@ delta-fuse/
   - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
-  - **F-002 / decomposed, targeting, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact). `deltafuse lint-context` проверяет и `tasks/`.
+  - **F-002 / decomposed, declaring, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact). `deltafuse lint-context` проверяет и `tasks/`.
   - Команда `deltafuse lint-context <change_dir>`.
 
 ---

@@ -45,10 +45,10 @@ project:
                  [decomposed]                              |
                       |                                    |
                       v                                    |
-                  [targeting]                              |
+                  [declaring]                              |
                       |                                    |
                       v                                    |
-              [target-confirmed]                           |
+              [declared]                           |
                       |                                    |
                       v                                    |
                 [implementing]                             |
@@ -86,15 +86,15 @@ Change может быть переведён в терминальное сос
 | `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
-| `decomposed` | `targeting` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
-| `targeting` | `target-confirmed` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
-| `target-confirmed` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
+| `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
+| `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
+| `declared` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
 | `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. |
 | `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
 | `verifying` | `converged` | Запущен `/verify`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
 | `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |
 | `verifying` | `not-reproduced` | Закрытие Change как невоспроизведённого дефекта или подтверждённого no-op. | В `verification.md` зафиксирован исход `not-reproduced`. |
-| `analyzing` / `targeting` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |
+| `analyzing` / `declaring` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |
 | `normalized` / `analyzing` | `rejected` | Запрос нереализуем или отвергнут по результатам маршрутизации/анализа. | Обоснование отказа задокументировано (опционально `analysis.md` или заметки Change). |
 | `normalized` / `analyzing` | `duplicate` | Запрос дублирует уже существующий активный или архивный Change. | Ссылка на оригинальный `CHG-*` зафиксирована в `change.yaml`. |
 | `analyzing` | `superseded` | Change заменён более широким или реструктурированным запросом. | Ссылка на замещающий Change зафиксирована в `change.yaml`. |
@@ -128,7 +128,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
                +-----------------------------+
                |                             |
                v                             |
-[pending] ---> [targeting] ---> [target-confirmed] ---> [implementing] ---> [implemented] ---> [verified]
+[pending] ---> [declaring] ---> [declared] ---> [implementing] ---> [implemented] ---> [verified]
   |               |
   |               +------------> [blocked]
   |
@@ -136,8 +136,8 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 ```
 
 - `pending`: задача создана, ожидает выполнения зависимостей;
-- `targeting`: пишется минимальный тест, доказывающий Red;
-- `target-confirmed`: зафиксирован воспроизводимый Red evidence;
+- `declaring`: пишется минимальный тест, доказывающий Red;
+- `declared`: зафиксирован воспроизводимый Red evidence;
 - `implementing`: пишется минимальный продуктовый код;
 - `implemented`: тест и регрессии прошли успешно (Green evidence);
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;

@@ -22,7 +22,7 @@ def test_all_expected_schemas_loaded(registry: SchemaRegistry):
 
 def test_change_schema_valid_and_invalid(registry: SchemaRegistry):
     valid_change = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "CHG-042",
         "title": "Fix authentication expiration",
         "status": "normalized",
@@ -137,14 +137,14 @@ def test_coverage_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("coverage", valid_coverage) == []
 
-    with_schema_version = dict(valid_coverage, schema_version=2)
+    with_schema_version = dict(valid_coverage, schema_version=3)
     assert registry.validate("coverage", with_schema_version) == []
     with_unknown = dict(valid_coverage, unexpected_key="ok")
     assert registry.validate("coverage", with_unknown) == []
 
 def test_evidence_schema_validation(registry: SchemaRegistry):
     valid_evidence = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-001",
         "task": "TASK-001",
         "phase": "red",
@@ -167,7 +167,7 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
 
     # Regression phase requires task
     valid_regression = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-001",
         "task": "TASK-001",
         "phase": "regression",
@@ -206,7 +206,7 @@ def test_decision_schema_validation(registry: SchemaRegistry):
 
 def test_capability_schema_validation(registry: SchemaRegistry):
     valid_catalog = {
-        "schema_version": 2,
+        "schema_version": 3,
         "domains": {
             "identity": {
                 "summary": "User authentication and authorization",
@@ -256,7 +256,7 @@ def test_routing_schema_validation(registry: SchemaRegistry):
     assert registry.validate("routing", valid_routing) == []
 
     # AB-05 / RM-022: extra top-level keys (models copy schema_version) are ignored
-    with_schema_version = dict(valid_routing, schema_version=2)
+    with_schema_version = dict(valid_routing, schema_version=3)
     assert registry.validate("routing", with_schema_version) == []
     with_unknown = dict(valid_routing, unexpected_key="ok")
     assert registry.validate("routing", with_unknown) == []
@@ -288,7 +288,7 @@ def test_routing_schema_validation(registry: SchemaRegistry):
 
 def test_change_source_rejects_invented_keys(registry: SchemaRegistry):
     valid = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "CHG-042",
         "title": "Fix authentication expiration",
         "status": "normalized",

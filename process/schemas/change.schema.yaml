@@ -6,14 +6,14 @@ additionalProperties: false
 required: [schema_version, id, title, status, framework, source, deltas, slices, decisions, tasks]
 properties:
   schema_version:
-    const: 2
+    const: 3
   id:
     pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
   title:
     type: string
     minLength: 1
   status:
-    enum: [normalized, analyzing, blocked-on-decision, analyzed, specification-proposed, specified, decomposed, targeting, target-confirmed, implementing, implemented, verifying, converged, archived, rejected, duplicate, not-reproduced, superseded]
+    enum: [normalized, analyzing, blocked-on-decision, analyzed, specification-proposed, specified, decomposed, declaring, declared, implementing, implemented, verifying, converged, archived, rejected, duplicate, not-reproduced, superseded]
   framework:
     type: object
     additionalProperties: false

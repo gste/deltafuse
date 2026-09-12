@@ -15,7 +15,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 
 1. If no Change or task was named, run `deltafuse next --step declare` at the product root and use `path` / `task_path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure). Record Red with `deltafuse evidence`, not by hand-writing YAML.
-3. Close with `deltafuse check-gate <change-dir> --gate targeting`. Halt if it exits non-zero.
+3. Close with `deltafuse check-gate <change-dir> --gate declaring`. Halt if it exits non-zero.
 4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
@@ -34,7 +34,7 @@ Do not read implementation internals unless the oracle cannot otherwise be expre
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
 5. Require CLI exit 0 (authentic Red): expected behavior failure (`behavioral-mismatch`), not compilation, import, fixture, environment, or `_`-prefixed internals. Import/syntax still write YAML but are not a gate pass.
 6. `changed_paths` must stay inside `PHASE_CONTRACTS` Declare write scope (`tests/**`, Red evidence); do not list production `src/**`.
-7. Set task/Change state to `target-confirmed` only after valid Red.
+7. Set task/Change state to `declared` only after valid Red.
 
 If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.
 

@@ -1,10 +1,10 @@
-schema_version: 2
+schema_version: 3
 id: CHG-000-example
 title: Change title
 status: normalized
 
 framework:
-  version: 2.5.0
+  version: 3.5.0
   content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 intent: unknown

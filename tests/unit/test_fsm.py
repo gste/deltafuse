@@ -31,7 +31,7 @@ def test_check_gate_lifecycle(tmp_path: Path, repo_root: Path):
 
     (change_dir / "request.md").write_text("# Request\nCR-001: Implement feature", encoding="utf-8")
     change_yaml_content = (
-        "schema_version: 2\n"
+        "schema_version: 3\n"
         "id: CHG-001\n"
         "title: Test change\n"
         "status: normalized\n"
@@ -66,12 +66,12 @@ def test_fsm_canonical_statuses_and_transitions():
     assert can_transition("blocked-on-decision", "analyzing")
     assert can_transition("analyzing", "analyzed")
     assert can_transition("analyzed", "specification-proposed")
-    assert can_transition("analyzed", "targeting")  # Bug path
+    assert can_transition("analyzed", "declaring")  # Bug path
     assert can_transition("specification-proposed", "specified")
     assert can_transition("specified", "decomposed")
-    assert can_transition("decomposed", "targeting")
-    assert can_transition("targeting", "target-confirmed")
-    assert can_transition("target-confirmed", "implementing")
+    assert can_transition("decomposed", "declaring")
+    assert can_transition("declaring", "declared")
+    assert can_transition("declared", "implementing")
     assert can_transition("implementing", "implemented")
     assert can_transition("implemented", "verifying")
     assert can_transition("verifying", "converged")
@@ -80,7 +80,7 @@ def test_fsm_canonical_statuses_and_transitions():
     # Terminal transitions
     assert can_transition("normalized", "rejected")
     assert can_transition("normalized", "duplicate")
-    assert can_transition("targeting", "not-reproduced")
+    assert can_transition("declaring", "not-reproduced")
 
     # Forbidden transitions
     assert not can_transition("normalized", "converged")
@@ -104,7 +104,7 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
         encoding="utf-8"
     )
     change_yaml = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "CHG-001",
         "title": "Test change",
         "status": "analyzed",
@@ -217,7 +217,7 @@ def test_task_design_ref_validation(tmp_path: Path, repo_root: Path):
 
 def _write_security_ratelimit_catalog(root: Path) -> None:
     catalog = {
-        "schema_version": 2,
+        "schema_version": 3,
         "domains": {
             "security": {
                 "summary": "Security controls",
@@ -266,7 +266,7 @@ def test_specified_rejects_missing_live_spec_and_invalid_catalog(tmp_path: Path,
     )
     _set_slice_capability(builder.change_dir, "security.ratelimit", spec_refs=[])
     (tmp_path / "docs" / "spec" / "_capabilities.yaml").write_text(
-        "schema_version: 2\n"
+        "schema_version: 3\n"
         "domains:\n"
         "  rate-limiter:\n"
         "    capabilities:\n"
@@ -385,7 +385,7 @@ def test_specified_rejects_missing_usage_stats_file(tmp_path: Path, repo_root: P
         .step_specify()
     )
     catalog = {
-        "schema_version": 2,
+        "schema_version": 3,
         "domains": {
             "monitoring": {
                 "summary": "Usage monitoring",
@@ -422,7 +422,7 @@ def test_specified_rejects_missing_usage_stats_file(tmp_path: Path, repo_root: P
 
 
 def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
-    """AB-06 S04: targeting does not require spec-delta or the specified gate."""
+    """AB-06 S04: declaring does not require spec-delta or the specified gate."""
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-015", title="Bugfix no specify")
@@ -432,7 +432,7 @@ def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
         .step_declare()
     )
     assert not (builder.change_dir / "spec-delta.md").is_file()
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
 
 
 def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
@@ -462,7 +462,7 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
         red,
         tmp_path,
     )
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
 
 
 def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
@@ -481,7 +481,7 @@ def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
     red["failure_category"] = "import-error"
     red["summary"] = "ModuleNotFoundError"
     write_stamped_evidence(red_file, red, tmp_path)
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("behavioral-mismatch" in e for e in errs)
 
 
@@ -508,7 +508,7 @@ def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["tests/test_task-001.py"]
     write_stamped_evidence(red_file, red, tmp_path)
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("private symbols" in e for e in errs)
 
 
@@ -709,7 +709,7 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["src/core.py"]
     write_stamped_evidence(red_file, red, tmp_path)
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("outside the phase contract" in e and "src/core.py" in e for e in errs)
 
 
@@ -867,7 +867,7 @@ def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
     apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
     red = yaml.safe_load((builder.change_dir / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8"))
     assert red["changed_paths"] == ["docs/spec/core.md"]
     assert not (tmp_path / "src" / "ratelimit" / "limiter.py").exists()
@@ -939,7 +939,7 @@ def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
     apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
     builder.step_implement()
     assert check_gate(builder.change_dir, "implemented") == []
     green = yaml.safe_load((builder.change_dir / "evidence" / "green" / "TASK-001.yaml").read_text(encoding="utf-8"))
@@ -1035,7 +1035,7 @@ def test_two_slices_do_not_satisfy_specified_without_live_spec(tmp_path: Path, r
         .step_specify()
     )
     catalog = {
-        "schema_version": 2,
+        "schema_version": 3,
         "domains": {
             "monitoring": {
                 "summary": "Usage monitoring",

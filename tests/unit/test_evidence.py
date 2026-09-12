@@ -55,7 +55,7 @@ def test_run_evidence_red_behavioral(tmp_path: Path, repo_root: Path):
     assert outcome.payload["exit_code"] != 0
     assert outcome.payload["recorded_by"] == "deltafuse-evidence"
     assert str(outcome.payload["recorded_sha256"]).startswith("sha256:")
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
 
 
 def test_run_evidence_red_syntax_not_authentic(tmp_path: Path, repo_root: Path):
@@ -72,7 +72,7 @@ def test_run_evidence_red_syntax_not_authentic(tmp_path: Path, repo_root: Path):
     )
     assert not outcome.authentic
     assert outcome.payload["failure_category"] == "syntax-error"
-    assert any("behavioral-mismatch" in e for e in check_gate(builder.change_dir, "targeting"))
+    assert any("behavioral-mismatch" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
 def test_run_evidence_red_import_not_authentic(tmp_path: Path, repo_root: Path):
@@ -92,7 +92,7 @@ def test_run_evidence_red_import_not_authentic(tmp_path: Path, repo_root: Path):
     )
     assert not outcome.authentic
     assert outcome.payload["failure_category"] == "import-error"
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("behavioral-mismatch" in e for e in errs)
 
 
@@ -115,7 +115,7 @@ def test_run_evidence_red_private_not_authentic(tmp_path: Path, repo_root: Path)
     )
     assert not outcome.authentic
     assert any("private symbols" in e for e in outcome.errors)
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("private symbols" in e for e in errs)
 
 
@@ -134,7 +134,7 @@ def test_run_evidence_already_green(tmp_path: Path, repo_root: Path):
     assert outcome.authentic
     assert outcome.payload["result"] == "already-green"
     assert outcome.payload["exit_code"] == 0
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
 
 
 def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Path):
@@ -167,7 +167,7 @@ def test_handwritten_red_yaml_fails_targeting(tmp_path: Path, repo_root: Path):
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-040",
         "task": "TASK-001",
         "phase": "red",
@@ -184,7 +184,7 @@ def test_handwritten_red_yaml_fails_targeting(tmp_path: Path, repo_root: Path):
 
     assert default_registry.validate("evidence", payload) == []
     (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(payload), encoding="utf-8")
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("not stamped by deltafuse evidence" in e for e in errs)
 
 
@@ -203,12 +203,12 @@ def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path
         argv=_run_file_cmd("tests/test_task-001.py"),
         changed_paths=["tests/test_task-001.py"],
     )
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
     payload = dict(outcome.payload)
     payload["exit_code"] = 0
     payload["result"] = "already-green"
     payload["summary"] = "Edited by eye after the kernel stamp"
     outcome.dest.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-    errs = check_gate(builder.change_dir, "targeting")
+    errs = check_gate(builder.change_dir, "declaring")
     assert any("stamp does not match the recorded payload" in e for e in errs)
 

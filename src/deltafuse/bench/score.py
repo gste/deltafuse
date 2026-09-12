@@ -125,8 +125,8 @@ _AFTER_INTAKE = {
     "specification-proposed",
     "specified",
     "decomposed",
-    "targeting",
-    "target-confirmed",
+    "declaring",
+    "declared",
     "implementing",
     "implemented",
     "verifying",
@@ -138,8 +138,8 @@ _AFTER_SPECIFY = {
     "specified",
     "specification-proposed",
     "decomposed",
-    "targeting",
-    "target-confirmed",
+    "declaring",
+    "declared",
     "implementing",
     "implemented",
     "verifying",
@@ -148,8 +148,8 @@ _AFTER_SPECIFY = {
 }
 _AFTER_DECOMPOSE = _AFTER_SPECIFY - {"specified", "specification-proposed"}
 _AFTER_DECLARE = {
-    "targeting",
-    "target-confirmed",
+    "declaring",
+    "declared",
     "implementing",
     "implemented",
     "verifying",
@@ -484,9 +484,9 @@ def score_declare(product: Path, case: dict[str, Any], change_dir: Path | None) 
     checks.append(
         _gate_if_current(
             change_dir,
-            "targeting",
-            {"targeting", "target-confirmed"},
-            _AFTER_DECLARE - {"targeting", "target-confirmed"},
+            "declaring",
+            {"declaring", "declared"},
+            _AFTER_DECLARE - {"declaring", "declared"},
         )
     )
     red_dir = change_dir / "evidence" / "red"

@@ -23,6 +23,7 @@ class ScaffoldError(Exception):
 
 def _change_yaml(change_id: str, route: str, created: str) -> dict[str, Any]:
     return {
+        "schema_version": 3,
         "id": change_id,
         "title": "",
         "intent": "feature",

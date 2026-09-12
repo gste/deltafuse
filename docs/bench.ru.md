@@ -15,14 +15,14 @@
 | Видит | Intake, seed spec/code, skills | `oracle.yaml`, `hidden_suite`, журнал ядра |
 | Нельзя | `bench score`, поиск в parent repo, самоотчёт retries | `--out-file` внутри песочницы |
 
-Агент открывает **каталог продукта**, не `delta-fuse`. `DELTAFUSE_BENCH_PACK` — только у судьи.
+Агент открывает **каталог продукта**, не `deltafuse`. `DELTAFUSE_BENCH_PACK` — только у судьи.
 
 ## Команды
 
 ```text
 deltafuse bench init M02-policy-stats C:\work\m02-opus
 deltafuse bench journal C:\work\m02-opus
-deltafuse bench score C:\work\m02-opus --pack C:\src\delta-fuse --json --label cursor+opus-5 --out-file C:\scores\opus.json
+deltafuse bench score C:\work\m02-opus --pack C:\src\deltafuse --json --label cursor+opus-5 --out-file C:\scores\opus.json
 deltafuse bench compare C:\scores\opus.json C:\scores\flash.json
 ```
 

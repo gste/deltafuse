@@ -25,7 +25,7 @@ GATE_TARGETS: dict[str, str] = {
     "analyzed": "analyzed",
     "specified": "specified",
     "decomposed": "decomposed",
-    "targeting": "target-confirmed",
+    "declaring": "declared",
     "implemented": "implemented",
     "converged": "converged",
 }
@@ -38,8 +38,8 @@ GATE_ALLOWED_FROM: dict[str, set[str]] = {
     "analyzed": {"normalized", "analyzing"},
     "specified": {"analyzed"},
     "decomposed": {"analyzed", "specified", "decomposed"},
-    "targeting": {"decomposed", "targeting"},
-    "implemented": {"target-confirmed", "implementing"},
+    "declaring": {"decomposed", "declaring"},
+    "implemented": {"declared", "implementing"},
     "converged": {"implemented", "verifying"},
 }
 

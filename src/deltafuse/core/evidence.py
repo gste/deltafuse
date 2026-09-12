@@ -251,7 +251,7 @@ def run_evidence(
         result = "passed" if exit_code == 0 else "failed"
 
     payload: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": change_id,
         "task": task,
         "phase": phase,

@@ -31,7 +31,7 @@ def _write_proposed_dec(tmp_path: Path, change_id: str, dec_id: str = "DEC-0001"
 
 def test_step_contracts_match_phase_contracts():
     assert validate_step_contracts() == []
-    assert STEP_CONTRACTS["declare"]["gate"] == "targeting"
+    assert STEP_CONTRACTS["declare"]["gate"] == "declaring"
     assert STEP_CONTRACTS["implement"]["gate"] == "implemented"
 
 
@@ -152,7 +152,7 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
     )
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    meta["status"] = "target-confirmed"
+    meta["status"] = "declared"
     task_file.write_text(
         f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}",
         encoding="utf-8",
@@ -179,7 +179,7 @@ def test_next_human_declare_checklist(tmp_path: Path, repo_root: Path, capsys):
     assert "not a second process" in out
     assert "Worker (human)" in out
     assert "docs/changes/*/evidence/red/**" in out
-    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate targeting" in out
+    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate declaring" in out
     assert "deltafuse evidence" in out and "--phase red" in out
     assert "Do not auto-accept Decisions" in out
     assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
