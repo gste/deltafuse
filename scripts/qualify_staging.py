@@ -30,13 +30,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Environment variables preserved for command execution (Windows needs these
-# to start processes at all); everything else, including PYTHON* and any
-# variable referencing the framework root, is dropped.
-_ENV_KEEP = (
-    "SYSTEMROOT", "SystemRoot", "SYSTEMDRIVE", "SystemDrive", "windir",
-    "COMSPEC", "PATHEXT", "TEMP", "TMP", "HOME", "USERPROFILE",
-)
+# QF-005: the command environment is built from scratch; nothing is inherited
+# from the judge process (see StagingRoot.env).
 
 
 class StagingRoot:
@@ -73,21 +68,42 @@ class StagingRoot:
         return sys.executable
 
     def env(self, framework_root: Path | None = None) -> dict[str, str]:
-        """Minimal command environment: controlled interpreter dir + git dir
-        on PATH, no PYTHON* variables, no framework-root references."""
-        env = {k: v for k, v in os.environ.items() if k in _ENV_KEEP}
+        """QF-005: command environment built from scratch (allowlist).
+
+        PATH resolves to the controlled interpreter dir and git first; no
+        PYTEST_*/PYTHON*/framework variables are passed. TEMP/TMP (Windows)
+        and HOME/TMPDIR (POSIX) are redirected into the staging tree.
+        """
         path_parts = [str(Path(self.interpreter()).parent)]
         git = shutil.which("git")
         if git:
             path_parts.append(str(Path(git).parent))
-        if "PATH" in os.environ:
-            path_parts.append(os.environ["PATH"])
-        env["PATH"] = os.pathsep.join(dict.fromkeys(path_parts))
-        for name in list(env):
-            if name.lower().startswith("python"):
-                del env[name]
-            elif framework_root is not None and str(framework_root) in str(env[name]):
-                del env[name]
+        tmp_dir = self.base / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        if os.name == "nt":
+            system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+            path_parts.append(os.path.join(system_root, "System32"))
+            env: dict[str, str] = {
+                "PATH": os.pathsep.join(dict.fromkeys(path_parts)),
+                "SYSTEMROOT": system_root,
+                "SYSTEMDRIVE": os.environ.get("SYSTEMDRIVE", "C:"),
+                "COMSPEC": os.environ.get("COMSPEC", os.path.join(system_root, "System32", "cmd.exe")),
+                "PATHEXT": ".COM;.EXE;.BAT;.CMD",
+                "TEMP": str(tmp_dir),
+                "TMP": str(tmp_dir),
+            }
+        else:
+            home_dir = self.base / "home"
+            home_dir.mkdir(parents=True, exist_ok=True)
+            path_parts += ["/usr/bin", "/bin"]
+            env = {
+                "PATH": os.pathsep.join(dict.fromkeys(path_parts)),
+                "HOME": str(home_dir),
+                "TMPDIR": str(tmp_dir),
+            }
+        if framework_root is not None:
+            # defensive: no value may reference the framework root
+            env = {k: v for k, v in env.items() if str(framework_root) not in v}
         return env
 
     def new_workdir(self, run_id: str, sandbox: Path) -> Path:

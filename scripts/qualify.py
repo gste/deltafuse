@@ -118,6 +118,8 @@ def parse_shell_command(command: str) -> tuple[list[str] | None, str | None]:
             return _reject(f"path traversal not allowed: {token}")
         if token.startswith("%") and token.endswith("%") and len(token) > 2:
             return _reject(f"environment variable reference not allowed: {token}")
+        if "=" in token and not token.startswith("-"):
+            return _reject(f"env_override attempt not allowed: {token}")
     head = argv[0].lower()
     if head == "deltafuse":
         if len(argv) < 2 or argv[1].lower() not in DELTAFUSE_SUBCOMMANDS:
@@ -465,10 +467,15 @@ class SandboxIO:
             self.envelope_violations += 1
             self._record("shell", f"rejected: {reason}", command=command[:200])
             return f"ERROR: command not allowed: {reason}"
-        # QF-004: the `python` token is executed with the controlled staging
-        # interpreter, never with whatever a stray PATH entry provides.
-        if argv[0].lower() == "python" and self.interpreter:
-            argv = [self.interpreter, *argv[1:]]
+        # QF-004/QF-005: Worker commands execute with the controlled staging
+        # interpreter — `python ...` and `pytest ...` are canonized at the
+        # execution boundary, never resolved through a stray PATH.
+        if self.interpreter:
+            head = argv[0].lower()
+            if head == "python":
+                argv = [self.interpreter, *argv[1:]]
+            elif head == "pytest":
+                argv = [self.interpreter, "-m", "pytest", *argv[1:]]
         before = dict(self.inventory_fn()) if self.inventory_fn else {}
         try:
             proc = subprocess.run(

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -899,6 +902,95 @@ def test_symlink_and_junction_escape_rejected(tmp_path):
     assert "ERROR" in io.write_file("lnk/escape.txt", "x")
     assert not (outside / "escape.txt").exists()
     assert "ERROR" in io.read_file("lnk/secret.txt")
+
+
+# --------------------------------------- QF-005: interpreter & env pinning
+
+
+class _RecordingRun:
+    """Stub executor recording argv/env passed to subprocess.run."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append({"argv": list(argv), "env": kwargs.get("env")})
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+
+def test_python_resolved_to_pinned_interpreter(tmp_path, monkeypatch):
+    """QF-005: `python ...` never resolves via PATH; the pinned interpreter
+    runs even with a hostile python first on PATH."""
+    from qualify_staging import StagingRoot
+
+    fake_dir = tmp_path / "fakebin"
+    fake_dir.mkdir()
+    if sys.platform != "win32":
+        fake = fake_dir / "python"
+        fake.write_text("#!/bin/sh\necho fake > marker\nexit 1\n", encoding="utf-8")
+        fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    io = qualify.SandboxIO(tmp_path)
+    io.exec_env = staging.env()
+    io.interpreter = staging.interpreter()
+    rec = _RecordingRun()
+    monkeypatch.setattr(qualify.subprocess, "run", rec)
+    result = io.shell("python -m pytest --version")
+    assert result.startswith("exit=0")
+    assert rec.calls[0]["argv"][0] == staging.interpreter()
+    assert not (fake_dir / "marker").exists()  # hostile python untouched
+
+
+def test_pytest_head_resolved_to_module(tmp_path, monkeypatch):
+    """QF-005: `pytest ...` is executed as `<pinned python> -m pytest ...`."""
+    from qualify_staging import StagingRoot
+
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    io = qualify.SandboxIO(tmp_path)
+    io.exec_env = staging.env()
+    io.interpreter = staging.interpreter()
+    rec = _RecordingRun()
+    monkeypatch.setattr(qualify.subprocess, "run", rec)
+    result = io.shell("pytest -q tests/x.py")
+    assert result.startswith("exit=0")
+    assert rec.calls[0]["argv"] == [staging.interpreter(), "-m", "pytest", "-q", "tests/x.py"]
+
+
+def test_worker_env_is_allowlist(tmp_path, monkeypatch):
+    """QF-005: the command env is an allowlist — no PYTEST_*/PYTHON* vars,
+    PATH starts with the interpreter dir, TEMP/HOME redirected into staging."""
+    from qualify_staging import StagingRoot
+
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-x")
+    monkeypatch.setenv("PYTHONPATH", "C:/evil")
+    monkeypatch.setenv("PYTHONHOME", "C:/evil")
+    monkeypatch.setenv("DELTAFUSE_SECRET", "1")
+    staging = StagingRoot.create(tmp_path / "staging", build_venv=False)
+    io = qualify.SandboxIO(tmp_path)
+    io.exec_env = staging.env()
+    io.interpreter = staging.interpreter()
+    rec = _RecordingRun()
+    monkeypatch.setattr(qualify.subprocess, "run", rec)
+    io.shell("pytest -q")
+    env = rec.calls[0]["env"]
+    assert env is not None
+    for forbidden in ("PYTEST_ADDOPTS", "PYTHONPATH", "PYTHONHOME", "DELTAFUSE_SECRET"):
+        assert forbidden not in env, forbidden
+    assert env["PATH"].lower().startswith(str(Path(staging.interpreter()).parent).lower())
+    if sys.platform == "win32":
+        assert env["TEMP"].startswith(str(staging.base))
+    else:
+        assert env["HOME"].startswith(str(staging.base))
+        assert env["TMPDIR"].startswith(str(staging.base))
+
+
+def test_env_override_token_rejected(tmp_path):
+    """QF-005: argv tokens of the form KEY=VALUE are refused (env_override)."""
+    io = qualify.SandboxIO(tmp_path)
+    assert "ERROR" in io.shell("pytest PYTEST_ADDOPTS=-x")
+    assert "ERROR" in io.shell("python -m pytest FOO=bar")
 
 
 def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monkeypatch, capsys):
