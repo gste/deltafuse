@@ -267,7 +267,8 @@ def install(
     for root_rel in adapter_roots:
         installed, used = install_adapter_skills(
             framework_root=framework_root,
-                        target_root=target_root,
+            skills_dir=skills_dir,
+            target_root=target_root,
             adapter_rel=root_rel,
             version=version,
             content_hash=content_hash,
