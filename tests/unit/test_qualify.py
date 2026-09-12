@@ -139,3 +139,55 @@ def test_live_http_probe():
         assert probe["probe_prompt_tokens"] == 3
     finally:
         server.shutdown()
+
+
+def test_score_product_report_satisfies_thresholds_shape(tmp_path, repo_root):
+    """Step 1: apply_thresholds consumes a REAL score_product result.
+
+    A finished synthetic run must reach the threshold evaluation without
+    AttributeError, and any failing check must surface in T1.
+    """
+    from deltafuse.bench.init_product import init_bench_product
+    from deltafuse.bench.score import score_product
+
+    product = tmp_path / "m01"
+    init_bench_product("M01-cooldown", product, framework_root=repo_root)
+    report = score_product(product, pack_root=str(repo_root))
+
+    metrics = {
+        "context_peak_tokens": 10000,
+        "framework_input_tokens_max": 8000,
+        "max_unique_files": 10,
+        "hallucinated_paths": 0,
+        "envelope_violations": 0,
+    }
+    verdict, failures = qualify.apply_thresholds(report, metrics)
+    # The bare sandbox fails gates; that must show as T1/T2, never crash.
+    assert verdict is False
+    assert any(f.startswith("T1") or f.startswith("T2") for f in failures)
+    assert all("unmeasured" not in f for f in failures)
+
+    # One failing check must surface in T1 with the exact count.
+    forged = dict(report)
+    stages = dict(report.get("stages") or {})
+    first = next(iter(stages))
+    stages[first] = {
+        **stages[first],
+        "checks_passed": int(stages[first].get("checks_passed") or 0),
+        "checks_total": int(stages[first].get("checks_total") or 0) + 1,
+    }
+    forged["stages"] = stages
+    verdict2, failures2 = qualify.apply_thresholds(forged, metrics)
+    t1 = next(f for f in failures2 if f.startswith("T1"))
+    assert "correctness_failed=1" in t1
+
+
+def test_missing_measurement_fails_closed():
+    """Step 1/4: a missing metric is a failure, not an implicit pass."""
+    report = {"pass": True, "first_fail": None, "stages": {}, "retries": {}, "defense_checks": {}}
+    verdict, failures = qualify.apply_thresholds(report, {})
+    assert verdict is False
+    assert any("T4" in f and "unmeasured" in f for f in failures)
+    assert any("T5" in f for f in failures)
+    assert any("T6" in f for f in failures)
+    assert any("T7" in f for f in failures)

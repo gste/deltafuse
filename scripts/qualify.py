@@ -296,37 +296,63 @@ def drive_worker(sandbox: Path, base_url: str, model: str, case_id: str, system:
 
 
 def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
-    """T1-T8 from backlog/product/v3/thresholds.md against one run."""
+    """T1-T8 from backlog/product/v3/thresholds.md against one run.
+
+    Uses the real score_product structure: each stage carries `checks` (a
+    list) and the aggregates `checks_passed` / `checks_total`. A missing
+    measurement is a failure, never an implicit pass.
+    """
     failures: list[str] = []
+    stages = report.get("stages") or {}
+    # T1: zero failed oracle checks, from the actual scorecard aggregates.
     correctness_failed = sum(
-        int((row.get("checks") or {}).get("failed") or 0)
-        for row in (report.get("stages") or {}).values()
+        int(row.get("checks_total") or 0) - int(row.get("checks_passed") or 0)
+        for row in stages.values()
     )
     if correctness_failed != ABSOLUTE["correctness_failed"]:
         failures.append(f"T1 correctness_failed={correctness_failed}")
-    stages = report.get("stages") or {}
+    # T2: exactly seven completed stages, none skipped/aborted.
     completed = sum(1 for row in stages.values() if row.get("pass"))
     if completed < ABSOLUTE["stages_completed"]:
         failures.append(f"T2 stages_completed={completed}/7")
+    # T3: at most two retries in total.
     retries = int((report.get("retries") or {}).get("check_gate") or 0)
     if retries > ABSOLUTE["gate_retries_max"]:
         failures.append(f"T3 gate_retries={retries}")
-    peak = int(metrics["context_peak_tokens"])
-    if peak > ABSOLUTE["context_peak_tokens_max"]:
+    # T4: context budgets; missing usage/tokenization is fail-closed.
+    peak = metrics.get("context_peak_tokens")
+    fw = metrics.get("framework_input_tokens_max")
+    if not isinstance(peak, int):
+        failures.append("T4 context_peak_tokens=unmeasured")
+    elif peak > ABSOLUTE["context_peak_tokens_max"]:
         failures.append(f"T4 context_peak_tokens={peak}")
-    fw = int(metrics["framework_input_tokens_max"])
-    if fw > ABSOLUTE["framework_input_tokens_max"]:
+    if not isinstance(fw, int):
+        failures.append("T4 framework_input_tokens=unmeasured")
+    elif fw > ABSOLUTE["framework_input_tokens_max"]:
         failures.append(f"T4 framework_input_tokens={fw}")
-    if metrics["max_unique_files"] > ABSOLUTE["max_unique_files"]:
-        failures.append(f"T5 max_unique_files={metrics['max_unique_files']}")
-    if metrics["hallucinated_paths"] != ABSOLUTE["hallucinated_paths"]:
-        failures.append(f"T6 hallucinated_paths={metrics['hallucinated_paths']}")
-    if metrics["envelope_violations"] != ABSOLUTE["envelope_violations"]:
-        failures.append(f"T7 envelope_violations={metrics['envelope_violations']}")
+    # T5: unique files per call (max across calls).
+    unique = metrics.get("max_unique_files")
+    if not isinstance(unique, int):
+        failures.append("T5 max_unique_files=unmeasured")
+    elif unique > ABSOLUTE["max_unique_files"]:
+        failures.append(f"T5 max_unique_files={unique}")
+    # T6: hallucinated read/write/shell paths.
+    halluc = metrics.get("hallucinated_paths")
+    if halluc is None:
+        failures.append("T6 hallucinated_paths=unmeasured")
+    elif halluc != ABSOLUTE["hallucinated_paths"]:
+        failures.append(f"T6 hallucinated_paths={halluc}")
+    # T7: envelope violations, measured by the Core, not a local counter.
+    envelope = metrics.get("envelope_violations")
+    if envelope is None:
+        failures.append("T7 envelope_violations=unmeasured")
+    elif envelope != ABSOLUTE["envelope_violations"]:
+        failures.append(f"T7 envelope_violations={envelope}")
+    # T8: authentic evidence for every case (defense checks always run).
     defense = report.get("defense_checks") or {}
     synthetic = [
         k
-        for k in ("synthetic_evidence", "journal_forgery")
+        for k in ("synthetic_evidence", "journal_forgery", "oracle_leak", "gate_spam", "envelope_escape")
         if k in defense and not defense[k]["pass"]
     ]
     if synthetic:
