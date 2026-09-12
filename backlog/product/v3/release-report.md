@@ -3,7 +3,7 @@
 - **Статус:** `pending-reference-runs`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-12
+- **Обновлён:** 2026-09-12 (после стабилизации After Audit #2: runner реализован — V3-FIX-001/023/024; статусы строк таблицы остаются `pending` до прогонов)
 
 ## 1. Референсная конфигурация
 

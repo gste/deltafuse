@@ -2,7 +2,7 @@
 
 Живая очередь канонического репозитория. Не lifecycle продукта.
 
-Брать в работу: [DF3-009](DF3-009.md) — schema v3 и Declare contracts.
+Брать в работу: [DF3-009](DF3-009.md) — release qualification (bench, docs, runs). Программа стабилизации After Audit #2 (V3-FIX-001..026, кроме 002) выполнена; DF3-009 остаётся `in-review` до девяти реальных квалификационных прогонов.
 
 Активная программа: [DeltaFuse 3.0](deltafuse-3.md).
 
