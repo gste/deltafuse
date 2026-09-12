@@ -1,0 +1,27 @@
+schema_version: 2
+id: CHG-000-example
+title: Change title
+status: normalized
+
+framework:
+  version: 2.5.0
+  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+intent: unknown
+risk: unknown
+
+# Do not add provenance: here. Provenance is a heading in request.md.
+# source.request is the filename request.md. Intake paths go in intake_refs.
+source:
+  request: request.md
+  intake_refs: []
+
+analysis:
+  routing: null
+  summary: null
+
+deltas: []
+slices: []
+decisions: []
+tasks: []
+verification: null

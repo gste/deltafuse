@@ -6,6 +6,8 @@ DeltaFuse устанавливается как versioned external framework. Pr
 
 ## Install
 
+> **DF3-005**: two supported channels — nested source checkout (`vendor/deltafuse`) or a wheel. The wheel ships the immutable runtime asset bundle (schemas, templates, skills) and needs no source checkout. Scaffold new Changes with `deltafuse new <change-id> --route code|docs|ops` — it never closes Intake. Upgrades fail closed while active Changes exist; evidence stamps are never re-signed.
+
 Из доверенного DeltaFuse checkout или package:
 
 ```powershell
@@ -32,12 +34,18 @@ docs/archive/changes/
 
 Также ставит adapter skills в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. `adapters.mode`: `auto` (по умолчанию), `link` или `copy`.
 
-- **link**, если checkout фреймворка лежит внутри продукта (git submodule или vendor path): каждый скилл — относительный symlink на `process/skills/<name>`. Cursor видит живые скиллы после `git submodule update`. `init --force` только обновляет `.deltafuse/lock.yaml`. Сами ссылки в git не коммитить. На Windows без права на symlink installer может сделать directory junction (абсолютный, только локально).
+- **link**, если checkout фреймворка лежит внутри продукта (git submodule или vendor path, рекомендуется `vendor/deltafuse`): каждый скилл — относительный symlink на `process/skills/<name>`. Cursor видит живые скиллы после `git submodule update`. `init --force` только обновляет `.deltafuse/lock.yaml`. Сами ссылки в git не коммитить. На Windows без права на symlink installer может сделать directory junction (абсолютный, только локально).
 - **copy** в остальных случаях и если ОС отказывает в symlink: stamped snapshots с `DO NOT EDIT`, version, source URI и content hash.
 
 Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
 
 ## Pinning and upgrades
+
+Всё, чем владеет Ядро, пишется `deltafuse` без дефиса: CLI, Python-пакет, пин продукта `.deltafuse/` и git slug (`gste/deltafuse`). Nested checkout класть в `vendor/deltafuse`, чтобы путь clone и `source` в `lock.yaml` совпадали. Сабмодуль не класть в `.deltafuse/` — это каталог пина, не checkout.
+
+```bash
+git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
+```
 
 `.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 

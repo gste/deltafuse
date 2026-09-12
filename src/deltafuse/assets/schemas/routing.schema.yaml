@@ -1,0 +1,38 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v2/routing.schema.yaml
+title: DeltaFuse Claim Routing
+type: object
+additionalProperties: true
+description: Unknown top-level keys (for example schema_version) are ignored. Nested claim objects stay strict.
+required: [change, claims]
+properties:
+  change:
+    type: string
+    pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  route:
+    enum: [code, docs, ops]
+    description: Echo of change.yaml route. Missing means code.
+  claims:
+    type: object
+    propertyNames:
+      pattern: '^((CR-[0-9]{3,})|([A-Z]{1,3}[0-9]{1,3}))$'
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [primary_capability]
+      properties:
+        summary:
+          type: string
+        primary_capability:
+          type: string
+          minLength: 1
+        related_capabilities:
+          type: array
+          items:
+            type: string
+        policies:
+          type: array
+          items:
+            type: string
+        confidence:
+          enum: [low, medium, high, unknown]

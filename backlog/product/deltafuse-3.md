@@ -3,7 +3,7 @@
 - **Статус:** `active`
 - **Версия-цель:** `3.0.0`
 - **Источник:** [AU-001](AU-001.md) и [audit-report.md](audit-report.md)
-- **Следующий шаг:** [DF3-005](DF3-005.md)
+- **Следующий шаг:** [DF3-006](DF3-006.md)
 
 DeltaFuse 3.0 — breaking-линия, в которой Core становится единственным авторитетом lifecycle-переходов, доказательств и Human Gate receipts. Главная задача framework — обеспечивать качественную реализацию на локальных LLM класса 35B A3B и выше даже при полном context window от 32k. Это не повод ослаблять Process или переносить продуктовые требования во framework.
 
@@ -44,7 +44,7 @@ DeltaFuse защищается от ошибочного или враждебн
 | 2 | [DF3-002](DF3-002.md) | ✅ Archive bypass и docs/ops convergence | DF3-001 |
 | 3 | [DF3-003](DF3-003.md) | ✅ CI diff и полный framework manifest/hash | DF3-001 |
 | 4 | [DF3-004](DF3-004.md) | ✅ Core-owned transitions и spec rejection loop | DF3-002 |
-| 5 | [DF3-005](DF3-005.md) | Wheel/runtime bundle и безопасный upgrade | DF3-003 |
+| 5 | [DF3-005](DF3-005.md) | ✅ Wheel/runtime bundle и безопасный upgrade | DF3-003 |
 | 6 | [DF3-006](DF3-006.md) | Evidence command/path authority и task envelope | DF3-004 |
 | 7 | [DF3-007](DF3-007.md) | Подписанные Human Gate receipts | DF3-004 |
 | 8 | [DF3-008](DF3-008.md) | Schema v3 и Declare contracts | DF3-004, DF3-006, DF3-007 |

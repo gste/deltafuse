@@ -21,6 +21,14 @@ dev = [
 [project.scripts]
 deltafuse = "deltafuse.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# DF3-005 / B-01: the immutable runtime bundle (schemas, templates, skills,
+# manifest) ships inside the wheel so an installed CLI needs no source checkout.
+[tool.setuptools.package-data]
+"deltafuse.assets" = ["**/*.yaml", "**/*.yml", "**/*.md", "**/*.json", "**/*.py"]
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]

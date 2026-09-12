@@ -94,6 +94,14 @@ def main(argv: list[str] | None = None) -> int:
     advance_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
     # validate-layout command (P6.1)
+    # new command (DF3-005 / C-03): deterministic Change scaffolding
+    new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
+    new_parser.add_argument("product_path", nargs="?", default=".", help="Product root (default: current dir)")
+    new_parser.add_argument("change_id", help="Change id like CHG-101 or CHG-101-auth")
+    new_parser.add_argument("--route", default="code", choices=["code", "docs", "ops"], help="Change route")
+    new_parser.add_argument("--title", default="", help="Short Change title")
+    new_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+
     layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
     layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
 
@@ -362,6 +370,26 @@ def main(argv: list[str] | None = None) -> int:
                 f"{result['from']} -> {result['to']} "
                 f"(receipt {result['receipt'][:12]})"
             )
+        return 0
+
+    elif args.command == "new":
+        from deltafuse.core.scaffold import ScaffoldError, scaffold_change
+
+        try:
+            change_dir = scaffold_change(
+                Path(args.product_path),
+                args.change_id,
+                route=args.route,
+                title=args.title,
+            )
+        except ScaffoldError as se:
+            print(f"new failed: {se}", file=sys.stderr)
+            return 1
+        payload = {"ok": True, "change": args.change_id, "path": str(change_dir), "route": args.route}
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"new: scaffolded {args.change_id} at {change_dir} (Intake stays open)")
         return 0
 
     elif args.command == "validate-layout":

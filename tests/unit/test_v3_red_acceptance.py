@@ -24,6 +24,7 @@ No implementation changes in this module (DF3-001 contract).
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import sys
 import tomllib
@@ -166,20 +167,23 @@ def test_f04_passing_analyzed_gate_advances_status_out_of_draft(
 # ---------------------------------------------------------------- B-01 (P0)
 
 
-@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
-def test_b01_wheel_package_data_covers_schemas_and_templates(repo_root: Path):
-    """accidental_misuse: an installed wheel must ship process/schemas and
-    process/templates so the CLI works after ``pip install deltafuse``."""
-    pyproject = tomllib.loads(
-        (repo_root / "pyproject.toml").read_text(encoding="utf-8")
-    )
-    tool = pyproject.get("tool", {}).get("setuptools", {})
-    packages = tool.get("packages") or []
-    package_data = tool.get("package-data") or {}
-    as_text = repr(packages) + repr(package_data)
-    assert "process" in as_text, (
-        "wheel package data must include process/schemas and process/templates"
-    )
+def test_b01_installed_wheel_ships_schemas_and_templates():
+    """accidental_misuse: an installed wheel must carry schemas and templates
+    in the runtime asset bundle, so the CLI works with no source checkout."""
+    import importlib.resources
+
+    import yaml as _yaml
+
+    bundle = importlib.resources.files("deltafuse.assets")
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    files = manifest["files"]
+    schemas = [name for name in files if name.startswith("schemas/") and name.endswith(".schema.yaml")]
+    templates = [name for name in files if name.startswith("templates/")]
+    skills = [name for name in files if name.startswith("skills/")]
+    assert schemas, "bundle must ship schemas"
+    assert templates, "bundle must ship templates"
+    assert skills, "bundle must ship skills"
+    assert manifest["schema_version"] == 1
 
 
 # ---------------------------------------------------------------- B-04 (P1)

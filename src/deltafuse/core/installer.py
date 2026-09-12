@@ -1,6 +1,7 @@
 """Product installer and framework updater for DeltaFuse 2.0."""
 
 from __future__ import annotations
+import hashlib
 import os
 import re
 import shutil
@@ -13,6 +14,7 @@ from deltafuse.core.adapters import (
     is_framework_uri,
     resolve_effective_adapter_mode,
 )
+from deltafuse.core.assets import resolve_assets, source_assets_root
 from deltafuse.core.hasher import compute_framework_content_hash
 from deltafuse.core.leash import load_leash_mode, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
@@ -29,6 +31,25 @@ class InstallResult(NamedTuple):
 class InstallationError(Exception):
     """Raised when product installation or upgrade fails."""
     pass
+
+
+def _active_change_ids(target_root: Path) -> list[str]:
+    """Change ids whose status is not terminal (fail-closed upgrade, C-02)."""
+    terminal = {"archived", "rejected", "duplicate", "superseded", "not-reproduced"}
+    out: list[str] = []
+    root = target_root / "docs" / "changes"
+    if not root.is_dir():
+        return out
+    for path in sorted(root.glob("*/change.yaml")):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            continue
+        if data.get("status") not in terminal:
+            out.append(str(data.get("id") or path.parent.name))
+    return out
 
 
 TEMPLATE_MAPPINGS = [
@@ -92,26 +113,57 @@ def install(
     target_root = Path(target_dir).resolve()
     target_root.mkdir(parents=True, exist_ok=True)
 
+    bundle_assets: Path | None
     if framework_root is None:
-        framework_root = Path(__file__).resolve().parent.parent.parent.parent
+        checkout = source_assets_root()
+        if checkout is not None:
+            # Source checkout (dev, nested vendor tree): canonical process/.
+            framework_root = checkout.parent
+            bundle_assets = None
+        else:
+            # DF3-005: pure wheel install — the immutable bundle root stands
+            # in for the checkout and the lock pins the bundle manifest digest.
+            framework_root = resolve_assets("templates").parent
+            bundle_assets = framework_root
     else:
         framework_root = Path(framework_root)
         if not framework_root.is_absolute():
             framework_root = target_root / framework_root
         framework_root = Path(os.path.abspath(str(framework_root)))
+        bundle_assets = None
 
-    version_file = framework_root / "VERSION"
-    if not version_file.is_file():
-        raise InstallationError(f"VERSION file not found in framework root: {framework_root}")
-    version = version_file.read_text(encoding="utf-8").strip()
+    if bundle_assets is None:
+        version_file = framework_root / "VERSION"
+        if not version_file.is_file():
+            raise InstallationError(f"VERSION file not found in framework root: {framework_root}")
+        version = version_file.read_text(encoding="utf-8").strip()
+        content_hash = compute_framework_content_hash(framework_root)
+    else:
+        from importlib.metadata import version as _package_version
 
-    content_hash = compute_framework_content_hash(framework_root)
+        version = _package_version("deltafuse")
+        manifest_path = bundle_assets / "manifest.json"
+        if not manifest_path.is_file():
+            raise InstallationError("deltafuse asset bundle is incomplete: manifest.json missing")
+        content_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
 
     lock_path = target_root / ".deltafuse" / "lock.yaml"
-    if lock_path.is_file() and not force:
+    if lock_path.is_file():
         lock_text = lock_path.read_text(encoding="utf-8")
-        if f"content_hash: sha256:{content_hash}" not in lock_text:
+        lock_differs = f"content_hash: sha256:{content_hash}" not in lock_text
+        if lock_differs and not force:
             raise InstallationError("A different DeltaFuse lock already exists. Rerun with --force for an explicit upgrade.")
+        if lock_differs and force:
+            # DF3-005 / C-02 fail-closed upgrade: a pin revision change never
+            # silently invalidates active Change evidence stamps.
+            active = _active_change_ids(target_root)
+            if active:
+                raise InstallationError(
+                    "Fail-closed upgrade: framework pin differs while active Changes "
+                    f"exist ({', '.join(sorted(active))}). Close or migrate the Changes "
+                    "and re-run their evidence cycle before upgrading; evidence stamps "
+                    "are never re-signed."
+                )
 
     # Create target directories
     for d in DIRECTORIES_TO_CREATE:
@@ -122,6 +174,8 @@ def install(
 
     # Copy template files
     for src_rel, dst_rel in TEMPLATE_MAPPINGS:
+        if bundle_assets is not None:
+            src_rel = src_rel.replace('process/templates/', 'templates/', 1)
         _copy_template_file(framework_root, target_root, src_rel, dst_rel)
 
     adapter_roots: list[str] = []
@@ -207,12 +261,13 @@ def install(
     if not adapter_roots:
         adapter_roots = [".agents/skills", ".cursor/skills", ".gemini/skills"]
 
+    skills_dir = None if bundle_assets is None else framework_root / 'skills'
     total_skills = 0
     actual_mode = adapter_mode
     for root_rel in adapter_roots:
         installed, used = install_adapter_skills(
             framework_root=framework_root,
-            target_root=target_root,
+                        target_root=target_root,
             adapter_rel=root_rel,
             version=version,
             content_hash=content_hash,

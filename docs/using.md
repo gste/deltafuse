@@ -6,6 +6,8 @@ DeltaFuse is installed as a versioned external framework. The product repository
 
 ## Install
 
+> **DF3-005**: two supported channels — nested source checkout (`vendor/deltafuse`) or a wheel. The wheel ships the immutable runtime asset bundle (schemas, templates, skills) and needs no source checkout. Scaffold new Changes with `deltafuse new <change-id> --route code|docs|ops` — it never closes Intake. Upgrades fail closed while active Changes exist; evidence stamps are never re-signed.
+
 From a trusted DeltaFuse checkout or package:
 
 ```powershell
@@ -32,12 +34,18 @@ docs/archive/changes/
 
 It also installs adapter skills in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. `adapters.mode` is `auto` (default), `link`, or `copy`.
 
-- **link** when the framework checkout lives inside the product (git submodule or vendor path): each adapter skill is a relative symlink to `process/skills/<name>`. Cursor sees live skills after `git submodule update`. `init --force` only refreshes `.deltafuse/lock.yaml`. Do not commit the adapter links. On Windows without symlink privilege the installer may create a directory junction instead (absolute, machine-local).
+- **link** when the framework checkout lives inside the product (git submodule or vendor path, recommended `vendor/deltafuse`): each adapter skill is a relative symlink to `process/skills/<name>`. Cursor sees live skills after `git submodule update`. `init --force` only refreshes `.deltafuse/lock.yaml`. Do not commit the adapter links. On Windows without symlink privilege the installer may create a directory junction instead (absolute, machine-local).
 - **copy** otherwise, and when the OS refuses symlinks: stamped snapshots marked `DO NOT EDIT`, with version, source URI, and content hash.
 
 The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in the product repository.
 
 ## Pinning and upgrades
+
+Anything the Core owns uses the token `deltafuse` (no hyphen): the CLI, the Python package, the product pin `.deltafuse/`, and the git slug (`gste/deltafuse`). Nest the framework checkout at `vendor/deltafuse` so clone path and `lock.yaml` `source` match. Do not put the submodule in `.deltafuse/` — that directory is the pin, not the checkout.
+
+```bash
+git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
+```
 
 `.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and the Analyze call-width profile. Re-run the installer after changing `call_width` so lock matches config.
 
