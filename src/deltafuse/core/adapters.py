@@ -157,13 +157,16 @@ def _copy_skill(
             f"# deltafuse-content-hash: sha256:{content_hash}\n"
         )
         content = re.sub(r"\A---\r?\n", banner, content)
-        skill_md.write_text(content, encoding="utf-8")
+        # LF is part of the generated-snapshot contract: validators anchor
+        # patterns with `$`, which does not match before a CRLF's \n.
+        skill_md.write_text(content, encoding="utf-8", newline="\n")
     marker = dest / ADAPTER_MARKER_NAME
     marker.write_text(
         f"generated_by: deltafuse@{version}\n"
         f"source: deltafuse://v{version}/skills/{skill_name}\n"
         f"content_hash: sha256:{content_hash}\n",
         encoding="utf-8",
+        newline="\n",
     )
 
 
