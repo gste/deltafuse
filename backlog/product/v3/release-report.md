@@ -1,10 +1,38 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `engineering-failed / correction wave 2`
+- **Статус:** `engineering-pending / wave 2 implemented (QF-013–QF-017);
+  boundary qualification blocked on isolated executor availability`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-13 (независимая приёмка QF-001–QF-012; см.
+- **Обновлён:** 2026-09-13 (wave 2: QF-013–QF-017 исполнены; см.
   [qualification fix plan wave 2](qualification-fix-plan-wave-2.md))
+
+## 0. Wave 2 engineering qualification (QF-018, частично исполнена)
+
+Выполнено на ветке `feature/2026-09-11-audit` (Windows 10.0.26200, Python
+3.12 venv):
+
+- полный pytest: `534 passed, 6 skipped` — каждый skip обоснован: 5 —
+  adversarial boundary-матрица QF-013 требует недоступного на машине
+  container runtime (`DELTAFUSE_QUAL_IMAGE` + docker daemon), 1 —
+  отсутствие локального PBT runner; boundary-матрица обязана быть
+  сохранена до `engineering-passed`;
+- PowerShell smoke: passed (включая [4/4] re-validate product layout);
+- Git Bash/POSIX smoke: passed; asset drift отсутствует
+  (`sync_assets.py --check`: 44 assets, up to date);
+- wheel evidence сгенерирован явно (`scripts/wheel_evidence.py`);
+- legacy runtime search: `chars-div-4-fallback` остался только в истории
+  (RESULT/тест-документация); `docs/init`/`docs/todo` присутствуют лишь в
+  `LEGACY_FORBIDDEN_PATHS` валидатора.
+
+**Не выполнено (блокирует `engineering-passed`):**
+
+- QF-013 adversarial run внутри фактической isolated boundary (нет
+  docker/podman daemon + qual image на машине исполнения); hard-kill
+  матрица QF-016 подтверждена только на Windows;
+- POSIX/container результаты boundary-матрицы;
+- QF-012 (девять живых прогонов) — блокирован недоступностью reference
+  LM Studio host, остаётся `blocked`.
 
 ## 1. Референсная конфигурация
 
