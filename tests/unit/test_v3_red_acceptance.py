@@ -1,15 +1,17 @@
 """DF3-001 red acceptance tests for accepted AU-001 P0/P1 findings.
 
 Each test pins one accepted audit hypothesis as a minimal reproducer.
-They are `xfail(strict=True)`: red now, and they flip the suite the moment
-the owning DF3-00x card fixes the behavior (an unexpected pass fails CI).
+Still-red tests are `xfail(strict=True)` per test: red now, and they flip the
+suite the moment the owning DF3-00x card fixes the behavior (an unexpected
+pass fails CI). F-01 and F-02 already flipped green when DF3-002 fixed the
+archiver and the route-aware converged gate.
 
 Threat class per test:
 - accidental_misuse: an honest Worker following skills hits a deadlock or a
-  dead route (F-02, F-03, F-04, B-01).
+  dead route (F-03, F-04, B-01; F-02 fixed by DF3-002).
 - adversarial_worker: a Worker with the capabilities a host grants it games
-  gates, evidence, the journal or the bench (F-01, B-04, SEC-02, SEC-03,
-  SEC-04, C-01).
+  gates, evidence, the journal or the bench (B-04, SEC-02, SEC-03, SEC-04,
+  C-01; F-01 fixed by DF3-002).
 
 SEC-01 (CI leash diffs empty HEAD on a clean PR checkout) has no test here:
 its subject, ``process/templates/.github/workflows/deltafuse-leash.yml``, has
@@ -34,14 +36,8 @@ from deltafuse.bench.journal import collect_attempts
 from deltafuse.core.archiver import ArchivalError, archive_change
 from deltafuse.core.decide import apply_decision
 from deltafuse.core.fsm import check_gate, find_repo_root
-from deltafuse.core.leash import is_exempt_path
 from deltafuse.core.queue import build_work_queue, select_next
 from tests.fixtures.change_builder import MockChangeBuilder
-
-pytestmark = [
-    pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card"),
-]
-
 
 # ---------------------------------------------------------------- F-01 (P0)
 
@@ -95,6 +91,7 @@ def test_f02_converged_gate_does_not_demand_regression_for_docs_route(
 # ---------------------------------------------------------------- F-03 (P0)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_f03_spec_rejection_moves_change_out_of_specification_proposed(
     tmp_path: Path, repo_root: Path
 ):
@@ -133,6 +130,7 @@ def test_f03_spec_rejection_moves_change_out_of_specification_proposed(
 # ---------------------------------------------------------------- F-04 (P1)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_f04_passing_analyzed_gate_advances_status_out_of_draft(
     tmp_path: Path, repo_root: Path
 ):
@@ -157,6 +155,7 @@ def test_f04_passing_analyzed_gate_advances_status_out_of_draft(
 # ---------------------------------------------------------------- B-01 (P0)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_b01_wheel_package_data_covers_schemas_and_templates(repo_root: Path):
     """accidental_misuse: an installed wheel must ship process/schemas and
     process/templates so the CLI works after ``pip install deltafuse``."""
@@ -175,6 +174,7 @@ def test_b01_wheel_package_data_covers_schemas_and_templates(repo_root: Path):
 # ---------------------------------------------------------------- B-04 (P1)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_b04_synthetic_green_command_is_not_authentic_evidence(
     tmp_path: Path, repo_root: Path
 ):
@@ -206,6 +206,7 @@ def test_b04_synthetic_green_command_is_not_authentic_evidence(
 # ---------------------------------------------------------------- SEC-02 (P0)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec02_framework_hash_covers_core_source(tmp_path: Path):
     """adversarial_worker: tampering with src/deltafuse/** must change the
     framework content hash (lock verification must see Core code)."""
@@ -230,6 +231,7 @@ def test_sec02_framework_hash_covers_core_source(tmp_path: Path):
 # ---------------------------------------------------------------- SEC-03 (P0)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec03_gate_journal_is_inside_the_worker_write_boundary():
     """adversarial_worker: a Worker write to ``.deltafuse/gate-journal.jsonl``
     must be a leash violation; today the path is neither exempt nor covered by
@@ -243,6 +245,7 @@ def test_sec03_gate_journal_is_inside_the_worker_write_boundary():
 # ---------------------------------------------------------------- SEC-04 (P1)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path):
     """adversarial_worker: task ``allowed_paths`` outside the slice
     ``target_paths`` must be rejected, not merged into the write envelope."""
@@ -276,6 +279,7 @@ def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path
 # ---------------------------------------------------------------- C-01 (P0)
 
 
+@pytest.mark.xfail(strict=True, reason="DF3-001 red acceptance: fix lands in the owning DF3-00x card")
 def test_c01_gate_spam_does_not_inflate_process_score():
     """adversarial_worker: repeatedly querying an already-passed gate must not
     count as forward progress; bench process score rewards unique transitions."""

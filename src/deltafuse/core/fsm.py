@@ -909,8 +909,12 @@ def check_gate(
                 except Exception as ex:
                     errors.append(f"Gate converged: failed to parse task '{task_file.name}': {ex}")
 
-        # Coverage evidence mapping check (P4)
+        # Coverage evidence mapping check (P4). DF3-002 / F-02: route-aware —
+        # docs/ops routes keep their own green oracle and are not required to
+        # carry product-source regression evidence.
         cov_file = change_path / "coverage.yaml"
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         if cov_file.is_file():
             try:
                 cov_data = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
@@ -918,9 +922,14 @@ def check_gate(
                 for c_id, c_val in claims_map.items():
                     if isinstance(c_val, dict):
                         ev_map = c_val.get("evidence", {})
-                        if not ev_map.get("green") or not ev_map.get("regression"):
+                        missing = []
+                        if not ev_map.get("green"):
+                            missing.append("green")
+                        if route == "code" and not ev_map.get("regression"):
+                            missing.append("regression")
+                        if missing:
                             errors.append(
-                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing green or regression evidence mapping"
+                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
                             )
             except Exception:
                 pass

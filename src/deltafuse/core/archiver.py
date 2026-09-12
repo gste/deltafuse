@@ -33,7 +33,9 @@ def archive_change(
 ) -> Path:
     """Safely archives a Change package after convergence or terminal status.
     
-    1. Validates that the Change is converged or in terminal status.
+    1. Always re-verifies the converged gate unless the Change is in an
+       explicit non-converged terminal status (DF3-002); `force` no longer
+       bypasses gate verification.
     2. Enforces archive immutability: fails if target archive destination already exists.
     3. Updates status in change.yaml to 'archived'.
     4. Moves package to docs/archive/changes/YYYY-MM-DD-<change_id>/.
@@ -54,9 +56,11 @@ def archive_change(
     cid = change_data.get("id", cpath.name)
     current_status = change_data.get("status")
 
-    # Gate verification unless force
-    allowed_terminal = {"converged", "rejected", "duplicate", "not-reproduced", "superseded"}
-    if not force and current_status not in allowed_terminal:
+    # DF3-002 / F-01: a hand-set terminal status is not evidence. `converged`
+    # is always re-verified against the gate; only explicit non-converged
+    # terminal outcomes archive without gate replay.
+    bypass_gate = {"rejected", "duplicate", "not-reproduced", "superseded"}
+    if current_status not in bypass_gate:
         gate_errs = check_gate(cpath, "converged")
         if gate_errs:
             raise ArchivalError(

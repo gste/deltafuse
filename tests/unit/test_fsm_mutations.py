@@ -234,8 +234,11 @@ def test_mutation_f004_path_traversal_rejected(tmp_path: Path):
     assert any("Path traversal forbidden" in e for e in errs)
 
 
-def test_mutation_t8_rearchive_collision_fails(tmp_path: Path):
+def test_mutation_t8_rearchive_collision_fails(tmp_path: Path, repo_root: Path):
     """T8: Re-archiving a Change when target archive directory exists must fail with ArchivalError (no rmtree)."""
+    # DF3-002: install the product so the converged gate re-check has its
+    # docs/spec root; the old archive bypass (F-01) masked this setup.
+    install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-208", title="T8 Mutation Test")
         .step_intake()
