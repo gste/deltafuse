@@ -33,7 +33,7 @@ V0_PARAMS = {
 }
 
 
-def _patch_probe(monkeypatch, v0_entry=None, usage=None, ids=None):
+def _patch_probe(monkeypatch, v0_entry=None, usage=None, ids=None, tokens=None):
     ids = ids if ids is not None else [qualify.REFERENCE_MODEL_ID]
     monkeypatch.setattr(
         qualify, "_get_json",
@@ -43,9 +43,15 @@ def _patch_probe(monkeypatch, v0_entry=None, usage=None, ids=None):
             else {"data": [v0_entry if v0_entry is not None else V0_PARAMS]}
         ),
     )
-    monkeypatch.setattr(
-        qualify, "_post_json", lambda url, payload, timeout: {"usage": usage or {"prompt_tokens": 7}}
-    )
+
+    def fake_post(url, payload, timeout):
+        if url.endswith("/api/v0/tokenize"):
+            if tokens is None:
+                raise OSError("no tokenize endpoint")
+            return {"tokens": tokens}
+        return {"usage": usage or {"prompt_tokens": 7}}
+
+    monkeypatch.setattr(qualify, "_post_json", fake_post)
 
 
 def test_probe_host_requires_exact_model(monkeypatch):
@@ -91,6 +97,8 @@ def test_probe_host_diagnostic_completion(monkeypatch):
         return {"data": [V0_PARAMS]}
 
     def fake_post(url, payload, timeout):
+        if url.endswith("/api/v0/tokenize"):
+            return {"tokens": [5, 6, 7]}
         calls.append("/v1/chat/completions")
         return {"usage": {"prompt_tokens": 7}}
 
@@ -98,12 +106,13 @@ def test_probe_host_diagnostic_completion(monkeypatch):
     monkeypatch.setattr(qualify, "_post_json", fake_post)
     probe = qualify.probe_host("lm-studio")
     assert "/v1/chat/completions" in calls
-    assert probe["id"] == qualify.REFERENCE_MODEL_ID
-    assert probe["context_window_tokens_measured"] == 32768
-    assert probe["context_window_tokens_required"] == 32768
-    assert probe["model_params"]["quantization"] == "Q4_K_M"
-    assert probe["cloud_fallback"] is False
-    assert probe["probe_prompt_tokens"] == 7
+    assert probe["id"]["value"] == qualify.REFERENCE_MODEL_ID
+    assert probe["context_window_tokens"]["value"] == 32768
+    assert probe["context_window_tokens_required"]["value"] == 32768
+    assert probe["model_params"]["value"]["quantization"] == "Q4_K_M"
+    assert probe["cloud_fallback"]["value"] is False
+    assert probe["probe_prompt_tokens"]["value"] == 7
+    assert probe["tokenizer"]["value"] == "host-tokenize"
 
 
 def test_probe_host_down(monkeypatch):
@@ -190,7 +199,10 @@ def test_live_http_probe():
         def do_POST(self):
             length = int(self.headers.get("Content-Length", 0))
             self.rfile.read(length)
-            body = json.dumps({"usage": {"prompt_tokens": 3}}).encode()
+            if self.path.endswith("/api/v0/tokenize"):
+                body = json.dumps({"tokens": [1, 2, 3]}).encode()
+            else:
+                body = json.dumps({"usage": {"prompt_tokens": 3}}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -205,7 +217,8 @@ def test_live_http_probe():
     try:
         url = f"http://127.0.0.1:{server.server_port}"
         probe = qualify.probe_host("lm-studio", base_url=url)
-        assert probe["probe_prompt_tokens"] == 3
+        assert probe["probe_prompt_tokens"]["value"] == 3
+        assert probe["tokenizer"]["value"] == "host-tokenize"
     finally:
         server.shutdown()
 
@@ -1199,3 +1212,103 @@ def test_dirty_tree_aborts_campaign(tmp_path, monkeypatch):
     monkeypatch.setattr(qualify, "tree_dirty", lambda: [" M scripts/x.py"])
     exit_code = qualify.main()
     assert exit_code == 3
+
+
+# ------------------------------------------- QF-007: host attestation
+
+REQUIRED_MANIFEST_KEYS = (
+    "id", "host", "host_base_url", "context_window_tokens",
+    "context_window_tokens_required", "model_state", "model_params",
+    "probe_prompt_tokens", "tokenizer", "cloud_fallback",
+)
+
+
+_NO_TOKENS = object()
+
+def _full_probe(monkeypatch, tokens=_NO_TOKENS):
+    _patch_probe(monkeypatch, tokens=[11, 7, 3] if tokens is _NO_TOKENS else tokens)
+    return qualify.probe_host("lm-studio")
+
+
+def test_manifest_fields_carry_provenance(monkeypatch):
+    """QF-007: every mandatory model field carries value+provenance(+method/basis)."""
+    probe = _full_probe(monkeypatch)
+    qualify.attest_manifest_model(probe)  # self-check passes
+    for key in REQUIRED_MANIFEST_KEYS:
+        field_def = probe[key]
+        assert "value" in field_def, key
+        assert field_def["provenance"] in ("measured", "declared", "derived"), key
+    # self-check blocks when a provenance label is missing
+    broken = json.loads(json.dumps(probe))
+    del broken["tokenizer"]["provenance"]
+    with pytest.raises(qualify.QualificationError, match="provenance"):
+        qualify.attest_manifest_model(broken)
+
+
+def test_tokenizer_fingerprint_recorded(monkeypatch):
+    """QF-007: the calibration fingerprint is sha256 of the token ids."""
+    import hashlib
+
+    probe = _full_probe(monkeypatch, tokens=[11, 7, 3])
+    tokenizer = probe["tokenizer"]
+    assert tokenizer["value"] == "host-tokenize"
+    assert tokenizer["provenance"] == "measured"
+    expected = hashlib.sha256(json.dumps([11, 7, 3]).encode("utf-8")).hexdigest()
+    assert tokenizer["fingerprint"] == expected
+
+
+def test_tokenizer_endpoint_error_blocks_campaign(monkeypatch):
+    """QF-007: a broken tokenize endpoint blocks — never a silent fallback."""
+    import urllib.error
+
+    def boom(url, payload, timeout):
+        if url.endswith("/api/v0/tokenize"):
+            raise urllib.error.HTTPError(url, 500, "boom", hdrs=None, fp=None)
+        return {"usage": {"prompt_tokens": 7}}
+
+    _patch_probe(monkeypatch)
+    monkeypatch.setattr(qualify, "_post_json", boom)
+    with pytest.raises(qualify.QualificationError, match="tokenizer"):
+        qualify.probe_host("lm-studio")
+
+
+def test_tokenizer_endpoint_garbage_blocks_campaign(monkeypatch):
+    """QF-007: a tokenize endpoint answering garbage blocks the campaign."""
+    def garbage(url, payload, timeout):
+        if url.endswith("/api/v0/tokenize"):
+            return {"unexpected": True}
+        return {"usage": {"prompt_tokens": 7}}
+
+    monkeypatch.setattr(qualify, "_get_json", lambda url: {"data": [{"id": qualify.REFERENCE_MODEL_ID}]} if url.endswith("/v1/models") else {"data": [V0_PARAMS]})
+    monkeypatch.setattr(qualify, "_post_json", garbage)
+    with pytest.raises(qualify.QualificationError, match="tokenizer"):
+        qualify.probe_host("lm-studio")
+
+
+def test_tokenizer_absent_records_fallback(monkeypatch):
+    """QF-007: absent endpoint -> honest fallback, fingerprint null, no error."""
+    probe = _full_probe(monkeypatch, tokens=None)
+    tokenizer = probe["tokenizer"]
+    assert tokenizer["value"] == "chars-div-4-fallback"
+    assert tokenizer["fingerprint"] is None
+
+
+def test_no_second_transport():
+    """QF-007: runner modules only talk to HOST_BASE_URL (static check)."""
+    import re
+
+    allowed = {qualify.HOST_BASE_URL}
+    for path in ("scripts/qualify.py", "scripts/qualify_staging.py"):
+        source = Path(path).read_text(encoding="utf-8")
+        urls = set(re.findall(r"https?://[^\s'\"\)]+", source))
+        assert urls <= allowed, f"{path}: unexpected transport(s): {urls - allowed}"
+
+
+def test_cloud_fallback_is_declared_not_measured(monkeypatch):
+    """QF-007: cloud_fallback is a declared invariant with a basis, never
+    published as a measurement."""
+    probe = _full_probe(monkeypatch)
+    field_def = probe["cloud_fallback"]
+    assert field_def["value"] is False
+    assert field_def["provenance"] == "declared"
+    assert field_def["basis"].strip()

@@ -42,6 +42,100 @@ CONTEXT_WINDOW_TOKENS = 32768
 MAX_WORKER_TURNS = 120
 TURN_TIMEOUT_S = 240
 
+# QF-007: fixed tokenizer calibration text (~1 KiB, ASCII-stable) whose token
+# ids fingerprint the host tokenizer across campaigns.
+CALIBRATION_TEXT = (
+    "DeltaFuse qualification tokenizer calibration. "
+    "The quick brown fox jumps over the lazy dog. 0123456789 "
+    "def drive_worker(sandbox: Path, base_url: str, model: str) -> dict:\n"
+    "    return {'calls': [], 'context_peak_tokens': None}\n"
+    "Pack my box with five dozen liquor jugs. How vexingly quick daft "
+    "zebras jump! Sphinx of black quartz, judge my vow. "
+    "The framework keeps process, product and evidence strictly apart: "
+    "Intake -> Analyze -> Specify -> Decompose -> Declare -> Implement -> "
+    "Verify. Thresholds T1-T8 are absolute; a missing measurement is a "
+    "failure, never an implicit pass. "
+) * 3
+
+
+def _attest(value, provenance: str, method: str | None = None,
+            basis: str | None = None, **extra) -> dict:
+    """QF-007: provenance-tagged manifest field."""
+    field_def: dict = {"value": value, "provenance": provenance}
+    if method is not None:
+        field_def["method"] = method
+    if basis is not None:
+        field_def["basis"] = basis
+    field_def.update(extra)
+    return field_def
+
+
+def _probe_tokenizer(base_url: str) -> dict:
+    """QF-007: discover the host tokenize endpoint and fingerprint it.
+
+    - endpoint absent (connection error / HTTP 404): honest documented
+      fallback (`chars-div-4-fallback`, fingerprint null);
+    - endpoint present but failing/garbage: blocking QualificationError —
+      the campaign must not silently degrade its T4 measurement.
+    """
+    import urllib.error
+
+    try:
+        data = _post_json(
+            f"{base_url}/api/v0/tokenize", {"input": CALIBRATION_TEXT}, timeout=20
+        )
+    except urllib.error.HTTPError as ex:
+        if ex.code == 404:
+            return _attest(
+                "chars-div-4-fallback", "measured",
+                method="POST /api/v0/tokenize (endpoint absent: HTTP 404)",
+                fingerprint=None,
+            )
+        raise QualificationError(f"tokenizer endpoint failed: HTTP {ex.code}") from ex
+    except Exception as ex:
+        return _attest(
+            "chars-div-4-fallback", "measured",
+            method=f"POST /api/v0/tokenize (endpoint absent: {type(ex).__name__})",
+            fingerprint=None,
+        )
+    tokens = data.get("tokens") if isinstance(data, dict) else None
+    if not isinstance(tokens, list):
+        raise QualificationError(
+            f"tokenizer endpoint returned garbage: {str(data)[:120]}"
+        )
+    fingerprint = hashlib.sha256(json.dumps(tokens).encode("utf-8")).hexdigest()
+    return _attest(
+        "host-tokenize", "measured",
+        method="POST /api/v0/tokenize (endpoint discovered)",
+        fingerprint=fingerprint,
+    )
+
+
+def attest_manifest_model(probe: dict) -> None:
+    """QF-007: self-check — every mandatory model field is provenance-tagged.
+
+    measured fields need a method; declared fields need a basis; provenance
+    must be one of measured|declared|derived. Blocks the campaign otherwise.
+    """
+    for key, field_def in probe.items():
+        if not isinstance(field_def, dict) or "value" not in field_def or "provenance" not in field_def:
+            raise QualificationError(
+                f"manifest model field {key!r} lacks a provenance label"
+            )
+        provenance = field_def["provenance"]
+        if provenance not in ("measured", "declared", "derived"):
+            raise QualificationError(
+                f"manifest model field {key!r}: unknown provenance {provenance!r}"
+            )
+        if provenance == "measured" and not field_def.get("method"):
+            raise QualificationError(
+                f"manifest model field {key!r}: measured without method"
+            )
+        if provenance == "declared" and not str(field_def.get("basis") or "").strip():
+            raise QualificationError(
+                f"manifest model field {key!r}: declared without basis"
+            )
+
 ABSOLUTE = {
     "correctness_failed": 0,
     "stages_completed": 7,
@@ -337,21 +431,40 @@ def probe_host(host: str, base_url: str = HOST_BASE_URL) -> dict:
         )
 
     return {
-        "id": REFERENCE_MODEL_ID,
-        "host": host,
-        "host_base_url": base_url,
-        # measured, not assumed:
-        "context_window_tokens_measured": context_length,
-        "context_window_tokens_required": CONTEXT_WINDOW_TOKENS,
-        "model_state": state,
-        "model_params": {
-            k: info.get(k)
-            for k in ("type", "publisher", "arch", "quantization", "state")
-            if info.get(k) is not None
-        },
-        "cloud_fallback": False,  # runner construction: single local endpoint only
-        "loaded_models": ids,
-        "probe_prompt_tokens": prompt_tokens,
+        # QF-007: every mandatory field is provenance-tagged (measured /
+        # declared), attested by attest_manifest_model before the manifest
+        # is written.
+        "id": _attest(REFERENCE_MODEL_ID, "measured", method="GET /v1/models"),
+        "host": _attest(host, "declared",
+                        basis="runner invocation flag; the only supported host is 'lm-studio'"),
+        "host_base_url": _attest(base_url, "declared",
+                                 basis="runner construction: single local endpoint (HOST_BASE_URL)"),
+        "context_window_tokens": _attest(context_length, "measured",
+                                         method="GET /api/v0/models max_context_length"),
+        "context_window_tokens_required": _attest(
+            CONTEXT_WINDOW_TOKENS, "declared",
+            basis="DF3-009 reference contract (backlog/product/v3/thresholds.md)",
+        ),
+        "model_state": _attest(state, "measured", method="GET /api/v0/models state"),
+        "model_params": _attest(
+            {k: info.get(k)
+             for k in ("type", "publisher", "arch", "quantization", "state")
+             if info.get(k) is not None},
+            "measured", method="GET /api/v0/models",
+        ),
+        "probe_prompt_tokens": _attest(prompt_tokens, "measured",
+                                       method="diagnostic completion usage"),
+        "tokenizer": _probe_tokenizer(base_url),
+        # The absence of a cloud fallback is proved by runner construction,
+        # not by a measurement (test_no_second_transport). It is published as
+        # a declared invariant, never as a fact.
+        "cloud_fallback": _attest(
+            False, "declared",
+            basis="runner builds a single local endpoint (HOST_BASE_URL); no "
+                  "other transport exists in the runner code (test_no_second_"
+                  "transport); OS-level egress is not attested at L1",
+        ),
+        "loaded_models": _attest(ids, "measured", method="GET /v1/models"),
     }
 
 
@@ -1198,7 +1311,7 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "reports nothing ready or a done halt.\n\n"
         f"Worker start prompt:\n{format_worker_start_prompt(json.loads((sandbox / '.deltafuse' / 'bench.yaml').read_text(encoding='utf-8')))}\n\n{bench_md}"
     )
-    metrics = drive_worker(work, model_probe["host_base_url"], model_probe["id"], case_id, system, staging=staging)
+    metrics = drive_worker(work, model_probe["host_base_url"]["value"], model_probe["id"]["value"], case_id, system, staging=staging)
     staging.collect_workdir(run_id, sandbox)
     staging.teardown()
     report = score_product(sandbox, pack_root=str(CASES_ROOT))
@@ -1209,7 +1322,7 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict, prov
         "run_id": run_id,
         "case": case_id,
         "framework_commit": commit,
-        "model": model_probe["id"],
+        "model": model_probe["id"]["value"],
         "verdict": "pass" if verdict else "fail",
         "threshold_failures": failures,
         "stages": report.get("stages") or {},
@@ -1266,9 +1379,14 @@ def main() -> int:
             "and re-run this script."
         )
         return 2
+    try:
+        attest_manifest_model(model_probe)
+    except QualificationError as ex:
+        print(f"QUALIFICATION ERROR: {ex}", file=sys.stderr)
+        return 3
     print(
-        f"host probe ok: model={model_probe['id']} "
-        f"context={model_probe['context_window_tokens_measured']}"
+        f"host probe ok: model={model_probe['id']['value']} "
+        f"context={model_probe['context_window_tokens']['value']}"
     )
 
     campaign_dir = RUNS_DIR / args.campaign_id
