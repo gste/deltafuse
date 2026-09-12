@@ -47,3 +47,41 @@ def test_single_step_skills_advance_after_check_gate() -> None:
         checkgate_pos = text.find(f"check-gate <change-dir> --gate {gate}")
         assert checkgate_pos != -1, skill
         assert advance_pos > checkgate_pos, f"{skill}: advance must follow check-gate"
+
+
+# Step 3 of the completion plan: exact Core-command contract per skill.
+SKILL_CORE_CONTRACT = {
+    # skill: (gate stamped by exactly one advance, task/slice/state commands)
+    "intake": ("intake", 0),
+    "analyze": ("analyzed", 0),
+    "specify": ("specified", 2),  # slice state + Change in-flight state
+    "decompose": ("decomposed", 0),
+    "declare": ("declaring", 1),  # task -> declared
+    "implement": ("implemented", 1),  # task -> implemented
+    "verify": ("converged", 1),  # task -> verified
+}
+
+
+def test_skill_core_command_contract(repo_root: Path):
+    """Exactly one advance per skill, ordered after its check-gate; artifact
+    state changes go only through `deltafuse state`."""
+    for skill, (gate, state_calls) in SKILL_CORE_CONTRACT.items():
+        text = (repo_root / "process" / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        advances = [m.start() for m in re.finditer(r"deltafuse advance <change-dir> --gate (\S+)", text)]
+        gates = [text[m.start():].split("--gate ", 1)[1].split("`")[0].split(" ")[0] for m in
+                 re.finditer(r"deltafuse advance <change-dir> --gate", text)]
+        assert len(advances) == 1, f"{skill}: expected exactly one advance, got {gates}"
+        assert gates[0].rstrip("`.,") == gate, f"{skill}: wrong gate {gates[0]}"
+        states = re.findall(r"deltafuse state <change-dir>", text)
+        assert len(states) == state_calls, f"{skill}: expected {state_calls} state calls, got {len(states)}"
+        checkgate = text.find(f"check-gate <change-dir> --gate {gate}")
+        assert checkgate != -1 and checkgate < advances[0], f"{skill}: advance must follow check-gate"
+        # run-mode duplication: a through-mode skill may not repeat single-step gates
+        assert text.count("deltafuse advance") == 1, skill
+
+
+def test_run_skill_defers_advance_to_single_gate_cycle(repo_root: Path):
+    """Through-mode stays generic: one advance per gate cycle, never per gate name."""
+    text = (repo_root / "process" / "skills" / "run" / "SKILL.md").read_text(encoding="utf-8")
+    assert text.count("deltafuse advance") == 1
+    assert "--gate <gate>" in text
