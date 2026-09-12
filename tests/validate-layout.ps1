@@ -104,6 +104,9 @@ foreach ($forbidden in @("docs/process", "docs/init", "docs/todo")) {
 
 if (Test-Path -LiteralPath $lockPath) {
     $lock = Get-Content -LiteralPath $lockPath -Raw
+    if ($lock -notmatch '(?m)^schema_version:\s*3\s*$') {
+        $Errors.Add("Lock file schema_version must be 3 (lock contract v3; re-run the installer)")
+    }
     $versionMatch = [regex]::Match($lock, '(?m)^\s{2}version:\s*(\S+)\s*$')
     $sourceMatch = [regex]::Match($lock, '(?m)^\s{2}source:\s*(\S+)\s*$')
     $hashMatch = [regex]::Match($lock, '(?m)^\s{2}content_hash:\s*(sha256:[a-fA-F0-9]{64})\s*$')

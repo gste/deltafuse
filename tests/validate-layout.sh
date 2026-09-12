@@ -85,6 +85,7 @@ for forbidden in docs/process docs/init docs/todo; do
 done
 
 if [ -f "$lock" ]; then
+  grep -Eq '^schema_version:[[:space:]]*3[[:space:]]*$' "$lock" || fail "Lock file schema_version must be 3 (lock contract v3; re-run the installer)"
   lock_version="$(sed -n 's/^[[:space:]]\{2\}version:[[:space:]]*//p' "$lock" | head -n 1)"
   lock_source="$(sed -n 's/^[[:space:]]\{2\}source:[[:space:]]*//p' "$lock" | head -n 1)"
   lock_hash="$(sed -n 's/^[[:space:]]\{2\}content_hash:[[:space:]]*//p' "$lock" | head -n 1)"

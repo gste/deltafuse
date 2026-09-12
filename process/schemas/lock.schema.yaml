@@ -1,0 +1,32 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/schemas/v3/lock.schema.yaml
+title: DeltaFuse Framework Lock Pin
+description: >-
+  Canonical lock contract v3 (V3-FIX-014). Cores reject lock pins that do not
+  declare this schema_version; re-run the installer to regenerate the pin.
+type: object
+additionalProperties: false
+required: [schema_version, framework]
+properties:
+  schema_version: {const: 3}
+  framework:
+    type: object
+    additionalProperties: false
+    required: [version, source, content_hash]
+    properties:
+      version:
+        type: string
+        pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+      source:
+        type: string
+        minLength: 1
+      content_hash:
+        type: string
+        pattern: '^sha256:[a-fA-F0-9]{64}$'
+  workflow:
+    type: object
+    additionalProperties: false
+    properties:
+      call_width: {enum: [narrow, medium, wide]}
+      auto_accept_decisions: {type: boolean}
+      leash: {enum: [off, advisory, enforce]}
