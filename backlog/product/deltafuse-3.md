@@ -2,7 +2,8 @@
 
 - **Статус:** `active`
 - **Версия:** `3.0.0`
-- **Текущий план:** [v3/completion-plan.md](v3/completion-plan.md)
+- **Текущий план:** [v3/qualification-fix-plan.md](v3/qualification-fix-plan.md)
+- **Исходный completion plan:** [v3/completion-plan.md](v3/completion-plan.md)
 - **Release qualification:** [DF3-009](DF3-009.md)
 
 Базовая реализация v3 находится в коде. Программа не считается завершённой,
@@ -25,7 +26,8 @@
 
 ## Definition of Done
 
-1. Все пункты [completion plan](v3/completion-plan.md) закрыты проверяемыми тестами.
+1. Все пункты [qualification fix plan](v3/qualification-fix-plan.md) закрыты
+   проверяемыми тестами.
 2. Полный pytest, PowerShell/POSIX smoke, wheel smoke и layout validation зелёные.
 3. Девять реальных qualification-прогонов сохранены с полным provenance.
 4. Каждый прогон и медианы удовлетворяют T1–T8 из [thresholds.md](v3/thresholds.md).

@@ -1,9 +1,10 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `blocked-engineering`
+- **Статус:** `engineering-failed`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-12 (повторная проверка; см. [completion plan](completion-plan.md))
+- **Обновлён:** 2026-09-12 (независимая проверка №3; см.
+  [qualification fix plan](qualification-fix-plan.md))
 
 ## 1. Референсная конфигурация
 
@@ -26,32 +27,42 @@
 | M02-policy-stats | _pending_ | _pending_ | _pending_ | — | — | pending |
 | M03-adversarial | _pending_ | _pending_ | _pending_ | — | — | pending |
 
-**Прогоны ещё не выполнялись.** Сначала требуется закрыть инженерные блокеры
-runner из completion plan; референсный host с моделью также недоступен на машине
-разработки. Данные заполняются только фактическими результатами.
+**Прогоны ещё не выполнялись.** Сначала требуется закрыть инженерные блокеры из
+[qualification fix plan](qualification-fix-plan.md); референсный host с моделью
+также недоступен на машине разработки. Данные заполняются только фактическими
+результатами.
 
-## 3. Инженерная квалификация без модели (2026-09-12, completion plan шаг 8)
+## 3. Независимая инженерная перепроверка без модели (2026-09-12)
 
-Выполнено на чистом commit `25551473ad4c07a4c5b1e2fabdd782792f7e6975`
-(ветка `feature/2026-09-11-audit`), platform `win32 / Python 3.14`:
+Заявленная квалификация выполнялась на commit
+`25551473ad4c07a4c5b1e2fabdd782792f7e6975`. Независимая перепроверка выполнена
+на commit `c12803d` ветки `feature/2026-09-11-audit` после заявленных
+исправлений:
 
-1. Полный pytest-сьют: **~384 passed, 1 skipped** (`no local PBT runner` —
-   Hypothesis не установлен, skip обоснован в тесте).
+1. Полный pytest-сьют в независимом окружении: **1 failed, 382 passed,
+   1 skipped**. Failure:
+   `tests/unit/test_qualify.py::test_allowed_shell_commands_still_run` — команда
+   `python -m pytest --version` выбрала Python без pytest.
 2. `tests/smoke-test.ps1` — rc 0.
 3. `tests/smoke-test.sh` (Git Bash) — rc 0.
-4. Wheel smoke: `pip wheel` → установка в чистый venv → CLI `--help`, `init`,
-   `validate-config` без checkout — rc 0; durable build manifest в
-   `bench/builds/`; drift bundle = явный fail, дерево тест не чинит.
+4. Default wheel smoke перезаписывает tracked build manifest: версия Python и
+   wheel hash меняются. Изменение после проверки было откатано; тест не
+   удовлетворяет требованию чистого дерева.
 5. Layout validation чистого v3-продукта (sh-валидатор) — rc 0.
 6. Поиск legacy runtime paths: остались только намеренные negative-фикстуры
    (`schema_version: 2` в тестах fail-closed); bench seed catalogs переведены
    на v3.
 
-Исключения/skips: один — отсутствие локального PBT runner'а; блокеров нет.
+Дополнительные блокеры подтверждены прямыми probes: пустой envelope разрешает
+запись `src/evil.py`; `git diff --output=leak.txt` проходит parser; T5 сообщает
+`unique_files: 0` после реального чтения файла. Asset replacement остаётся
+неатомарным, T8 проходит без обязательного defense evidence, а host fallback и
+tokenizer provenance не измеряются полностью.
 
-**Инженерный блокер снят:** шаги 1–7 completion plan выполнены и закрыты
-тестами; кампания `scripts/qualify.py` ожидает только референсный host
-(шаг 9).
+**Инженерный блокер не снят.** Исправления перечислены в
+[qualification-fix-plan.md](qualification-fix-plan.md). Кампания
+`scripts/qualify.py` не принимается для reference qualification до выполнения
+QF-001–QF-011; отсутствие LM Studio отдельно блокирует QF-012.
 
 ## 4. Критерии закрытия DF3-009
 
