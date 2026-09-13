@@ -34,23 +34,12 @@ Contract ([deltafuse-3](../deltafuse-3.md)) и context envelope, а не из р
 Процесс-скор не порог; он диагностический. Threshold не награждает gate spam
 (C-01): повторные запросы уже пройденного гейта не считаются forward-переходами.
 
-## Токенизация (QF-015)
-
-Release-verdict `pass` возможен только при **измеренном** полном input usage
-(из `usage.prompt_tokens` каждого вызова) и **измеренном**
-framework-controlled input (host `POST /api/v0/tokenize`). Состояния
-измерения: `measured`, `estimated-nonrelease`, `unavailable`, `error`;
-оценка `chars // 4` сохранена только как local-dev диагностика с provenance
-`estimated-nonrelease` и никогда не даёт pass. Отсутствие endpoint
-(404/connection/timeout), garbage-ответ, отрицательное или булево число
-токенов блокируют кампанию (`PENDING`) до первого Worker-вызова.
-
-Калибровка: фиксированный `CALIBRATION_TEXT`; fingerprint — sha256 списка
-token id, проверяется до и после кампании (расхождение обнуляет verdict).
-Согласованность: `usage.prompt_tokens` диагностической completion на
-калибровочном тексте должен лежать в диапазоне
-`[tokenize_count, tokenize_count + 48]`; 48 — задокументированный допуск на
-шаблон chat-сообщения (TOKENIZER_CONSISTENCY_ALLOWANCE).
+Правила measurement-хоста (LM Studio endpoint, tokenizer, fingerprint,
+consistency) вынесены из этого файла в
+[qualification-host-contract.md](qualification-host-contract.md) (QF-022):
+этот файл — источник только утверждённых T1–T8; любое численное изменение
+здесь требует maintainer Decision в [decisions.md](decisions.md) ДО
+implementation.
 
 ## Run manifest (единый формат для DF3-009)
 

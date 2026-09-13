@@ -121,14 +121,15 @@ def _probe_tokenizer(base_url: str) -> dict:
     )
 
 
-# QF-015: documented consistency allowance between the raw tokenizer count of
-# CALIBRATION_TEXT and the diagnostic completion usage on the same text; the
-# chat template adds the difference (see backlog/product/v3/thresholds.md).
-TOKENIZER_CONSISTENCY_ALLOWANCE = 48
-
-
 def _assert_tokenizer_consistency(base_url: str, model: str, calibration_tokens: int) -> None:
-    """QF-015: the diagnostic completion usage must agree with the tokenizer."""
+    """QF-015/QF-022: fail-closed consistency WITHOUT a numeric allowance.
+
+    The diagnostic completion usage must be a measured count and can never
+    be below the tokenizer count (the chat template only ADDS tokens). Any
+    numeric tolerance would be a release gate change and requires a
+    maintainer Decision recorded BEFORE implementation
+    (backlog/product/v3/decisions.md).
+    """
     probe = _post_json(
         f"{base_url}/v1/chat/completions",
         {
@@ -140,13 +141,16 @@ def _assert_tokenizer_consistency(base_url: str, model: str, calibration_tokens:
         timeout=60,
     )
     usage = (probe.get("usage") or {}).get("prompt_tokens")
-    low = calibration_tokens
-    high = calibration_tokens + TOKENIZER_CONSISTENCY_ALLOWANCE
-    if not isinstance(usage, int) or isinstance(usage, bool) or not low <= usage <= high:
+    if not isinstance(usage, int) or isinstance(usage, bool) or usage <= 0:
         raise QualificationError(
-            f"tokenizer consistency check failed: tokenizer counted "
-            f"{calibration_tokens} tokens but completion usage was {usage!r} "
-            f"(allowed {low}..{high})"
+            f"tokenizer consistency check failed: diagnostic completion "
+            f"returned unmeasured usage {usage!r}"
+        )
+    if usage < calibration_tokens:
+        raise QualificationError(
+            f"tokenizer consistency check failed: completion usage {usage} is "
+            f"below the tokenizer count {calibration_tokens} (the chat "
+            f"template cannot remove tokens)"
         )
 
 
@@ -1342,6 +1346,21 @@ def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
 # ------------------------------------------------------------------- runner
 
 
+def assert_threshold_governance(revision: str | None = None) -> None:
+    """QF-022: a frozen-thresholds revision without an accepted maintainer
+    Decision blocks release tooling (fail-closed, before any Worker call)."""
+    import threshold_governance
+
+    rev = revision or thresholds_revision()
+    if not threshold_governance.check_revision(rev):
+        raise QualificationError(
+            f"thresholds governance: revision {rev!r} of "
+            f"backlog/product/v3/thresholds.md is not covered by an accepted "
+            f"maintainer Decision; numeric release gates change only via a "
+            f"Decision recorded before implementation"
+        )
+
+
 def thresholds_revision() -> str:
     proc = subprocess.run(
         ["git", "hash-object", str(THRESHOLDS_DOC)],
@@ -1823,6 +1842,16 @@ def main_with_args(argv: list[str] | None = None) -> int:
             "for development only (verdict capped at non-release)."
         )
         return 2
+
+    if executor.kind == "isolated":
+        # QF-022: an unapproved thresholds revision blocks RELEASE tooling
+        # before the host probe and any Worker call. local-dev stays a
+        # diagnostics-only mode (its verdicts are capped at non-release).
+        try:
+            assert_threshold_governance(provenance_info["thresholds_revision"])
+        except QualificationError as ex:
+            print(f"QUALIFICATION ERROR: {ex}", file=sys.stderr)
+            return 3
 
     try:
         model_probe = probe_host(args.host)

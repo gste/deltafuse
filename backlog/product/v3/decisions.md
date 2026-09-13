@@ -72,3 +72,30 @@ adversarial Worker (он может пересчитать chain); лечит т
 
 **Consequences.** Формат receipts и подписи — контракт DF3-007; валидация по
 профилю — в `check-gate`. Leash-исключение журнала убирается в DF3-004/DF3-007.
+
+## DR-3.0-4 — Threshold governance (release gates меняются только Decision)
+
+- **Статус:** accepted (2026-09-13)
+- **Влияет на:** DF3-009, `scripts/qualify.py`,
+  `scripts/threshold_governance.py`, [thresholds.md](thresholds.md)
+- **Red-тесты:** `tests/unit/test_threshold_governance.py`
+
+**Decision.** Численные release gates (T1–T8 и любые допуски/диапазоны в
+release-пути) меняются только заранее записанным maintainer Decision с
+обоснованием и новой revision. QF-015 добавил численный допуск
+`TOKENIZER_CONSISTENCY_ALLOWANCE = 48` в зафиксированный thresholds.md ПОСЛЕ
+implementation — нарушая собственное правило файла; настоящий Decision
+фиксирует удаление этого допуска (восстановление fail-closed consistency:
+usage измерен и не ниже счёта токенизатора, chat-шаблон только добавляет
+токены) и перенос правил host/tokenizer в
+[qualification-host-contract.md](qualification-host-contract.md).
+
+**Механизм.** Revision thresholds.md (git hash-object) попадает в каждый
+campaign manifest; release tooling блокирует кампанию, если revision не
+перечислен в accepted Decision (checked by `scripts/threshold_governance.py`).
+
+**Approved thresholds revisions:** `3c6e52f7a0909a921a2c0b0957303264344af558`
+
+**Consequences.** Любое будущее ослабление/ужесточение T1–T8 или ввод
+численного допуска: Human Gate → evidence на reference host → Decision в этом
+файле с новой revision → только затем изменение кода/порога.
