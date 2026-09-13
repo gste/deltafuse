@@ -1,0 +1,22 @@
+schema_version: 3
+domains:
+  telemetry:
+    summary: Industrial telemetry ingestion
+    capabilities:
+      raw_ingest:
+        summary: Accept and publish raw measurements
+        spec: [docs/spec/telemetry/raw_ingest.md]
+        code_roots: [telemetry-gateway/src, shared-contracts/src]
+        test_roots: [telemetry-gateway/src/test]
+        status: active
+        type: primary
+  calibration:
+    summary: Measurement calibration and storage
+    capabilities:
+      identity_store:
+        summary: Persist measurements with identity calibration
+        spec: [docs/spec/calibration/identity_store.md]
+        code_roots: [calibration-service/src, shared-contracts/src]
+        test_roots: [calibration-service/src/test]
+        status: active
+        type: primary

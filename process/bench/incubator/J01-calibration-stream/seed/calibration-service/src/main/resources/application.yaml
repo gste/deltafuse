@@ -1,0 +1,17 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: calibration-service
+  datasource:
+    url: ${JDBC_URL:jdbc:postgresql://localhost:5432/calibration}
+    username: ${JDBC_USER:calibration}
+    password: ${JDBC_PASSWORD:calibration}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: dev.deltafuse.bench.contracts
