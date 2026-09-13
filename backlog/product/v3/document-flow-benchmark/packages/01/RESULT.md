@@ -2,7 +2,7 @@
 
 Status: in_progress
 Package title: Scoring contracts
-Cards: J03-101 through J03-106 complete; J03-107 and J03-108 planned
+Cards: J03-101 through J03-107 complete; J03-108 planned
 
 ## Evidence index
 
@@ -12,6 +12,7 @@ Cards: J03-101 through J03-106 complete; J03-107 and J03-108 planned
 - [J03-104 result](cards/J03-104.md)
 - [J03-105 result](cards/J03-105.md)
 - [J03-106 result](cards/J03-106.md)
+- [J03-107 result](cards/J03-107.md)
 - Frozen registry: `scripts/document_flow/contracts/checks.json`
 - Registry loader: `scripts/document_flow/registry.py`
 - Focused registry tests: `tests/bench/document_flow/test_registry.py`
@@ -26,6 +27,8 @@ Cards: J03-101 through J03-106 complete; J03-107 and J03-108 planned
 - Focused attestation/variant tests: `tests/bench/document_flow/test_attestation_variant_schema.py`
 - Pure run evaluator: `scripts/document_flow/evaluate.py`
 - Focused evaluator tests: `tests/bench/document_flow/test_evaluate.py`
+- Campaign evaluator/comparison: `scripts/document_flow/campaign.py`
+- Focused campaign tests: `tests/bench/document_flow/test_campaign.py`
 
 ## Handoff
 
@@ -42,4 +45,6 @@ membership identity, and retained missing/not-run/invalid member records.
 J03-105 adds measured-versus-declared attestation and deterministic variant
 identity contracts. J03-106 derives exact run scores and deterministic failure
 precedence from registry facts and measured factors. The first exact
-dependency-ready card is now J03-107.
+dependency-ready card is now J03-108. J03-107 validates frozen membership and
+re-evaluated run totals, preserves every planned member, computes exact
+campaign diagnostics, and refuses incompatible comparisons.

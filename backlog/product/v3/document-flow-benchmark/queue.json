@@ -349,7 +349,7 @@
       "green": "Exact three/four-run fixtures, ties, rounding boundaries and all-failed valid campaigns match hand calculations.",
       "test": "python -m pytest tests/bench/document_flow/test_campaign.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-107.md",
       "result_path": "packages/01/cards/J03-107.md"
     },
