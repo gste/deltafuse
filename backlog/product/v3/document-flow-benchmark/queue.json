@@ -227,7 +227,7 @@
       "green": "All seven stage variants and valid/failed/not-reached/invalid system fixtures validate with consistent required fields.",
       "test": "python -m pytest tests/bench/document_flow/test_stage_system_schema.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-103.md",
       "result_path": "packages/01/cards/J03-103.md"
     },

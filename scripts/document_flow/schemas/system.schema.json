@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deltafuse:j03:system-report:1",
+  "title": "J03 system report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_hash", "identity", "status", "failure_class", "snapshot_ref", "attestation_refs", "event_refs", "scenarios", "measurements", "totals", "hard_failures", "test_result_refs"],
+  "properties": {
+    "schema_version": {"const": 1}, "report_hash": {"$ref": "#/$defs/hash"}, "identity": {"$ref": "#/$defs/identity"},
+    "status": {"enum": ["passed", "failed", "not_reached", "invalid"]},
+    "failure_class": {"type": ["string", "null"]}, "snapshot_ref": {"anyOf": [{"$ref": "#/$defs/evidence_ref"}, {"type": "null"}]},
+    "attestation_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true},
+    "event_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true},
+    "scenarios": {"type": "array", "items": {"$ref": "#/$defs/scenario"}},
+    "measurements": {"$ref": "#/$defs/measurements"}, "totals": {"anyOf": [{"$ref": "#/$defs/totals"}, {"type": "null"}]},
+    "hard_failures": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "test_result_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+      "then": {"properties": {
+        "failure_class": {"type": "null"}, "snapshot_ref": {"$ref": "#/$defs/evidence_ref"}, "event_refs": {"minItems": 1},
+        "scenarios": {"minItems": 1}, "totals": {"$ref": "#/$defs/totals"}, "hard_failures": {"maxItems": 0}, "test_result_refs": {"minItems": 1},
+        "measurements": {"properties": {"sql_statements": {"type": "integer", "minimum": 0}, "completion_ms": {"type": "integer", "minimum": 0}, "heap_peak_bytes": {"type": "integer", "minimum": 0}, "provenance_refs": {"minItems": 1}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+      "then": {"properties": {
+        "failure_class": {"enum": ["product-build-failure", "product-functional-failure", "product-resilience-failure", "security-boundary-failure"]},
+        "snapshot_ref": {"$ref": "#/$defs/evidence_ref"}, "event_refs": {"minItems": 1}, "scenarios": {"minItems": 1},
+        "totals": {"$ref": "#/$defs/totals"}, "hard_failures": {"minItems": 1}, "test_result_refs": {"minItems": 1},
+        "measurements": {"properties": {"provenance_refs": {"minItems": 1}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "invalid"}}, "required": ["status"]},
+      "then": {"properties": {
+        "failure_class": {"enum": ["infrastructure-invalid", "host/model-invalid", "oracle-leak", "provenance-invalid"]},
+        "totals": {"type": "null"}, "hard_failures": {"minItems": 1}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "not_reached"}}, "required": ["status"]},
+      "then": {"properties": {
+        "failure_class": {"type": "null"}, "snapshot_ref": {"type": "null"}, "event_refs": {"maxItems": 0}, "scenarios": {"maxItems": 0},
+        "totals": {"type": "null"}, "test_result_refs": {"maxItems": 0}
+      }}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "id": {"type": "string", "minLength": 1},
+    "nullable_count": {"type": ["integer", "null"], "minimum": 0}, "evidence_ref": {"$ref": "urn:deltafuse:j03:evidence-ref:1"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["campaign_id", "run_id", "case_id", "variant_id", "framework_commit", "wheel_sha256", "lock_sha256", "registry_sha256", "agent_name", "agent_version", "agent_config_sha256", "model_id", "provider_id", "endpoint_attestation_ref", "tokenizer_fingerprint"],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"}, "case_id": {"$ref": "#/$defs/id"}, "variant_id": {"$ref": "#/$defs/id"},
+        "framework_commit": {"$ref": "#/$defs/hash"}, "wheel_sha256": {"$ref": "#/$defs/hash"}, "lock_sha256": {"$ref": "#/$defs/hash"}, "registry_sha256": {"$ref": "#/$defs/hash"},
+        "agent_name": {"$ref": "#/$defs/id"}, "agent_version": {"$ref": "#/$defs/id"}, "agent_config_sha256": {"$ref": "#/$defs/hash"},
+        "model_id": {"$ref": "#/$defs/id"}, "provider_id": {"$ref": "#/$defs/id"}, "endpoint_attestation_ref": {"$ref": "#/$defs/evidence_ref"},
+        "tokenizer_fingerprint": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "scenario": {
+      "type": "object", "additionalProperties": false,
+      "required": ["check_id", "status", "build_id", "fault_id", "load_id", "evidence_refs", "failure_reason"],
+      "properties": {
+        "check_id": {"type": "string", "pattern": "^SYS\\.[FRCE][0-9]{2}$"}, "status": {"enum": ["pass", "fail", "not_reached"]},
+        "build_id": {"$ref": "#/$defs/id"}, "fault_id": {"type": ["string", "null"]}, "load_id": {"type": ["string", "null"]},
+        "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true}, "failure_reason": {"type": ["string", "null"]}
+      }
+    },
+    "measurements": {
+      "type": "object", "additionalProperties": false, "required": ["sql_statements", "completion_ms", "heap_peak_bytes", "provenance_refs"],
+      "properties": {
+        "sql_statements": {"$ref": "#/$defs/nullable_count"}, "completion_ms": {"$ref": "#/$defs/nullable_count"}, "heap_peak_bytes": {"$ref": "#/$defs/nullable_count"},
+        "provenance_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true}
+      }
+    },
+    "totals": {
+      "type": "object", "additionalProperties": false, "required": ["functional", "resilience", "compatibility", "efficiency", "score"],
+      "properties": {
+        "functional": {"type": "integer", "minimum": 0, "maximum": 1800}, "resilience": {"type": "integer", "minimum": 0, "maximum": 600},
+        "compatibility": {"type": "integer", "minimum": 0, "maximum": 400}, "efficiency": {"type": "integer", "minimum": 0, "maximum": 200},
+        "score": {"type": "integer", "minimum": 0, "maximum": 3000}
+      }
+    }
+  }
+}
