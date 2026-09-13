@@ -1180,6 +1180,8 @@ def test_synthetic_campaign_with_failure_is_nonzero_and_saves_all(tmp_path, monk
                                       qualify.REFERENCE_MODEL_ID)
         if verdict != "pass":
             d["verdict"] = "fail"
+            d["stages"][-1]["checks"]["failed"] = 2
+            d["totals"]["correctness"]["failed"] = 2
             d["threshold_failures"] = ["T1 correctness_failed=2"]
         (run_dir / "report.yaml").write_text(
             yaml.safe_dump(d), encoding="utf-8",
@@ -1354,6 +1356,8 @@ def test_case_verdicts_isolated(tmp_path, monkeypatch):
         d = _schema_valid_pass_report(run_id, case_id, "a" * 40, qualify.REFERENCE_MODEL_ID)
         if verdict == "fail":
             d["verdict"] = "fail"
+            d["stages"][-1]["checks"]["failed"] = 2
+            d["totals"]["correctness"]["failed"] = 2
             d["threshold_failures"] = ["T1 correctness_failed=2"]
         run_dir = tmp_path / campaign_id / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -1373,25 +1377,53 @@ def test_case_verdicts_isolated(tmp_path, monkeypatch):
 
 
 def _schema_valid_pass_report(run_id, case_id, commit, model):
-    """QF-017: minimal but schema- and semantic-valid measured pass report."""
+    """QF-017/QF-021: minimal but schema-, semantic- and evaluator-valid
+    measured pass report."""
+    import copy
+
+    from qualify_evidence import LIFECYCLE as _LC
+
     return {
         "schema_version": 1, "run_id": run_id, "case": case_id,
         "framework_commit": commit, "model": model, "verdict": "pass",
         "threshold_failures": [], "process": 100.0, "correctness": 100.0,
-        "stages": [{"stage": "intake", "status": "completed",
-                    "checks": {"passed": 3, "failed": 0}, "gate_retries": 0}],
+        "points": {"earned": 21, "max": 21},
+        "executor_kind": "local-dev",
+        "stages": [{"stage": name, "status": "completed",
+                    "checks": {"passed": 3, "failed": 0}, "gate_retries": 0}
+                   for name in _LC],
         "calls": [], "tool_events": [], "stage_leash": [],
         "framework_input_tokens_method": "host-tokenize",
+        "framework_input_chars_max": 8000,
         "hallucinated_breakdown": {"hallucinated": 0, "envelope": 0,
                                    "execution_policy": 0},
         "t7_breakdown": {"write_denied": 0, "leash_violations": 0,
                          "unjournaled_change": 0, "inventory_tampered": 0,
                          "staging_escape": 0, "execution_policy": 0},
         "totals": {
-            "correctness": {"passed": 3, "failed": 0}, "gate_retries": 0,
+            "correctness": {"passed": 21, "failed": 0}, "gate_retries": 0,
             "context_peak_tokens": 20000, "framework_input_tokens_max": 10000,
             "max_unique_files": 0, "hallucinated_paths": 0,
             "envelope_violations": 0, "evidence_authentic": True,
+        },
+        "defense_checks": {
+            "journal_forgery": {"id": "defense.journal_forgery", "pass": True,
+                                "detail": "journals consistent"},
+            "synthetic_evidence": {"id": "defense.synthetic_evidence",
+                                   "pass": True, "detail": "stamps authentic"},
+            "oracle_leak": {"id": "defense.oracle_leak", "pass": True,
+                            "detail": "no hidden markers"},
+        },
+        "thresholds": {
+            "source": "backlog/product/v3/thresholds.md",
+            "revision": "abc123",
+            "absolute": {
+                "correctness_failed": 0, "stages_completed": 7,
+                "gate_retries_max": 2, "context_peak_tokens_max": 32768,
+                "framework_input_tokens_max": 16000, "max_unique_files": 24,
+                "hallucinated_paths": 0, "envelope_violations": 0,
+                "evidence_authentic": True,
+            },
         },
     }
 

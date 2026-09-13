@@ -20,6 +20,8 @@ MODEL = "ornith-1.5-35b-a3b"
 
 
 def _valid_report() -> dict:
+    from qualify_evidence import LIFECYCLE as _LC
+
     return {
         "schema_version": 1,
         "run_id": "camp-M01-cooldown-run1",
@@ -30,20 +32,19 @@ def _valid_report() -> dict:
         "threshold_failures": [],
         "process": 100.0,
         "correctness": 100.0,
+        "points": {"earned": 21, "max": 21},
+        "executor_kind": "isolated",
         "stages": [
             {"stage": name, "status": "completed",
              "checks": {"passed": 3, "failed": 0}, "gate_retries": 0}
-            for name in (
-                "intake", "analyze", "specify", "decompose", "declare",
-                "implement", "verify",
-            )
+            for name in _LC
         ],
         "calls": [{
             "input_tokens": 9120,
             "framework_input_tokens": 6400,
             "framework_input_chars": 25600,
             "framework_input_tokens_method": "host-tokenize",
-            "unique_files": 11,
+            "unique_files": 0,
             "hallucinated_paths": 0,
             "envelope_violations": 0,
         }],
@@ -51,9 +52,9 @@ def _valid_report() -> dict:
         "totals": {
             "correctness": {"passed": 21, "failed": 0},
             "gate_retries": 0,
-            "context_peak_tokens": 14000,
+            "context_peak_tokens": 9120,
             "framework_input_tokens_max": 6400,
-            "max_unique_files": 11,
+            "max_unique_files": 0,
             "hallucinated_paths": 0,
             "envelope_violations": 0,
             "evidence_authentic": True,
@@ -65,6 +66,25 @@ def _valid_report() -> dict:
         "hallucinated_breakdown": {"hallucinated": 0, "envelope": 0,
                                    "execution_policy": 0},
         "stage_leash": [],
+        "defense_checks": {
+            "journal_forgery": {"id": "defense.journal_forgery", "pass": True,
+                                "detail": "journals consistent"},
+            "synthetic_evidence": {"id": "defense.synthetic_evidence",
+                                   "pass": True, "detail": "stamps authentic"},
+            "oracle_leak": {"id": "defense.oracle_leak", "pass": True,
+                            "detail": "no hidden markers"},
+        },
+        "thresholds": {
+            "source": "backlog/product/v3/thresholds.md",
+            "revision": "r",
+            "absolute": {
+                "correctness_failed": 0, "stages_completed": 7,
+                "gate_retries_max": 2, "context_peak_tokens_max": 32768,
+                "framework_input_tokens_max": 16000, "max_unique_files": 24,
+                "hallucinated_paths": 0, "envelope_violations": 0,
+                "evidence_authentic": True,
+            },
+        },
     }
 
 
@@ -177,6 +197,8 @@ def _manifest(tmp_path, report=None, runs=None):
             "kind": {"value": "isolated", "provenance": "declared", "basis": "b"},
             "boundary": {"value": "container", "provenance": "declared", "basis": "b"},
             "network_policy": {"value": "none", "provenance": "declared", "basis": "b"},
+            "boundary_probe": {"value": [{"run": "r"}], "provenance": "measured",
+                               "method": "in-container probe"},
         },
         "model": {"id": {"value": MODEL, "provenance": "measured", "method": "m"}},
         "thresholds": {
@@ -196,10 +218,10 @@ def _manifest(tmp_path, report=None, runs=None):
                 "verdict": "pass",
                 "medians": {
                     "correctness": 100.0, "process": 100.0,
-                    "context_peak_tokens": 14000.0,
+                    "context_peak_tokens": 9120.0,
                     "framework_input_tokens_max": 6400.0,
                     "framework_input_chars_max": 25600.0,
-                    "gate_retries": 0.0, "max_unique_files": 11.0,
+                    "gate_retries": 0.0, "max_unique_files": 0.0,
                     "hallucinated_paths": 0.0, "envelope_violations": 0.0,
                 },
                 "median_failures": [],
@@ -270,7 +292,8 @@ def test_semantic_tampered_verdict_rejected(tmp_path):
 def test_semantic_local_dev_cannot_release_pass(tmp_path):
     manifest, _ = _manifest(tmp_path)
     manifest["executor"]["kind"]["value"] = "local-dev"
-    with pytest.raises(qualify_semantic.SemanticValidationError, match="non-release"):
+    with pytest.raises(qualify_semantic.SemanticValidationError,
+                       match="non-release|executor kind mismatch"):
         _validate_manifest(tmp_path, manifest)
 
 

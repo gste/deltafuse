@@ -39,6 +39,50 @@
     },
     "process": { "type": "number", "minimum": 0, "maximum": 100 },
     "correctness": { "type": ["number", "null"] },
+    "points": {
+      "type": "object",
+      "description": "QF-021: scorecard points, the primary source of correctness.",
+      "required": ["earned", "max"],
+      "properties": {
+        "earned": { "type": ["integer", "null"], "minimum": 0 },
+        "max": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "defense_checks": {
+      "type": "object",
+      "description": "QF-021: T8 defense evidence embedded with receipt details.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "pass"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "pass": { "type": "boolean" },
+          "detail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "executor_kind": { "enum": ["isolated", "local-dev"] },
+    "thresholds": {
+      "type": "object",
+      "description": "QF-021: thresholds snapshot embedded in every report.",
+      "required": ["source", "revision", "absolute"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "minLength": 1 },
+        "absolute": {
+          "type": "object",
+          "required": [
+            "correctness_failed", "stages_completed", "gate_retries_max",
+            "context_peak_tokens_max", "framework_input_tokens_max",
+            "max_unique_files", "hallucinated_paths", "envelope_violations",
+            "evidence_authentic"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "stage_leash": {
       "type": "array",
       "items": {

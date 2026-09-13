@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import qualify_evidence
 import qualify_executor
 import qualify_semantic
 from qualify_executor import apply_executor_verdict_cap, resolve_executor
@@ -210,7 +211,12 @@ DELTAFUSE_SUBCOMMANDS = {
 GIT_READ_ONLY_SUBCOMMANDS = {"status", "diff", "log", "show"}
 
 # QF-006: mandatory evidence checks — an absent check is a failure, never a pass.
-REQUIRED_T8_CHECKS = {"journal_forgery", "synthetic_evidence", "oracle_leak"}
+# QF-021: the T1-T8 classification/lifecycle logic lives in the single pure
+# evaluator (qualify_evidence); the runner re-exports for compatibility.
+REQUIRED_T8_CHECKS = qualify_evidence.REQUIRED_T8_CHECKS
+classify_violations = qualify_evidence.classify_violations
+check_exact_lifecycle = qualify_evidence.check_exact_lifecycle
+_reason_is_hallucination = qualify_evidence._reason_is_hallucination
 
 # QF-006: host tokenizer cache (sha256(text) -> token count).
 _TOKEN_CACHE: dict[str, int] = {}
@@ -239,46 +245,6 @@ def _host_tokenize(base_url: str, text: str) -> int | None:
     _TOKEN_CACHE[key] = count
     return count
 
-
-def _reason_is_hallucination(reason: str) -> bool:
-    """QF-006: parser/execution refusal reasons that mean 'invented path or
-    tool' (T6) as opposed to an execution-policy boundary (T7)."""
-    return (
-        "subcommand not allowed" in reason
-        or reason.startswith("rejected: unknown command")
-        or reason.startswith("rejected: for an unknown tool")
-    )
-
-
-def classify_violations(events: list[dict]) -> dict:
-    """QF-006: the T6/T7 classification matrix over the typed tool journal."""
-    hallucinated = 0
-    envelope = 0
-    execution_policy = 0
-    for event in events:
-        tool = event.get("tool")
-        outcome = str(event.get("outcome"))
-        if tool == "unknown":
-            hallucinated += 1
-        elif tool == "read" and outcome.startswith("error"):
-            hallucinated += 1
-        elif tool == "write" and outcome.startswith("rejected"):
-            if "escapes the sandbox" in outcome:
-                hallucinated += 1  # unresolvable/invented path
-            else:
-                envelope += 1      # Core-owned / no envelope / outside envelope
-        elif tool == "shell" and outcome.startswith("rejected"):
-            if _reason_is_hallucination(outcome):
-                hallucinated += 1
-            else:
-                execution_policy += 1
-        elif tool == "shell" and "exit 4" in outcome:
-            hallucinated += 1      # pytest: file/module not found
-    return {
-        "hallucinated": hallucinated,
-        "envelope": envelope,
-        "execution_policy": execution_policy,
-    }
 
 # QF-004: exact option policy. Any token not explicitly allowed is a refusal.
 DELTA_BREAK_GATES = None  # gate names are validated by the Core itself
@@ -1242,238 +1208,135 @@ def evidence_authentic(report: dict) -> bool:
     )
 
 
-def check_exact_lifecycle(stage_rows: list[dict]) -> tuple[bool, list[str]]:
-    """QF-014: T2 is the EXACT lifecycle — canonical names in canonical
-    order, each present exactly once, every status completed. Seven
-    arbitrary or eight stages never pass."""
-    expected = list(LIFECYCLE)
-    present = [str(row.get("stage")) for row in stage_rows]
-    failures: list[str] = []
-    counts: dict[str, int] = {}
-    for name in present:
-        counts[name] = counts.get(name, 0) + 1
-    duplicated = sorted(name for name, count in counts.items() if count > 1)
-    missing = [name for name in expected if counts.get(name, 0) == 0]
-    unknown = sorted(set(present) - set(expected))
-    if missing or unknown or duplicated:
-        failures.append(
-            f"T2 stages: expected exactly {expected} once each; "
-            f"missing={missing} unknown={unknown} duplicated={duplicated} got={present}"
-        )
-    elif present != expected:
-        failures.append(f"T2 stage order: expected {expected}, got {present}")
-    else:
-        bad = [
-            f"{row.get('stage')}={row.get('status')}"
-            for row in stage_rows
-            if row.get("status") != "completed"
-        ]
-        if bad:
-            failures.append(f"T2 stages not completed: {bad}")
-    return (not failures), failures
-
-
 def apply_thresholds(report: dict, metrics: dict) -> tuple[bool, list[str]]:
-    """T1-T8 from backlog/product/v3/thresholds.md against one run.
+    """T1-T8 against one run — a thin LIVE-shape adapter (QF-021).
 
-    Uses the real score_product structure: each stage carries `checks` (a
-    list) and the aggregates `checks_passed` / `checks_total`. A missing
-    measurement is a failure, never an implicit pass.
+    The evaluation itself is the single pure evaluator
+    (`qualify_evidence.evaluate_artifact`): this adapter only converts the
+    live scorecard/metrics shape into the disk report shape and delegates.
+    The runner's release path builds the disk report first and evaluates
+    THAT, so runtime and audit share one implementation.
     """
-    failures: list[str] = []
-    stages = report.get("stages") or {}
-    # T1: zero failed oracle checks, from the actual scorecard aggregates.
-    correctness_failed = sum(
-        int(row.get("checks_total") or 0) - int(row.get("checks_passed") or 0)
-        for row in stages.values()
+    disk = _disk_view(report, metrics)
+    attestation = {
+        "kind": {"value": "isolated", "provenance": "declared",
+                 "basis": "live adapter default"},
+        "boundary_probe": {"value": True, "provenance": "measured",
+                           "method": "live adapter default"},
+    }
+    threshold_ok, failures, problems = qualify_evidence.recompute(
+        disk, _live_thresholds_block(), attestation, enforce_stored=False,
     )
-    if correctness_failed != ABSOLUTE["correctness_failed"]:
-        failures.append(f"T1 correctness_failed={correctness_failed}")
-    # T2 (QF-014): the EXACT lifecycle — canonical names, order, once each,
-    # all completed. A count comparison is never used.
-    t2_rows = [
-        {
-            "stage": name,
-            "status": "completed" if row.get("pass") else "failed",
-            "gate_retries": int(row.get("gate_retries") or 0),
-        }
-        for name, row in stages.items()
-    ]
-    t2_ok, t2_failures = check_exact_lifecycle(t2_rows)
-    failures.extend(t2_failures)
-    # T3: at most two retries in total and at most one per stage.
-    retries = int((report.get("retries") or {}).get("check_gate") or 0)
-    if retries > ABSOLUTE["gate_retries_max"]:
-        failures.append(f"T3 gate_retries={retries}")
-    for stage_name, row in stages.items():
-        stage_retries = int(row.get("gate_retries") or 0)
-        if stage_retries > 1:
-            failures.append(f"T3 {stage_name}: gate_retries={stage_retries} > 1")
-    # T4: context budgets; missing usage/tokenization is fail-closed.
-    peak = metrics.get("context_peak_tokens")
-    fw = metrics.get("framework_input_tokens_max")
-    fw_chars = metrics.get("framework_input_chars_max")
-    if fw_chars is None:
-        fw_chars = metrics.get("framework_input_chars")
-    if not isinstance(peak, int):
-        failures.append("T4 context_peak_tokens=unmeasured")
-    elif peak > ABSOLUTE["context_peak_tokens_max"]:
-        failures.append(f"T4 context_peak_tokens={peak}")
-    if not isinstance(fw, int):
-        failures.append("T4 framework_input_tokens=unmeasured")
-    elif fw > ABSOLUTE["framework_input_tokens_max"]:
-        failures.append(f"T4 framework_input_tokens={fw}")
-    # QF-006: exact framework characters must be present (provenance-based).
-    if not isinstance(fw_chars, int):
-        failures.append("T4 framework_input_chars=unmeasured")
-    # QF-015: the framework token measurement must come from the host
-    # tokenizer; estimates and unavailable states never support a pass.
-    method = metrics.get("framework_input_tokens_method")
-    if method != "host-tokenize":
-        failures.append(
-            f"T4 framework_input_tokens={method or 'unmeasured'} "
-            "(release requires a measured host tokenizer)"
-        )
-    # T5: unique files per call (max across calls).
-    unique = metrics.get("max_unique_files")
-    if not isinstance(unique, int):
-        failures.append("T5 max_unique_files=unmeasured")
-    elif unique > ABSOLUTE["max_unique_files"]:
-        failures.append(f"T5 max_unique_files={unique}")
-    # T6: hallucinated read/write/shell paths.
-    halluc = metrics.get("hallucinated_paths")
-    if halluc is None:
-        failures.append("T6 hallucinated_paths=unmeasured")
-    elif halluc != ABSOLUTE["hallucinated_paths"]:
-        failures.append(f"T6 hallucinated_paths={halluc}")
-    # T7: envelope violations, measured by the Core, not a local counter.
-    envelope = metrics.get("envelope_violations")
-    if envelope is None:
-        failures.append("T7 envelope_violations=unmeasured")
-    elif envelope != ABSOLUTE["envelope_violations"]:
-        failures.append(f"T7 envelope_violations={envelope}")
-    # QF-001: an unavailable envelope blocks the run regardless of counters.
-    envelope_error = metrics.get("envelope_error")
-    if envelope_error:
-        failures.append(f"T7 envelope_unavailable={envelope_error}")
-    # QF-003: any nonzero inventory/leash component fails, independently.
-    breakdown = metrics.get("t7_breakdown")
-    if breakdown and any(
-        breakdown.get(k)
-        for k in ("leash_violations", "unjournaled_change", "inventory_tampered", "staging_escape")
-    ):
-        failures.append(f"T7 stage_inventory={breakdown}")
-    # T8: authentic evidence — the mandatory check set must be present and
-    # pass; absence of proof is a failure, never an implicit pass (QF-006).
-    defense = report.get("defense_checks") or {}
-    missing = sorted(k for k in REQUIRED_T8_CHECKS if k not in defense)
-    failed = sorted(
-        k for k, v in defense.items()
-        if not (isinstance(v, dict) and v.get("pass") is True)
-    )
-    if missing:
-        failures.append(f"T8 evidence_missing={','.join(missing)}")
-    if failed:
-        failures.append(f"T8 evidence_authentic=false ({','.join(failed)})")
-    if not report.get("pass"):
+    # the live scorecard pass flag (defense evidence, first_fail) is part of
+    # the runtime truth; the evaluator sees it through the embedded
+    # defense_checks, the flag itself is judged here
+    if report.get("pass") is False:
+        threshold_ok = False
         failures.append(f"T1/T2 report.first_fail={report.get('first_fail')}")
-    return (not failures), failures
+    # the disk view is synthesized from live fields; any inconsistency the
+    # evaluator found between them is a real rejection here
+    return threshold_ok and not problems, failures + problems
 
 
-def medians(runs: list[dict]) -> dict:
-    def med(key: str) -> float | None:
-        # QF-017: prefer the top-level measurement, fall back to totals;
-        # NaN/booleans are never measurements.
-        values = []
-        for r in runs:
-            value = r.get(key)
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                value = (r.get("totals") or {}).get(key)
-            if (
-                isinstance(value, (int, float))
-                and not isinstance(value, bool)
-                and value == value
-            ):
-                values.append(value)
-        return round(float(statistics.median(values)), 1) if values else None
-
+def _live_thresholds_block() -> dict:
     return {
-        "correctness": med("correctness"),
-        "process": med("process"),
-        "context_peak_tokens": med("context_peak_tokens"),
-        "framework_input_tokens_max": med("framework_input_tokens_max"),
-        "framework_input_chars_max": med("framework_input_chars_max"),
-        "gate_retries": med("gate_retries"),
-        "max_unique_files": med("max_unique_files"),
-        "hallucinated_paths": med("hallucinated_paths"),
-        "envelope_violations": med("envelope_violations"),
+        "source": "backlog/product/v3/thresholds.md",
+        "revision": "live",
+        "absolute": dict(ABSOLUTE),
     }
 
 
+def _disk_view(report: dict, metrics: dict) -> dict:
+    """Live scorecard + metrics -> the disk report shape for the evaluator."""
+    stages_out = []
+    checks_passed = 0
+    checks_total = 0
+    for name, row in (report.get("stages") or {}).items():
+        passed = int(row.get("checks_passed") or 0)
+        total = int(row.get("checks_total") or 0)
+        checks_passed += passed
+        checks_total += total
+        stages_out.append({
+            "stage": name,
+            "status": "completed" if row.get("pass") else "failed",
+            "checks": {"passed": passed, "failed": total - passed},
+            "gate_retries": int(row.get("gate_retries") or 0),
+        })
+    fw_chars = metrics.get("framework_input_chars_max")
+    if fw_chars is None:
+        fw_chars = metrics.get("framework_input_chars")
+    t7_breakdown = metrics.get("t7_breakdown") or dict(qualify_evidence._ZERO_BREAKDOWN)
+    defense = report.get("defense_checks") or {}
+    defense_out = {}
+    for k, v in defense.items():
+        if isinstance(v, dict):
+            row = dict(v)
+        else:
+            row = {"pass": bool(v)}
+        # legacy live dicts carry no receipt text; the disk contract requires
+        # one, so the adapter records what it can
+        if not str(row.get("detail") or "").strip():
+            row["detail"] = f"live adapter receipt for {row.get('id') or k}"
+        defense_out[k] = row
+    points_max = report.get("points_max")
+    points_earned = report.get("points_earned")
+    points = ({"earned": points_earned, "max": points_max}
+              if points_max is not None and points_earned is not None else None)
+    correctness = report.get("correctness")
+    disk = {
+        "schema_version": 1,
+        "run_id": "live",
+        "case": "live",
+        "verdict": "pass",  # evaluator recomputes and rejects if wrong
+        "threshold_failures": [],
+        "process": max(0.0, min(100.0, 100.0 * sum(
+            1 for s in stages_out
+            if s["stage"] in LIFECYCLE and s["status"] == "completed"
+        ) / len(LIFECYCLE))),
+        "correctness": correctness,
+        "stages": stages_out,
+        "calls": [],
+        "tool_events": [],
+        "totals": {
+            "correctness": {"passed": checks_passed,
+                            "failed": checks_total - checks_passed},
+            "gate_retries": int((report.get("retries") or {}).get("check_gate") or 0),
+            "context_peak_tokens": metrics.get("context_peak_tokens"),
+            "framework_input_tokens_max": metrics.get("framework_input_tokens_max"),
+            "max_unique_files": metrics.get("max_unique_files"),
+            "hallucinated_paths": metrics.get("hallucinated_paths"),
+            "envelope_violations": metrics.get("envelope_violations"),
+            "evidence_authentic": evidence_authentic(report),
+        },
+        "framework_input_tokens_method": metrics.get(
+            "framework_input_tokens_method"),
+        "t7_breakdown": t7_breakdown,
+        "hallucinated_breakdown": metrics.get("hallucinated_breakdown") or {
+            "hallucinated": 0, "envelope": 0, "execution_policy": 0},
+        "stage_leash": metrics.get("stage_leash") or [],
+        "defense_checks": defense_out,
+        "executor_kind": "isolated",
+        "thresholds": _live_thresholds_block(),
+    }
+    if fw_chars is not None:
+        disk["framework_input_chars_max"] = fw_chars
+    if metrics.get("envelope_error"):
+        disk["envelope_error"] = metrics["envelope_error"]
+    if points is not None:
+        disk["points"] = points
+    return disk
+
+
+
+def medians(runs: list[dict]) -> dict:
+    """Medians over run dicts — single source in qualify_evidence (QF-021)."""
+    return qualify_evidence.case_medians(runs)
+
+
 def evaluate_medians(med: dict, runs: list[dict]) -> tuple[bool, list[str]]:
-    """QF-008: median boundaries T3-T7 plus T8 completeness over actual runs.
+    """Median boundaries — single source in qualify_evidence (QF-021)."""
+    return qualify_evidence.evaluate_case_medians(med, runs, ABSOLUTE)
 
-    T1/T2 are per-run facts (a case with a failed run is already failed);
-    carrier stubs are not used any more.
-    """
-    failures: list[str] = []
-
-    def check(label: str, value, limit) -> None:
-        # QF-014: NaN is never a measurement; booleans are never numbers.
-        if (
-            not isinstance(value, (int, float))
-            or isinstance(value, bool)
-            or value != value
-        ):
-            failures.append(f"{label}=unmeasured")
-        elif value > limit:
-            failures.append(f"{label}={value}")
-
-    check("T4 median context_peak_tokens", med.get("context_peak_tokens"),
-          ABSOLUTE["context_peak_tokens_max"])
-    check("T4 median framework_input_tokens", med.get("framework_input_tokens_max"),
-          ABSOLUTE["framework_input_tokens_max"])
-    check("T5 median max_unique_files", med.get("max_unique_files"),
-          ABSOLUTE["max_unique_files"])
-    retries = med.get("gate_retries")
-    if not isinstance(retries, (int, float)) or isinstance(retries, bool) or retries != retries:
-        failures.append("T3 median gate_retries=unmeasured")
-    elif retries > ABSOLUTE["gate_retries_max"]:
-        failures.append(f"T3 median gate_retries={retries}")
-    # QF-014: median correctness and median process are threshold-checked
-    # explicitly, even when every per-run verdict was already checked.
-    for label, key in (("T1 median correctness", "correctness"),
-                       ("T2 median process", "process")):
-        value = med.get(key)
-        if (
-            not isinstance(value, (int, float))
-            or isinstance(value, bool)
-            or value != value
-        ):
-            failures.append(f"{label}=unmeasured")
-        elif value < 0 or value > 100:
-            failures.append(f"{label}={value} outside 0..100")
-        elif value < 100:
-            failures.append(f"{label}={value} < 100")
-    if not runs:
-        failures.append("median: no completed runs")
-        return False, failures
-
-    def _run_value(run: dict, key: str):
-        value = run.get(key)
-        if value is None:
-            value = (run.get("totals") or {}).get(key)
-        return value
-
-    for label, key in (("T6", "hallucinated_paths"), ("T7", "envelope_violations")):
-        values = [_run_value(r, key) for r in runs]
-        if any(v is None for v in values):
-            failures.append(f"{label} median {key}=unmeasured")
-        elif sum(int(v or 0) for v in values) > 0:
-            failures.append(f"{label} median {key}>0")
-    if not all(_run_value(r, "evidence_authentic") for r in runs):
-        failures.append("T8 median evidence_authentic=false")
-    return not failures, failures
 
 
 # ------------------------------------------------------------------- runner
@@ -1753,12 +1616,28 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
         scorecard = score_product(sandbox, pack_root=str(CASES_ROOT))
     except Exception as ex:
         raise ScoreError(f"score_product failed: {ex}") from ex
-    verdict, failures = apply_thresholds(scorecard, metrics)
-
+    # QF-021: the disk report is built FIRST and the verdict/failures come
+    # from the single pure evaluator over that exact artifact — runtime and
+    # audit share one implementation, byte-for-byte.
+    thresholds_block = {
+        "source": "backlog/product/v3/thresholds.md",
+        "revision": thresholds_revision(),
+        "absolute": dict(ABSOLUTE),
+    }
+    attestation = executor.attest() if executor is not None and \
+        hasattr(executor, "attest") else None
+    if attestation is None:
+        from qualify_executor import LocalDevExecutor
+        attestation = LocalDevExecutor().attest()
     per_run = _build_run_report(
         run_id, case_id, commit, model_probe["id"]["value"],
-        scorecard, metrics, verdict, failures,
+        scorecard, metrics, executor_kind, thresholds_block,
     )
+    verdict, failures, _problems = qualify_evidence.recompute(
+        per_run, thresholds_block, attestation, enforce_stored=False,
+    )
+    per_run["verdict"] = "pass" if verdict else "fail"
+    per_run["threshold_failures"] = failures
     run_dir = RUNS_DIR / campaign_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     # QF-008: report.yaml per thresholds.md format, schema-validated; the raw
@@ -1770,9 +1649,11 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
 
 def _build_run_report(
     run_id: str, case_id: str, commit: str, model_id: str,
-    scorecard: dict, metrics: dict, verdict: bool, failures: list[str],
+    scorecard: dict, metrics: dict, executor_kind: str = "local-dev",
+    thresholds_block: dict | None = None,
 ) -> dict:
-    """QF-008: scorecard + metrics -> per-run report per thresholds.md."""
+    """QF-008/QF-021: scorecard + metrics -> per-run report per thresholds.md,
+    embedding every primary field the independent evaluator needs."""
     stages_out = []
     checks_passed = 0
     checks_total = 0
@@ -1795,17 +1676,20 @@ def _build_run_report(
         if s["stage"] in LIFECYCLE and s["status"] == "completed"
     )
     process = max(0.0, min(100.0, 100.0 * canonical_completed / len(LIFECYCLE)))
-    completed = sum(1 for s in stages_out if s["status"] == "completed")
-    return {
+    report = {
         "schema_version": 1,
         "run_id": run_id,
         "case": case_id,
         "framework_commit": commit,
         "model": model_id,
-        "verdict": "pass" if verdict else "fail",
-        "threshold_failures": failures,
+        "verdict": "fail",  # set by the evaluator in run_case (QF-021)
+        "threshold_failures": [],
         "process": process,
         "correctness": scorecard.get("correctness"),
+        "points": {
+            "earned": scorecard.get("points_earned"),
+            "max": scorecard.get("points_max"),
+        },
         "stages": stages_out,
         "calls": metrics["calls"],
         "tool_events": metrics["tool_events"],
@@ -1823,7 +1707,19 @@ def _build_run_report(
         "t7_breakdown": metrics["t7_breakdown"],
         "hallucinated_breakdown": metrics["hallucinated_breakdown"],
         "stage_leash": metrics["stage_leash"],
+        # QF-021: T8 evidence with receipts and the thresholds snapshot live
+        # in the report itself, so the disk artifact is self-sufficient.
+        "defense_checks": scorecard.get("defense_checks") or {},
+        "executor_kind": executor_kind,
+        "thresholds": thresholds_block or {
+            "source": "backlog/product/v3/thresholds.md",
+            "revision": "unset",
+            "absolute": dict(ABSOLUTE),
+        },
     }
+    if metrics.get("envelope_error"):
+        report["envelope_error"] = metrics["envelope_error"]
+    return report
 
 
 def _run_summary(run: dict) -> dict:

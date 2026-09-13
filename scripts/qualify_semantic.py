@@ -1,17 +1,20 @@
-"""QF-017: semantic validation of qualification disk artifacts.
+"""QF-017/QF-021: semantic validation of qualification disk artifacts.
 
 JSON Schema alone cannot express cross-field and cross-file consistency.
 After schema validation, `semantic_validate_report` and
 `semantic_validate_manifest` recompute what is recomputable from the artifact
 itself and from the run reports on disk; a manifest is written only when both
-validations pass. Independent re-computation of T1-T8 must be possible from
-disk artifacts alone, without runner memory.
+validations pass. Independent re-computation of T1-T8 is delegated to the
+single pure evaluator (`qualify_evidence.evaluate_artifact`): every stored
+verdict must be reproducible from disk alone.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+import qualify_evidence
 
 
 class SemanticValidationError(Exception):
@@ -128,11 +131,32 @@ def semantic_validate_manifest(
 
     model_id = (manifest.get("model") or {}).get("id", {}).get("value")
     commit = (manifest.get("framework") or {}).get("commit")
+    thresholds_block = manifest.get("thresholds") or {}
+    executor_block = manifest.get("executor") or {}
+    reports_by_case: dict[str, list[dict]] = {}
     for row in runs:
         report = _load_report(runs_root, campaign_id, row["run_id"])
         if validate_report_fn is not None:
             validate_report_fn("run-report", report)
         semantic_validate_report(report)
+        # QF-021: the stored verdict must be reproducible from the disk
+        # artifact alone, against THIS campaign's thresholds and executor.
+        # Infrastructure-failure reports are bookkeeping-checked above.
+        if not report.get("error"):
+            _, _, problems = qualify_evidence.recompute(
+                report, thresholds_block, executor_block, enforce_stored=True,
+            )
+            if problems:
+                raise SemanticValidationError(
+                    f"run {row['run_id']}: disk re-evaluation inconsistent: "
+                    f"{problems[:3]}"
+                )
+        if report.get("verdict") != row.get("verdict"):
+            raise SemanticValidationError(
+                f"run {row['run_id']}: manifest verdict {row.get('verdict')!r} "
+                f"!= report verdict {report.get('verdict')!r}"
+            )
+        reports_by_case.setdefault(str(row.get("case")), []).append(report)
         if report.get("framework_commit") != commit:
             raise SemanticValidationError(
                 f"run {row['run_id']}: commit {report.get('framework_commit')!r} "
@@ -142,11 +166,6 @@ def semantic_validate_manifest(
             raise SemanticValidationError(
                 f"run {row['run_id']}: model {report.get('model')!r} "
                 f"!= campaign model {model_id!r}"
-            )
-        if report.get("verdict") != row.get("verdict"):
-            raise SemanticValidationError(
-                f"run {row['run_id']}: manifest verdict {row.get('verdict')!r} "
-                f"!= report verdict {report.get('verdict')!r}"
             )
 
     verdict = manifest.get("verdict")
@@ -158,11 +177,30 @@ def semantic_validate_manifest(
                 "case_verdicts keys do not match the campaign cases"
             )
         for case, block in case_verdicts.items():
+            case_reports = reports_by_case.get(case) or []
+            # QF-021: medians are recomputed from the disk reports and must
+            # match the manifest exactly; median failures recomputed too.
+            recomputed_med = qualify_evidence.case_medians(case_reports)
+            if block.get("medians") != recomputed_med:
+                raise SemanticValidationError(
+                    f"case {case}: medians {block.get('medians')!r} != "
+                    f"recomputed from disk reports {recomputed_med!r}"
+                )
+            med_ok, med_failures = qualify_evidence.evaluate_case_medians(
+                recomputed_med, case_reports,
+                (thresholds_block.get("absolute") or {}),
+            )
+            if block.get("median_failures") != med_failures:
+                raise SemanticValidationError(
+                    f"case {case}: median_failures "
+                    f"{block.get('median_failures')!r} != recomputed "
+                    f"{med_failures!r}"
+                )
             case_runs = [r for r in runs if r.get("case") == case]
             expected = "pass" if (
                 case_runs
                 and all(r.get("verdict") == "pass" and not r.get("error") for r in case_runs)
-                and not block.get("median_failures")
+                and med_ok
             ) else "fail"
             if block.get("verdict") != expected:
                 raise SemanticValidationError(
@@ -176,9 +214,18 @@ def semantic_validate_manifest(
             else "fail"
         )
         executor_kind = ((manifest.get("executor") or {}).get("kind") or {}).get("value")
-        if recomputed == "pass" and executor_kind != "isolated":
-            # QF-013: only the isolated boundary can produce a release pass.
-            recomputed = "non-release"
+        if recomputed == "pass":
+            # QF-013/QF-021: only the measured isolated boundary can produce
+            # a release pass — declared boundaries are capped.
+            if executor_kind != "isolated":
+                recomputed = "non-release"
+            else:
+                probe = (manifest.get("executor") or {}).get("boundary_probe") or {}
+                if probe.get("provenance") != "measured":
+                    raise SemanticValidationError(
+                        "release pass requires a measured boundary probe; "
+                        "declared-only boundary evidence is not release evidence"
+                    )
         if verdict != recomputed:
             raise SemanticValidationError(
                 f"manifest verdict {verdict!r} != recomputed {recomputed!r}"
