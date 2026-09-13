@@ -133,7 +133,7 @@
       "green": "Host profile fields, provenance sources and exact future preflight checks are specified; missing installations are explicit.",
       "test": "java -version; mvn -version; docker version/info/compose version; package inventory, read-only.",
       "kind": "contract",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-003.md",
       "result_path": "packages/00/cards/J03-003.md"
     },

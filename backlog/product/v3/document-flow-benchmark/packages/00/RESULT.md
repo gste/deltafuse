@@ -1,8 +1,8 @@
 # Package 00 — result
 
-Status: in_progress
+Status: complete
 Package title: Entry gates and decisions
-Cards: J03-000 through J03-002 complete; J03-003 planned
+Cards: J03-000 through J03-003 complete
 
 ## Evidence index
 
@@ -12,6 +12,8 @@ Cards: J03-000 through J03-002 complete; J03-003 planned
 - [Worker feasibility matrix](worker-feasibility.md)
 - [J03-002 result](cards/J03-002.md)
 - [Public contract decisions](public-contract-decisions.md)
+- [J03-003 result](cards/J03-003.md)
+- [Host profile and provisioning plan](host-profile-plan.md)
 
 ## Handoff
 
@@ -20,5 +22,8 @@ J03-000 binds the clean planning commit
 engineering qualification evidence and DeltaFuse `3.0.0`. Package 00 remains
 open. J03-001 verified the external process surface without a model call and
 mapped unresolved enforcement/measurement work to J03-502 through J03-506.
-J03-002 froze every scored product behavior and witness placement without
-widening Core envelopes. The exact next dependency-ready card is J03-003.
+J03-003 completes the entry package with an explicit fail-closed provisioning
+profile. The currently observed host remains unqualified because Java 21 and a
+runnable pinned Python are absent and the offline artifact closure is not yet
+resolved. Package completion is contract completion, not live qualification.
+The exact next dependency-ready card is J03-101.
