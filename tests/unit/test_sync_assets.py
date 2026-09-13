@@ -105,7 +105,7 @@ def test_check_detects_drift_without_modification(asset_repo):
     packaged = sa.ASSETS / "skills" / "sample-skills.txt"
     packaged.write_text("tampered\n", encoding="utf-8")
     assert sa.check() == 1
-    packaged.write_text("content-skills\n", encoding="utf-8")  # restore
+    packaged.write_bytes(b"content-skills\n")  # restore byte-exact (LF)
     assert _snapshot(sa.ASSETS) == before or True  # check itself never mutates
     # rerun check on the restored bundle: green again
     assert sa.check() == 0

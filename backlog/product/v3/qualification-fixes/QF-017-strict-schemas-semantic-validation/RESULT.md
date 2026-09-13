@@ -49,3 +49,15 @@
 - Synthetic 3x3 с одним failure сохраняет все результаты и даёт ненулевой
   exit (`test_synthetic_campaign_with_failure_is_nonzero_and_saves_all`).
 - Полный qualification-набор: 153 passed.
+
+## Коррекция (QF-024)
+
+- Неверно указанный базовый commit: `6267f84` — этот commit существует в
+  репозитории, но НЕ находится в ancestry активной ветки
+  `feature/2026-09-11-audit` (alternate/dangling base). Это вариант коммита
+  «assets: recover interrupted bundle transactions», финальная версия
+  которого вошла в историю как `6b44c66`; RESULT ссылался на непопавшую в
+  ветку редакцию.
+- Фактический parent commit'а пакета QF-017 (`47c7a40`): `6b44c66c26aad1907aba9da49a5c79002a6c2c61`
+  (QF-016). История не переписывалась; настоящая заметка добавлена задним
+  числом явно, по правилу 1 QF-024.

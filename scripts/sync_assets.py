@@ -56,6 +56,21 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _copy_canonical(src: Path, dest: Path) -> None:
+    """Copy an asset byte-exactly, normalizing CRLF to LF for text files.
+
+    QF-024: the bundle must be byte-identical to a fresh checkout
+    (.gitattributes: `* text=auto eol=lf`) — otherwise the committed
+    manifest (generated on a CRLF working tree) never verifies against the
+    committed content, and wheels built from clean checkouts are
+    unverifiable. Binary files (NUL byte) are copied untouched.
+    """
+    data = src.read_bytes()
+    if b"\x00" not in data:
+        data = data.replace(b"\r\n", b"\n")
+    dest.write_bytes(data)
+
+
 def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
     """Generate the bundle into `target`; returns (files manifest, problems)."""
     problems: list[str] = []
@@ -84,7 +99,7 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
             rel = path.relative_to(source_dir)
             dest = target / root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, dest)
+            _copy_canonical(path, dest)
             files[f"{root}/{rel.as_posix()}"] = _hash(dest)
     return files, problems
 

@@ -25,6 +25,30 @@ smoke и Windows recovery, но найдены блокеры:
 [qualification-fix-plan-wave-3.md](qualification-fix-plan-wave-3.md). До QF-025
 статус остаётся engineering-failed; QF-012 не запускается.
 
+
+## 0.2 Классы evidence (QF-024)
+
+Отчёт различает три класса; смешение классов запрещено:
+
+1. **Historical evidence** — записи волн 1–2 (§3, §3.1, §0) и RESULT
+   QF-001–QF-018. Сохраняются как история с явными коррекциями
+   (QF-017: alternate base `6267f84` → фактический parent `6b44c66`;
+   отдельный [RESULT QF-018](qualification-fixes/QF-018-engineering-qualification/RESULT.md)
+   — `partial / not accepted`). Release-доказательством не являются.
+2. **Current engineering evidence** — QF-019–QF-024
+   ([qualification-fixes/](qualification-fixes/README.md)): исполнимый
+   command executor, измеряемая граница (probe той же среды, network none,
+   hardened), независимый disk-пересчёт T1–T8, threshold governance,
+   полное hash-покрытие bundle, восстановленный provenance. Проверено
+   тестами на Windows-host; live-container прогоны — pending (нет daemon).
+3. **Pending reference evidence** — QF-012 (девять живых прогонов на
+   `ornith-1.5-35b-a3b`): блокирован ТОЛЬКО доступностью LM Studio host;
+   инженерных блокеров после QF-025 не остаётся.
+
+Durable wheel evidence пересобран на commit wave 3 (см. RESULT QF-024);
+stale-запись `141c2ae` заменена. Целостность ссылок RESULT проверяется
+`python scripts/result_integrity.py`.
+
 ## 0. Wave 2 engineering qualification (QF-018, частично исполнена)
 
 Выполнено на ветке `feature/2026-09-11-audit` (Windows 10.0.26200, Python
