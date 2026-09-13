@@ -1,6 +1,6 @@
 # Package 00 — Entry gates and decisions
 
-Status: in progress; J03-000 and J03-001 complete, J03-002 and J03-003 planned.
+Status: in progress; J03-000 through J03-002 complete, J03-003 planned.
 Commit boundary: `planning/readiness evidence (separate from implementation)`.
 
 ## Cards in default order
@@ -29,3 +29,5 @@ The next package cannot treat this README as completion evidence.
   [package result](RESULT.md).
 - [J03-001 completed result](cards/J03-001.md) — versioned little-coder/Pi
   feasibility matrix, offline RPC probe, and explicit adapter gaps.
+- [J03-002 completed result](cards/J03-002.md) — frozen public semantics,
+  deterministic witness grammar, and Core-envelope placement review.

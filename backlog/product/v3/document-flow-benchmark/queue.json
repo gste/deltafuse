@@ -102,7 +102,7 @@
       "green": "Every requirement has a public contract anchor and observable check mapping; no unresolved choice affects scored behavior.",
       "test": "Contract review against INSTRUCTION sections 3–4, Core envelope examples and SCORING-PLAN registry.",
       "kind": "contract",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-002.md",
       "result_path": "packages/00/cards/J03-002.md"
     },

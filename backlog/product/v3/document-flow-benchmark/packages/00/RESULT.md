@@ -2,7 +2,7 @@
 
 Status: in_progress
 Package title: Entry gates and decisions
-Cards: J03-000 and J03-001 complete; J03-002 and J03-003 planned
+Cards: J03-000 through J03-002 complete; J03-003 planned
 
 ## Evidence index
 
@@ -10,6 +10,8 @@ Cards: J03-000 and J03-001 complete; J03-002 and J03-003 planned
 - [J03-000 baseline manifest](baseline.json)
 - [J03-001 result](cards/J03-001.md)
 - [Worker feasibility matrix](worker-feasibility.md)
+- [J03-002 result](cards/J03-002.md)
+- [Public contract decisions](public-contract-decisions.md)
 
 ## Handoff
 
@@ -18,5 +20,5 @@ J03-000 binds the clean planning commit
 engineering qualification evidence and DeltaFuse `3.0.0`. Package 00 remains
 open. J03-001 verified the external process surface without a model call and
 mapped unresolved enforcement/measurement work to J03-502 through J03-506.
-The first next dependency-ready card in queue order is J03-002; J03-003 is also
-ready from the same baseline.
+J03-002 froze every scored product behavior and witness placement without
+widening Core envelopes. The exact next dependency-ready card is J03-003.
