@@ -400,6 +400,11 @@ class QualificationError(Exception):
     """Fail-closed qualification abort."""
 
 
+class BoundaryBlocked(QualificationError):
+    """QF-020: the measured release boundary leaked or drifted — the run
+    (and the campaign) is blocked before any Worker metric is produced."""
+
+
 class HostError(QualificationError):
     """Reference host unavailable / misbehaving (QF-008)."""
 
@@ -443,6 +448,8 @@ def classify_exception(ex: BaseException) -> str:
 
     if isinstance(ex, SchemaValidationError):
         return "schema_error"
+    if isinstance(ex, BoundaryBlocked):
+        return "boundary_error"
     if isinstance(ex, ScoreError):
         return "score_error"
     if isinstance(ex, HostError):
@@ -1186,6 +1193,41 @@ def _final_metrics(
     return metrics
 
 
+# ------------------------------------------- QF-020: judge boundary probes
+
+
+def _create_judge_sentinel(campaign_dir: Path) -> dict:
+    """Random sentinel OUTSIDE all container mounts: unique name, random
+    content. The host path is passed to the probe only as a target that must
+    be invisible; the probe additionally searches every visible root for the
+    name and the exact content hash."""
+    import secrets
+
+    campaign_dir.mkdir(parents=True, exist_ok=True)
+    content = secrets.token_hex(32)
+    name = f".judge-sentinel-{secrets.token_hex(8)}"
+    path = campaign_dir / name
+    path.write_text(content, encoding="utf-8")
+    import hashlib
+
+    return {
+        "host_path": str(path),
+        "name": name,
+        "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "size": len(content),
+    }
+
+
+def _forbidden_peer() -> str:
+    """A loopback listener the container must never reach."""
+    import socket
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        return f"127.0.0.1:{listener.getsockname()[1]}"
+
+
 # -------------------------------------------------------------- thresholds
 
 
@@ -1455,7 +1497,12 @@ def framework_lock_hash() -> str:
 
 # ------------------------------------------- QF-003: inventory & stage leash
 
-GITIGNORE_LINES = ("__pycache__/", ".pytest_cache/", "*.pyc", ".venv/")
+GITIGNORE_LINES = (
+    "__pycache__/", ".pytest_cache/", "*.pyc", ".venv/",
+    # QF-020: container scratch/home live inside the sandbox; they are
+    # sanctioned infrastructure, never Worker changes to inventory.
+    ".qual-home/", ".qual-scratch/",
+)
 # Core-owned state is legitimately rewritten by deltafuse commands; it never
 # counts as an unjournaled Worker change.
 CORE_OWNED_PREFIX = ".deltafuse/"
@@ -1624,12 +1671,63 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
             raise QualificationError(
                 "isolated executor cannot provide a command session"
             )
+        # QF-020: scratch/home live INSIDE the sandbox (gitignored) so the
+        # read-only rootfs works and all temp use stays inventoried.
+        (sandbox / ".qual-scratch").mkdir(parents=True, exist_ok=True)
+        (sandbox / ".qual-home").mkdir(parents=True, exist_ok=True)
         session = executor.command_session(sandbox)
         try:
-            metrics = drive_worker(
-                sandbox, base_url, model_id, case_id, system,
-                command_executor=session, release_mode=True,
+            # QF-020: the EFFECTIVE policy is measured from runtime inspect
+            # and verified before the first command — a declared invocation
+            # is never sufficient attestation.
+            policy = session.measure_policy()
+            qualify_executor.assert_policy_clean(
+                session.verify_policy(policy, expected_image_digest=executor.image)
             )
+            sentinel_info = _create_judge_sentinel(RUNS_DIR / campaign_id)
+            try:
+                # QF-020: the probe runs INSIDE the same container, before
+                # the first and after the last Worker command.
+                before = session.run_boundary_probe(
+                    sentinel_host_path=sentinel_info["host_path"],
+                    sentinel_name=sentinel_info["name"],
+                    sentinel_sha256=sentinel_info["sha256"],
+                    sentinel_size=sentinel_info["size"],
+                    search_names=["cases", "hidden_suite", "oracle", "process"],
+                    forbidden_peer=_forbidden_peer(),
+                    scratch="/sandbox/.qual-scratch",
+                    phase="before",
+                )
+                qualify_executor.assert_boundary_clean(
+                    before, container_id=session.container_id
+                )
+                metrics = drive_worker(
+                    sandbox, base_url, model_id, case_id, system,
+                    command_executor=session, release_mode=True,
+                )
+                after = session.run_boundary_probe(
+                    sentinel_host_path=sentinel_info["host_path"],
+                    sentinel_name=sentinel_info["name"],
+                    sentinel_sha256=sentinel_info["sha256"],
+                    sentinel_size=sentinel_info["size"],
+                    search_names=["cases", "hidden_suite", "oracle", "process"],
+                    forbidden_peer=_forbidden_peer(),
+                    scratch="/sandbox/.qual-scratch",
+                    phase="after",
+                )
+                qualify_executor.assert_boundary_clean(
+                    after, container_id=session.container_id
+                )
+            finally:
+                Path(sentinel_info["host_path"]).unlink(missing_ok=True)
+            executor.probe_reports.append({
+                "run": run_id,
+                "container_id": session.container_id,
+                "policy": policy,
+                "probes": {"before": before, "after": after},
+            })
+        except qualify_executor.BoundaryViolation as ex:
+            raise BoundaryBlocked(str(ex)) from ex
         finally:
             session.stop()
     else:
@@ -1852,35 +1950,11 @@ def main_with_args(argv: list[str] | None = None) -> int:
 
     campaign_dir = RUNS_DIR / args.campaign_id
     campaign_dir.mkdir(parents=True, exist_ok=True)
+    # QF-020: the boundary probe moved INTO the per-run command container
+    # (before the first / after the last Worker command, one measured
+    # policy via runtime inspect); probe reports attach to the manifest
+    # attestation as runs complete.
     executor_attestation = executor.attest()
-    if executor.kind == "isolated":
-        # QF-013: the adversarial boundary probe runs INSIDE the actual
-        # boundary before the first Worker call; any leak blocks the campaign.
-        import secrets
-        import socket as _socket
-        import tempfile
-
-        sentinel = campaign_dir / ".judge-sentinel"
-        sentinel.write_text(secrets.token_hex(32), encoding="utf-8")
-        with _socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            listener.listen(1)
-            forbidden_peer = f"127.0.0.1:{listener.getsockname()[1]}"
-        try:
-            probe = executor.boundary_probe(
-                campaign_dir, sentinel,
-                search_roots=["/"],
-                write_roots=[str(REPO), tempfile.gettempdir(), str(Path.home())],
-                forbidden_peer=forbidden_peer,
-            )
-            qualify_executor.assert_boundary_clean(probe)
-        except (qualify_executor.BoundaryViolation, qualify_executor.ExecutorError) as ex:
-            print(f"PENDING: release boundary not clean: {ex}", file=sys.stderr)
-            return 2
-        finally:
-            sentinel.unlink(missing_ok=True)
-        executor_attestation = executor.attest(probe_report=probe)
-        print("boundary probe ok: sentinel/pack/write/network all blocked")
 
     manifest = {
         "schema_version": 1,
@@ -1928,14 +2002,23 @@ def main_with_args(argv: list[str] | None = None) -> int:
                     _write_manifest(campaign_dir, manifest)
                 except (SchemaValidationError, OSError, qualify_semantic.SemanticValidationError) as write_ex:
                     write_error = str(write_ex)
-                if error_class == "host_error":
+                if error_class in ("host_error", "boundary_error"):
                     # One host per campaign: a host error aborts everything.
+                    # QF-020: a boundary leak/drift blocks the campaign too.
                     aborted = True
                     break
                 continue
             manifest["runs"].append(_run_summary(run))
             case_runs.append(run)
             print(f"{run['run_id']}: {run['verdict']} {run['threshold_failures'] or ''}")
+            # QF-020: measured per-run boundary evidence (policy + before/
+            # after probes) rides on the executor attestation.
+            if executor.probe_reports:
+                manifest["executor"]["boundary_probe"] = _attest(
+                    list(executor.probe_reports), "measured",
+                    method=("QF-020 in-container probes (before/after) + "
+                            "runtime inspect policy"),
+                )
             # QF-017: schema+semantic validated manifest refresh after EVERY
             # run: partial results survive.
             try:

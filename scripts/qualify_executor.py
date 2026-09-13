@@ -25,6 +25,7 @@ network connection. Any leak is a BoundaryViolation and blocks the campaign.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -32,6 +33,24 @@ from dataclasses import dataclass
 from pathlib import Path
 
 EXECUTOR_KINDS = ("isolated", "local-dev")
+
+# QF-020: the ONE policy for the persistent command container. The boundary
+# probe and every Worker command run in this container; the effective values
+# are measured from runtime inspect and verified against this policy — a
+# declared tag/invocation is never sufficient attestation.
+COMMAND_CONTAINER_POLICY = {
+    "network_mode": "none",
+    "read_only_rootfs": True,
+    "user": "1000:1000",  # non-root
+    "cap_drop": "ALL",
+    "no_new_privileges": True,
+    "memory_bytes": 2 * 1024 * 1024 * 1024,
+    "pids_limit": 256,
+}
+# QF-020: pytest/git temp + home live INSIDE the sandbox (gitignored by the
+# judge), so a read-only rootfs still works and scratch use is inventoried.
+CONTAINER_SCRATCH = "/sandbox/.qual-scratch"
+CONTAINER_HOME = "/sandbox/.qual-home"
 
 # QF-019: classification of one executed command. The SandboxIO layer maps
 # this onto its typed tool journal; nothing here depends on judge-side state.
@@ -63,52 +82,89 @@ class CommandResult:
         if self.kind not in _COMMAND_KINDS:
             raise ValueError(f"unknown command result kind: {self.kind!r}")
 
-# The adversarial probe runs inside the boundary with this embedded script;
+# QF-020: the adversarial probe runs INSIDE the same persistent command
+# container as the Worker commands (before the first and after the last);
 # targets are supplied on stdin so no host path is baked into the image.
-PROBE_SCRIPT = r"""
-import json, os, socket, sys
+BOUNDARY_PROBE_SCRIPT = r"""
+import hashlib, json, os, socket, sys
 
 targets = json.load(sys.stdin)
 results = {}
 
-# 1. Judge-side sentinel must be unreadable by absolute path.
+def try_write(path):
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("probe")
+        return True
+    except OSError:
+        return False
+
+# 1. Judge sentinel by host path: must not exist inside the container.
 try:
-    with open(targets["sentinel"], "rb") as fh:
+    with open(targets["sentinel_host_path"], "rb") as fh:
         fh.read(1)
     results["sentinel_read"] = "LEAK"
 except OSError:
     results["sentinel_read"] = "blocked"
 
-# 2. Judge-pack directories must not be reachable on any mounted root.
-names = set(targets["search_names"])
-hits = []
+# 2. Search every visible filesystem root for the sentinel by its unique
+#    name AND by exact content (a copy hidden inside an allowed mount under
+#    another name is a leak, not `blocked`), plus judge pack/checkout names.
+names = set(targets.get("search_names") or []) | {targets["sentinel_name"]}
+sent_hash = targets.get("sentinel_sha256")
+sent_size = targets.get("sentinel_size")
+name_hits = []
+content_hits = []
 for root in targets.get("search_roots", [os.sep]):
     if not os.path.isdir(root):
         continue
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda e: None):
+        # inspect the CURRENT level first, then prune the descent: the
+        # depth limit bounds the walk, it never hides entries of an
+        # already-reached directory
+        matched = names.intersection(filenames) | names.intersection(dirnames)
+        if matched:
+            name_hits.append(dirpath)
+        if sent_hash and sent_size:
+            for fn in filenames:
+                p = os.path.join(dirpath, fn)
+                try:
+                    if os.path.getsize(p) != sent_size:
+                        continue
+                    with open(p, "rb") as fh:
+                        if hashlib.sha256(fh.read()).hexdigest() == sent_hash:
+                            content_hits.append(p)
+                except OSError:
+                    continue
         depth = dirpath.rstrip(os.sep).count(os.sep)
-        if depth > 8:
+        if depth > 6:
             dirnames[:] = []
-            continue
-        hit = names.intersection(dirnames) | names.intersection(filenames)
-        if hit:
-            hits.append(dirpath)
-        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
-results["pack_found"] = hits
+        else:
+            dirnames[:] = [d for d in dirnames if d not in (
+                ".git", "node_modules", "__pycache__", "proc", "sys", "dev", "run")]
+results["sentinel_found"] = content_hits
+results["pack_found"] = name_hits
 
-# 3. Writes outside the sandbox must fail (host paths are not mounted).
-write_leak = []
-for target in targets.get("write_roots", []):
-    probe = os.path.join(target, "deltafuse-boundary-probe")
-    try:
-        with open(probe, "w", encoding="utf-8") as fh:
-            fh.write("x")
-        write_leak.append(target)
-    except OSError:
-        pass
-results["write_leak"] = write_leak
+# 3. Writes outside the sandbox/scratch must fail.
+results["write_leak"] = [
+    p for p in targets.get("write_roots", [])
+    if try_write(os.path.join(p, "deltafuse-boundary-probe"))
+]
 
-# 4. Network beyond the boundary policy must be refused.
+# 4. The container rootfs and runtime control paths must not be writable.
+results["rootfs_write_leak"] = [
+    p for p in targets.get("rootfs_write_probes", [])
+    if try_write(os.path.join(p, "deltafuse-boundary-probe"))
+]
+
+# 5. The runtime control socket must be absent; if present it is exposure.
+sock = targets.get("control_socket") or "/var/run/docker.sock"
+if os.path.exists(sock):
+    results["docker_sock"] = "writable" if try_write(sock) else "present"
+else:
+    results["docker_sock"] = "absent"
+
+# 6. Network beyond the boundary policy must be refused.
 peer = targets.get("forbidden_peer")
 if peer:
     host, port = peer.rsplit(":", 1)
@@ -119,6 +175,34 @@ if peer:
         results["network"] = "blocked"
 else:
     results["network"] = "not-probed"
+
+# 7. Positive control: the sanctioned scratch inside the sandbox MUST be
+#    writable, otherwise the run contract is broken.
+scratch = targets.get("scratch")
+if scratch:
+    try:
+        os.makedirs(scratch, exist_ok=True)
+        with open(os.path.join(scratch, "deltafuse-boundary-probe"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("probe")
+        results["scratch_write"] = "ok"
+    except OSError:
+        results["scratch_write"] = "blocked"
+else:
+    results["scratch_write"] = "not-probed"
+
+# 8. Container identity measured from inside (cgroup token when the runtime
+#    exposes it); the judge compares it with the session container id.
+token = None
+try:
+    with open("/proc/self/cgroup", encoding="utf-8") as fh:
+        text = fh.read()
+    for word in text.replace("/", " ").replace(".", " ").split():
+        if len(word) in (32, 64) and all(c in "0123456789abcdef" for c in word):
+            token = word
+except OSError:
+    pass
+results["container_token"] = token
 
 print(json.dumps(results))
 """
@@ -146,6 +230,10 @@ class LocalDevExecutor:
     """In-process runner with L1 staging; development only, never release."""
 
     kind = "local-dev"
+
+    def __init__(self) -> None:
+        # QF-020: stays empty — L1 staging hosts no meaningful boundary probe.
+        self.probe_reports: list[dict] = []
 
     def available(self) -> bool:
         return True
@@ -242,10 +330,25 @@ class ContainerCommandExecutor:
         self.container_id: str | None = None
 
     def start(self, sandbox: Path) -> str:
-        """Start the persistent command container for one run."""
+        """Start the persistent command container for one run.
+
+        QF-020: read-only rootfs, non-root, all capabilities dropped, no new
+        privileges, memory/pids limits, no network; temp/home are redirected
+        into the sandbox scratch so a read-only rootfs still works and all
+        scratch use stays inside the inventoried sandbox.
+        """
         proc = subprocess.run(
             [
-                self.runtime, "run", "-d", "--rm", "--network", "none",
+                self.runtime, "run", "-d", "--rm",
+                "--network", COMMAND_CONTAINER_POLICY["network_mode"],
+                "--read-only",
+                "--user", COMMAND_CONTAINER_POLICY["user"],
+                "--cap-drop", COMMAND_CONTAINER_POLICY["cap_drop"],
+                "--security-opt", "no-new-privileges",
+                "--memory", str(COMMAND_CONTAINER_POLICY["memory_bytes"]),
+                "--pids-limit", str(COMMAND_CONTAINER_POLICY["pids_limit"]),
+                "-e", f"TMPDIR={CONTAINER_SCRATCH}",
+                "-e", f"HOME={CONTAINER_HOME}",
                 "-v", f"{Path(sandbox).resolve()}:/sandbox",
                 "-w", self.container_cwd,
                 self.image, "sleep", "infinity",
@@ -263,6 +366,126 @@ class ContainerCommandExecutor:
         self.sandbox = Path(sandbox).resolve()
         self.container_id = cid
         return cid
+
+    def inspect(self) -> dict:
+        """QF-020: parsed `runtime inspect` of the running container."""
+        if not self.container_id:
+            raise ExecutorError("command container is not started")
+        proc = subprocess.run(
+            [self.runtime, "inspect", self.container_id],
+            capture_output=True, text=True, timeout=120,
+        )
+        if proc.returncode != 0:
+            raise ExecutorUnavailable(
+                f"container inspect failed (exit {proc.returncode}): "
+                f"{(proc.stderr or '').strip()[:300]}"
+            )
+        docs = json.loads(proc.stdout)
+        if not isinstance(docs, list) or not docs:
+            raise ExecutorUnavailable("container inspect returned no document")
+        return docs[0]
+
+    def measure_policy(self) -> dict:
+        """QF-020: the EFFECTIVE policy from the runtime, not the invocation."""
+        doc = self.inspect()
+        hostconfig = doc.get("HostConfig") or {}
+        config = doc.get("Config") or {}
+        return {
+            "container_id": doc.get("Id"),
+            "image_digest": doc.get("Image"),
+            "user": config.get("User") or "",
+            "network_mode": hostconfig.get("NetworkMode"),
+            "read_only_rootfs": bool(hostconfig.get("ReadonlyRootfs")),
+            "cap_drop": list(hostconfig.get("CapDrop") or []),
+            "security_opt": list(hostconfig.get("SecurityOpt") or []),
+            "memory": int(hostconfig.get("Memory") or 0),
+            "pids_limit": int(hostconfig.get("PidsLimit") or 0),
+            "mounts": [
+                {
+                    "destination": m.get("Destination"),
+                    "source": m.get("Source"),
+                    "rw": bool(m.get("RW", m.get("Mode") != "ro")),
+                    "type": m.get("Type"),
+                }
+                for m in (doc.get("Mounts") or [])
+            ],
+        }
+
+    def verify_policy(self, measured: dict,
+                      expected_image_digest: str | None = None) -> list[str]:
+        """QF-020: compare the measured policy with COMMAND_CONTAINER_POLICY;
+        returns the list of mismatches (empty = policy holds)."""
+        p = COMMAND_CONTAINER_POLICY
+        mismatches: list[str] = []
+        if measured.get("network_mode") != p["network_mode"]:
+            mismatches.append(f"network_mode={measured.get('network_mode')!r} "
+                              f"(expected {p['network_mode']!r})")
+        if not measured.get("read_only_rootfs"):
+            mismatches.append("rootfs writable (expected read-only)")
+        if measured.get("user") in ("", "0", "0:0", "root"):
+            mismatches.append(f"user={measured.get('user')!r} (expected non-root)")
+        if p["cap_drop"] not in (measured.get("cap_drop") or []):
+            mismatches.append(f"cap_drop={measured.get('cap_drop')!r} (expected ALL)")
+        if not any(
+            str(o).split(":")[0] == "no-new-privileges"
+            for o in (measured.get("security_opt") or [])
+        ):
+            mismatches.append("no-new-privileges not enforced")
+        if measured.get("memory", 0) < p["memory_bytes"]:
+            mismatches.append(f"memory={measured.get('memory')} below limit")
+        if measured.get("pids_limit", 0) != p["pids_limit"]:
+            mismatches.append(f"pids_limit={measured.get('pids_limit')}")
+        sandbox_mounts = [
+            m for m in (measured.get("mounts") or [])
+            if m.get("destination") == "/sandbox"
+        ]
+        if len(sandbox_mounts) != 1 or not sandbox_mounts[0].get("rw"):
+            mismatches.append(f"mounts: expected exactly one rw /sandbox, "
+                              f"got {measured.get('mounts')!r}")
+        extra = [m for m in (measured.get("mounts") or [])
+                 if m.get("destination") != "/sandbox"]
+        if extra:
+            mismatches.append(f"extra mounts present: {extra!r}")
+        if expected_image_digest and measured.get("image_digest") != expected_image_digest:
+            mismatches.append(
+                f"image digest drift: container runs {measured.get('image_digest')!r}, "
+                f"expected {expected_image_digest!r}"
+            )
+        return mismatches
+
+    def run_boundary_probe(self, *, sentinel_host_path: str, sentinel_name: str,
+                           sentinel_sha256: str, sentinel_size: int,
+                           search_names: list[str], forbidden_peer: str | None,
+                           scratch: str, phase: str) -> dict:
+        """QF-020: run the adversarial probe INSIDE this command container."""
+        if not self.container_id:
+            raise ExecutorError("command container is not started")
+        targets = {
+            "sentinel_host_path": sentinel_host_path,
+            "sentinel_name": sentinel_name,
+            "sentinel_sha256": sentinel_sha256,
+            "sentinel_size": sentinel_size,
+            "search_names": list(search_names),
+            "search_roots": [os.sep],
+            "write_roots": ["/tmp", "/root", "/home"],
+            "rootfs_write_probes": ["/", "/usr/bin", "/var/tmp"],
+            "control_socket": "/var/run/docker.sock",
+            "forbidden_peer": forbidden_peer,
+            "scratch": scratch,
+        }
+        proc = subprocess.run(
+            [self.runtime, "exec", self.container_id,
+             "python", "-c", BOUNDARY_PROBE_SCRIPT],
+            input=json.dumps(targets), capture_output=True, text=True, timeout=600,
+        )
+        if proc.returncode != 0:
+            raise ExecutorUnavailable(
+                f"boundary probe failed (exit {proc.returncode}): "
+                f"{((proc.stderr or '') + (proc.stdout or '')).strip()[:300]}"
+            )
+        report = json.loads((proc.stdout or "").strip().splitlines()[-1])
+        report["phase"] = phase
+        return report
 
     def run(self, argv: list[str], cwd: Path, timeout: int) -> CommandResult:
         if not self.container_id or self.sandbox is None:
@@ -318,8 +541,11 @@ class IsolatedExecutor:
     kind = "isolated"
 
     def __init__(self, image: str | None = None):
-        self.image = image or __import__("os").environ.get("DELTAFUSE_QUAL_IMAGE")
+        self.image = image or os.environ.get("DELTAFUSE_QUAL_IMAGE")
         self.runtime = self._detect_runtime()
+        # QF-020: measured per-run boundary evidence (policy + before/after
+        # probes), attached to the manifest attestation as runs complete.
+        self.probe_reports: list[dict] = []
 
     def _detect_runtime(self) -> str | None:
         for runtime in ("docker", "podman"):
@@ -408,51 +634,51 @@ class IsolatedExecutor:
             )
         if probe_report is not None:
             attestation["boundary_probe"] = _attest(
-                probe_report, "measured", method="embedded probe inside the boundary container"
+                probe_report, "measured",
+                method="QF-020 in-container probes (before/after) + runtime inspect policy",
             )
         return attestation
 
-    def boundary_probe(self, sandbox: Path, sentinel: Path, search_roots: list[str],
-                       write_roots: list[str], forbidden_peer: str | None) -> dict:
-        """Run the adversarial probe INSIDE the actual boundary container."""
-        targets = {
-            "sentinel": str(sentinel),
-            "search_names": ["cases", "hidden_suite", "oracle"],
-            "search_roots": search_roots,
-            "write_roots": write_roots,
-            "forbidden_peer": forbidden_peer,
-        }
-        proc = subprocess.run(
-            [
-                self.runtime, "run", "--rm", "--network", "none",
-                "-v", f"{sandbox}:/sandbox",
-                self.image,
-                "python", "-c", PROBE_SCRIPT,
-            ],
-            input=json.dumps(targets),
-            capture_output=True,
-            text=True,
-            timeout=300,
+
+def assert_policy_clean(mismatches: list[str]) -> None:
+    """QF-020: any measured-policy mismatch blocks the campaign."""
+    if mismatches:
+        raise BoundaryViolation(
+            "command container policy mismatch: " + "; ".join(mismatches[:5])
         )
-        if proc.returncode != 0:
-            raise ExecutorUnavailable(
-                f"boundary probe container failed (exit {proc.returncode}): "
-                f"{(proc.stderr or proc.stdout).strip()[:300]}"
-            )
-        return json.loads(proc.stdout.strip().splitlines()[-1])
 
 
-def assert_boundary_clean(report: dict) -> None:
-    """Any leak in the adversarial probe blocks the campaign (fail-closed)."""
+def assert_boundary_clean(report: dict, container_id: str | None = None) -> None:
+    """QF-020: any leak in the adversarial probe blocks the campaign.
+
+    The sentinel is checked three ways: unreadable by host path, absent by
+    unique name on every visible root, absent by exact content hash (a copy
+    hidden inside the allowed sandbox mount is a leak). Scratches must stay
+    writable (positive control); rootfs and runtime control paths must not be
+    writable; the measured container identity must match the session id.
+    """
     leaks = []
     if report.get("sentinel_read") == "LEAK":
         leaks.append("sentinel_read")
+    if report.get("sentinel_found"):
+        leaks.append(f"sentinel_found={report['sentinel_found'][:3]}")
     if report.get("pack_found"):
         leaks.append(f"pack_found={report['pack_found'][:3]}")
     if report.get("write_leak"):
         leaks.append(f"write_leak={report['write_leak'][:3]}")
+    if report.get("rootfs_write_leak"):
+        leaks.append(f"rootfs_write_leak={report['rootfs_write_leak'][:3]}")
+    if report.get("docker_sock") in ("present", "writable"):
+        leaks.append(f"runtime_control_socket={report['docker_sock']}")
     if report.get("network") == "LEAK":
         leaks.append("network")
+    if report.get("scratch_write") == "blocked":
+        leaks.append("scratch_write=blocked (run contract broken)")
+    token = report.get("container_token")
+    if container_id and token:
+        # a container id may be a 64-hex prefix of the cgroup token
+        if token != container_id and not container_id.startswith(token):
+            leaks.append(f"container_identity={token[:12]}!={container_id[:12]}")
     if leaks:
         raise BoundaryViolation(f"release boundary leaks: {'; '.join(leaks)}")
 
