@@ -1,6 +1,7 @@
 {
   "canonical": "process/**",
   "files": {
+    "__init__.py": "4d4b547752479fd066b8b102d682ba4a512f568cb319b869118d63e968dd1a44",
     "schemas/capability.schema.yaml": "c2cb8ccb69e108b9e59f1795e78ac1f7150e594143d0a04e2eb298e5327a68be",
     "schemas/change.schema.yaml": "51805fa8d3fef8211dca6503ebdcd6bf865dbdec32e83570f49e494950069cb7",
     "schemas/coverage.schema.yaml": "cb8201c5eb240aa72976ab4c02204e8ce53189836370114462621d8569ab9308",

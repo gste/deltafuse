@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
 import uuid
@@ -59,11 +60,17 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
     """Generate the bundle into `target`; returns (files manifest, problems)."""
     problems: list[str] = []
     target.mkdir(parents=True, exist_ok=True)
-    (target / "__init__.py").write_text(
-        '"""Generated runtime asset bundle. DO NOT EDIT: run scripts/sync_assets.py."""\n',
-        encoding="utf-8",
+    init_text = (
+        '"""Generated runtime asset bundle. DO NOT EDIT: run scripts/sync_assets.py."""\n'
     )
-    files: dict[str, str] = {}
+    # QF-023: exact bytes — write_text would apply platform newline
+    # translation (CRLF on Windows), making the hashed marker content
+    # platform-dependent and the bundle non-verifiable across hosts.
+    (target / "__init__.py").write_bytes(init_text.encode("utf-8"))
+    files: dict[str, str] = {
+        # QF-023: the package marker ships and is hashed like every asset
+        "__init__.py": _hash(target / "__init__.py"),
+    }
     for root in BUNDLE_ROOTS:
         source_dir = REPO / "process" / root
         if not source_dir.is_dir():
@@ -87,7 +94,18 @@ _rename = os.rename
 
 
 def _is_reparse_point(path: Path) -> bool:
-    """True for symlinks and (on Windows) junctions inside a bundle."""
+    """True for symlinks and (on Windows) junctions/mount points inside a
+    bundle. QF-023: detected via lstat reparse attributes, not only a
+    realpath string comparison."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return True
+    if hasattr(st, "st_file_attributes"):
+        if st.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            return True
+    if os.path.islink(path):
+        return True
     try:
         return os.path.realpath(path) != str(path)
     except OSError:
@@ -107,8 +125,14 @@ def _verify_bundle(bundle: Path) -> None:
     for rel, digest in files.items():
         if not isinstance(digest, str) or len(digest) != 64:
             raise RuntimeError(f"bundle manifest digest malformed: {rel}")
-    expected = set(files) | {"manifest.json", "__init__.py"}
+    # QF-023: the manifest must cover EVERY packaged regular file, the
+    # package marker included — only the manifest itself is self-describing.
+    expected = set(files) | {"manifest.json"}
     for path in sorted(bundle.rglob("*")):
+        # the generator never packages these; runtime imports may drop them
+        # into a development source tree and they are not bundle contract
+        if "__pycache__" in path.parts or ".pytest_cache" in path.parts:
+            continue
         rel = path.relative_to(bundle).as_posix()
         if _is_reparse_point(path):
             raise RuntimeError(f"bundle contains symlink/junction: {rel}")
@@ -336,6 +360,12 @@ def check() -> int:
             drift.append(f"missing packaged asset: {rel}")
         elif _hash(path) != digest:
             drift.append(f"tampered packaged asset: {rel}")
+    # c) QF-023: full bundle verification — exact file set, per-file hashes
+    #    and the TYPE of every entry (no symlink/junction/reparse point)
+    try:
+        _verify_bundle(ASSETS)
+    except (RuntimeError, json.JSONDecodeError, OSError) as ex:
+        drift.append(f"bundle verification failed: {ex}")
     if committed.get("schema_version") != expected["schema_version"]:
         drift.append("manifest schema_version")
     if drift:
