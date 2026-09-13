@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "card_id": "J03-000",
-  "status": "blocked",
+  "status": "complete",
   "check_id": "J03-000-ENTRY",
   "framework_version": "3.0.0",
-  "source_sha": "520421e3e8a0739229560860403609d9594e09b5",
+  "source_sha": "e79dab7358839820a73d364a11986faf0b6bd050",
   "qualification": {
     "result_path": "backlog/product/v3/qualification-fixes/QF-025-wave3-engineering-qualification/RESULT.md",
     "result_sha256": "b827fbd54fbac1e325bff632139ffe1915f681f3012a9be43f79364ff001b970",
@@ -18,10 +18,10 @@
     "version_file_sha256": "2985be8b28d3ade858e8d8fb4bc22f565b1bf6020dff982dce141f7721b9999c"
   },
   "readiness": {
-    "clean_tree": false,
-    "dirty_entry_count_before_result_files": 82,
-    "ready": false,
-    "blocker": "J03 planning files are not yet committed separately and a concurrent M03 oracle modification is present."
+    "clean_tree": true,
+    "dirty_entry_count_before_result_files": 0,
+    "ready": true,
+    "blocker": null
   },
   "evidence": {
     "kind": "read-only readiness check",

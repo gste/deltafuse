@@ -1,6 +1,6 @@
 # Package 00 — Entry gates and decisions
 
-Status: blocked at J03-000; no package implementation/result is asserted.
+Status: in progress; J03-000 complete, J03-001 through J03-003 planned.
 Commit boundary: `planning/readiness evidence (separate from implementation)`.
 
 ## Cards in default order
@@ -24,6 +24,6 @@ The next package cannot treat this README as completion evidence.
 
 ## Evidence index
 
-- [J03-000 blocked result](cards/J03-000.md) — the Wave 3 qualification
-  evidence and version are valid, but the implementation entry tree is not
-  clean. See [package result](RESULT.md).
+- [J03-000 completed result](cards/J03-000.md) — clean DeltaFuse 3.0.0
+  baseline bound to Wave 3 qualification evidence. See
+  [package result](RESULT.md).

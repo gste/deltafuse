@@ -39,7 +39,7 @@
       "green": "Baseline manifest references actual completed qualification evidence and a clean tree. Planning docs are committed separately or explicitly included before capture.",
       "test": "Read-only git status/rev-parse, VERSION and evidence hash checks; record commands in package 00 RESULT.",
       "kind": "prerequisite",
-      "status": "blocked",
+      "status": "complete",
       "card_path": "cards/J03-000.md",
       "result_path": "packages/00/cards/J03-000.md"
     },

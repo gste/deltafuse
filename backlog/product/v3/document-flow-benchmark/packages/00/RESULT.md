@@ -1,8 +1,8 @@
 # Package 00 — result
 
-Status: blocked
+Status: in_progress
 Package title: Entry gates and decisions
-Cards: J03-000 blocked; J03-001 through J03-003 planned
+Cards: J03-000 complete; J03-001 through J03-003 planned
 
 ## Evidence index
 
@@ -11,6 +11,8 @@ Cards: J03-000 blocked; J03-001 through J03-003 planned
 
 ## Handoff
 
-The qualified 3.0.0 source identity and QF-025 ancestry are verified. Package
-execution is blocked because the current tree is not clean, so the baseline
-manifest is deliberately non-qualifying. No dependent card is ready.
+J03-000 binds the clean planning commit
+`e79dab7358839820a73d364a11986faf0b6bd050` to the tracked Wave 3 QF-025
+engineering qualification evidence and DeltaFuse `3.0.0`. Package 00 remains
+open. The first next dependency-ready card in queue order is J03-001; J03-002
+and J03-003 are independently ready from the same baseline.
