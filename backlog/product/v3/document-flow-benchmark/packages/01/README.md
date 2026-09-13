@@ -1,6 +1,6 @@
 # Package 01 — Scoring contracts
 
-Status: in_progress; J03-101 is complete and later package cards remain planned.
+Status: complete; J03-101 through J03-108 are complete.
 Commit boundary: `bench: define document flow scoring contracts`.
 
 ## Cards in default order
@@ -12,7 +12,7 @@ Commit boundary: `bench: define document flow scoring contracts`.
 - [J03-105 — Define attestation and variant schemas](../../cards/J03-105.md) — [result](cards/J03-105.md)
 - [J03-106 — Implement pure run scoring and failure precedence](../../cards/J03-106.md) — [result](cards/J03-106.md)
 - [J03-107 — Implement campaign and comparison arithmetic](../../cards/J03-107.md) — [result](cards/J03-107.md)
-- [J03-108 — Implement evidence store and sealed event integrity](../../cards/J03-108.md)
+- [J03-108 — Implement evidence store and sealed event integrity](../../cards/J03-108.md) — [result](cards/J03-108.md)
 
 Use [EXECUTOR.md](../../EXECUTOR.md) for bounded execution and evidence handling.
 Write card results under `cards/<ID>.md` within this package directory.
@@ -36,6 +36,7 @@ The next package cannot treat this README as completion evidence.
 - [J03-105 result](cards/J03-105.md)
 - [J03-106 result](cards/J03-106.md)
 - [J03-107 result](cards/J03-107.md)
+- [J03-108 result](cards/J03-108.md)
 - Frozen registry: `scripts/document_flow/contracts/checks.json`
 - Validating loader: `scripts/document_flow/registry.py`
 - Focused tests: `tests/bench/document_flow/test_registry.py`
@@ -52,3 +53,5 @@ The next package cannot treat this README as completion evidence.
 - Focused evaluator tests: `tests/bench/document_flow/test_evaluate.py`
 - Campaign evaluator/comparison: `scripts/document_flow/campaign.py`
 - Focused campaign tests: `tests/bench/document_flow/test_campaign.py`
+- Canonical JSON and sealed evidence store: `scripts/document_flow/canonical.py`, `scripts/document_flow/store.py`
+- Focused evidence-integrity tests: `tests/bench/document_flow/test_store.py`

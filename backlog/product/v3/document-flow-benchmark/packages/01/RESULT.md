@@ -1,8 +1,8 @@
 # Package 01 — result
 
-Status: in_progress
+Status: complete
 Package title: Scoring contracts
-Cards: J03-101 through J03-107 complete; J03-108 planned
+Cards: J03-101 through J03-108 complete
 
 ## Evidence index
 
@@ -13,6 +13,7 @@ Cards: J03-101 through J03-107 complete; J03-108 planned
 - [J03-105 result](cards/J03-105.md)
 - [J03-106 result](cards/J03-106.md)
 - [J03-107 result](cards/J03-107.md)
+- [J03-108 result](cards/J03-108.md)
 - Frozen registry: `scripts/document_flow/contracts/checks.json`
 - Registry loader: `scripts/document_flow/registry.py`
 - Focused registry tests: `tests/bench/document_flow/test_registry.py`
@@ -29,6 +30,8 @@ Cards: J03-101 through J03-107 complete; J03-108 planned
 - Focused evaluator tests: `tests/bench/document_flow/test_evaluate.py`
 - Campaign evaluator/comparison: `scripts/document_flow/campaign.py`
 - Focused campaign tests: `tests/bench/document_flow/test_campaign.py`
+- Canonical JSON and sealed evidence store: `scripts/document_flow/canonical.py`, `scripts/document_flow/store.py`
+- Focused evidence-integrity tests: `tests/bench/document_flow/test_store.py`
 
 ## Handoff
 
@@ -48,3 +51,9 @@ precedence from registry facts and measured factors. The first exact
 dependency-ready card is now J03-108. J03-107 validates frozen membership and
 re-evaluated run totals, preserves every planned member, computes exact
 campaign diagnostics, and refuses incompatible comparisons.
+J03-108 adds canonical integer-only JSON, content-addressed evidence, a
+hash-linked host event log, create-only finalized JSON, externally keyed HMAC
+manifests, and semantic validators that reject a locally rehashed false report.
+Package completion is contract and unit-test evidence only: it does not claim a
+live Worker run, filesystem crash qualification, or Human Gate approval. The
+first exact dependency-ready card in queue order is J03-201.
