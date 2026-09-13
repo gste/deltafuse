@@ -1,6 +1,8 @@
 # DeltaFuse 3.0 — qualification fix plan, wave 3
 
-- **Статус:** `ready`
+- **Статус:** `implemented` — QF-019–QF-025 исполнены (2026-09-13);
+  [QF-025 RESULT](qualification-fixes/QF-025-wave3-engineering-qualification/RESULT.md):
+  `engineering-passed / reference-pending`. QF-012 ждёт LM Studio host.
 - **Основание:** независимая приёмка Wave 2 на commit `01037cd`, 2026-09-13
 - **Предыдущая волна:**
   [qualification-fix-plan-wave-2.md](qualification-fix-plan-wave-2.md)

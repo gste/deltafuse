@@ -1,6 +1,6 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `engineering-failed / correction wave 3`
+- **Статус:** `engineering-passed / reference-pending` (wave 3, QF-025; см. §0.3)
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
 - **Обновлён:** 2026-09-13 (независимая приёмка Wave 2; см.
@@ -179,3 +179,29 @@ LM Studio с `ornith-1.5-35b-a3b`.
 1. Три чистых прогона каждого case выполнены на референсном host.
 2. Каждый отчёт прогона и медианы удовлетворяют T1–T8.
 3. `verdict: pass` по всем трём cases → карточка закрывается, v3.0.0 release.
+
+## 0.3 Wave 3 engineering qualification (QF-025, 2026-09-13)
+
+Выполнена на commit `082e6f429a0a4e16f4f1cb5f90ff71b7ac385bc9` ветки
+`feature/2026-09-11-audit` (Windows 10.0.26200, Python 3.12.14, docker
+29.7.2). Полный отчёт —
+[QF-025 RESULT](qualification-fixes/QF-025-wave3-engineering-qualification/RESULT.md).
+
+- Полный pytest: **644 passed, 0 failed, 1 skipped** (только опциональный
+  PBT). Все 6 live-тестов command-контейнера и adversarial границы
+  исполнены в реальном runtime (docker Linux engine); skip больше не
+  покрывает инженерные гарантии.
+- Live boundary: image `sha256:84c28058…` (build manifest в `bench/builds/`,
+  commit `082e6f4…`), network none, read-only rootfs, non-root 1000:1000,
+  cap-drop ALL, no-new-privileges, memory/pids limits, sandbox+tmpfs
+  scratch; probe before/after в одном container id с Worker-командами.
+- QF-021 mutation matrix, QF-022 governance checker, QF-023 asset/hard-kill
+  матрицы — зелёные; PowerShell/POSIX smoke, wheel smoke, 4 layout
+  validators на продукте из свежего wheel — rc 0; asset drift отсутствует;
+  result integrity ok.
+- Durable evidence: wheel manifest + qual-image manifest на commit
+  `082e6f4…` (`bench/builds/`).
+
+**QF-012** остаётся `blocked` ТОЛЬКО доступностью reference LM Studio host
+(`ornith-1.5-35b-a3b`, context 32768). Нативный POSIX-host прогон недоступен
+(нет второй машины); POSIX-среда команд/probe — сам Debian-контейнер.

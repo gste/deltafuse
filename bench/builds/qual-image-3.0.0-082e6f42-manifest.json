@@ -1,0 +1,30 @@
+{
+  "base_image": "python:3.12-slim-bookworm",
+  "commands": [
+    {
+      "command": "C:\\Users\\ghost\\workspace\\gste\\deltafuse\\.venv\\Scripts\\python.exe -m pip wheel --no-deps -w C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp3x88nak8\\wheel C:\\Users\\ghost\\AppData\\Local\\Temp\\wheel-ev",
+      "rc": 0
+    },
+    {
+      "command": "docker build -f C:\\Users\\ghost\\workspace\\gste\\deltafuse\\scripts\\Containerfile.qual --build-arg BASE_IMAGE=python:3.12-slim-bookworm --build-arg PYTEST_PIN=9.1.1 -t deltafuse/qual:3.0.0-082e6f42 C:\\Users\\ghost\\AppData\\Local\\Temp\\tmp3x88nak8\\context",
+      "rc": 0
+    },
+    {
+      "command": "docker image inspect --format {{.Id}} deltafuse/qual:3.0.0-082e6f42",
+      "rc": 0
+    }
+  ],
+  "commit": "082e6f429a0a4e16f4f1cb5f90ff71b7ac385bc9",
+  "containerfile": "scripts/Containerfile.qual",
+  "created": "2026-09-13T06:38:20Z",
+  "image_id": "sha256:84c28058d38e80af6e0dccd2171a4b4add221238e2a7dd902e04c6680d8d8429",
+  "image_tag": "deltafuse/qual:3.0.0-082e6f42",
+  "platform": "win32",
+  "pytest_pin": "9.1.1",
+  "python": "3.12.14 (cpython)",
+  "schema_version": 1,
+  "tree_clean": true,
+  "wheel": "deltafuse-3.0.0-py3-none-any.whl",
+  "wheel_sha256": "dbb95723fb6123e6d9b0307053eaaf8cee94b858588190b31ec6c165c6ff20f9",
+  "wheel_size_bytes": 146164
+}

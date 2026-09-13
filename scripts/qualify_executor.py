@@ -349,6 +349,12 @@ class ContainerCommandExecutor:
                 "--pids-limit", str(COMMAND_CONTAINER_POLICY["pids_limit"]),
                 "-e", f"TMPDIR={CONTAINER_SCRATCH}",
                 "-e", f"HOME={CONTAINER_HOME}",
+                # scratch/home live INSIDE the sandbox path-space but on
+                # tmpfs: a Windows bind mount does not support the
+                # truncate/seek patterns pytest's capture needs, and tmpfs
+                # is memory-only (dies with the container)
+                "--tmpfs", f"{CONTAINER_SCRATCH}:rw,uid=1000,size=64m",
+                "--tmpfs", f"{CONTAINER_HOME}:rw,uid=1000,size=16m",
                 "-v", f"{Path(sandbox).resolve()}:/sandbox",
                 "-w", self.container_cwd,
                 self.image, "sleep", "infinity",
@@ -442,10 +448,20 @@ class ContainerCommandExecutor:
         if len(sandbox_mounts) != 1 or not sandbox_mounts[0].get("rw"):
             mismatches.append(f"mounts: expected exactly one rw /sandbox, "
                               f"got {measured.get('mounts')!r}")
+        allowed_scratch = {"/sandbox", CONTAINER_SCRATCH, CONTAINER_HOME}
         extra = [m for m in (measured.get("mounts") or [])
-                 if m.get("destination") != "/sandbox"]
+                 if m.get("destination") not in allowed_scratch]
         if extra:
             mismatches.append(f"extra mounts present: {extra!r}")
+        scratch_mounts = [
+            m for m in (measured.get("mounts") or [])
+            if m.get("destination") in (CONTAINER_SCRATCH, CONTAINER_HOME)
+            and m.get("type") != "tmpfs"
+        ]
+        if scratch_mounts:
+            mismatches.append(
+                f"scratch must be tmpfs: {scratch_mounts!r}"
+            )
         if expected_image_digest and measured.get("image_digest") != expected_image_digest:
             mismatches.append(
                 f"image digest drift: container runs {measured.get('image_digest')!r}, "
@@ -466,7 +482,8 @@ class ContainerCommandExecutor:
             "sentinel_sha256": sentinel_sha256,
             "sentinel_size": sentinel_size,
             "search_names": list(search_names),
-            "search_roots": [os.sep],
+            # the command container is POSIX — never use the judge host's os.sep
+            "search_roots": ["/"],
             "write_roots": ["/tmp", "/root", "/home"],
             "rootfs_write_probes": ["/", "/usr/bin", "/var/tmp"],
             "control_socket": "/var/run/docker.sock",
@@ -474,7 +491,9 @@ class ContainerCommandExecutor:
             "scratch": scratch,
         }
         proc = subprocess.run(
-            [self.runtime, "exec", self.container_id,
+            # -i: the probe receives its targets on stdin; real runtimes do
+            # not attach stdin to exec without it
+            [self.runtime, "exec", "-i", self.container_id,
              "python", "-c", BOUNDARY_PROBE_SCRIPT],
             input=json.dumps(targets), capture_output=True, text=True, timeout=600,
         )

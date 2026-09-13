@@ -193,6 +193,11 @@ def test_command_container_start_is_hardened(tmp_path, fake_runtime):
     assert {v.split("=", 1)[0] for v in scratch_env} == {"TMPDIR", "HOME"}
     for value in scratch_env:
         assert value.split("=", 1)[1].startswith("/sandbox/"), value
+    # QF-025 live evidence: scratch/home are tmpfs INSIDE the sandbox
+    # path-space (a Windows bind mount breaks pytest capture semantics)
+    tmpfs_values = [argv[i + 1] for i, t in enumerate(argv) if t == "--tmpfs"]
+    assert {v.split(":", 1)[0] for v in tmpfs_values} == {
+        "/sandbox/.qual-scratch", "/sandbox/.qual-home"}
 
 
 def test_probe_execs_use_the_worker_container_id(tmp_path, fake_runtime):
@@ -226,7 +231,11 @@ def test_probe_execs_use_the_worker_container_id(tmp_path, fake_runtime):
     )
     execs = _state(tmp_path)["execs"]
     assert len(execs) == 3
-    assert {e[1] for e in execs} == {"fake-container-id-0001"}
+    # probe execs carry "-i" (stdin targets); every exec targets the SAME
+    # container as the Worker command
+    assert execs[0][1:3] == ["-i", "fake-container-id-0001"]
+    assert execs[1][:2] == ["exec", "fake-container-id-0001"]
+    assert execs[2][1:3] == ["-i", "fake-container-id-0001"]
 
 
 # ---------------------------------------------- measured effective policy
@@ -282,6 +291,26 @@ def test_extra_mount_is_policy_mismatch(tmp_path, monkeypatch):
     _patch_inspect(monkeypatch, doc)
     mismatches = executor.verify_policy(executor.measure_policy())
     assert any("mount" in m for m in mismatches), mismatches
+
+
+def test_tmpfs_scratch_mounts_are_allowed_but_must_be_tmpfs(tmp_path, monkeypatch):
+    executor = ContainerCommandExecutor("docker", FAKE_IMAGE_ID)
+    executor.sandbox = tmp_path
+    executor.container_id = "cid-1234"
+    doc = _inspect_doc()
+    doc["Mounts"] += [
+        {"Type": "tmpfs", "Destination": "/sandbox/.qual-scratch", "RW": True,
+         "Source": ""},
+        {"Type": "tmpfs", "Destination": "/sandbox/.qual-home", "RW": True,
+         "Source": ""},
+    ]
+    _patch_inspect(monkeypatch, doc)
+    assert executor.verify_policy(executor.measure_policy()) == []
+
+    doc["Mounts"][-1]["Type"] = "bind"
+    _patch_inspect(monkeypatch, doc)
+    mismatches = executor.verify_policy(executor.measure_policy())
+    assert any("tmpfs" in m for m in mismatches), mismatches
 
 
 def test_image_digest_drift_between_probe_and_run(tmp_path, monkeypatch):
