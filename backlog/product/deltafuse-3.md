@@ -3,8 +3,10 @@
 - **Статус:** `active`
 - **Версия:** `3.0.0`
 - **Текущий план:**
-  [v3/qualification-fix-plan-wave-2.md](v3/qualification-fix-plan-wave-2.md)
-- **Предыдущий fix plan:** [v3/qualification-fix-plan.md](v3/qualification-fix-plan.md)
+  [v3/qualification-fix-plan-wave-3.md](v3/qualification-fix-plan-wave-3.md)
+- **Предыдущие fix plans:**
+  [wave 2](v3/qualification-fix-plan-wave-2.md),
+  [wave 1](v3/qualification-fix-plan.md)
 - **Исходный completion plan:** [v3/completion-plan.md](v3/completion-plan.md)
 - **Release qualification:** [DF3-009](DF3-009.md)
 
@@ -29,7 +31,7 @@
 ## Definition of Done
 
 1. Все пункты
-   [qualification fix plan wave 2](v3/qualification-fix-plan-wave-2.md)
+   [qualification fix plan wave 3](v3/qualification-fix-plan-wave-3.md)
    закрыты проверяемыми тестами.
 2. Полный pytest, PowerShell/POSIX smoke, wheel smoke и layout validation зелёные.
 3. Девять реальных qualification-прогонов сохранены с полным provenance.

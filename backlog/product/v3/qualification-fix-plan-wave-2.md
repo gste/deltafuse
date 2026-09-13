@@ -1,9 +1,9 @@
 # DeltaFuse 3.0 — qualification fix plan, wave 2
 
-- **Статус:** `executing` — QF-013–QF-017 выполнены (RESULT.md в
-  `qualification-fixes/QF-013…QF-017`); QF-018 частично: всё запускаемое
-  зелёное, isolated-boundary прогоны и POSIX-матрица ждут доступного
-  container runtime
+- **Статус:** `implemented-needs-correction` — QF-013–QF-017 реализованы,
+  QF-018 частично; независимая приёмка выявила функциональные дефекты boundary,
+  semantic re-evaluation и evidence. Продолжение:
+  [qualification-fix-plan-wave-3.md](qualification-fix-plan-wave-3.md)
 - **Основание:** независимая проверка исполнения QF-001–QF-012, 2026-09-13
 - **Предыдущая волна:** [qualification-fix-plan.md](qualification-fix-plan.md)
 - **Цель:** закрыть оставшиеся fail-open границы qualification до реальных

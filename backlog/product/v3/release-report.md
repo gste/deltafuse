@@ -1,11 +1,29 @@
 # DeltaFuse 3.0 — release qualification report
 
-- **Статус:** `engineering-pending / wave 2 implemented (QF-013–QF-017);
-  boundary qualification blocked on isolated executor availability`
+- **Статус:** `engineering-failed / correction wave 3`
 - **Пороги:** [thresholds.md](thresholds.md) (T1–T8, absolute)
 - **Runner:** [scripts/qualify.py](../../../scripts/qualify.py)
-- **Обновлён:** 2026-09-13 (wave 2: QF-013–QF-017 исполнены; см.
-  [qualification fix plan wave 2](qualification-fix-plan-wave-2.md))
+- **Обновлён:** 2026-09-13 (независимая приёмка Wave 2; см.
+  [qualification fix plan wave 3](qualification-fix-plan-wave-3.md))
+
+## 0.1 Независимая приёмка Wave 2
+
+Wave 2 не принята как завершённая. Подтверждены `534 passed, 6 skipped`, оба
+smoke и Windows recovery, но найдены блокеры:
+
+- container entrypoint не работает с заявленным wheel-only image: смонтированный
+  `qualify.py` импортирует отсутствующие helper modules;
+- sentinel находится внутри разрешённого mount, а probe и Worker используют
+  разные network policies;
+- schema+semantic validation пропускают нарушающий T1–T8 report с `verdict: pass`;
+- tokenizer allowance `+48` внесён без требуемого maintainer Decision;
+- `__init__.py` asset bundle не покрыт hash;
+- durable wheel evidence относится к commit `141c2ae`, а не к Wave 2;
+  QF-017 RESULT ссылается на alternate base SHA; отдельного QF-018 RESULT нет.
+
+Исправления выполняются по
+[qualification-fix-plan-wave-3.md](qualification-fix-plan-wave-3.md). До QF-025
+статус остаётся engineering-failed; QF-012 не запускается.
 
 ## 0. Wave 2 engineering qualification (QF-018, частично исполнена)
 
