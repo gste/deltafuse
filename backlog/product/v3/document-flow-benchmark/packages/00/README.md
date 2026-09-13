@@ -1,6 +1,6 @@
 # Package 00 — Entry gates and decisions
 
-Status: in progress; J03-000 complete, J03-001 through J03-003 planned.
+Status: in progress; J03-000 and J03-001 complete, J03-002 and J03-003 planned.
 Commit boundary: `planning/readiness evidence (separate from implementation)`.
 
 ## Cards in default order
@@ -27,3 +27,5 @@ The next package cannot treat this README as completion evidence.
 - [J03-000 completed result](cards/J03-000.md) — clean DeltaFuse 3.0.0
   baseline bound to Wave 3 qualification evidence. See
   [package result](RESULT.md).
+- [J03-001 completed result](cards/J03-001.md) — versioned little-coder/Pi
+  feasibility matrix, offline RPC probe, and explicit adapter gaps.

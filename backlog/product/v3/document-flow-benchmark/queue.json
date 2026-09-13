@@ -70,7 +70,7 @@
       "green": "A table maps every required observation/control to versioned local source evidence, transport event, probe and remaining gap; no live inference requested by this card.",
       "test": "Inspect package sources and run only documented help/scripted probes; preserve argv/output/version evidence.",
       "kind": "feasibility",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-001.md",
       "result_path": "packages/00/cards/J03-001.md"
     },
