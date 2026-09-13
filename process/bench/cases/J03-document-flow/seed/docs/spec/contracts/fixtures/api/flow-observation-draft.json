@@ -1,0 +1,1 @@
+{"active_version":null,"audit_sequence":[{"event_id":"evt-1001","kind":"j03.document.created","sequence":1}],"document":{"document_id":"doc-101"},"open_slots":[],"watermark":{"audit_sequence":1,"caught_up":true,"document_sequence":1,"required_sequence":1,"workflow_sequence":0},"workflow":null}

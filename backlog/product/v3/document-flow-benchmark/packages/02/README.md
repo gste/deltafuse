@@ -1,12 +1,12 @@
 # Package 02 — Working Java seed
 
-Status: in_progress; J03-201 is complete and later package cards remain planned.
+Status: in_progress; J03-201 and J03-202 are complete and later package cards remain planned.
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
 
 - [J03-201 — Pin Java reactor and offline dependency inventory](../../cards/J03-201.md) — [result](cards/J03-201.md)
-- [J03-202 — Publish baseline event/API contracts](../../cards/J03-202.md)
+- [J03-202 — Publish baseline event/API contracts](../../cards/J03-202.md) — [result](cards/J03-202.md)
 - [J03-203 — Create isolated service schemas and migrations](../../cards/J03-203.md)
 - [J03-204 — Implement document baseline commands](../../cards/J03-204.md)
 - [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md)
@@ -32,6 +32,11 @@ The next package cannot treat this README as completion evidence.
 
 - [Package result](RESULT.md)
 - [J03-201 result](cards/J03-201.md)
+- [J03-202 result](cards/J03-202.md)
 - Java reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
 - Dependency inventory: `process/bench/cases/J03-document-flow/dependencies.lock.json`
 - Focused inventory tests: `tests/bench/document_flow/test_dependency_inventory.py`
+- Baseline contracts: `process/bench/cases/J03-document-flow/seed/docs/spec/contracts/README.md`
+- Public compatibility fixtures: `process/bench/cases/J03-document-flow/seed/docs/spec/contracts/fixtures/`
+- Capability catalog: `process/bench/cases/J03-document-flow/seed/docs/spec/_capabilities.yaml`
+- Contract test sources: `process/bench/cases/J03-document-flow/seed/shared-contracts/src/test/java/dev/deltafuse/bench/contracts/`

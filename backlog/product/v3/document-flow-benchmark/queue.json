@@ -446,7 +446,7 @@
       "green": "Round-trip baseline messages and public API fixtures pass; no target multi-stage transition is implemented.",
       "test": "mvn --offline -f <seed>/pom.xml -pl shared-contracts -am test",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-202.md",
       "result_path": "packages/02/cards/J03-202.md"
     },

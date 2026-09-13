@@ -1,0 +1,1 @@
+{"aggregate_id":"doc-101","aggregate_type":"DOCUMENT","causation_id":null,"correlation_id":"op-9008","domain_sequence":1,"event_id":"evt-9008","occurred_at":null,"payload":{"document_id":"doc-101","title":true},"producer":"document-service","schema_name":"j03.document.created","schema_version":1}

@@ -1,0 +1,1 @@
+{"aggregate_id":"","aggregate_type":"DOCUMENT","causation_id":null,"correlation_id":"op-9004","domain_sequence":1,"event_id":"evt-9004","occurred_at":null,"payload":{"document_id":"doc-101","title":"Data retention policy"},"producer":"document-service","schema_name":"j03.document.created","schema_version":1}

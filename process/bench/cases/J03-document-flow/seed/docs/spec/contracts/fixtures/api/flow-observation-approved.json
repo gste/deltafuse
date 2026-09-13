@@ -1,0 +1,1 @@
+{"active_version":{"immutable":true,"version_id":"ver-201"},"audit_sequence":[{"event_id":"evt-1005","kind":"j03.workflow.decision-applied","sequence":5}],"document":{"document_id":"doc-101"},"open_slots":[],"watermark":{"audit_sequence":5,"caught_up":true,"document_sequence":3,"required_sequence":5,"workflow_sequence":2},"workflow":{"route_id":"rte-301","state":"APPROVED"}}
