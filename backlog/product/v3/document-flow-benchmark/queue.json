@@ -165,7 +165,7 @@
       "green": "Seven correctness totals=600, discipline=250 each; system totals=1800/600/400/200; all hard gates independently identifiable.",
       "test": "python -m pytest tests/bench/document_flow/test_registry.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-101.md",
       "result_path": "packages/01/cards/J03-101.md"
     },
