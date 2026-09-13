@@ -196,7 +196,7 @@
       "green": "All event variants validate, null measurement remains distinguishable from zero, remote refs never resolve.",
       "test": "python -m pytest tests/bench/document_flow/test_events_schema.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-102.md",
       "result_path": "packages/01/cards/J03-102.md"
     },

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deltafuse:j03:evidence-ref:1",
+  "title": "J03 EvidenceRef",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "sha256", "media_type", "byte_length", "producer_event_id"],
+  "properties": {
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "media_type": {"type": "string", "minLength": 1},
+    "byte_length": {"type": "integer", "minimum": 0},
+    "producer_event_id": {"type": "string", "minLength": 1}
+  }
+}
