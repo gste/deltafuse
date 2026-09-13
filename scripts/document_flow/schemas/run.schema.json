@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deltafuse:j03:run-report:1",
+  "title": "J03 run summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_hash", "semantic_result_hash", "identity", "status", "raw_score", "applied_ceilings", "final_score", "release_verdict", "stage_report_refs", "system_report_ref", "attestation_refs", "hard_failures", "failure_classes"],
+  "properties": {
+    "schema_version": {"const": 1}, "report_hash": {"$ref": "#/$defs/hash"}, "semantic_result_hash": {"$ref": "#/$defs/hash"},
+    "identity": {"$ref": "#/$defs/identity"}, "status": {"enum": ["passed", "failed", "invalid"]},
+    "raw_score": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+    "applied_ceilings": {"type": "array", "items": {"$ref": "#/$defs/ceiling"}, "uniqueItems": true},
+    "final_score": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+    "release_verdict": {"enum": ["release_pass", "fail", "invalid"]},
+    "stage_report_refs": {"type": "array", "maxItems": 7, "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true},
+    "system_report_ref": {"anyOf": [{"$ref": "#/$defs/evidence_ref"}, {"type": "null"}]},
+    "attestation_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true},
+    "hard_failures": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "failure_classes": {"type": "array", "items": {"$ref": "#/$defs/failure_class"}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]},
+      "then": {"properties": {
+        "raw_score": {"type": "integer", "minimum": 0, "maximum": 10000}, "final_score": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "release_verdict": {"const": "release_pass"}, "stage_report_refs": {"minItems": 7, "maxItems": 7},
+        "system_report_ref": {"$ref": "#/$defs/evidence_ref"}, "hard_failures": {"maxItems": 0}, "failure_classes": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+      "then": {"properties": {
+        "raw_score": {"type": "integer", "minimum": 0, "maximum": 10000}, "final_score": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "release_verdict": {"const": "fail"}, "stage_report_refs": {"minItems": 7, "maxItems": 7},
+        "system_report_ref": {"$ref": "#/$defs/evidence_ref"}, "hard_failures": {"minItems": 1}, "failure_classes": {"minItems": 1}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "invalid"}}, "required": ["status"]},
+      "then": {"properties": {
+        "raw_score": {"type": "null"}, "applied_ceilings": {"maxItems": 0}, "final_score": {"type": "null"},
+        "release_verdict": {"const": "invalid"}, "hard_failures": {"minItems": 1}, "failure_classes": {"minItems": 1, "items": {"enum": ["infrastructure-invalid", "host/model-invalid", "oracle-leak", "provenance-invalid"]}}
+      }}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "id": {"type": "string", "minLength": 1},
+    "evidence_ref": {"$ref": "urn:deltafuse:j03:evidence-ref:1"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["campaign_id", "run_id", "case_id", "variant_id", "session_id", "sandbox_id", "profile_sha256", "contract_sha256", "registry_sha256", "host_profile_sha256"],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"}, "case_id": {"$ref": "#/$defs/id"}, "variant_id": {"$ref": "#/$defs/id"},
+        "session_id": {"$ref": "#/$defs/id"}, "sandbox_id": {"$ref": "#/$defs/id"}, "profile_sha256": {"$ref": "#/$defs/hash"},
+        "contract_sha256": {"$ref": "#/$defs/hash"}, "registry_sha256": {"$ref": "#/$defs/hash"}, "host_profile_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "ceiling": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "limit"], "properties": {"kind": {"const": "incomplete_lifecycle"}, "limit": {"const": 4999}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "limit"], "properties": {"kind": {"const": "functional_system_failure"}, "limit": {"const": 6999}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "limit"], "properties": {"kind": {"const": "integrity_or_substitution"}, "limit": {"const": 1999}}}
+      ]
+    },
+    "failure_class": {"enum": ["infrastructure-invalid", "host/model-invalid", "worker-tool-failure", "process-failure", "artifact-correctness-failure", "product-build-failure", "product-functional-failure", "product-resilience-failure", "security-boundary-failure", "oracle-leak", "provenance-invalid"]}
+  }
+}

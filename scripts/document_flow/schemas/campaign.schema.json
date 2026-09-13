@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:deltafuse:j03:campaign-report:1",
+  "title": "J03 campaign summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_hash", "semantic_result_hash", "identity", "status", "required_run_count", "members", "campaign_score", "diagnostics", "member_report_refs", "failure_reasons"],
+  "properties": {
+    "schema_version": {"const": 1}, "report_hash": {"$ref": "#/$defs/hash"}, "semantic_result_hash": {"$ref": "#/$defs/hash"},
+    "identity": {"$ref": "#/$defs/identity"}, "status": {"enum": ["complete", "incomplete", "invalid"]},
+    "required_run_count": {"type": "integer", "minimum": 3},
+    "members": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/member"}, "uniqueItems": true},
+    "campaign_score": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+    "diagnostics": {"$ref": "#/$defs/diagnostics"},
+    "member_report_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}, "uniqueItems": true},
+    "failure_reasons": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]},
+      "then": {"properties": {
+        "campaign_score": {"type": "integer", "minimum": 1, "maximum": 10000}, "failure_reasons": {"maxItems": 0},
+        "members": {"items": {"allOf": [{"$ref": "#/$defs/member"}, {"properties": {"status": {"enum": ["valid_pass", "valid_fail"]}}}]}},
+        "diagnostics": {"properties": {"median": {"type": "number"}, "minimum": {"type": "integer", "minimum": 1}, "mean": {"type": "number"}, "population_variance": {"type": "number", "minimum": 0}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["incomplete", "invalid"]}}, "required": ["status"]},
+      "then": {"properties": {"campaign_score": {"type": "null"}, "failure_reasons": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "id": {"type": "string", "minLength": 1},
+    "evidence_ref": {"$ref": "urn:deltafuse:j03:evidence-ref:1"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["campaign_id", "case_id", "profile_sha256", "contract_sha256", "registry_sha256", "host_profile_sha256", "generator_sha256", "membership_sha256"],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/id"}, "case_id": {"$ref": "#/$defs/id"}, "profile_sha256": {"$ref": "#/$defs/hash"},
+        "contract_sha256": {"$ref": "#/$defs/hash"}, "registry_sha256": {"$ref": "#/$defs/hash"}, "host_profile_sha256": {"$ref": "#/$defs/hash"},
+        "generator_sha256": {"$ref": "#/$defs/hash"}, "membership_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_id", "session_id", "sandbox_id", "seed", "schedule_sha256", "status", "report_ref", "score", "first_failure"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/id"}, "session_id": {"$ref": "#/$defs/id"}, "sandbox_id": {"$ref": "#/$defs/id"},
+        "seed": {"type": "integer", "minimum": 0}, "schedule_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["valid_pass", "valid_fail", "invalid", "missing", "not_run"]},
+        "report_ref": {"anyOf": [{"$ref": "#/$defs/evidence_ref"}, {"type": "null"}]}, "score": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+        "first_failure": {"type": ["string", "null"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"enum": ["valid_pass", "valid_fail"]}}, "required": ["status"]}, "then": {"properties": {"report_ref": {"$ref": "#/$defs/evidence_ref"}, "score": {"type": "integer", "minimum": 1, "maximum": 10000}}}},
+        {"if": {"properties": {"status": {"const": "invalid"}}, "required": ["status"]}, "then": {"properties": {"report_ref": {"$ref": "#/$defs/evidence_ref"}, "score": {"type": "null"}, "first_failure": {"type": "string", "minLength": 1}}}},
+        {"if": {"properties": {"status": {"enum": ["missing", "not_run"]}}, "required": ["status"]}, "then": {"properties": {"report_ref": {"type": "null"}, "score": {"type": "null"}, "first_failure": {"type": "string", "minLength": 1}}}}
+      ]
+    },
+    "diagnostics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_scores", "median", "minimum", "mean", "pass_rate_numerator", "pass_rate_denominator", "population_variance", "first_failure_distribution", "stage_deltas"],
+      "properties": {
+        "run_scores": {"type": "array", "minItems": 3, "items": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000}},
+        "median": {"type": ["number", "null"], "minimum": 1, "maximum": 10000}, "minimum": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+        "mean": {"type": ["number", "null"], "minimum": 1, "maximum": 10000}, "pass_rate_numerator": {"type": "integer", "minimum": 0},
+        "pass_rate_denominator": {"type": "integer", "minimum": 3}, "population_variance": {"type": ["number", "null"], "minimum": 0},
+        "first_failure_distribution": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["failure", "count"], "properties": {"failure": {"type": "string", "minLength": 1}, "count": {"type": "integer", "minimum": 1}}}},
+        "stage_deltas": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["stage_id", "delta"], "properties": {"stage_id": {"enum": ["intake", "analyze", "specify", "decompose", "declare", "implement", "verify"]}, "delta": {"type": "integer", "minimum": -1000, "maximum": 1000}}}}
+      }
+    }
+  }
+}

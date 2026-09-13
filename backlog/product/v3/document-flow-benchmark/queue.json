@@ -257,7 +257,7 @@
       "green": "Represent maximum, valid zero-performance=1, failed capped, invalid and incomplete campaign fixtures.",
       "test": "python -m pytest tests/bench/document_flow/test_run_campaign_schema.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-104.md",
       "result_path": "packages/01/cards/J03-104.md"
     },
