@@ -9,7 +9,7 @@ Commit boundary: `bench: define document flow scoring contracts`.
 - [J03-102 — Define raw event schemas and safe decoding](../../cards/J03-102.md) — [result](cards/J03-102.md)
 - [J03-103 — Define stage and system report schemas](../../cards/J03-103.md) — [result](cards/J03-103.md)
 - [J03-104 — Define run and campaign schemas](../../cards/J03-104.md) — [result](cards/J03-104.md)
-- [J03-105 — Define attestation and variant schemas](../../cards/J03-105.md)
+- [J03-105 — Define attestation and variant schemas](../../cards/J03-105.md) — [result](cards/J03-105.md)
 - [J03-106 — Implement pure run scoring and failure precedence](../../cards/J03-106.md)
 - [J03-107 — Implement campaign and comparison arithmetic](../../cards/J03-107.md)
 - [J03-108 — Implement evidence store and sealed event integrity](../../cards/J03-108.md)
@@ -33,6 +33,7 @@ The next package cannot treat this README as completion evidence.
 - [J03-102 result](cards/J03-102.md)
 - [J03-103 result](cards/J03-103.md)
 - [J03-104 result](cards/J03-104.md)
+- [J03-105 result](cards/J03-105.md)
 - Frozen registry: `scripts/document_flow/contracts/checks.json`
 - Validating loader: `scripts/document_flow/registry.py`
 - Focused tests: `tests/bench/document_flow/test_registry.py`
@@ -43,3 +44,5 @@ The next package cannot treat this README as completion evidence.
 - Focused stage/system tests: `tests/bench/document_flow/test_stage_system_schema.py`
 - Closed run/campaign schemas: `scripts/document_flow/schemas/`
 - Focused run/campaign tests: `tests/bench/document_flow/test_run_campaign_schema.py`
+- Closed attestation/variant schemas: `scripts/document_flow/schemas/`
+- Focused attestation/variant tests: `tests/bench/document_flow/test_attestation_variant_schema.py`
