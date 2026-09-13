@@ -1,0 +1,27 @@
+# Package 03 — Generated oracle and system judge
+
+Status: planned; no package implementation/result is asserted.
+Commit boundary: `bench: add generated document flow oracle`.
+
+## Cards in default order
+
+- [J03-301 — Generate replayable scenario variants](../../cards/J03-301.md)
+- [J03-302 — Build independent pure domain interpreter](../../cards/J03-302.md)
+- [J03-303 — Create private reference version-supersede implementation](../../cards/J03-303.md)
+- [J03-304 — Complete private reference parallel approval implementation](../../cards/J03-304.md)
+- [J03-305 — Build judge clients and stack execution harness](../../cards/J03-305.md)
+- [J03-306 — Implement hidden functional scenarios](../../cards/J03-306.md)
+- [J03-307 — Implement hidden transaction and resilience scenarios](../../cards/J03-307.md)
+- [J03-308 — Implement hidden bounded load and resource checks](../../cards/J03-308.md)
+
+Use [EXECUTOR.md](../../EXECUTOR.md) for bounded execution and evidence handling.
+Write card results under `cards/<ID>.md` within this package directory.
+After all cards satisfy their acceptance, write `RESULT.md` using
+[the result template](../../RESULT-TEMPLATE.md); do not prefill it as passed.
+
+Each package closes with evidence review, exact source identities and a focused
+commit or small commit sequence. Raw logs/runs remain in the external judge
+evidence store. A result-index commit may record a preceding implementation
+commit hash; do not invent a self-referential SHA.
+
+The next package cannot treat this README as completion evidence.

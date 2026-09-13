@@ -1,0 +1,1843 @@
+{
+  "schema_version": 1,
+  "plan_revision": "J03-plan-1",
+  "planning_only": true,
+  "framework_target": "3.0.0",
+  "planning_sha": "db15ca24cc6af128920165fb7c57d6a18c382978",
+  "intention": "INSTRUCTION.md",
+  "entry_gate": "J03-000",
+  "selection": "first planned card in order with all dependencies evidence-verified complete",
+  "statuses": [
+    "planned",
+    "in_progress",
+    "blocked",
+    "complete"
+  ],
+  "cards": [
+    {
+      "id": "J03-000",
+      "package": "00",
+      "title": "Capture qualified framework baseline",
+      "depends_on": [],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/INSTRUCTION.md",
+        "backlog/product/v3/qualification-fix-plan-wave-3.md",
+        "backlog/product/v3/qualification-fixes/QF-025/RESULT.md",
+        "AGENTS.md",
+        "VERSION"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/baseline.json"
+      ],
+      "invariant": "Implementation starts only on a clean Wave-3-qualified DeltaFuse 3.0.0 commit, preserving the active qualification work.",
+      "steps": [
+        "Read QF-025 evidence and verify referenced files and full SHA; absence means blocked, not permission to complete Wave 3 here.",
+        "Record git SHA/status, version, input-document hash and runtime locations outside committed machine-specific config.",
+        "Create an isolated codex/j03-document-flow implementation branch only after the prerequisite is satisfied; do not absorb dirty files."
+      ],
+      "red": "Negative readiness fixture: dirty tree, absent QF-025 evidence or a version other than 3.0.0 prevents implementation entry.",
+      "green": "Baseline manifest references actual completed qualification evidence and a clean tree. Planning docs are committed separately or explicitly included before capture.",
+      "test": "Read-only git status/rev-parse, VERSION and evidence hash checks; record commands in package 00 RESULT.",
+      "kind": "prerequisite",
+      "status": "blocked",
+      "card_path": "cards/J03-000.md",
+      "result_path": "packages/00/cards/J03-000.md"
+    },
+    {
+      "id": "J03-001",
+      "package": "00",
+      "title": "Prove external Worker instrumentation feasibility",
+      "depends_on": [
+        "J03-000"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/START-HERE.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "locally installed little-coder package.json and README",
+        "locally installed little-coder launcher/extension sources"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/worker-feasibility.md"
+      ],
+      "invariant": "Do not build an adapter around imaginary flags or unavailable measurements.",
+      "steps": [
+        "Inventory installed little-coder, pi and Node exact versions/hashes; current observed little-coder 1.19.0 is a lead, not a pin.",
+        "Use documented RPC/extension hooks to list observable model requests, usage, tools, compactions, active model and thinking retention.",
+        "Map disabled dispatch/browser/fetch, user-extension discovery, plan/action substitution and shell hooks to effective enforcement mechanisms.",
+        "Run a non-model scripted event probe where supported; record missing hooks as blockers with a bounded remedy card before package 05."
+      ],
+      "red": "Unsupported token provenance, silent model switching or unobservable shell reads must be marked unsupported, never implemented with estimates.",
+      "green": "A table maps every required observation/control to versioned local source evidence, transport event, probe and remaining gap; no live inference requested by this card.",
+      "test": "Inspect package sources and run only documented help/scripted probes; preserve argv/output/version evidence.",
+      "kind": "feasibility",
+      "status": "planned",
+      "card_path": "cards/J03-001.md",
+      "result_path": "packages/00/cards/J03-001.md"
+    },
+    {
+      "id": "J03-002",
+      "package": "00",
+      "title": "Freeze public semantics and judge observability",
+      "depends_on": [
+        "J03-000"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/INSTRUCTION.md",
+        "backlog/product/v3/document-flow-benchmark/DECISIONS.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "docs/contracts/leash.md",
+        "process/schemas/slice.schema.yaml"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md"
+      ],
+      "invariant": "Every hidden assertion has public semantics, and benchmark witness files fit existing Core envelopes.",
+      "steps": [
+        "Resolve DEC-A through DEC-H from DECISIONS.md, using stated defaults only where within the given intent; record unresolved material choices as real Human Gates.",
+        "Define exact endpoint, identity, actor-role, idempotency, late/invalid ordering and supersede-ownership contracts.",
+        "Place typed normative witness blocks in existing allowed Change/spec artifact paths; prove the format is public and never requires an unauthorized extra write.",
+        "Separate normative behavior from test instrumentation and private judge fixtures."
+      ],
+      "red": "Counterexample: a hidden expectation absent from intake/spec, a witness written outside the envelope, or a distributed-ACID promise is rejected.",
+      "green": "Every requirement has a public contract anchor and observable check mapping; no unresolved choice affects scored behavior.",
+      "test": "Contract review against INSTRUCTION sections 3–4, Core envelope examples and SCORING-PLAN registry.",
+      "kind": "contract",
+      "status": "planned",
+      "card_path": "cards/J03-002.md",
+      "result_path": "packages/00/cards/J03-002.md"
+    },
+    {
+      "id": "J03-003",
+      "package": "00",
+      "title": "Define reproducible host and dependency provisioning",
+      "depends_on": [
+        "J03-000"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/INSTRUCTION.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "process/bench/incubator/J01-calibration-stream/seed/pom.xml",
+        "scripts/build_qual_image.py"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md"
+      ],
+      "invariant": "Provisioning is explicit; qualification uses pinned artifacts with no arbitrary network.",
+      "steps": [
+        "Inventory Java 21, Maven, Python, Node, Docker/Compose and Linux container support; user enabled daemon, remeasure rather than assume.",
+        "Specify allowed artifact repositories, offline Maven/npm/wheel caches, image digest resolution, limits and evidence paths.",
+        "Separate provisioning network from Worker inference-only egress and private product traffic.",
+        "Document resource-budget calibration procedure without inventing version digests or post-hoc tolerances."
+      ],
+      "red": "A tag-only image, JDK 25 pretending to be Java 21, cold missing offline dependency or mutable npm caret range cannot qualify.",
+      "green": "Host profile fields, provenance sources and exact future preflight checks are specified; missing installations are explicit.",
+      "test": "java -version; mvn -version; docker version/info/compose version; package inventory, read-only.",
+      "kind": "contract",
+      "status": "planned",
+      "card_path": "cards/J03-003.md",
+      "result_path": "packages/00/cards/J03-003.md"
+    },
+    {
+      "id": "J03-101",
+      "package": "01",
+      "title": "Create frozen check registry",
+      "depends_on": [
+        "J03-001",
+        "J03-002",
+        "J03-003"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/contracts/checks.json",
+        "scripts/document_flow/registry.py",
+        "tests/bench/document_flow/test_registry.py"
+      ],
+      "invariant": "Check IDs, weights, prerequisites and critical gates are judge-owned and sum exactly to the published scales.",
+      "steps": [
+        "Create closed registry rows for all stage/system IDs in SCORING-PLAN.",
+        "Validate duplicate IDs, missing categories, weight sums and unknown check references.",
+        "Version/hash the registry; no live run can override weights."
+      ],
+      "red": "Duplicate an ID, change a group total or inject an unknown outcome ID; registry validation must reject it.",
+      "green": "Seven correctness totals=600, discipline=250 each; system totals=1800/600/400/200; all hard gates independently identifiable.",
+      "test": "python -m pytest tests/bench/document_flow/test_registry.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-101.md",
+      "result_path": "packages/01/cards/J03-101.md"
+    },
+    {
+      "id": "J03-102",
+      "package": "01",
+      "title": "Define raw event schemas and safe decoding",
+      "depends_on": [
+        "J03-101"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/contracts/checks.json"
+      ],
+      "write_set": [
+        "scripts/document_flow/schemas/event.schema.json",
+        "scripts/document_flow/schemas/evidence-ref.schema.json",
+        "scripts/document_flow/validation.py",
+        "tests/bench/document_flow/test_events_schema.py"
+      ],
+      "invariant": "Every raw event is typed, closed and linked to a run/call/stage with measured-or-missing provenance.",
+      "steps": [
+        "Implement local-only JSON Schema loading and safe JSON decoding with duplicate-key/nonfinite rejection.",
+        "Define Core, model-call, file access, command, compaction, boundary and Human Gate event variants.",
+        "Close all nested objects, enforce identity/hash/count types and explicit null measurements."
+      ],
+      "red": "Unknown nested fields, duplicate JSON keys, bool counts, NaN, broken references and unsupported event kinds fail.",
+      "green": "All event variants validate, null measurement remains distinguishable from zero, remote refs never resolve.",
+      "test": "python -m pytest tests/bench/document_flow/test_events_schema.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-102.md",
+      "result_path": "packages/01/cards/J03-102.md"
+    },
+    {
+      "id": "J03-103",
+      "package": "01",
+      "title": "Define stage and system report schemas",
+      "depends_on": [
+        "J03-102"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/INSTRUCTION.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/schemas/event.schema.json"
+      ],
+      "write_set": [
+        "scripts/document_flow/schemas/stage.schema.json",
+        "scripts/document_flow/schemas/system.schema.json",
+        "tests/bench/document_flow/test_stage_system_schema.py"
+      ],
+      "invariant": "Stage/system reports carry all required identity, evidence, measurement and failure fields with closed nested objects.",
+      "steps": [
+        "Define report envelope including schema/hash, snapshots, attestation refs, events, checks, status, totals and hard failures.",
+        "Represent per-task attempts and not-reached stages explicitly; distinguish invalid system infrastructure from product failure.",
+        "Require provenance references for measured metrics and test result artifacts."
+      ],
+      "red": "A successful report with absent measurements, missing mandatory stage metadata, invalid enum or score out of bounds fails validation.",
+      "green": "All seven stage variants and valid/failed/not-reached/invalid system fixtures validate with consistent required fields.",
+      "test": "python -m pytest tests/bench/document_flow/test_stage_system_schema.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-103.md",
+      "result_path": "packages/01/cards/J03-103.md"
+    },
+    {
+      "id": "J03-104",
+      "package": "01",
+      "title": "Define run and campaign schemas",
+      "depends_on": [
+        "J03-103"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/schemas/run.schema.json",
+        "scripts/document_flow/schemas/campaign.schema.json",
+        "tests/bench/document_flow/test_run_campaign_schema.py"
+      ],
+      "invariant": "An invalid run cannot carry a numeric score, and campaigns cannot omit required members.",
+      "steps": [
+        "Model raw score, applied ceilings, final score, release verdict and failure taxonomy.",
+        "Require fixed campaign membership/profile/contract identities, all run refs and aggregate diagnostics.",
+        "Allow distinct missing/not-run records without falsely treating them as valid zero-point runs."
+      ],
+      "red": "Null verdict paired with 10000, duplicate runs, fewer than three required runs or missing member references fails.",
+      "green": "Represent maximum, valid zero-performance=1, failed capped, invalid and incomplete campaign fixtures.",
+      "test": "python -m pytest tests/bench/document_flow/test_run_campaign_schema.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-104.md",
+      "result_path": "packages/01/cards/J03-104.md"
+    },
+    {
+      "id": "J03-105",
+      "package": "01",
+      "title": "Define attestation and variant schemas",
+      "depends_on": [
+        "J03-102"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/worker-feasibility.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/schemas/attestation.schema.json",
+        "scripts/document_flow/schemas/variant.schema.json",
+        "tests/bench/document_flow/test_attestation_variant_schema.py"
+      ],
+      "invariant": "Profiles and variants are independently reproducible identities, not free-form labels.",
+      "steps": [
+        "Model framework SHA/wheel/lock, executor inspect facts, agent dependency/config/extensions hashes and model/provider/tokenizer evidence.",
+        "Define variant seed, generator source revision, operation stream hash, ambiguity and workload IDs.",
+        "Reject secret values in persisted configuration; store redacted configuration hashes with evidence provenance."
+      ],
+      "red": "Tag-only image, missing provider identity, unmeasured context cap or variant lacking operation hash is rejected for qualification.",
+      "green": "Measured fixture validates; declared-only facts remain non-release and cannot satisfy release attestation.",
+      "test": "python -m pytest tests/bench/document_flow/test_attestation_variant_schema.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-105.md",
+      "result_path": "packages/01/cards/J03-105.md"
+    },
+    {
+      "id": "J03-106",
+      "package": "01",
+      "title": "Implement pure run scoring and failure precedence",
+      "depends_on": [
+        "J03-103",
+        "J03-104",
+        "J03-105"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "scripts/document_flow/registry.py",
+        "scripts/document_flow/validation.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/evaluate.py",
+        "tests/bench/document_flow/test_evaluate.py"
+      ],
+      "invariant": "Scores are derived from evaluated checks and exact measurements, never accepted from supplied totals.",
+      "steps": [
+        "Use exact rational arithmetic and half-even rounding; reject invalid primitives.",
+        "Implement stage/group summation, 1..10000 clamp, all ceilings and invalidity precedence.",
+        "Require all absolute gates independently for release-pass; return deterministic first failure ordering."
+      ],
+      "red": "Exercise 0/1/4999/5000/6999/7000/9999/10000, combined ceilings, forged totals, absent metrics and null provenance.",
+      "green": "Boundary table in SCORING-PLAN passes; order of input mappings cannot change the result.",
+      "test": "python -m pytest tests/bench/document_flow/test_evaluate.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-106.md",
+      "result_path": "packages/01/cards/J03-106.md"
+    },
+    {
+      "id": "J03-107",
+      "package": "01",
+      "title": "Implement campaign and comparison arithmetic",
+      "depends_on": [
+        "J03-106"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "scripts/document_flow/evaluate.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/campaign.py",
+        "tests/bench/document_flow/test_campaign.py"
+      ],
+      "invariant": "Campaign aggregation preserves all valid failures and invalidates missing/invalid required members.",
+      "steps": [
+        "Validate schedule, uniqueness, profile/host/variant compatibility and independent session identities.",
+        "Compute weighted median/min/mean, pass rate, population variance, first failures and per-stage deltas.",
+        "Require re-evaluated runs; comparison reports incompatibility rather than ranking unlike campaigns."
+      ],
+      "red": "Drop the lowest run, substitute duplicate sessions, mix profiles, forge totals, or omit an invalid member; reject each.",
+      "green": "Exact three/four-run fixtures, ties, rounding boundaries and all-failed valid campaigns match hand calculations.",
+      "test": "python -m pytest tests/bench/document_flow/test_campaign.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-107.md",
+      "result_path": "packages/01/cards/J03-107.md"
+    },
+    {
+      "id": "J03-108",
+      "package": "01",
+      "title": "Implement evidence store and sealed event integrity",
+      "depends_on": [
+        "J03-102",
+        "J03-106"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/validation.py",
+        "scripts/document_flow/evaluate.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/store.py",
+        "scripts/document_flow/canonical.py",
+        "tests/bench/document_flow/test_store.py"
+      ],
+      "invariant": "A Worker cannot rewrite host evidence; rehashed reports remain subject to semantic recomputation.",
+      "steps": [
+        "Canonicalize JSON and define self-hash exclusion; create content-addressed evidence and host sequence chain.",
+        "Implement create-only atomic finalization, fsync/recovery, sealed manifest trust root and safe relative refs.",
+        "Test missing objects, symlinks/junctions, truncation, replay, path collision and cross-run substitution."
+      ],
+      "red": "Rewrite an old event and all local hashes, remove a segment, or replace a report total+hash; external seal/semantic checks reject.",
+      "green": "Read-back hashes verify, repeated read/recompute is identical, interrupted writes retain previously finalized reports.",
+      "test": "python -m pytest tests/bench/document_flow/test_store.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-108.md",
+      "result_path": "packages/01/cards/J03-108.md"
+    },
+    {
+      "id": "J03-201",
+      "package": "02",
+      "title": "Pin Java reactor and offline dependency inventory",
+      "depends_on": [
+        "J03-003",
+        "J03-107",
+        "J03-108"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/pom.xml",
+        "process/bench/cases/J03-document-flow/seed/*/pom.xml",
+        "process/bench/cases/J03-document-flow/seed/.mvn/**",
+        "process/bench/cases/J03-document-flow/dependencies.lock.json",
+        "tests/bench/document_flow/test_dependency_inventory.py"
+      ],
+      "invariant": "Java 21 and dependency identity are reproducible before any product logic.",
+      "steps": [
+        "Create reactor for shared-contracts and three services with enforced Java 21/compiler/test plugin versions.",
+        "Resolve approved exact artifacts/plugins and record full offline inventory with hashes; include test dependencies.",
+        "Prove offline build of empty modules uses the inventoried cache without external repositories."
+      ],
+      "red": "Missing cached plugin/transitive artifact or modified jar blocks preflight; JDK mismatch fails explicitly.",
+      "green": "mvn --offline verify succeeds on the empty reactor under Java 21; dependency lock hashes are measured.",
+      "test": "mvn --offline -f <case>/seed/pom.xml verify; python -m pytest tests/bench/document_flow/test_dependency_inventory.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-201.md",
+      "result_path": "packages/02/cards/J03-201.md"
+    },
+    {
+      "id": "J03-202",
+      "package": "02",
+      "title": "Publish baseline event/API contracts",
+      "depends_on": [
+        "J03-201",
+        "J03-002"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**",
+        "process/bench/cases/J03-document-flow/seed/docs/spec/contracts/**",
+        "process/bench/cases/J03-document-flow/seed/docs/spec/_capabilities.yaml"
+      ],
+      "invariant": "Baseline DTOs and event versions encode only the working single-step flow, with target changes reserved for intake.",
+      "steps": [
+        "Define immutable envelope, IDs, aggregate sequence, event schema version and correlation causation fields.",
+        "Implement strict serialization/validation and baseline API error/idempotency contracts.",
+        "Publish capability mapping and public compatibility fixtures; do not leak target implementation."
+      ],
+      "red": "Malformed envelope, unknown schema, missing identity or serialization nondeterminism fails contract tests.",
+      "green": "Round-trip baseline messages and public API fixtures pass; no target multi-stage transition is implemented.",
+      "test": "mvn --offline -f <seed>/pom.xml -pl shared-contracts -am test",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-202.md",
+      "result_path": "packages/02/cards/J03-202.md"
+    },
+    {
+      "id": "J03-203",
+      "package": "02",
+      "title": "Create isolated service schemas and migrations",
+      "depends_on": [
+        "J03-202"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/docs/spec/contracts/**",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/*-service/src/main/resources/db/migration/**",
+        "process/bench/cases/J03-document-flow/seed/infra/postgres/**",
+        "process/bench/cases/J03-document-flow/seed/*-service/src/test/**/Migration*"
+      ],
+      "invariant": "Service-owned databases enforce identity/deduplication and forbid cross-service writes.",
+      "steps": [
+        "Create version, route/decision, inbox/outbox and audit baseline schemas with unique constraints.",
+        "Provision separate principals, Flyway histories and restricted judge read-only access.",
+        "Test fresh install and upgrade from historical baseline; preserve old migration fixtures."
+      ],
+      "red": "Duplicate identity constraints, forbidden cross-database write and changed applied migration each fail for the expected reason.",
+      "green": "Fresh/upgrade migrations succeed on pinned PostgreSQL; roles enforce separation and baseline constraints.",
+      "test": "mvn --offline -f <seed>/pom.xml verify -Pdb-integration (profile created by this card)",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-203.md",
+      "result_path": "packages/02/cards/J03-203.md"
+    },
+    {
+      "id": "J03-204",
+      "package": "02",
+      "title": "Implement document baseline commands",
+      "depends_on": [
+        "J03-203"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**",
+        "process/bench/cases/J03-document-flow/seed/docs/spec/contracts/**",
+        "process/bench/cases/J03-document-flow/seed/document-service/src/main/resources/db/migration/**"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/document-service/src/**"
+      ],
+      "invariant": "Create draft, create immutable version and submit single-step work with state/outbox written atomically.",
+      "steps": [
+        "Implement document API, immutable version persistence and request idempotency.",
+        "Publish submission only through a transactionally written outbox row; duplicate commands return prior observable outcome.",
+        "Test version mutation denial, same-key payload conflicts and rollback with no partial state/outbox."
+      ],
+      "red": "Forced failure before commit leaves neither submitted state nor outbox; duplicate command never creates a second version.",
+      "green": "Baseline document unit/database tests pass for create/version/submit, rollback and duplicates.",
+      "test": "mvn --offline -f <seed>/pom.xml -pl document-service -am verify -Pdb-integration",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-204.md",
+      "result_path": "packages/02/cards/J03-204.md"
+    },
+    {
+      "id": "J03-205",
+      "package": "02",
+      "title": "Implement single-step workflow baseline",
+      "depends_on": [
+        "J03-203"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**",
+        "process/bench/cases/J03-document-flow/seed/workflow-service/src/main/resources/db/migration/**",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/workflow-service/src/**"
+      ],
+      "invariant": "One approver can approve/reject a baseline route with transactional inbox/state/outbox.",
+      "steps": [
+        "Implement single-step route creation and decisions against exact version/route identity.",
+        "Enforce inbox dedup and per-document concurrency at database boundary.",
+        "Keep target expert/registrar/supersede semantics absent; write baseline unit/database tests."
+      ],
+      "red": "Duplicate message or transaction failure cannot repeat/partially apply a decision; wrong version/route rejected.",
+      "green": "Single-step approve/reject and isolation tests pass; target multi-stage tests still cannot pass.",
+      "test": "mvn --offline -f <seed>/pom.xml -pl workflow-service -am verify -Pdb-integration",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-205.md",
+      "result_path": "packages/02/cards/J03-205.md"
+    },
+    {
+      "id": "J03-206",
+      "package": "02",
+      "title": "Implement reliable Kafka inbox/outbox delivery",
+      "depends_on": [
+        "J03-204",
+        "J03-205"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**",
+        "process/bench/cases/J03-document-flow/seed/document-service/src/**",
+        "process/bench/cases/J03-document-flow/seed/workflow-service/src/**"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/document-service/src/**/messaging/**",
+        "process/bench/cases/J03-document-flow/seed/workflow-service/src/**/messaging/**",
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**/messaging/**",
+        "process/bench/cases/J03-document-flow/seed/*-service/src/test/**/Delivery*"
+      ],
+      "invariant": "Database commit, publisher retries and consumer acknowledgement preserve at-least-once safety.",
+      "steps": [
+        "Implement bounded outbox polling/publishing and inbox transaction boundaries with real Kafka acknowledgements.",
+        "Define public invalid-event/DLQ reasons and atomic no-domain-change handling.",
+        "Expose controlled crash barriers in the test profile around commit/ack and publish/sent; no judge scenario code in services."
+      ],
+      "red": "Crash at measured barriers creates a duplicate delivery but exactly one baseline domain effect; malformed payload never partially updates state.",
+      "green": "Kafka/Postgres integration cases prove redelivery, bounded polling and recovery, including publisher restart.",
+      "test": "mvn --offline -f <seed>/pom.xml verify -Pmessaging-integration",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-206.md",
+      "result_path": "packages/02/cards/J03-206.md"
+    },
+    {
+      "id": "J03-207",
+      "package": "02",
+      "title": "Implement audit projection and canonical query",
+      "depends_on": [
+        "J03-206"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/shared-contracts/src/**",
+        "process/bench/cases/J03-document-flow/seed/audit-service/src/main/resources/db/migration/**",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/audit-service/src/**",
+        "process/bench/cases/J03-document-flow/seed/document-service/src/**/query/**"
+      ],
+      "invariant": "Replay leaves one append-only audit effect and canonical JSON reflects observed state deterministically.",
+      "steps": [
+        "Implement audit consumer/dedup store and stable per-aggregate ordering.",
+        "Implement canonical public query aggregation with synchronization watermark and no state writes.",
+        "Include duplicate/reordered baseline events and unavailable downstream query behavior."
+      ],
+      "red": "Replay produces duplicate rows, arrival-order-dependent output or a query that mutates state; tests must expose each.",
+      "green": "Canonical output stabilizes to expected baseline state, replay is idempotent and audit is not a state authority.",
+      "test": "mvn --offline -f <seed>/pom.xml -pl audit-service,document-service -am verify -Pmessaging-integration",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-207.md",
+      "result_path": "packages/02/cards/J03-207.md"
+    },
+    {
+      "id": "J03-208",
+      "package": "02",
+      "title": "Wire pinned Compose stack and fault controls",
+      "depends_on": [
+        "J03-207"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/dependencies.lock.json",
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md",
+        "process/bench/cases/J03-document-flow/seed/*-service/src/main/resources/**"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/seed/compose.yaml",
+        "process/bench/cases/J03-document-flow/seed/*-service/Dockerfile",
+        "process/bench/cases/J03-document-flow/seed/infra/**",
+        "process/bench/cases/J03-document-flow/seed/README.md"
+      ],
+      "invariant": "One documented command starts the complete baseline on an isolated, bounded, offline-ready stack.",
+      "steps": [
+        "Pin measured image digests, health checks, JVM/container resource limits and separate database principals.",
+        "Use private networking and no runtime socket/host checkout mounts; label run-owned resources.",
+        "Provide start/readiness/fault/preserve/cleanup procedures with exact ownership checks; avoid sleep-based success."
+      ],
+      "red": "Cold missing dependency, wrong digest, unhealthy service and escaped mount fail with infrastructure classification.",
+      "green": "Compose config validates and all three services plus Kafka/Postgres become healthy from clean volumes; no manual service editing.",
+      "test": "docker compose -f <seed>/compose.yaml config; provisioned offline build/up and deadline health probes",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-208.md",
+      "result_path": "packages/02/cards/J03-208.md"
+    },
+    {
+      "id": "J03-209",
+      "package": "02",
+      "title": "Prove public baseline end to end",
+      "depends_on": [
+        "J03-208"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/docs/spec/contracts/**",
+        "process/bench/cases/J03-document-flow/seed/compose.yaml"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/public_suite/**",
+        "process/bench/cases/J03-document-flow/seed/tests/system/**",
+        "tests/bench/document_flow/test_public_baseline.py"
+      ],
+      "invariant": "Actual baseline create/version/submit/approve-or-reject/audit flow is green and observable.",
+      "steps": [
+        "Create public HTTP/Kafka smoke clients with deterministic fixture inputs and deadline polling.",
+        "Run unit/integration/system profiles and capture command/build/container identities.",
+        "Cover at least approve, reject, immutable version and replay duplicate guard with actual services."
+      ],
+      "red": "A deliberately broken service wiring or duplicate audit implementation fails a named public assertion, not a generic timeout alone.",
+      "green": "All baseline public tests pass against the real pinned stack and retain logs on failure.",
+      "test": "mvn --offline -f <seed>/pom.xml verify; python -m pytest tests/bench/document_flow/test_public_baseline.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-209.md",
+      "result_path": "packages/02/cards/J03-209.md"
+    },
+    {
+      "id": "J03-210",
+      "package": "02",
+      "title": "Add realistic noise and safe public pack installation",
+      "depends_on": [
+        "J03-209"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/docs/spec/_capabilities.yaml",
+        "backlog/product/v3/document-flow-benchmark/INSTRUCTION.md",
+        "src/deltafuse/bench/init_product.py",
+        "docs/contracts/leash.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/case.yaml",
+        "process/bench/cases/J03-document-flow/input.md",
+        "process/bench/cases/J03-document-flow/WORKER.md",
+        "process/bench/cases/J03-document-flow/public-inventory.json",
+        "process/bench/cases/J03-document-flow/seed/legacy/**",
+        "process/bench/cases/J03-document-flow/seed/docs/archive/**",
+        "process/bench/cases/J03-document-flow/seed/*-service/src/main/java/**/legacy/**",
+        "scripts/document_flow/install.py",
+        "tests/bench/document_flow/test_install.py"
+      ],
+      "invariant": "Worker receives a functional public product with realistic irrelevant files but no judge material.",
+      "steps": [
+        "Add several dozen realistic non-target Java files/DTOs, deprecated adapter, old migration and historical Change without altering baseline behavior.",
+        "Publish complete target intake and stage-witness syntax in allowed paths; inventory seed/public assets explicitly.",
+        "Install from frozen wheel and public inventory, checking links/reparse points, seed hashes and layout; reject judge artifacts."
+      ],
+      "red": "Place renamed oracle or escaping link in public inventory; init refuses. Opening installed wheel cannot expose judge package.",
+      "green": "Public baseline remains green, target paths fit bounded packets, and installation/layout/leak tests pass.",
+      "test": "python -m pytest tests/bench/document_flow/test_install.py -q; public baseline regression; platform layout validators",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-210.md",
+      "result_path": "packages/02/cards/J03-210.md"
+    },
+    {
+      "id": "J03-301",
+      "package": "03",
+      "title": "Generate replayable scenario variants",
+      "depends_on": [
+        "J03-210",
+        "J03-105"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "process/bench/cases/J03-document-flow/input.md",
+        "scripts/document_flow/schemas/variant.schema.json"
+      ],
+      "write_set": [
+        "scripts/document_flow/variants.py",
+        "process/bench/cases/J03-document-flow/oracle/variant-contract.json",
+        "tests/bench/document_flow/test_variants.py"
+      ],
+      "invariant": "Saved generator identity and seed reproduce exact operations without hardcoded public IDs.",
+      "steps": [
+        "Generate IDs, actors, document multiplicity, legal delivery orders, duplicates and crash schedules.",
+        "Record full operation stream and hash; constrain valid scenarios causally and label deliberate invalid schedules.",
+        "Define frozen corpus of calibration and held-out seeds with no reference tuning on held-out results."
+      ],
+      "red": "Same seed differs across supported runtimes, invalid actor reuse appears in a valid scenario, or static public IDs dominate outputs.",
+      "green": "Cross-platform golden variant hashes match; different seeds alter identities/schedules without altering required semantics.",
+      "test": "python -m pytest tests/bench/document_flow/test_variants.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-301.md",
+      "result_path": "packages/03/cards/J03-301.md"
+    },
+    {
+      "id": "J03-302",
+      "package": "03",
+      "title": "Build independent pure domain interpreter",
+      "depends_on": [
+        "J03-301"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/input.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md",
+        "process/bench/cases/J03-document-flow/oracle/variant-contract.json"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/oracle/interpreter.py",
+        "tests/bench/document_flow/test_interpreter.py"
+      ],
+      "invariant": "Expected state is derived independently of Java product transition code.",
+      "steps": [
+        "Implement bounded pure transitions for version/route/slot decisions, supersede, duplicates, invalid and late events.",
+        "Canonicalize audit/state results and expose expected-state-at-barrier API.",
+        "Use hand-worked timelines and invariants, not Java reference outputs, as unit-test oracles."
+      ],
+      "red": "Early registrar, same actor in two roles, late superseded decision, wrong version and duplicate effect break explicit hand-derived fixtures.",
+      "green": "Normal/reject/interleaved/late/conflict cases match independently calculated final state and audit.",
+      "test": "python -m pytest tests/bench/document_flow/test_interpreter.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-302.md",
+      "result_path": "packages/03/cards/J03-302.md"
+    },
+    {
+      "id": "J03-303",
+      "package": "03",
+      "title": "Create private reference version-supersede implementation",
+      "depends_on": [
+        "J03-302"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/document-service/src/**",
+        "process/bench/cases/J03-document-flow/seed/workflow-service/src/**",
+        "process/bench/cases/J03-document-flow/input.md",
+        "process/bench/cases/J03-document-flow/oracle/interpreter.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/oracle/reference/patches/version-supersede/**",
+        "process/bench/cases/J03-document-flow/oracle/reference/manifest.json",
+        "tests/bench/document_flow/test_reference_supersede.py"
+      ],
+      "invariant": "Reference supersede atomically closes old workflow and opens successor while keeping public seed unchanged.",
+      "steps": [
+        "Apply reference-only patch to a fresh seed copy; implement transaction ownership and version identity.",
+        "Preserve late-decision audit with no old-route mutation.",
+        "Keep reference assets outside public inventory and independently compare API outcomes to interpreter."
+      ],
+      "red": "Baseline fails supersede checks; reference transaction crash or late decision mutation fails exact scenario checks.",
+      "green": "Reference version/supersede scenarios pass with actual PostgreSQL, original seed hashes unchanged.",
+      "test": "python -m pytest tests/bench/document_flow/test_reference_supersede.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-303.md",
+      "result_path": "packages/03/cards/J03-303.md"
+    },
+    {
+      "id": "J03-304",
+      "package": "03",
+      "title": "Complete private reference parallel approval implementation",
+      "depends_on": [
+        "J03-303"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/input.md",
+        "process/bench/cases/J03-document-flow/oracle/interpreter.py",
+        "process/bench/cases/J03-document-flow/oracle/reference/patches/version-supersede/**"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/oracle/reference/patches/parallel-approval/**",
+        "process/bench/cases/J03-document-flow/oracle/reference/manifest.json",
+        "tests/bench/document_flow/test_reference_approval.py"
+      ],
+      "invariant": "Private reference satisfies two expert roles then registrar, identities, rejection and event idempotency.",
+      "steps": [
+        "Implement expert/registrar state transitions and distinct actor enforcement in private reference patches.",
+        "Integrate schema/API/audit compatibility for target Change; preserve transactional delivery.",
+        "Prove reference transitions against interpreter for both hand-written and generated sequences."
+      ],
+      "red": "One expert unlocks registrar, actor closes two roles or expert rejection allows later progress; named tests fail.",
+      "green": "All target domain timelines pass on real reference stack without changing the public baseline tree.",
+      "test": "python -m pytest tests/bench/document_flow/test_reference_approval.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-304.md",
+      "result_path": "packages/03/cards/J03-304.md"
+    },
+    {
+      "id": "J03-305",
+      "package": "03",
+      "title": "Build judge clients and stack execution harness",
+      "depends_on": [
+        "J03-304",
+        "J03-108"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/seed/compose.yaml",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/store.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/system_runner.py",
+        "scripts/document_flow/clients.py",
+        "scripts/document_flow/faults.py",
+        "tests/bench/document_flow/test_system_runner.py"
+      ],
+      "invariant": "Hidden tests access only public APIs/Kafka and allow-listed read-only SQL from a judge-owned harness.",
+      "steps": [
+        "Launch unique run-labelled stacks from snapshot-bound build artifacts; poll readiness and preserve diagnostic output.",
+        "Implement HTTP/Kafka clients, SQL assertion allow-list and measured crash-barrier controls.",
+        "Classify host/tool failure versus Worker build/behavior failure and use documented nonzero exit codes."
+      ],
+      "red": "Bad image/dropped judge connection is infrastructure-invalid; bad Worker Java compilation is product-build-failure; arbitrary SQL write is denied.",
+      "green": "Positive reference and negative seed are executed from identified snapshots with complete evidence and no host leaks.",
+      "test": "python -m pytest tests/bench/document_flow/test_system_runner.py -q; live reference/seed harness probe",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-305.md",
+      "result_path": "packages/03/cards/J03-305.md"
+    },
+    {
+      "id": "J03-306",
+      "package": "03",
+      "title": "Implement hidden functional scenarios",
+      "depends_on": [
+        "J03-305"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/oracle/interpreter.py",
+        "scripts/document_flow/clients.py",
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
+        "tests/bench/document_flow/test_hidden_functional_contract.py"
+      ],
+      "invariant": "Functional points are earned only by observable target behavior across private variants.",
+      "steps": [
+        "Implement F01–F09 plus C02/C03 scenarios from registry, with exact expected error/late/audit assertions.",
+        "Cover duplicate HTTP/decision identities, separate documents, early registrar, both reject roles, supersede before/after partial review.",
+        "Run against baseline and reference; retain each named assertion and evidence ref."
+      ],
+      "red": "Unchanged seed fails expected target IDs; a hardcoded happy-path candidate fails held-out schedules.",
+      "green": "Reference passes every functional scenario; points derive from fixed scenario outcomes, not pytest exit status alone.",
+      "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q; judge functional suite on seed/reference",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-306.md",
+      "result_path": "packages/03/cards/J03-306.md"
+    },
+    {
+      "id": "J03-307",
+      "package": "03",
+      "title": "Implement hidden transaction and resilience scenarios",
+      "depends_on": [
+        "J03-305"
+      ],
+      "read_set": [
+        "scripts/document_flow/faults.py",
+        "scripts/document_flow/clients.py",
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "process/bench/cases/J03-document-flow/oracle/interpreter.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/hidden_suite/test_resilience.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_atomicity.py",
+        "tests/bench/document_flow/test_hidden_resilience_contract.py"
+      ],
+      "invariant": "Measured faults prove inbox/outbox and replay safety; unavailable infrastructure is not a passing resilience test.",
+      "steps": [
+        "Implement R01–R04 and C01 with actual commit/ack and publish/sent barriers, topic replay and DB/broker outage/recovery.",
+        "Verify fault point receipts, duplicates, partial state, inbox/outbox rows and audit count via approved observations.",
+        "Scope restoration and cleanup to run-owned resources."
+      ],
+      "red": "No fault actually triggered, shared transaction assumption, direct publish or replay duplicates must fail named checks.",
+      "green": "Reference survives each measured fault; induced faulty candidates fail expected IDs without counting harness errors.",
+      "test": "python -m pytest tests/bench/document_flow/test_hidden_resilience_contract.py -q; live resilience suite",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-307.md",
+      "result_path": "packages/03/cards/J03-307.md"
+    },
+    {
+      "id": "J03-308",
+      "package": "03",
+      "title": "Implement hidden bounded load and resource checks",
+      "depends_on": [
+        "J03-306",
+        "J03-307"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md",
+        "scripts/document_flow/variants.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/hidden_suite/test_resources.py",
+        "process/bench/cases/J03-document-flow/oracle/resource-budgets.json",
+        "tests/bench/document_flow/test_resource_accounting.py"
+      ],
+      "invariant": "Efficiency uses frozen relative resource counts and explicit host limits, never cross-host inference speed.",
+      "steps": [
+        "Generate bounded concurrent workload with interpreter-derived final state.",
+        "Measure SQL statement counts, replay work, memory/OOM/restart behavior and completion barriers through independent sources.",
+        "Freeze calibrated budgets before any Worker pilot; preserve calibration observations and revision."
+      ],
+      "red": "Inflated query count, unbounded replay, OOM/restart loop or incomplete load state fails its specific E/C04 check.",
+      "green": "Reference meets all frozen budgets on fixed host profile; unit accounting resists missing/forged measurements.",
+      "test": "python -m pytest tests/bench/document_flow/test_resource_accounting.py -q; bounded live system suite",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-308.md",
+      "result_path": "packages/03/cards/J03-308.md"
+    },
+    {
+      "id": "J03-401",
+      "package": "04",
+      "title": "Adapt Core snapshots without changing the Process",
+      "depends_on": [
+        "J03-308"
+      ],
+      "read_set": [
+        "src/deltafuse/core/queue.py",
+        "src/deltafuse/core/leash.py",
+        "docs/contracts/leash.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/core_bridge.py",
+        "tests/bench/document_flow/test_core_bridge.py"
+      ],
+      "invariant": "Judge consumes pinned Core state/envelope; Worker and judge cannot invent a lifecycle transition.",
+      "steps": [
+        "Parse next/queue/halt/envelope output into versioned observations, binding command argv/exit/artifacts to snapshot.",
+        "Support multiple tasks, revisited Analyze/Declare/Implement and null envelopes.",
+        "Keep existing CLI/Core behavior unchanged; contract mismatch fails explicitly."
+      ],
+      "red": "Manual state transition, null envelope widened to all files, skipped Human Gate or historical later snapshot used for earlier stage is rejected.",
+      "green": "Real installed 3.0.0 Core fixtures traverse expected states including task cycles and Gate pauses.",
+      "test": "python -m pytest tests/bench/document_flow/test_core_bridge.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-401.md",
+      "result_path": "packages/04/cards/J03-401.md"
+    },
+    {
+      "id": "J03-402",
+      "package": "04",
+      "title": "Capture immutable stage and task boundary snapshots",
+      "depends_on": [
+        "J03-401"
+      ],
+      "read_set": [
+        "scripts/document_flow/core_bridge.py",
+        "scripts/document_flow/store.py",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/snapshots.py",
+        "tests/bench/document_flow/test_snapshots.py"
+      ],
+      "invariant": "Earlier stage evidence is preserved and cannot be replaced by a final converged tree.",
+      "steps": [
+        "Record content inventory, git state, Core result and host event range at each task/stage boundary.",
+        "Create immutable visit records; finalize seven rollups only when the run closes, referencing all visits.",
+        "Handle crash/early stop with durable earlier visits and explicit later not-reached records."
+      ],
+      "red": "A later spec edit contaminates Intake, overwritten Declare visit or crash deletes prior stage evidence; tests fail.",
+      "green": "Resume only same authenticated session state when supported; otherwise interrupted run closes without fabricated events.",
+      "test": "python -m pytest tests/bench/document_flow/test_snapshots.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-402.md",
+      "result_path": "packages/04/cards/J03-402.md"
+    },
+    {
+      "id": "J03-403",
+      "package": "04",
+      "title": "Implement Intake and Analyze deterministic oracles",
+      "depends_on": [
+        "J03-402",
+        "J03-101"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "process/bench/cases/J03-document-flow/input.md",
+        "process/bench/cases/J03-document-flow/oracle/variant-contract.json",
+        "scripts/document_flow/core_bridge.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/oracles/intake.py",
+        "scripts/document_flow/oracles/analyze.py",
+        "tests/bench/document_flow/test_intake_analyze.py"
+      ],
+      "invariant": "Claims/routing/slices are evaluated against explicit obligations and snapshot evidence, not keywords or status alone.",
+      "steps": [
+        "Map typed witnesses to raw intake clauses; reject invented/omitted IDs and evaluate pre-reading restrictions.",
+        "Validate routing, capability closure, migration/event impacts and bounded slices.",
+        "Use variant ambiguity metadata and genuine Gate receipts to distinguish required/missing/spurious Decisions."
+      ],
+      "red": "Correct keywords in nonsense claims, wrong capability, whole-repository slice, premature source read and false Decision each fail named IDs.",
+      "green": "Good multi-service artifacts pass; semantic adversarial fixtures fail without an LLM judge.",
+      "test": "python -m pytest tests/bench/document_flow/test_intake_analyze.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-403.md",
+      "result_path": "packages/04/cards/J03-403.md"
+    },
+    {
+      "id": "J03-404",
+      "package": "04",
+      "title": "Implement Specify and Decompose deterministic oracles",
+      "depends_on": [
+        "J03-403",
+        "J03-302"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/public-contract-decisions.md",
+        "process/schemas/task.schema.yaml",
+        "process/schemas/spec-delta.schema.yaml"
+      ],
+      "write_set": [
+        "scripts/document_flow/oracles/specify.py",
+        "scripts/document_flow/oracles/decompose.py",
+        "scripts/document_flow/witness.py",
+        "tests/bench/document_flow/test_specify_decompose.py"
+      ],
+      "invariant": "Specification witnesses express executable public predicates; tasks form a complete bounded dependency graph.",
+      "steps": [
+        "Parse typed witness language within public allowed artifact blocks and reject unknown/vacuous/contradictory predicates.",
+        "Check all obligations/spec anchors, unchanged seed code and event/API state contracts.",
+        "Verify task coverage, dependencies, affected roots and independently measured context packet closure."
+      ],
+      "red": "Meaningless keyword spec, tautological predicates, nonexistent anchor, missing edge or oversized task fails the intended ID.",
+      "green": "Good specification/task fixtures pass exact traceability checks; unsupported prose semantics are reported as limitations.",
+      "test": "python -m pytest tests/bench/document_flow/test_specify_decompose.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-404.md",
+      "result_path": "packages/04/cards/J03-404.md"
+    },
+    {
+      "id": "J03-405",
+      "package": "04",
+      "title": "Implement authentic Declare and frozen test oracle",
+      "depends_on": [
+        "J03-404",
+        "J03-305"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "src/deltafuse/core/evidence.py",
+        "scripts/document_flow/store.py",
+        "scripts/document_flow/system_runner.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/oracles/declare.py",
+        "scripts/document_flow/red_runner.py",
+        "tests/bench/document_flow/test_declare.py"
+      ],
+      "invariant": "Red fails unchanged code on the intended observable requirement and its assertions remain frozen.",
+      "steps": [
+        "Run declared public tests on an identified unchanged seed/baseline snapshot in isolated build execution.",
+        "Bind assertion identity/source hashes and failure reason to required obligation; distinguish build/tool errors from valid Red.",
+        "Expose calibrated mutant-kill references for later finalization; pending calibration cannot receive full Red-strength points."
+      ],
+      "red": "A compile error masquerading as Red, private method assertion, passing-on-seed test or edited assertion cannot satisfy Declare.",
+      "green": "Genuine observable Red accepted; integrity covers test source/resources/fixtures and relevant execution config.",
+      "test": "python -m pytest tests/bench/document_flow/test_declare.py -q; isolated baseline Red probe",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-405.md",
+      "result_path": "packages/04/cards/J03-405.md"
+    },
+    {
+      "id": "J03-406",
+      "package": "04",
+      "title": "Implement Implement and Verify convergence oracles",
+      "depends_on": [
+        "J03-405",
+        "J03-308"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "scripts/document_flow/oracles/declare.py",
+        "scripts/document_flow/core_bridge.py",
+        "scripts/document_flow/system_runner.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/oracles/implement.py",
+        "scripts/document_flow/oracles/verify.py",
+        "tests/bench/document_flow/test_implement_verify.py"
+      ],
+      "invariant": "Green, final stack behavior and traceability belong to the actual scored snapshot and follow authentic Core transitions.",
+      "steps": [
+        "Verify task-local production writes, frozen tests, actual Green/regression receipts and dependency lock consistency.",
+        "Bind hidden task/system results to candidate build and final tree; verify terminal tasks and full claim/result coverage.",
+        "Enforce archive after convergence without judge auto-accepting merge or spec Gates.",
+        "Construct the private complete positive-reference Change fixture from the preceding good stage fixtures using actual Core commands and genuine required Human Gate receipts; keep scripted authorship explicitly separate from a Worker pilot."
+      ],
+      "red": "Forged Green stdout, modified test, snapshot substitution, unexplained dependency drift or early archive fails the mapped ID.",
+      "green": "Reference Change fixtures with real command receipts pass; valid product-build failures retain prior stage points.",
+      "test": "python -m pytest tests/bench/document_flow/test_implement_verify.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-406.md",
+      "result_path": "packages/04/cards/J03-406.md"
+    },
+    {
+      "id": "J03-407",
+      "package": "04",
+      "title": "Compute measured context/file/tool/retry efficiency",
+      "depends_on": [
+        "J03-402",
+        "J03-106"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/SCORING-PLAN.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/schemas/event.schema.json"
+      ],
+      "write_set": [
+        "scripts/document_flow/efficiency.py",
+        "tests/bench/document_flow/test_efficiency.py"
+      ],
+      "invariant": "Efficiency factors are reproducible from complete per-call telemetry with no free points for missing observations.",
+      "steps": [
+        "Implement agreed input+retained-thinking+output reservation cap and per-stage calibration budgets.",
+        "Compute file usefulness by unique files plus read-volume/context-dump guard, productive action rules and task-aware retry identities.",
+        "Normalize multi-visit stages without duplicating points; distinguish legitimate expected Red and real failed commands."
+      ],
+      "red": "Estimated tokens, missing reads, repeated cached dump, no calls, forged retry journal or model-call overflow reduces/invalidates as contract defines.",
+      "green": "Hand-calculated factors/rounding and multi-task reentry fixtures agree exactly; outputs retain raw denominators/provenance.",
+      "test": "python -m pytest tests/bench/document_flow/test_efficiency.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-407.md",
+      "result_path": "packages/04/cards/J03-407.md"
+    },
+    {
+      "id": "J03-408",
+      "package": "04",
+      "title": "Re-evaluate runs from source artifacts",
+      "depends_on": [
+        "J03-406",
+        "J03-407",
+        "J03-108"
+      ],
+      "read_set": [
+        "scripts/document_flow/oracles/**",
+        "scripts/document_flow/evaluate.py",
+        "scripts/document_flow/store.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/replay.py",
+        "tests/bench/document_flow/test_replay.py"
+      ],
+      "invariant": "Disk replay re-executes semantic checks from raw evidence instead of trusting saved check.pass or totals.",
+      "steps": [
+        "Resolve sealed event/snapshot/artifact refs and reconstruct every stage check through the registry.",
+        "Recompute system check predicates against preserved observations where sufficient; mark live rerun requirements explicitly.",
+        "Compare every derived field and identity with stored reports, reject unknown/duplicate checks and supplied weights."
+      ],
+      "red": "Rehash a forged check.pass, total, source reference or claimed host attestation; replay still fails.",
+      "green": "Two replays of one sealed artifact yield identical semantic JSON and score; live nondeterministic reruns are separate evidence.",
+      "test": "python -m pytest tests/bench/document_flow/test_replay.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-408.md",
+      "result_path": "packages/04/cards/J03-408.md"
+    },
+    {
+      "id": "J03-409",
+      "package": "04",
+      "title": "Render reports and define read-only report commands",
+      "depends_on": [
+        "J03-408",
+        "J03-107"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/replay.py",
+        "scripts/document_flow/campaign.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/reports.py",
+        "scripts/document_flow/report_cli.py",
+        "tests/bench/document_flow/test_reports.py"
+      ],
+      "invariant": "JSON/Markdown/comparison views display the same recomputed numbers and preserve failure distinctions.",
+      "steps": [
+        "Render seven-stage correctness/discipline/efficiency/retry/context/first-failure table, system groups and all ceilings.",
+        "Add machine JSON and short Markdown outputs plus compatible-profile comparison.",
+        "Escape untrusted content and secrets; renderer does not overwrite source evidence or recalculate with different arithmetic."
+      ],
+      "red": "Invalid run shown as zero/one, absent stage painted green, stale total trusted or malicious Markdown misrepresented fails fixtures.",
+      "green": "Golden readable reports for pass/failed/invalid/early stop and two-profile comparison match pure evaluator.",
+      "test": "python -m pytest tests/bench/document_flow/test_reports.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-409.md",
+      "result_path": "packages/04/cards/J03-409.md"
+    },
+    {
+      "id": "J03-501",
+      "package": "05",
+      "title": "Integrate external little-coder session transport",
+      "depends_on": [
+        "J03-001",
+        "J03-409"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/00/worker-feasibility.md",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "locally installed little-coder/ pi documented RPC sources"
+      ],
+      "write_set": [
+        "scripts/document_flow/worker/adapter.py",
+        "scripts/document_flow/worker/profile.json",
+        "scripts/document_flow/worker/extension/**",
+        "tests/bench/document_flow/test_worker_transport.py"
+      ],
+      "invariant": "The real external little-coder loop owns agent execution; no internal qualification-loop substitute.",
+      "steps": [
+        "Pin actual package/dependency/extension inventory; launch isolated fresh session through verified transport.",
+        "Implement prompt, event, halt, cancellation and compaction lifecycle adapters; no implicit plan/action model change.",
+        "Use scripted transport fixture for framing/error tests; label all scripted output synthetic."
+      ],
+      "red": "Adapter silently runs a Python JSON loop, accepts extra user extension or switches model between phases; tests reject.",
+      "green": "Transport handles actual versioned event shapes, maintains same session/model and cleanly pauses at Human Gate.",
+      "test": "python -m pytest tests/bench/document_flow/test_worker_transport.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-501.md",
+      "result_path": "packages/05/cards/J03-501.md"
+    },
+    {
+      "id": "J03-502",
+      "package": "05",
+      "title": "Capture actual model and compaction measurements",
+      "depends_on": [
+        "J03-501",
+        "J03-407"
+      ],
+      "read_set": [
+        "scripts/document_flow/worker/adapter.py",
+        "scripts/document_flow/schemas/event.schema.json",
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md"
+      ],
+      "write_set": [
+        "scripts/document_flow/worker/telemetry.py",
+        "scripts/document_flow/worker/extension/**",
+        "tests/bench/document_flow/test_worker_measurements.py"
+      ],
+      "invariant": "Every actual request has measured usage, context/retained-thinking provenance and source-linked file/tool observations.",
+      "steps": [
+        "Observe actual outbound model request and response, not only final UI transcript; record tokenizer/provider attestations.",
+        "Link compaction input/output and retained obligations/session state using non-answer-bearing sentinels.",
+        "Redact credentials without losing necessary identity; enforce 32768 reservation rule before dispatch."
+      ],
+      "red": "Dropped tool call, unmeasured hidden reasoning, declared-only usage, unavailable tokenizer or silent compaction loss cannot qualify.",
+      "green": "Scripted edge cases validate accounting; live measurement support is deferred to dedicated external probe/qualification, never fabricated.",
+      "test": "python -m pytest tests/bench/document_flow/test_worker_measurements.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-502.md",
+      "result_path": "packages/05/cards/J03-502.md"
+    },
+    {
+      "id": "J03-503",
+      "package": "05",
+      "title": "Enforce native tool envelopes and disabled capabilities",
+      "depends_on": [
+        "J03-501",
+        "J03-401"
+      ],
+      "read_set": [
+        "scripts/document_flow/worker/adapter.py",
+        "docs/contracts/leash.md",
+        "scripts/document_flow/core_bridge.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/worker/tool_guard.py",
+        "scripts/document_flow/worker/extension/**",
+        "tests/bench/document_flow/test_tool_guard.py"
+      ],
+      "invariant": "Effective tools obey the current Core envelope and forbid dispatch/browser/search/fetch/sub-agent escape.",
+      "steps": [
+        "Restrict native read/write/edit by stage allow-list with resolved path/reparse-point checks.",
+        "Disable and probe forbidden tools/extensions; null envelope closes product writes and cannot be widened by metadata instructions.",
+        "Revalidate envelope/snapshot at action time to prevent stale permission reuse."
+      ],
+      "red": "Renamed tool, symlink race, alternate write API, metadata prompt injection or stale approved envelope bypass fails adversarial tests.",
+      "green": "Denied actions are logged externally; legitimate stage writes work and actual Gate pauses remain human.",
+      "test": "python -m pytest tests/bench/document_flow/test_tool_guard.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-503.md",
+      "result_path": "packages/05/cards/J03-503.md"
+    },
+    {
+      "id": "J03-504",
+      "package": "05",
+      "title": "Observe and confine arbitrary shell subprocesses",
+      "depends_on": [
+        "J03-503",
+        "J03-502"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/qualify_executor.py",
+        "scripts/document_flow/worker/tool_guard.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/worker/command_boundary.py",
+        "scripts/document_flow/worker/monitor/**",
+        "tests/bench/document_flow/test_command_boundary.py"
+      ],
+      "invariant": "Shell access cannot bypass file telemetry, Core write restrictions or host isolation.",
+      "steps": [
+        "Choose and prove OS-level file access/write mediation for descendants; distinguish build I/O from model-visible source reads.",
+        "Mount protected product regions read-only or mediate writes, with explicit scratch/output accounting and no product write loophole.",
+        "Record exec tree, file accesses, denied attempts and actual exit/timeout results; unavailable monitoring blocks release."
+      ],
+      "red": "Python/Java subprocess reads forbidden source, shell redirects outside envelope, detached process or writable scratch link escapes: live probes must fail.",
+      "green": "Native and shell actions share stage semantics and complete measurements; build outputs are bounded separate derived artifacts.",
+      "test": "python -m pytest tests/bench/document_flow/test_command_boundary.py -q; live OS-boundary adversarial probe",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-504.md",
+      "result_path": "packages/05/cards/J03-504.md"
+    },
+    {
+      "id": "J03-505",
+      "package": "05",
+      "title": "Enforce isolated Worker network and filesystem policy",
+      "depends_on": [
+        "J03-504",
+        "J03-208"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "backlog/product/v3/document-flow-benchmark/packages/00/host-profile-plan.md",
+        "scripts/qualify_executor.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/worker/Containerfile",
+        "scripts/document_flow/worker/isolation.py",
+        "scripts/document_flow/worker/proxy/**",
+        "tests/bench/document_flow/test_worker_isolation.py"
+      ],
+      "invariant": "Worker reaches only the attested inference endpoint and its public sandbox, while product services retain private Kafka/DB connectivity.",
+      "steps": [
+        "Build pinned external-agent image with no judge package, no Docker socket, non-root and restricted privileges.",
+        "Use an inference allow-list proxy with DNS/redirect/IP bypass tests; separate command and product networks.",
+        "Inspect effective mounts/user/capabilities/rootfs/network, not intended launch flags; preserve immutable config."
+      ],
+      "red": "Extra mount, host gateway route, inherited proxy, writable rootfs, external redirect or hidden asset visibility fails preflight.",
+      "green": "Live boundary policy works in the same environment used by Worker commands; legitimate inference protocol remains possible.",
+      "test": "python -m pytest tests/bench/document_flow/test_worker_isolation.py -q; live inspect/egress/mount probes",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-505.md",
+      "result_path": "packages/05/cards/J03-505.md"
+    },
+    {
+      "id": "J03-506",
+      "package": "05",
+      "title": "Seal actual host/agent/model attestation",
+      "depends_on": [
+        "J03-505",
+        "J03-105"
+      ],
+      "read_set": [
+        "scripts/document_flow/worker/isolation.py",
+        "scripts/document_flow/worker/telemetry.py",
+        "scripts/document_flow/store.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/attest.py",
+        "scripts/document_flow/probes.py",
+        "tests/bench/document_flow/test_attestation.py"
+      ],
+      "invariant": "Before/after probes attest the actual executing identities and detect named or renamed judge leaks.",
+      "steps": [
+        "Bind image/container/wheel/config/tokenizer/provider/session identities and run-scoped sentinel outside all mounts.",
+        "Probe access by path, content, renamed mounted sentinel, network and forbidden tools before/after Worker work.",
+        "Seal measured facts outside Worker control; release requires provider/weights/quantization evidence supported by endpoint."
+      ],
+      "red": "Declared but unmeasured identity, hidden-pack leak, changed model/container, replayed attestation or missing final probe invalidates.",
+      "green": "Positive and deliberately broken live environments produce expected check IDs; free-provider pilot marked non-release if immutable profile unavailable.",
+      "test": "python -m pytest tests/bench/document_flow/test_attestation.py -q; live positive/negative attestation probes",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-506.md",
+      "result_path": "packages/05/cards/J03-506.md"
+    },
+    {
+      "id": "J03-507",
+      "package": "05",
+      "title": "Wire runner CLI and durable failure handling",
+      "depends_on": [
+        "J03-506",
+        "J03-409",
+        "J03-305"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/CONTRACTS.md",
+        "scripts/document_flow/worker/adapter.py",
+        "scripts/document_flow/core_bridge.py",
+        "scripts/document_flow/reports.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/__init__.py",
+        "scripts/document_flow/__main__.py",
+        "scripts/document_flow/runner.py",
+        "scripts/document_flow/preflight.py",
+        "tests/bench/document_flow/test_runner_cli.py"
+      ],
+      "invariant": "A run preserves evidence on all failure paths and does not start a Worker before required preflight succeeds.",
+      "steps": [
+        "Implement proposed CLI argv contract, unique output directories, pre-registered run identity and snapshot-bound build lifecycle.",
+        "Wire collector, Worker pause/resume, system judge, replay and report generation without auto-approving Gates.",
+        "Enforce documented exits, timeouts/cancellation and run-owned cleanup; no --force deletion of existing results."
+      ],
+      "red": "Malformed args, preflight failure, early crash, missing operator decision or colliding output path leaves honest artifacts and nonzero exit.",
+      "green": "Scripted end-to-end fixture produces all report states with correct exits; synthetic evidence cannot become release-pass.",
+      "test": "python -m pytest tests/bench/document_flow/test_runner_cli.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-507.md",
+      "result_path": "packages/05/cards/J03-507.md"
+    },
+    {
+      "id": "J03-508",
+      "package": "05",
+      "title": "Verify adapter with real process and no scored Worker campaign",
+      "depends_on": [
+        "J03-507"
+      ],
+      "read_set": [
+        "scripts/document_flow/runner.py",
+        "backlog/product/v3/document-flow-benchmark/packages/00/worker-feasibility.md",
+        "scripts/document_flow/worker/profile.json"
+      ],
+      "write_set": [
+        "tests/bench/document_flow/test_external_adapter_live.py",
+        "backlog/product/v3/document-flow-benchmark/packages/05/adapter-probe-protocol.md"
+      ],
+      "invariant": "External process integration is proven before calibration without masquerading as a completed benchmark pilot.",
+      "steps": [
+        "Run real little-coder startup and documented scripted/mock-provider transport probe if available, on public non-benchmark fixture.",
+        "Verify tool/compaction/halt wiring, extension inventory and identity; no target Change execution yet.",
+        "Record limitations if actual compaction/thinking cannot be probed without inference; retain those checks for the later pilot."
+      ],
+      "red": "Process launches but executes forbidden tool, misses transcript events, or leaks parent directory: probe must fail with evidence.",
+      "green": "Real process boundary and transport tested; explicit synthetic/non-release classification retained.",
+      "test": "python -m pytest tests/bench/document_flow/test_external_adapter_live.py -q (explicit live profile, not silent skip)",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-508.md",
+      "result_path": "packages/05/cards/J03-508.md"
+    },
+    {
+      "id": "J03-601",
+      "package": "06",
+      "title": "Implement process-artifact mutants",
+      "depends_on": [
+        "J03-508"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/MUTATION-PLAN.md",
+        "scripts/document_flow/oracles/**",
+        "process/bench/cases/J03-document-flow/oracle/reference/manifest.json"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/mutations/process/**",
+        "tests/bench/document_flow/test_process_mutants.py"
+      ],
+      "invariant": "Process calibration mutates real artifacts and authenticated action fixtures, not check-result booleans.",
+      "steps": [
+        "Implement M01–M08 and M21/M23 from the frozen matrix with precise source patch/asserted action.",
+        "Keep valid surrounding fixture evidence so the intended defect reaches the relevant oracle.",
+        "Include corrected-keyword nonsense, bad routing, oversized slice, missing edge, bad Red, frozen test weakening, state edit and early write."
+      ],
+      "red": "A mutant is declared killed only by collection failure or arbitrary false check; calibration test must reject that result.",
+      "green": "Every process mutant reaches its expected check, good control passes, mutation bytes and origins are recorded.",
+      "test": "python -m pytest tests/bench/document_flow/test_process_mutants.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-601.md",
+      "result_path": "packages/06/cards/J03-601.md"
+    },
+    {
+      "id": "J03-602",
+      "package": "06",
+      "title": "Implement Java functional mutants",
+      "depends_on": [
+        "J03-601"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/MUTATION-PLAN.md",
+        "process/bench/cases/J03-document-flow/oracle/reference/**",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/mutations/functional/**",
+        "tests/bench/document_flow/test_functional_mutants.py"
+      ],
+      "invariant": "Functional mutants are compiled faulty Java candidates tested by real hidden clients.",
+      "steps": [
+        "Implement M09–M13 and M22 as separate patches on the private reference.",
+        "Validate each patch applies cleanly and compiles before scoring; preserve unchanged reference control.",
+        "Map duplicate/version/late/registrar/actor/hardcode defects to named semantic assertions."
+      ],
+      "red": "Changing only an expected JSON or failing compilation must not count as a functional mutant kill.",
+      "green": "Each mutant executes real scenario and fails expected check ID; baseline/reference hashes remain untouched.",
+      "test": "python -m pytest tests/bench/document_flow/test_functional_mutants.py -q; live functional mutant matrix",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-602.md",
+      "result_path": "packages/06/cards/J03-602.md"
+    },
+    {
+      "id": "J03-603",
+      "package": "06",
+      "title": "Implement Java delivery and atomicity mutants",
+      "depends_on": [
+        "J03-602"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/MUTATION-PLAN.md",
+        "process/bench/cases/J03-document-flow/oracle/reference/**",
+        "scripts/document_flow/faults.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/mutations/resilience/**",
+        "tests/bench/document_flow/test_resilience_mutants.py"
+      ],
+      "invariant": "Fault/replay mutants are detected at measured transaction boundaries rather than by infrastructure accidents.",
+      "steps": [
+        "Implement M14–M20, each changing one inbox/outbox/DLQ/replay/restart/transaction property.",
+        "Execute measured fault points and compare preserved observations against independent interpreter and SQL assertions.",
+        "Keep correct reference rerun controls to diagnose harness instability."
+      ],
+      "red": "Restart not reached, outage never restored or wrong build fails before fault; count as invalid calibration, never kill.",
+      "green": "All critical resilience mutants fail the expected IDs with evidence of actual fault trigger and observable violation.",
+      "test": "python -m pytest tests/bench/document_flow/test_resilience_mutants.py -q; live resilience mutant matrix",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-603.md",
+      "result_path": "packages/06/cards/J03-603.md"
+    },
+    {
+      "id": "J03-604",
+      "package": "06",
+      "title": "Implement score/provenance and boundary mutants",
+      "depends_on": [
+        "J03-603"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/MUTATION-PLAN.md",
+        "scripts/document_flow/replay.py",
+        "scripts/document_flow/attest.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/mutations/integrity/**",
+        "tests/bench/document_flow/test_integrity_mutants.py"
+      ],
+      "invariant": "Recomputed totals and effective isolation reject forged summaries and missing/substituted provenance.",
+      "steps": [
+        "Implement M24 plus M25–M28: rehashed totals/checks, truncated event chain, oracle mount/rename, identity substitution and omitted campaign member.",
+        "Exercise replay on mutated disk trees including attacker-updated local hashes.",
+        "Distinguish valid observed misconduct from invalid broken trust root."
+      ],
+      "red": "Self-hash alone lets a forged total pass, or missing campaign member improves score; tests expose the issue.",
+      "green": "Every integrity mutation yields expected cap/invalidity/check classification, not an accidental exception.",
+      "test": "python -m pytest tests/bench/document_flow/test_integrity_mutants.py -q",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-604.md",
+      "result_path": "packages/06/cards/J03-604.md"
+    },
+    {
+      "id": "J03-605",
+      "package": "06",
+      "title": "Run complete calibration and freeze judge pack",
+      "depends_on": [
+        "J03-604"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/MUTATION-PLAN.md",
+        "process/bench/cases/J03-document-flow/mutations/**",
+        "scripts/document_flow/replay.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/calibrate.py",
+        "process/bench/cases/J03-document-flow/mutations/manifest.json",
+        "process/bench/cases/J03-document-flow/reports/calibration-index.md",
+        "tests/bench/document_flow/test_calibration.py"
+      ],
+      "invariant": "All critical mutants and >=90% of the frozen 28-mutant population are detected before any benchmark Worker run.",
+      "steps": [
+        "Run positive reference and negative seed, then full matrix using pristine per-mutant copies.",
+        "Report exact expected/observed IDs, build/fault/evidence hashes, kill/survive/invalid and denominators.",
+        "Freeze registry/budgets/oracle/reference/generator/hidden-source hashes; revise before pilot if calibration fails, never retroactively."
+      ],
+      "red": "Missing mutant, unexpected error counted as kill, hidden denominator shrink or reference failure prevents calibration acceptance.",
+      "green": "All critical killed; at least 26/28 total with zero unexplained invalid calibration cases; two replays agree.",
+      "test": "python -m pytest tests/bench/document_flow/test_calibration.py -q; python -m scripts.document_flow calibrate --plan <manifest> --out <fresh-output>",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-605.md",
+      "result_path": "packages/06/cards/J03-605.md"
+    },
+    {
+      "id": "J03-701",
+      "package": "07",
+      "title": "Capture clean qualification build and public/judge inventories",
+      "depends_on": [
+        "J03-605"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "scripts/wheel_evidence.py",
+        "scripts/sync_assets.py",
+        "scripts/document_flow/preflight.py"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/07/build-protocol.md",
+        "process/bench/cases/J03-document-flow/reports/qualification-index.md"
+      ],
+      "invariant": "Qualification names a clean benchmark implementation commit and hashes the actual wheel/judge/public inputs.",
+      "steps": [
+        "Commit only reviewed package changes per policy, then build clean wheel and images with recorded artifact dependencies.",
+        "Verify public inventory excludes private source/reference/mutants; attest package/wheel/judge hashes and clean tree.",
+        "Pre-register campaign membership/profile/seeds and preserve private judge root outside implementation checkout."
+      ],
+      "red": "Dirty build, stale wheel, mismatched lock, judge artifact in public wheel or unregistered run cannot qualify.",
+      "green": "Immutable build and inventory manifest references real clean SHA and independent evidence store.",
+      "test": "Read-only clean-tree checks; wheel evidence builder at verified interface; J03 preflight; asset sync --check",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-701.md",
+      "result_path": "packages/07/cards/J03-701.md"
+    },
+    {
+      "id": "J03-702",
+      "package": "07",
+      "title": "Qualify Windows baseline, framework and system harness",
+      "depends_on": [
+        "J03-701"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "tests/smoke-test.ps1",
+        "tests/validate-layout.ps1"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/07/windows-evidence-index.md"
+      ],
+      "invariant": "Windows acceptance covers real Java baseline/target controls and current framework integration.",
+      "steps": [
+        "Run Java 21 offline baseline unit/integration/public system smoke on Windows host with pinned Linux Docker stack.",
+        "Run reference/seed hidden controls and deterministic replay; save host versus container OS distinctions.",
+        "Run framework pytest, PowerShell smoke/layout, read-only asset drift and legacy search without rewriting existing evidence."
+      ],
+      "red": "Any required skip, unavailable tool or baseline/reference failure blocks Windows acceptance.",
+      "green": "All mandatory checks pass with full commands/exits, logs and actual host/image versions; working tree stays clean.",
+      "test": "See RUNBOOK Windows command matrix; save all raw output outside tracked tree.",
+      "kind": "qualification",
+      "status": "planned",
+      "card_path": "cards/J03-702.md",
+      "result_path": "packages/07/cards/J03-702.md"
+    },
+    {
+      "id": "J03-703",
+      "package": "07",
+      "title": "Qualify POSIX baseline, framework and recovery",
+      "depends_on": [
+        "J03-702"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "tests/smoke-test.sh",
+        "tests/validate-layout.sh"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/07/posix-evidence-index.md"
+      ],
+      "invariant": "POSIX evidence is a real Linux/POSIX execution, separately identified from Git Bash on Windows.",
+      "steps": [
+        "Use clean checkout/artifacts under Linux/WSL/container host profile and Java 21 to run baseline/build/public system checks.",
+        "Run POSIX smoke/layout and evidence-store interrupted-write recovery; compare variant/replay hashes to Windows.",
+        "Retain unavailable checks as blockers; do not label Git Bash-only execution full Linux qualification."
+      ],
+      "red": "Platform-specific path/link/encoding or recovery failure must be reported, not normalized out.",
+      "green": "All required POSIX checks pass, logical variants/scores reproduce and host distinctions are documented.",
+      "test": "See RUNBOOK POSIX command matrix; no mandatory live check may silently skip.",
+      "kind": "qualification",
+      "status": "planned",
+      "card_path": "cards/J03-703.md",
+      "result_path": "packages/07/cards/J03-703.md"
+    },
+    {
+      "id": "J03-704",
+      "package": "07",
+      "title": "Run fully attested external Worker pilot",
+      "depends_on": [
+        "J03-703"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "scripts/document_flow/worker/profile.json",
+        "process/bench/cases/J03-document-flow/reports/calibration-index.md"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/07/pilot-evidence-index.md"
+      ],
+      "invariant": "Pilot is an actual little-coder + poolside/laguna-xs-2.1 execution after successful mutation calibration.",
+      "steps": [
+        "Preflight endpoint/tokenizer/thinking/profile and effective disabled tools; preserve exact provider identity without credentials.",
+        "Launch fresh isolated session/product and collect all stages, compactions, tools and measured usage; pause genuine Human Gates.",
+        "Build/run actual resulting stack and replay evidence; free provider lacking fixed identity is explicitly non-release."
+      ],
+      "red": "No model access, rate limit before valid run, unmeasured provider or artificial transcript cannot become a pilot result.",
+      "green": "Pilot outcome is recorded honestly even if Worker fails; full provenance and failure classification survive.",
+      "test": "python -m scripts.document_flow run --plan <pilot-plan> --run-id <pilot-id> --out <fresh-root>; replay afterward",
+      "kind": "qualification",
+      "status": "planned",
+      "card_path": "cards/J03-704.md",
+      "result_path": "packages/07/cards/J03-704.md"
+    },
+    {
+      "id": "J03-705",
+      "package": "07",
+      "title": "Execute three-run campaign and independent replay",
+      "depends_on": [
+        "J03-704"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "scripts/document_flow/campaign.py",
+        "scripts/document_flow/replay.py"
+      ],
+      "write_set": [
+        "backlog/product/v3/document-flow-benchmark/packages/07/campaign-evidence-index.md"
+      ],
+      "invariant": "Campaign includes at least three clean independent runs on one frozen profile; failures are never cherry-picked out.",
+      "steps": [
+        "Use preregistered schedule, new session/volumes/sandbox for every member and actual Human Gate receipts.",
+        "Preserve all reports regardless of failure; identical evidence replay twice must reproduce numeric results.",
+        "Run campaign aggregate and compatible-profile comparison (synthetic comparison clearly labelled if no second real profile authorized)."
+      ],
+      "red": "Missing/invalid member produces null campaign; rerunning failure under same ID or dropping low score is rejected.",
+      "green": "All required run directories and source evidence exist; aggregate and diagnostic tables re-evaluate from disk; no guaranteed Worker success is assumed.",
+      "test": "python -m scripts.document_flow campaign --plan <campaign-plan> --runs <root> --out <fresh-report>; replay each member twice",
+      "kind": "qualification",
+      "status": "planned",
+      "card_path": "cards/J03-705.md",
+      "result_path": "packages/07/cards/J03-705.md"
+    },
+    {
+      "id": "J03-706",
+      "package": "07",
+      "title": "Close acceptance matrix and publish benchmark usage docs",
+      "depends_on": [
+        "J03-705"
+      ],
+      "read_set": [
+        "backlog/product/v3/document-flow-benchmark/COVERAGE.md",
+        "backlog/product/v3/document-flow-benchmark/RUNBOOK.md",
+        "docs/bench.md",
+        "docs/bench.ru.md",
+        "tests/README.md"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/README.md",
+        "docs/bench.md",
+        "docs/bench.ru.md",
+        "tests/README.md",
+        "backlog/product/v3/document-flow-benchmark/packages/07/RESULT.md",
+        "backlog/product/v3/document-flow-benchmark/IMPLEMENTATION-STATUS.md"
+      ],
+      "invariant": "Completion means all 15 acceptance criteria have evidence, not merely green runner unit tests.",
+      "steps": [
+        "Reconcile every acceptance row, delivery requirement and 28-mutant row with immutable evidence refs and exact hashes.",
+        "Document install/provision/run/replay/compare, 1..10000 semantics, invalidity, threats, limitations and next work in English/Russian.",
+        "Verify active J03 dispatch/inventory, preserve M01–M03/J01, check links and dirty state; write truthful completion verdict."
+      ],
+      "red": "Missing live stack/pilot/platform evidence or stale hash prevents marking complete regardless of unit counts.",
+      "green": "Every required criterion is passed or explicitly blocking; benchmark ready only when all pass; no push/merge implied.",
+      "test": "Full acceptance reconciliation; docs link checks; git diff --check; clean-tree and report-schema/replay verification.",
+      "kind": "qualification",
+      "status": "planned",
+      "card_path": "cards/J03-706.md",
+      "result_path": "packages/07/cards/J03-706.md"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "card_id": "J03-000",
+  "status": "blocked",
+  "check_id": "J03-000-ENTRY",
+  "framework_version": "3.0.0",
+  "source_sha": "520421e3e8a0739229560860403609d9594e09b5",
+  "qualification": {
+    "result_path": "backlog/product/v3/qualification-fixes/QF-025-wave3-engineering-qualification/RESULT.md",
+    "result_sha256": "b827fbd54fbac1e325bff632139ffe1915f681f3012a9be43f79364ff001b970",
+    "tracked_at_source_sha": true,
+    "recorded_parent_sha": "082e6f429a0a4e16f4f1cb5f90ff71b7ac385bc9",
+    "recorded_parent_is_ancestor": true,
+    "classification": "engineering-passed; reference-pending"
+  },
+  "inputs": {
+    "instruction_sha256": "b21881e0f7121b467d1c1337c999c0af75561aa91d395d472778eb1bd591152e",
+    "version_file_sha256": "2985be8b28d3ade858e8d8fb4bc22f565b1bf6020dff982dce141f7721b9999c"
+  },
+  "readiness": {
+    "clean_tree": false,
+    "dirty_entry_count_before_result_files": 82,
+    "ready": false,
+    "blocker": "J03 planning files are not yet committed separately and a concurrent M03 oracle modification is present."
+  },
+  "evidence": {
+    "kind": "read-only readiness check",
+    "result_path": "backlog/product/v3/document-flow-benchmark/packages/00/cards/J03-000.md"
+  }
+}

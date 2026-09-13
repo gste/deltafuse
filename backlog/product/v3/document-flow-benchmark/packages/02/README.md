@@ -1,0 +1,29 @@
+# Package 02 — Working Java seed
+
+Status: planned; no package implementation/result is asserted.
+Commit boundary: `bench: add working Java document flow seed`.
+
+## Cards in default order
+
+- [J03-201 — Pin Java reactor and offline dependency inventory](../../cards/J03-201.md)
+- [J03-202 — Publish baseline event/API contracts](../../cards/J03-202.md)
+- [J03-203 — Create isolated service schemas and migrations](../../cards/J03-203.md)
+- [J03-204 — Implement document baseline commands](../../cards/J03-204.md)
+- [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md)
+- [J03-206 — Implement reliable Kafka inbox/outbox delivery](../../cards/J03-206.md)
+- [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md)
+- [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md)
+- [J03-209 — Prove public baseline end to end](../../cards/J03-209.md)
+- [J03-210 — Add realistic noise and safe public pack installation](../../cards/J03-210.md)
+
+Use [EXECUTOR.md](../../EXECUTOR.md) for bounded execution and evidence handling.
+Write card results under `cards/<ID>.md` within this package directory.
+After all cards satisfy their acceptance, write `RESULT.md` using
+[the result template](../../RESULT-TEMPLATE.md); do not prefill it as passed.
+
+Each package closes with evidence review, exact source identities and a focused
+commit or small commit sequence. Raw logs/runs remain in the external judge
+evidence store. A result-index commit may record a preceding implementation
+commit hash; do not invent a self-referential SHA.
+
+The next package cannot treat this README as completion evidence.
