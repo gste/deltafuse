@@ -415,7 +415,7 @@
       "green": "mvn --offline verify succeeds on the empty reactor under Java 21; dependency lock hashes are measured.",
       "test": "mvn --offline -f <case>/seed/pom.xml verify; python -m pytest tests/bench/document_flow/test_dependency_inventory.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-201.md",
       "result_path": "packages/02/cards/J03-201.md"
     },

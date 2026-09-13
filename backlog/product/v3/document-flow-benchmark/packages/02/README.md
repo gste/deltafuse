@@ -1,11 +1,11 @@
 # Package 02 — Working Java seed
 
-Status: planned; no package implementation/result is asserted.
+Status: in_progress; J03-201 is complete and later package cards remain planned.
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
 
-- [J03-201 — Pin Java reactor and offline dependency inventory](../../cards/J03-201.md)
+- [J03-201 — Pin Java reactor and offline dependency inventory](../../cards/J03-201.md) — [result](cards/J03-201.md)
 - [J03-202 — Publish baseline event/API contracts](../../cards/J03-202.md)
 - [J03-203 — Create isolated service schemas and migrations](../../cards/J03-203.md)
 - [J03-204 — Implement document baseline commands](../../cards/J03-204.md)
@@ -27,3 +27,11 @@ evidence store. A result-index commit may record a preceding implementation
 commit hash; do not invent a self-referential SHA.
 
 The next package cannot treat this README as completion evidence.
+
+## Evidence index
+
+- [Package result](RESULT.md)
+- [J03-201 result](cards/J03-201.md)
+- Java reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
+- Dependency inventory: `process/bench/cases/J03-document-flow/dependencies.lock.json`
+- Focused inventory tests: `tests/bench/document_flow/test_dependency_inventory.py`
