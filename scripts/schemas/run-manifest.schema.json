@@ -31,6 +31,8 @@
         "network_policy": { "$ref": "#/$defs/attested" },
         "runtime": { "$ref": "#/$defs/attested" },
         "image": { "$ref": "#/$defs/attested" },
+        "image_digest": { "$ref": "#/$defs/attested" },
+        "wheel_sha256": { "$ref": "#/$defs/attested" },
         "mounts": { "$ref": "#/$defs/attested" },
         "release_cap": { "$ref": "#/$defs/attested" },
         "boundary_probe": { "$ref": "#/$defs/attested" }

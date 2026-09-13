@@ -634,10 +634,17 @@ class SandboxIO:
     envelope is read from `deltafuse next --json`, never from a local guess.
     Fail-closed (QF-001): with no envelope, an empty envelope or an envelope
     error, product writes are denied — a Core failure never widens access.
+
+    QF-019: shell commands cross the execution boundary only through a
+    CommandExecutor (`command_executor`). In release mode there is no local
+    subprocess fallback: without an isolated command executor every shell
+    command is refused and journaled.
     """
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, release_mode: bool = False):
         self.root = root.resolve()
+        self.release_mode = release_mode
+        self.command_executor = None
         self.hallucinated_paths = 0
         self.envelope_violations = 0
         self.envelope_errors = 0
@@ -655,6 +662,7 @@ class SandboxIO:
         # QF-004: staging hooks — minimal command environment, the controlled
         # interpreter (substituted for the `python` token) and the escape
         # walker (new files in staging outside the work dir since last call).
+        # LEGACY local-dev path only; the release path uses command_executor.
         self.exec_env: dict | None = None
         self.interpreter: str | None = None
         self.escape_check_fn = None
@@ -766,9 +774,22 @@ class SandboxIO:
                 self.envelope_violations += 1
             self._record("shell", f"rejected: {reason}", command=command[:200])
             return f"ERROR: command not allowed: {reason}"
-        # QF-004/QF-005: Worker commands execute with the controlled staging
-        # interpreter — `python ...` and `pytest ...` are canonized at the
-        # execution boundary, never resolved through a stray PATH.
+        if self.command_executor is not None:
+            return self._shell_via_executor(argv, timeout)
+        if self.release_mode:
+            # QF-019: release commands never execute through a local
+            # subprocess — no executor, no execution.
+            self.envelope_violations += 1
+            self._record(
+                "shell",
+                "rejected: release mode requires an isolated command executor",
+                command=" ".join(argv),
+            )
+            return "ERROR: release command execution requires an isolated command executor"
+        # QF-004/QF-005 local-dev fallback: Worker commands execute with the
+        # controlled staging interpreter — `python ...` and `pytest ...` are
+        # canonized at the execution boundary, never resolved through a
+        # stray PATH.
         if self.interpreter:
             head = argv[0].lower()
             if head == "python":
@@ -793,14 +814,40 @@ class SandboxIO:
         except OSError as ex:
             self._record("shell", f"error: cannot execute: {ex}", command=" ".join(argv))
             return f"ERROR: cannot execute: {ex}"
+        return self._finish_shell(argv, before, proc.returncode,
+                                  (proc.stdout or "") + (proc.stderr or ""))
+
+    def _shell_via_executor(self, argv: list[str], timeout: int) -> str:
+        """QF-019: execute parsed argv through the CommandExecutor boundary."""
+        from qualify_executor import CommandResult, ExecutorError
+
+        before = dict(self.inventory_fn()) if self.inventory_fn else {}
+        try:
+            result = self.command_executor.run(argv, cwd=self.root, timeout=timeout)
+        except ExecutorError as ex:
+            result = CommandResult("container_error", None, "", str(ex))
+        if result.kind == "timeout":
+            self._record("shell", f"error: timed out after {timeout}s",
+                         command=" ".join(argv), exit_code=None)
+            return f"ERROR: command timed out after {timeout}s"
+        if result.kind in ("container_error", "spawn_error"):
+            detail = (result.stderr or result.detail or "unknown").strip()[:200]
+            self._record("shell", f"error: {result.kind}: {detail}",
+                         command=" ".join(argv), exit_code=result.exit_code)
+            return f"ERROR: command execution failed ({result.kind}): {detail}"
+        combined = (result.stdout or "") + (result.stderr or "")
+        return self._finish_shell(argv, before, result.exit_code or 0, combined)
+
+    def _finish_shell(self, argv: list[str], before: dict, returncode: int,
+                      output: str) -> str:
         # QF-003: paths changed by the command itself (inventory diff) are
         # attributed to this shell event.
         changed: list[str] = []
         if self.inventory_fn:
             after = dict(self.inventory_fn())
             changed = sorted(p for p in after if before.get(p) != after.get(p))
-        outcome = "ok" if proc.returncode == 0 else f"error: exit {proc.returncode}"
-        if proc.returncode == 4:
+        outcome = "ok" if returncode == 0 else f"error: exit {returncode}"
+        if returncode == 4:
             # QF-006: pytest usage error = file/module not found = T6.
             self.hallucinated_paths += 1
         # QF-004: anything appearing in staging outside the work dir is an
@@ -810,9 +857,8 @@ class SandboxIO:
             self.staging_escapes += len(escaped)
             outcome += f"; staging_escape: {','.join(escaped[:5])}"
         self._record("shell", outcome,
-                     paths_written=changed, command=" ".join(argv), exit_code=proc.returncode)
-        out = ((proc.stdout or "") + (proc.stderr or ""))[-4000:]
-        return f"exit={proc.returncode}\n{out}"
+                     paths_written=changed, command=" ".join(argv), exit_code=returncode)
+        return f"exit={returncode}\n{output[-4000:]}"
 
 
 def _get_json(url: str) -> dict:
@@ -915,7 +961,7 @@ def _core_leash_violations(sandbox: Path, files: list[str]) -> tuple[int, list[s
 
 def drive_worker(
     sandbox: Path, base_url: str, model: str, case_id: str, system: str,
-    staging=None,
+    staging=None, command_executor=None, release_mode: bool = False,
 ) -> dict:
     """Drive the Worker agent loop in one clean sandbox; return call metrics.
 
@@ -936,6 +982,9 @@ def drive_worker(
     QF-004: when `staging` is given, commands run with the staging's minimal
     environment and the escape walker counts files appearing outside the work
     dir (`staging_escape`); see backlog/product/v3/qualification-threat-model.md.
+    QF-019: when `command_executor` is given, shell argv crosses the execution
+    boundary through it; `release_mode=True` forbids the local-subprocess
+    fallback entirely (model calls/scoring stay judge-side either way).
     """
     seed = f"Begin the case {case_id}. Run `deltafuse next` first."
     messages: list[dict] = [
@@ -948,13 +997,12 @@ def drive_worker(
         {"origin": "system", "source": "system-prompt", "content": system},
         {"origin": "framework", "source": "seed", "content": seed},
     ]
-    io = SandboxIO(sandbox)
+    io = SandboxIO(sandbox, release_mode=release_mode)
+    io.command_executor = command_executor
     expected_head = init_sandbox_git(sandbox)
     head = {"sha": expected_head}
     io.inventory_fn = lambda: inventory(sandbox, head["sha"])
     if staging is not None:
-        io.exec_env = staging.env()
-        io.interpreter = staging.interpreter()
         io.escape_check_fn = staging.escape_walker()
     calls: list[dict] = []
     unmeasured_usage = False
@@ -1544,47 +1592,17 @@ def _system_prompt(sandbox: Path) -> str:
     )
 
 
-def _run_worker_in_boundary(executor, sandbox: Path, model_probe: dict, case_id: str) -> dict:
-    """QF-013: run the Worker phase INSIDE the isolated boundary container.
-
-    Mounts: the run sandbox read/write plus the single runner script
-    read-only. The judge pack and the framework checkout are never mounted;
-    the endpoint is reached through the host gateway alias.
-    """
-    base_url = model_probe["host_base_url"]["value"].replace(
-        "127.0.0.1", "host.docker.internal"
-    )
-    qual_script = Path(__file__).resolve()
-    cmd = [
-        executor.runtime, "run", "--rm",
-        "--add-host", "host.docker.internal:host-gateway",
-        "-v", f"{sandbox}:/sandbox",
-        "-v", f"{qual_script}:/opt/qualify.py:ro",
-        "-w", "/sandbox",
-        executor.image,
-        "python", "/opt/qualify.py",
-        "--boundary-run",
-        "--sandbox", "/sandbox",
-        "--base-url", base_url,
-        "--model", model_probe["id"]["value"],
-        "--case", case_id,
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
-    metrics_path = sandbox / ".qual-metrics.json"
-    if proc.returncode != 0 or not metrics_path.is_file():
-        raise HostError(
-            f"boundary worker run failed (exit {proc.returncode}): "
-            f"{((proc.stderr or '') + (proc.stdout or ''))[-400:]}"
-        )
-    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-    metrics_path.unlink()
-    return metrics
-
-
 def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
              provenance_info: dict, executor_kind: str = "local-dev",
              executor=None) -> dict:
-    """One clean run: sandbox -> worker loop -> score -> thresholds."""
+    """One clean run: sandbox -> worker loop -> score -> thresholds.
+
+    QF-019: the Worker phase (model calls, tool orchestration) always stays
+    judge-side. Only the allowed shell argv of each turn crosses into the
+    isolated command container (`executor.command_session`); the container
+    never receives qualify.py, helper modules, the bench pack or the
+    framework checkout.
+    """
     from deltafuse.bench.init_product import init_bench_product
     from deltafuse.bench.score import score_product
 
@@ -1595,24 +1613,41 @@ def run_case(case_id: str, index: int, campaign_id: str, model_probe: dict,
         raise QualificationError(f"sandbox already exists: {sandbox}")
     init_bench_product(case_id, sandbox, framework_root=REPO)
 
+    system = _system_prompt(sandbox)
+    base_url = model_probe["host_base_url"]["value"]
+    model_id = model_probe["id"]["value"]
     if executor_kind == "isolated":
-        # QF-013: release campaigns execute the Worker inside the system
-        # boundary; the in-process runner would violate the isolation
-        # invariant and is never used here.
-        metrics = _run_worker_in_boundary(executor, sandbox, model_probe, case_id)
+        # QF-013/QF-019: release campaigns execute Worker shell commands
+        # inside the system boundary; the in-process runner would violate
+        # the isolation invariant and is never used here.
+        if executor is None or not hasattr(executor, "command_session"):
+            raise QualificationError(
+                "isolated executor cannot provide a command session"
+            )
+        session = executor.command_session(sandbox)
+        try:
+            metrics = drive_worker(
+                sandbox, base_url, model_id, case_id, system,
+                command_executor=session, release_mode=True,
+            )
+        finally:
+            session.stop()
     else:
         # local-dev only (QF-013): L1 staging work copy, capped at
-        # non-release verdicts by the executor.
+        # non-release verdicts by the executor. Commands run through the
+        # LocalCommandExecutor (pinned interpreter + allowlist env).
+        from qualify_executor import LocalCommandExecutor
         from qualify_staging import StagingRoot
 
         staging = StagingRoot.create(
             RUNS_DIR / campaign_id / "staging", build_venv=False, framework_root=REPO
         )
         work = staging.new_workdir(run_id, sandbox)
-        system = _system_prompt(sandbox)
         metrics = drive_worker(
-            work, model_probe["host_base_url"]["value"],
-            model_probe["id"]["value"], case_id, system, staging=staging,
+            work, base_url, model_id, case_id, system, staging=staging,
+            command_executor=LocalCommandExecutor(
+                interpreter=staging.interpreter(), env=staging.env()
+            ),
         )
         staging.collect_workdir(run_id, sandbox)
         staging.teardown()
@@ -1763,27 +1798,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                     default=["M01-cooldown", "M02-policy-stats", "M03-adversarial"])
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--campaign-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
-    # QF-013: internal mode — executed INSIDE the boundary container only.
-    ap.add_argument("--boundary-run", action="store_true", help=argparse.SUPPRESS)
-    ap.add_argument("--sandbox", help=argparse.SUPPRESS)
-    ap.add_argument("--base-url", help=argparse.SUPPRESS)
-    ap.add_argument("--model", help=argparse.SUPPRESS)
-    ap.add_argument("--case", help=argparse.SUPPRESS)
     return ap
-
-
-def _boundary_run_main(args) -> int:
-    """QF-013: Worker phase inside the isolated boundary; writes metrics."""
-    sandbox = Path(args.sandbox)
-    metrics = drive_worker(sandbox, args.base_url, args.model, args.case, _system_prompt(sandbox))
-    (sandbox / ".qual-metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
-    return 0
 
 
 def main_with_args(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    if args.boundary_run:
-        return _boundary_run_main(args)
 
     # Step 6: provenance is fail-closed — a dirty tree aborts the campaign.
     try:
@@ -1804,9 +1823,10 @@ def main_with_args(argv: list[str] | None = None) -> int:
         print(
             f"PENDING: {ex}\n"
             "Release qualification does not execute Worker-authored code "
-            "outside an isolated boundary. Provide a container runtime and "
-            "DELTAFUSE_QUAL_IMAGE, or run --executor local-dev for "
-            "development only (verdict capped at non-release)."
+            "outside an isolated boundary. Build the canonical command image "
+            "with `python scripts/build_qual_image.py`, export the digest "
+            "reference as DELTAFUSE_QUAL_IMAGE, or run --executor local-dev "
+            "for development only (verdict capped at non-release)."
         )
         return 2
 

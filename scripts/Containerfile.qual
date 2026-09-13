@@ -1,0 +1,25 @@
+# DeltaFuse qualification command image (QF-019).
+#
+# CANONICAL: build only via scripts/build_qual_image.py from a wheel produced
+# at a clean commit. The build context contains ONLY that wheel — no checkout,
+# no bench pack, no judge-side runner script ever enters this image. At
+# release time the executor passes already-parsed argv to `exec`; the image
+# itself carries no qualification logic, only the pinned tool surface the
+# Worker is allowed to call (deltafuse from the installed wheel, pytest, git).
+ARG BASE_IMAGE=python:3.12-slim-bookworm
+FROM ${BASE_IMAGE}
+
+ARG PYTEST_PIN=9.1.1
+
+# pinned tool dependencies: git backs the read-only VCS commands.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# the framework arrives only as the built wheel
+COPY deltafuse-*.whl /tmp/qual-wheel/
+RUN pip install --no-cache-dir /tmp/qual-wheel/deltafuse-*.whl "pytest==${PYTEST_PIN}" \
+    && rm -rf /tmp/qual-wheel
+
+# command containers run with cwd=/sandbox — the only mount of a run
+WORKDIR /sandbox

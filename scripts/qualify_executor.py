@@ -25,11 +25,43 @@ network connection. Any leak is a BoundaryViolation and blocks the campaign.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 EXECUTOR_KINDS = ("isolated", "local-dev")
+
+# QF-019: classification of one executed command. The SandboxIO layer maps
+# this onto its typed tool journal; nothing here depends on judge-side state.
+_COMMAND_KINDS = ("ok", "exit", "timeout", "spawn_error", "container_error")
+
+# A 125/126/127 exit of `runtime exec` may be the runtime itself failing
+# (container died, daemon error) rather than the guest command. Runtime
+# error text is the reliable discriminator; guest output never matches.
+_RUNTIME_ERROR = re.compile(r"\b(docker|podman)\b.{0,200}\berror\b|OCI runtime", re.IGNORECASE)
+
+
+@dataclass
+class CommandResult:
+    """Outcome of one command executed through a CommandExecutor.
+
+    kind: ok (exit 0) | exit (guest command ran, nonzero) | timeout
+    (wall clock exceeded) | spawn_error (command could not be started)
+    | container_error (the boundary itself failed). stdout/stderr are kept
+    (bounded by the caller); undecodable bytes are replaced and flagged.
+    """
+
+    kind: str
+    exit_code: int | None
+    stdout: str
+    stderr: str
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if self.kind not in _COMMAND_KINDS:
+            raise ValueError(f"unknown command result kind: {self.kind!r}")
 
 # The adversarial probe runs inside the boundary with this embedded script;
 # targets are supplied on stdin so no host path is baked into the image.
@@ -138,6 +170,142 @@ class LocalDevExecutor:
         return {"executed": False, "reason": "local-dev boundary probe not applicable"}
 
 
+# ------------------------------------------------------------ QF-019 executors
+
+
+class LocalCommandExecutor:
+    """CommandExecutor for local-dev: direct subprocess with the staging
+    interpreter and allowlist environment. Never used in release mode."""
+
+    kind = "local-dev"
+
+    def __init__(self, interpreter: str | None = None, env: dict | None = None):
+        self.interpreter = interpreter
+        self.env = env
+
+    def _canonize(self, argv: list[str]) -> list[str]:
+        """QF-005: `python ...`/`pytest ...` resolve to the pinned
+        interpreter, never through a stray PATH."""
+        if not self.interpreter:
+            return list(argv)
+        head = argv[0].lower()
+        if head == "python":
+            return [self.interpreter, *argv[1:]]
+        if head == "pytest":
+            return [self.interpreter, "-m", "pytest", *argv[1:]]
+        return list(argv)
+
+    def run(self, argv: list[str], cwd: Path, timeout: int) -> CommandResult:
+        argv = self._canonize(argv)
+        try:
+            proc = subprocess.run(
+                argv,
+                shell=False,
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                env=self.env,
+            )
+        except subprocess.TimeoutExpired:
+            return CommandResult("timeout", None, "",
+                                 f"command timed out after {timeout}s")
+        except OSError as ex:
+            return CommandResult("spawn_error", None, "", f"cannot execute: {ex}")
+        return CommandResult(
+            "ok" if proc.returncode == 0 else "exit",
+            proc.returncode,
+            proc.stdout or "",
+            proc.stderr or "",
+        )
+
+
+class ContainerCommandExecutor:
+    """QF-019: executes parsed argv inside ONE persistent command container.
+
+    Per run the executor starts a container from the pinned qual image with:
+    only the run sandbox mounted (rw), cwd=/sandbox, no network. The host
+    passes already-parsed argv to `exec` and receives stdout/stderr/exit
+    code. The container never receives qualify.py, helper modules, the bench
+    pack or the framework checkout — the Worker phase stays judge-side.
+    """
+
+    kind = "isolated"
+    container_cwd = "/sandbox"
+
+    def __init__(self, runtime: str, image: str):
+        self.runtime = runtime
+        self.image = image
+        self.sandbox: Path | None = None
+        self.container_id: str | None = None
+
+    def start(self, sandbox: Path) -> str:
+        """Start the persistent command container for one run."""
+        proc = subprocess.run(
+            [
+                self.runtime, "run", "-d", "--rm", "--network", "none",
+                "-v", f"{Path(sandbox).resolve()}:/sandbox",
+                "-w", self.container_cwd,
+                self.image, "sleep", "infinity",
+            ],
+            capture_output=True, text=True, timeout=300,
+        )
+        if proc.returncode != 0:
+            raise ExecutorUnavailable(
+                f"command container failed to start (exit {proc.returncode}): "
+                f"{((proc.stderr or '') + (proc.stdout or '')).strip()[:300]}"
+            )
+        cid = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else ""
+        if not cid:
+            raise ExecutorUnavailable("command container returned no id")
+        self.sandbox = Path(sandbox).resolve()
+        self.container_id = cid
+        return cid
+
+    def run(self, argv: list[str], cwd: Path, timeout: int) -> CommandResult:
+        if not self.container_id or self.sandbox is None:
+            raise ExecutorError("command container is not started")
+        if Path(cwd).resolve() != self.sandbox:
+            raise ExecutorError(
+                f"cwd {cwd} is not the mounted sandbox {self.sandbox}"
+            )
+        try:
+            proc = subprocess.run(
+                [self.runtime, "exec", self.container_id, *argv],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return CommandResult("timeout", None, "",
+                                 f"command timed out after {timeout}s")
+        except OSError as ex:
+            return CommandResult("container_error", None, "", f"runtime error: {ex}")
+        stderr = proc.stderr or ""
+        if proc.returncode in (125, 126, 127) and _RUNTIME_ERROR.search(stderr):
+            return CommandResult("container_error", proc.returncode,
+                                 proc.stdout or "", stderr)
+        stdout = proc.stdout or ""
+        malformed = "\ufffd" in (stdout + stderr)
+        return CommandResult(
+            "ok" if proc.returncode == 0 else "exit",
+            proc.returncode,
+            stdout,
+            stderr,
+            "malformed output bytes replaced" if malformed else "",
+        )
+
+    def stop(self) -> None:
+        if not self.container_id:
+            return
+        subprocess.run(
+            [self.runtime, "stop", "-t", "0", self.container_id],
+            capture_output=True, timeout=120,
+        )
+        self.container_id = None
+
+
 class IsolatedExecutor:
     """Container boundary: sandbox rw only, no pack/checkout, probe network none.
 
@@ -168,7 +336,38 @@ class IsolatedExecutor:
         )
         return proc.returncode == 0
 
-    def attest(self, probe_report: dict | None = None) -> dict:
+    @property
+    def release_ready(self) -> bool:
+        """QF-019: only an immutable digest reference is accepted for a
+        release campaign; a mutable tag is not a campaign identity."""
+        image = self.image or ""
+        return (
+            image.startswith("sha256:")
+            and len(image) == 71
+            and all(c in "0123456789abcdef" for c in image[7:])
+        )
+
+    def inspect_image_id(self) -> str | None:
+        """Measured image identity (config digest) from the runtime."""
+        if not self.runtime or not self.image:
+            return None
+        proc = subprocess.run(
+            [self.runtime, "image", "inspect", "--format", "{{.Id}}", self.image],
+            capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            return None
+        out = (proc.stdout or "").strip()
+        return out.splitlines()[-1] if out else None
+
+    def command_session(self, sandbox: Path) -> ContainerCommandExecutor:
+        """QF-019: persistent command container for one run's shell argv."""
+        session = ContainerCommandExecutor(self.runtime, self.image)
+        session.start(sandbox)
+        return session
+
+    def attest(self, probe_report: dict | None = None,
+               image_manifest: dict | None = None) -> dict:
         attestation = {
             "kind": _attest("isolated", "declared",
                             basis="runner invocation flag --executor isolated"),
@@ -182,11 +381,31 @@ class IsolatedExecutor:
                 basis="QF-013: only the run sandbox is mounted, read/write",
             ),
             "network_policy": _attest(
-                "probe:none", "declared",
-                basis="adversarial probe runs with --network none; Worker-run networking "
-                      "is limited to the configured LM Studio endpoint by the boundary image",
+                "none", "declared",
+                basis="command container and probe run with --network none; the LM "
+                      "Studio endpoint is called by the judge host, never by the container",
             ),
         }
+        # QF-019: the image identity is measured, and a build manifest is
+        # cross-checked — an image whose digest differs from its manifest
+        # never attests.
+        measured_id = self.inspect_image_id()
+        if measured_id:
+            attestation["image_digest"] = _attest(
+                measured_id, "measured", method="runtime image inspect --format {{.Id}}"
+            )
+        if image_manifest is not None:
+            manifest_id = image_manifest.get("image_id")
+            if measured_id and manifest_id != measured_id:
+                raise ExecutorError(
+                    f"image digest mismatch: runtime reports {measured_id!r} but the "
+                    f"build manifest recorded {manifest_id!r}"
+                )
+            attestation["wheel_sha256"] = _attest(
+                image_manifest.get("wheel_sha256"), "derived",
+                basis=("qual image build manifest (commit "
+                       f"{str(image_manifest.get('commit'))[:12]})"),
+            )
         if probe_report is not None:
             attestation["boundary_probe"] = _attest(
                 probe_report, "measured", method="embedded probe inside the boundary container"
@@ -248,6 +467,15 @@ def resolve_executor(mode: str):
             raise ExecutorUnavailable(
                 "no isolated executor on this host: need docker or podman plus "
                 "DELTAFUSE_QUAL_IMAGE (wheel deltafuse + pytest, no judge material)"
+            )
+        if not executor.release_ready:
+            # QF-019: a mutable tag is not a release identity. The digest
+            # reference is printed by the canonical build script.
+            raise ExecutorUnavailable(
+                "DELTAFUSE_QUAL_IMAGE must be an immutable digest reference "
+                "(sha256:...) for a release campaign; build the canonical image "
+                "with `python scripts/build_qual_image.py` and export the digest "
+                "reference it prints"
             )
         return executor
     raise ExecutorError(f"unknown executor mode: {mode!r}")
