@@ -476,7 +476,7 @@
       "green": "Fresh/upgrade migrations succeed on pinned PostgreSQL; roles enforce separation and baseline constraints.",
       "test": "mvn --offline -f <seed>/pom.xml verify -Pdb-integration (profile created by this card)",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-203.md",
       "result_path": "packages/02/cards/J03-203.md"
     },
