@@ -2,7 +2,7 @@
 
 Status: in_progress
 Package title: Scoring contracts
-Cards: J03-101 through J03-105 complete; J03-106 through J03-108 planned
+Cards: J03-101 through J03-106 complete; J03-107 and J03-108 planned
 
 ## Evidence index
 
@@ -11,6 +11,7 @@ Cards: J03-101 through J03-105 complete; J03-106 through J03-108 planned
 - [J03-103 result](cards/J03-103.md)
 - [J03-104 result](cards/J03-104.md)
 - [J03-105 result](cards/J03-105.md)
+- [J03-106 result](cards/J03-106.md)
 - Frozen registry: `scripts/document_flow/contracts/checks.json`
 - Registry loader: `scripts/document_flow/registry.py`
 - Focused registry tests: `tests/bench/document_flow/test_registry.py`
@@ -23,6 +24,8 @@ Cards: J03-101 through J03-105 complete; J03-106 through J03-108 planned
 - Focused run/campaign tests: `tests/bench/document_flow/test_run_campaign_schema.py`
 - Attestation/variant schemas: `scripts/document_flow/schemas/`
 - Focused attestation/variant tests: `tests/bench/document_flow/test_attestation_variant_schema.py`
+- Pure run evaluator: `scripts/document_flow/evaluate.py`
+- Focused evaluator tests: `tests/bench/document_flow/test_evaluate.py`
 
 ## Handoff
 
@@ -37,4 +40,6 @@ exact dependency-ready card in queue order is J03-105. J03-104 adds closed
 run/campaign envelopes with null invalid scores, explicit ceilings, immutable
 membership identity, and retained missing/not-run/invalid member records.
 J03-105 adds measured-versus-declared attestation and deterministic variant
-identity contracts. The first exact dependency-ready card is now J03-106.
+identity contracts. J03-106 derives exact run scores and deterministic failure
+precedence from registry facts and measured factors. The first exact
+dependency-ready card is now J03-107.

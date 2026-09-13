@@ -320,7 +320,7 @@
       "green": "Boundary table in SCORING-PLAN passes; order of input mappings cannot change the result.",
       "test": "python -m pytest tests/bench/document_flow/test_evaluate.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-106.md",
       "result_path": "packages/01/cards/J03-106.md"
     },
