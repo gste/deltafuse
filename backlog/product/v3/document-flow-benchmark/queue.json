@@ -567,7 +567,7 @@
       "green": "Kafka/Postgres integration cases prove redelivery, bounded polling and recovery, including publisher restart.",
       "test": "mvn --offline -f <seed>/pom.xml verify -Pmessaging-integration",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-206.md",
       "result_path": "packages/02/cards/J03-206.md"
     },

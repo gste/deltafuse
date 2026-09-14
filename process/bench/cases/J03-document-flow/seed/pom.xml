@@ -22,6 +22,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <spring-boot.version>3.5.11</spring-boot.version>
     <testcontainers.version>1.21.3</testcontainers.version>
+    <kafka.version>3.9.1</kafka.version>
     <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
     <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
     <maven-resources-plugin.version>3.4.0</maven-resources-plugin.version>
@@ -52,6 +53,7 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <dependency><groupId>org.apache.kafka</groupId><artifactId>kafka-clients</artifactId><version>${kafka.version}</version></dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -84,7 +86,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
-            <excludedGroups>db-integration</excludedGroups>
+            <excludedGroups>db-integration | messaging-integration</excludedGroups>
           </configuration>
         </plugin>
         <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>${maven-failsafe-plugin.version}</version></plugin>
@@ -133,11 +135,18 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
-              <excludedGroups combine.self="remove"/>
+              <excludedGroups>messaging-integration</excludedGroups>
             </configuration>
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>messaging-integration</id>
+      <build><plugins><plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId>
+        <configuration><excludedGroups>db-integration</excludedGroups></configuration>
+      </plugin></plugins></build>
     </profile>
   </profiles>
 </project>
