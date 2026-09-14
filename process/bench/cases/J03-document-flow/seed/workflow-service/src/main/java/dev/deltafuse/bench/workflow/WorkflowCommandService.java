@@ -87,10 +87,10 @@ public final class WorkflowCommandService {
                 "j03.workflow.decision-applied", null);
         String request = decisionRequest(operationId, eventId, decision);
         return transaction(connection -> {
-            DecisionResult replay = decisionReplay(connection, routeId, decisionId, request);
+            DecisionResult replay = decisionReplay(connection, operationId, routeId, decisionId, request);
             if (replay != null) return replay;
             RouteRow route = lockRoute(connection, operationId, routeId);
-            replay = decisionReplay(connection, routeId, decisionId, request);
+            replay = decisionReplay(connection, operationId, routeId, decisionId, request);
             if (replay != null) return replay;
             if (!route.documentId().equals(documentId) || !route.versionId().equals(versionId)
                     || !route.approverActorId().equals(actorId)) {
@@ -129,8 +129,8 @@ public final class WorkflowCommandService {
         }
     }
 
-    private DecisionResult decisionReplay(Connection connection, String routeId, String decisionId, String request)
-            throws SQLException {
+    private DecisionResult decisionReplay(Connection connection, String operationId, String routeId,
+            String decisionId, String request) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT operation_id, request_payload::text, result_event_id, result_state, result_domain_sequence "
                         + "FROM decision_receipt WHERE route_id=? AND decision_id=?")) {
@@ -138,11 +138,39 @@ public final class WorkflowCommandService {
             statement.setString(2, decisionId);
             try (ResultSet row = statement.executeQuery()) {
                 if (!row.next()) return null;
-                requireSame(row.getString(1), row.getString(2), request);
-                return new DecisionResult(row.getString(1), routeId, decisionId, row.getString(4),
+                // DEC-D: decision_id is the domain idempotency key of the
+                // route. The binding comparison ignores operation and event
+                // identities so a repeated decision under a new operation
+                // returns the prior result instead of conflicting.
+                requireSameDecisionBinding(operationId, row.getString(2), request);
+                return new DecisionResult(operationId, routeId, decisionId, row.getString(4),
                         row.getString(3), row.getLong(5));
             }
         }
+    }
+
+    private static void requireSameDecisionBinding(String operationId, String stored, String incoming) {
+        if (!sameDecisionBinding(stored, incoming)) {
+            throw new WorkflowFailure(ErrorCode.IDEMPOTENCY_CONFLICT, operationId,
+                    "decision id replayed with a different payload");
+        }
+    }
+
+    private static boolean sameDecisionBinding(String stored, String incoming) {
+        try {
+            JsonObj a = withoutAttemptIdentity(CanonicalJson.parse(stored).asObj());
+            JsonObj b = withoutAttemptIdentity(CanonicalJson.parse(incoming).asObj());
+            return a.equals(b);
+        } catch (IllegalArgumentException failure) {
+            return false;
+        }
+    }
+
+    private static JsonObj withoutAttemptIdentity(JsonObj obj) {
+        Map<String, JsonValue> members = new LinkedHashMap<>(obj.members());
+        members.remove("operation_id");
+        members.remove("event_id");
+        return JsonObj.of(members);
     }
 
     private static void requireSame(String operationId, String stored, String incoming) {

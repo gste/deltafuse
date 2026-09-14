@@ -20,6 +20,25 @@ Secrets are random per run and stored under the operator profile directory (`%LO
 in the checkout or Compose model. A reused run ID fails closed. Inspect with
 `./infra/stack.ps1 -Action status -RunId j03208probe`.
 
+## Public end-to-end suite
+
+With the stack up, run the public baseline suite from the benchmark case
+root (one level above this directory). It executes the approve and reject
+scenarios of `tests/system/fixtures`, the immutable-version and replay
+guards, and observes the run-owned Kafka topics from inside the private
+network:
+
+```bash
+python public_suite/baseline_suite.py \
+  --document-url http://127.0.0.1:18081 \
+  --workflow-url http://127.0.0.1:18082 \
+  --private-network j03-<run-id>_j03_private
+```
+
+Every assertion carries a stable public identifier (`J03-PUB-001` …
+`J03-PUB-012`); infrastructure failures are classified separately
+(`J03-PUB-INF-001`) and score nothing.
+
 ## Fault, evidence and cleanup
 
 Fault commands accept only five named run-owned services and verify the run

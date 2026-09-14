@@ -1,0 +1,21 @@
+{
+  "scenario": "approve",
+  "document": {
+    "document_id": "pub-doc-approve",
+    "title": "Public approve scenario"
+  },
+  "version": {
+    "version_id": "pub-ver-approve-1",
+    "content": "approve scenario body"
+  },
+  "decision": {
+    "decision_id": "pub-dec-approve-1",
+    "actor_id": "pub-approver-1",
+    "role": "approver",
+    "action": "APPROVE"
+  },
+  "expected": {
+    "final_state": "APPROVED",
+    "error_code": null
+  }
+}

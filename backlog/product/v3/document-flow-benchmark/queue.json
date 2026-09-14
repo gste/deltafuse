@@ -659,7 +659,7 @@
       "green": "All baseline public tests pass against the real pinned stack and retain logs on failure.",
       "test": "mvn --offline -f <seed>/pom.xml verify; python -m pytest tests/bench/document_flow/test_public_baseline.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-209.md",
       "result_path": "packages/02/cards/J03-209.md"
     },
