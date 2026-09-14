@@ -1,11 +1,11 @@
 # Package 03 — Generated oracle and system judge
 
-Status: planned; no package implementation/result is asserted.
+Status: in_progress; J03-301 is complete and later package cards remain planned.
 Commit boundary: `bench: add generated document flow oracle`.
 
 ## Cards in default order
 
-- [J03-301 — Generate replayable scenario variants](../../cards/J03-301.md)
+- [J03-301 — Generate replayable scenario variants](../../cards/J03-301.md) — [result](cards/J03-301.md)
 - [J03-302 — Build independent pure domain interpreter](../../cards/J03-302.md)
 - [J03-303 — Create private reference version-supersede implementation](../../cards/J03-303.md)
 - [J03-304 — Complete private reference parallel approval implementation](../../cards/J03-304.md)
@@ -25,3 +25,10 @@ evidence store. A result-index commit may record a preceding implementation
 commit hash; do not invent a self-referential SHA.
 
 The next package cannot treat this README as completion evidence.
+
+## Evidence index
+
+- [J03-301 result](cards/J03-301.md)
+- Frozen variant contract: `process/bench/cases/J03-document-flow/oracle/variant-contract.json`
+- Variant generator: `scripts/document_flow/variants.py`
+- Generator tests: `tests/bench/document_flow/test_variants.py`

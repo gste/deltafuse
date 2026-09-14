@@ -729,7 +729,7 @@
       "green": "Cross-platform golden variant hashes match; different seeds alter identities/schedules without altering required semantics.",
       "test": "python -m pytest tests/bench/document_flow/test_variants.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-301.md",
       "result_path": "packages/03/cards/J03-301.md"
     },

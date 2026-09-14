@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "contract_revision": "J03-public-contract-1",
+  "generator_version": 1,
+  "documents": {"min": 1, "max": 3},
+  "roles": {"expert": ["legal", "security"], "registrar": ["registrar"]},
+  "storylines": [
+    "approve",
+    "reject-expert",
+    "supersede-before-partial",
+    "supersede-after-partial",
+    "registrar-early",
+    "registrar-reject",
+    "actor-reuse",
+    "duplicate-decision"
+  ],
+  "invalid_labels": {
+    "late-decision": "IGNORED_LATE_DECISION",
+    "registrar-early": "EXPERT_REVIEW_INCOMPLETE",
+    "registrar-reject": "UNSUPPORTED_ACTION",
+    "actor-reuse": "ACTOR_ROLE_MISMATCH",
+    "closed-route": "IDENTITY_MISMATCH"
+  },
+  "delivery": {
+    "duplicate_bounds": [1, 2],
+    "crash_bounds": [1, 1],
+    "crash_points": ["after-commit-before-ack", "after-publish-before-sent"],
+    "crash_services": ["document-service", "workflow-service"]
+  },
+  "topics": {
+    "document": "j03.document-events",
+    "workflow": "j03.workflow-events"
+  },
+  "corpus": {
+    "calibration_seeds": [1, 2, 3, 4, 5],
+    "heldout_seeds": [1000001, 2000002, 3000003]
+  }
+}
