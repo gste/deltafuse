@@ -109,10 +109,21 @@ def _live_main():
 
     def invalid_schema(operation):
         kafka = KafkaClient(subprocess_executor, os.environ["J03_KAFKA_CONTAINER"])
-        attempt = kafka.consume("j03.workflow.dlq", max_messages=1)
-        return {"attempt_argv": list(attempt.argv), "attempt_exit": attempt.exit_code,
+        invalid = json.dumps({"schema_name": operation["schema_name"],
+            "schema_version": operation["schema_version"], "event_id": "c02-invalid-event",
+            "producer": "j03-judge", "aggregate_type": "DOCUMENT",
+            "aggregate_id": "c02-document", "domain_sequence": 1,
+            "correlation_id": "c02-invalid-operation", "causation_id": None,
+            "occurred_at": None, "payload": {}}, separators=(",", ":"))
+        import hashlib
+        raw_hash = hashlib.sha256(invalid.encode()).hexdigest()
+        published = kafka.publish("j03.document-events", "c02-document", invalid)
+        attempt = kafka.consume("j03.workflow-dlq", max_messages=100)
+        return {"publish_argv": list(published.argv), "publish_exit": published.exit_code,
+                "attempt_argv": list(attempt.argv), "attempt_exit": attempt.exit_code,
                 "attempt_stdout": attempt.stdout, "attempt_stderr": attempt.stderr,
-                "dlq_observed": attempt.exit_code == 0 and bool(attempt.stdout.strip()),
+                "dlq_observed": published.exit_code == 0 and attempt.exit_code == 0
+                    and raw_hash in attempt.stdout and "INVALID_CONTRACT" in attempt.stdout,
                 "invalid_operation": operation,
                 "baseline_fields": {"document": True, "active_version": True,
                     "workflow": True, "open_slots": True, "audit_sequence": True}}

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.document_flow.clients import ReadOnlySqlClient, UnsafeObservation
+from scripts.document_flow.clients import KafkaClient, ReadOnlySqlClient, UnsafeObservation
 from scripts.document_flow.faults import BarrierReceipt, FaultController, FaultDenied
 from scripts.document_flow.system_runner import (
     CommandResult, PRODUCT_BUILD_FAILURE, INFRASTRUCTURE_INVALID,
@@ -19,6 +19,20 @@ class FakeExecutor:
     def __call__(self, argv, *, cwd, env=None, timeout=None):
         self.calls.append((tuple(argv), Path(cwd), dict(env or {}), timeout))
         return self.results.pop(0)
+
+
+def test_kafka_client_uses_runtime_java_boundary_not_missing_native_cli(monkeypatch):
+    ok = CommandResult(("docker",), 0, "message\n", "", 1)
+    executor = FakeExecutor([ok, ok, ok, ok])
+    client = KafkaClient(executor, "j03-probe-kafka-kafka-1")
+    monkeypatch.setattr(client, "_compiled_probe", lambda: b"class-bytes")
+    published = client.publish("j03.document-events", "key-1", '{"schema_name":"unknown"}')
+    consumed = client.consume("j03.workflow-dlq", max_messages=1)
+    assert published.exit_code == consumed.exit_code == 0
+    flattened = [part for call in executor.calls for part in call[0]]
+    assert "/opt/kafka/bin/kafka-console-consumer.sh" not in flattened
+    assert "j03-probe-kafka-workflow-service-1" in flattened
+    assert "J03KafkaProbe.class" in " ".join(flattened)
 
 
 def result(exit_code=0, stdout="", stderr=""):
