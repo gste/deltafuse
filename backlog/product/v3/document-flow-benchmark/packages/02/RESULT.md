@@ -2,7 +2,7 @@
 
 Status: in_progress
 Package title: Working Java seed
-Cards: J03-201 through J03-206 complete; J03-207 through J03-210 planned
+Cards: J03-201 through J03-207 complete; J03-208 through J03-210 planned
 
 ## Evidence index
 
@@ -12,6 +12,7 @@ Cards: J03-201 through J03-206 complete; J03-207 through J03-210 planned
 - [J03-204 result](cards/J03-204.md)
 - [J03-205 result](cards/J03-205.md)
 - [J03-206 result](cards/J03-206.md)
+- [J03-207 result](cards/J03-207.md)
 - Java 21 reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
 - Four module POMs: `process/bench/cases/J03-document-flow/seed/*/pom.xml`
 - Reproducibility configuration: `process/bench/cases/J03-document-flow/seed/.mvn/`
@@ -27,5 +28,6 @@ Cards: J03-201 through J03-206 complete; J03-207 through J03-210 planned
 J03-201 establishes the Java 21 reactor and measured offline closure; J03-202
 freezes the baseline contracts; J03-203 installs isolated schemas; J03-204 adds
 atomic document commands; J03-205 adds the one-approver baseline workflow;
-J03-206 adds bounded Kafka inbox/outbox delivery and measured restart barriers.
-Package 02 remains incomplete. The first exact dependency-ready card is J03-207.
+J03-206 adds bounded Kafka inbox/outbox delivery and measured restart barriers;
+J03-207 adds replay-safe audit projection and deterministic read-only flow output.
+Package 02 remains incomplete. The first exact dependency-ready card is J03-208.

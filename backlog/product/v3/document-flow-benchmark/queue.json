@@ -597,7 +597,7 @@
       "green": "Canonical output stabilizes to expected baseline state, replay is idempotent and audit is not a state authority.",
       "test": "mvn --offline -f <seed>/pom.xml -pl audit-service,document-service -am verify -Pmessaging-integration",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-207.md",
       "result_path": "packages/02/cards/J03-207.md"
     },

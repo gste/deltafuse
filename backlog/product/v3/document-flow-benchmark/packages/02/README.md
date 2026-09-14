@@ -1,6 +1,6 @@
 # Package 02 — Working Java seed
 
-Status: in_progress; J03-201 through J03-206 are complete and later package cards remain planned.
+Status: in_progress; J03-201 through J03-207 are complete and later package cards remain planned.
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
@@ -11,7 +11,7 @@ Commit boundary: `bench: add working Java document flow seed`.
 - [J03-204 — Implement document baseline commands](../../cards/J03-204.md) — [result](cards/J03-204.md)
 - [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md) — [result](cards/J03-205.md)
 - [J03-206 — Implement reliable Kafka inbox/outbox delivery](../../cards/J03-206.md) — [result](cards/J03-206.md)
-- [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md)
+- [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md) — [result](cards/J03-207.md)
 - [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md)
 - [J03-209 — Prove public baseline end to end](../../cards/J03-209.md)
 - [J03-210 — Add realistic noise and safe public pack installation](../../cards/J03-210.md)
@@ -37,6 +37,9 @@ The next package cannot treat this README as completion evidence.
 - [J03-204 result](cards/J03-204.md)
 - [J03-205 result](cards/J03-205.md)
 - [J03-206 result](cards/J03-206.md)
+- [J03-207 result](cards/J03-207.md)
+- Audit projection/query: `process/bench/cases/J03-document-flow/seed/audit-service/src/`
+- Canonical flow query: `process/bench/cases/J03-document-flow/seed/document-service/src/main/java/dev/deltafuse/bench/document/query/`
 - Shared delivery implementation: `process/bench/cases/J03-document-flow/seed/shared-contracts/src/main/java/dev/deltafuse/bench/messaging/`
 - Document/workflow messaging adapters and live tests: `process/bench/cases/J03-document-flow/seed/*-service/src/**/messaging/`, `Delivery*IntegrationTest.java`
 - Java reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
