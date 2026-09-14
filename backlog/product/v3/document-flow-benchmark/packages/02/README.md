@@ -1,6 +1,6 @@
 # Package 02 — Working Java seed
 
-Status: in_progress; J03-201 through J03-209 are complete and J03-210 remains planned.
+Status: complete; all ten package cards are complete. Package result: [RESULT.md](RESULT.md).
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
@@ -14,7 +14,7 @@ Commit boundary: `bench: add working Java document flow seed`.
 - [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md) — [result](cards/J03-207.md)
 - [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md) — [result](cards/J03-208.md)
 - [J03-209 — Prove public baseline end to end](../../cards/J03-209.md) — [result](cards/J03-209.md)
-- [J03-210 — Add realistic noise and safe public pack installation](../../cards/J03-210.md)
+- [J03-210 — Add realistic noise and safe public pack installation](../../cards/J03-210.md) — [result](cards/J03-210.md)
 
 Use [EXECUTOR.md](../../EXECUTOR.md) for bounded execution and evidence handling.
 Write card results under `cards/<ID>.md` within this package directory.
@@ -62,3 +62,5 @@ The next package cannot treat this README as completion evidence.
 - Stack documentation: `process/bench/cases/J03-document-flow/seed/README.md`
 - Public end-to-end suite: `process/bench/cases/J03-document-flow/public_suite/`, fixtures in `process/bench/cases/J03-document-flow/seed/tests/system/`
 - Public suite judge tests: `tests/bench/document_flow/test_public_baseline.py`
+- Installer and install/leak tests: `scripts/document_flow/install.py`, `tests/bench/document_flow/test_install.py`
+- Case metadata and target intake: `process/bench/cases/J03-document-flow/case.yaml`, `input.md`, `WORKER.md`, `public-inventory.json`

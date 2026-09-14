@@ -1,0 +1,20 @@
+schema_version: 1
+id: J03-document-flow
+title: Managed version supersede and multi-stage parallel approval
+intake_name: J03-document-flow.md
+description: >
+  Three-service Java 21 document flow baseline (single-step approval) plus a
+  target Change that adds managed version supersede and a two-stage parallel
+  approval route. The Worker executes the target Change through the
+  DeltaFuse Process; the judge scores the Process stages and the result.
+# The judge pack (oracle.yaml, hidden_suite/, mutations/, reports/) is
+# staged: it lands with benchmark package 03, not with the public seed.
+judge_pack: pending
+framework:
+  target: 3.0.0
+seed_must_stay_until_implement:
+  - pom.xml
+  - shared-contracts/src/main/java/dev/deltafuse/bench/contracts/CanonicalJson.java
+  - shared-contracts/src/main/java/dev/deltafuse/bench/contracts/Idempotency.java
+  - audit-service/src/main/java/dev/deltafuse/bench/audit/query/AuditQueryService.java
+  - infra/postgres/init/01-databases.sql

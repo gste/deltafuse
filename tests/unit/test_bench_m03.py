@@ -38,6 +38,10 @@ def test_case_and_oracle_describe_the_same_task():
 def test_case_oracle_pairs_are_consistent_for_all_cases():
     for case_id in list_cases():
         case = load_case(case_id)
+        if case.get("judge_pack") == "pending":
+            # Staged benchmark case: the judge pack is deliberately absent
+            # from the public seed and lands in a later package.
+            continue
         case_dir = case["dir"]
         assert (case_dir / "oracle.yaml").is_file(), case_id
         assert (case_dir / "input.md").is_file(), case_id

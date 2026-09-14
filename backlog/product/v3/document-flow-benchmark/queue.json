@@ -697,7 +697,7 @@
       "green": "Public baseline remains green, target paths fit bounded packets, and installation/layout/leak tests pass.",
       "test": "python -m pytest tests/bench/document_flow/test_install.py -q; public baseline regression; platform layout validators",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-210.md",
       "result_path": "packages/02/cards/J03-210.md"
     },
