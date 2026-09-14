@@ -629,7 +629,7 @@
       "green": "Compose config validates and all three services plus Kafka/Postgres become healthy from clean volumes; no manual service editing.",
       "test": "docker compose -f <seed>/compose.yaml config; provisioned offline build/up and deadline health probes",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-208.md",
       "result_path": "packages/02/cards/J03-208.md"
     },

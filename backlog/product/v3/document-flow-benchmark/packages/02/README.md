@@ -1,6 +1,6 @@
 # Package 02 — Working Java seed
 
-Status: in_progress; J03-201 through J03-207 are complete and later package cards remain planned.
+Status: in_progress; J03-201 through J03-208 are complete and J03-209/J03-210 remain planned.
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
@@ -12,7 +12,7 @@ Commit boundary: `bench: add working Java document flow seed`.
 - [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md) — [result](cards/J03-205.md)
 - [J03-206 — Implement reliable Kafka inbox/outbox delivery](../../cards/J03-206.md) — [result](cards/J03-206.md)
 - [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md) — [result](cards/J03-207.md)
-- [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md)
+- [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md) — [result](cards/J03-208.md)
 - [J03-209 — Prove public baseline end to end](../../cards/J03-209.md)
 - [J03-210 — Add realistic noise and safe public pack installation](../../cards/J03-210.md)
 
@@ -57,3 +57,6 @@ The next package cannot treat this README as completion evidence.
 - Workflow command/API implementation: `process/bench/cases/J03-document-flow/seed/workflow-service/src/main/java/dev/deltafuse/bench/workflow/`
 - Workflow receipts: `process/bench/cases/J03-document-flow/seed/workflow-service/src/main/resources/db/migration/V2__workflow_receipts.sql`
 - Workflow command/API tests: `process/bench/cases/J03-document-flow/seed/workflow-service/src/test/java/dev/deltafuse/bench/workflow/WorkflowCommandServiceTest.java`, `WorkflowControllerTest.java`
+- Pinned Compose stack: `process/bench/cases/J03-document-flow/seed/compose.yaml`
+- Stack launcher and fault controls: `process/bench/cases/J03-document-flow/seed/infra/stack.ps1`, `process/bench/cases/J03-document-flow/seed/infra/fault.ps1`
+- Stack documentation: `process/bench/cases/J03-document-flow/seed/README.md`

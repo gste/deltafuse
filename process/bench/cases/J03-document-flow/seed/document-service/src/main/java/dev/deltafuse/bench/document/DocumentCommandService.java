@@ -19,6 +19,7 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Transactional baseline commands for the document aggregate. */
@@ -29,6 +30,7 @@ public final class DocumentCommandService {
     private final DataSource dataSource;
     private final BeforeCommitHook beforeCommit;
 
+    @Autowired
     public DocumentCommandService(DataSource dataSource) {
         this(dataSource, connection -> { });
     }
