@@ -855,7 +855,7 @@
       "green": "Positive reference and negative seed are executed from identified snapshots with complete evidence and no host leaks.",
       "test": "python -m pytest tests/bench/document_flow/test_system_runner.py -q; live reference/seed harness probe",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-305.md",
       "result_path": "packages/03/cards/J03-305.md"
     },
