@@ -759,7 +759,7 @@
       "green": "Normal/reject/interleaved/late/conflict cases match independently calculated final state and audit.",
       "test": "python -m pytest tests/bench/document_flow/test_interpreter.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-302.md",
       "result_path": "packages/03/cards/J03-302.md"
     },
