@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "patch": "version-supersede",
+  "applies_to": "seed/**",
+  "files": [
+    {
+      "path": "overlay/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java",
+      "sha256": "9010c2181078df64ca942f76445d23b7c05a32b104f88728f98dafec0a5bf542",
+      "byte_length": 20867
+    },
+    {
+      "path": "overlay/workflow-service/src/main/resources/db/migration/V4__reference_supersede.sql",
+      "sha256": "16497b745bc2c175ba8c6d12be3f7b1e9c39ca17c5a782c49d719524a4d0e143",
+      "byte_length": 1200
+    },
+    {
+      "path": "overlay/workflow-service/src/test/java/dev/deltafuse/bench/workflow/ReferenceSupersedeHarness.java",
+      "sha256": "2bf85e89935e0591cdf1fffc1289e0f381cd05ac307ca67bcaf40f2c413d0b7a",
+      "byte_length": 17006
+    },
+    {
+      "path": "overlay/workflow-service/src/test/java/dev/deltafuse/bench/workflow/WorkflowCommandServiceTest.java",
+      "sha256": "aba15c709033488a659846e7562b3bcdc4cd78e3c0a6e69f47307bfa1c4e1b42",
+      "byte_length": 11327
+    }
+  ]
+}

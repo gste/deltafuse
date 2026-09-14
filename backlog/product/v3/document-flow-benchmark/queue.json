@@ -791,7 +791,7 @@
       "green": "Reference version/supersede scenarios pass with actual PostgreSQL, original seed hashes unchanged.",
       "test": "python -m pytest tests/bench/document_flow/test_reference_supersede.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-303.md",
       "result_path": "packages/03/cards/J03-303.md"
     },
