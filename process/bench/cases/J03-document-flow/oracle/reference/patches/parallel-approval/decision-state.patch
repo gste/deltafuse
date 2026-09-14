@@ -1,0 +1,46 @@
+diff --git a/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java b/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java
+--- a/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java
++++ b/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java
+@@ -124,13 +124,35 @@ public final class WorkflowCommandService {
+-            String state = decision.resultingState().name();
++            long sequence = nextSequence(connection, routeId);
++            if ("registrar".equals(role) && "REJECT".equals(action)) {
++                return invalidDecision(connection, operationId, eventId, routeId, decisionId,
++                        request, sequence, "UNSUPPORTED_ACTION", decision);
++            }
++            if ("registrar".equals(role) && approvedExperts(connection, routeId) != 2) {
++                return invalidDecision(connection, operationId, eventId, routeId, decisionId,
++                        request, sequence, "EXPERT_REVIEW_INCOMPLETE", decision);
++            }
++            if (!"registrar".equals(role) && roleFilled(connection, routeId, role)) {
++                return invalidDecision(connection, operationId, eventId, routeId, decisionId,
++                        request, sequence, "IDENTITY_MISMATCH", decision);
++            }
++            if (!"registrar".equals(role) && actorFilledOtherRole(connection, routeId, actorId, role)) {
++                return invalidDecision(connection, operationId, eventId, routeId, decisionId,
++                        request, sequence, "ACTOR_ROLE_MISMATCH", decision);
++            }
++            String state = "PENDING";
++            if (("legal".equals(role) || "security".equals(role)) && "REJECT".equals(action)) {
++                state = "REJECTED";
++            } else if ("registrar".equals(role)) {
++                state = "APPROVED";
++            }
+             update(connection, "INSERT INTO decision (route_id, decision_id, actor_id, role, action, "
+-                            + "resulting_state) VALUES (?, ?, ?, 'approver', ?, ?)",
+-                    routeId, decisionId, actorId, action.name(), state);
++                            + "resulting_state) VALUES (?, ?, ?, ?, ?, ?)",
++                    routeId, decisionId, actorId, role, action, state);
+             update(connection, "UPDATE route SET state=? WHERE route_id=?", state, routeId);
+-            insertOutbox(connection, eventId, routeId, 2, "j03.workflow.decision-applied", decision);
++            insertOutbox(connection, eventId, routeId, sequence, "j03.workflow.decision-applied", decision);
+             update(connection, "INSERT INTO decision_receipt (route_id, decision_id, operation_id, "
+                             + "request_payload, result_event_id, result_state, result_domain_sequence) "
+-                            + "VALUES (?, ?, ?, ?::jsonb, ?, ?, 2)",
+-                    routeId, decisionId, operationId, request, eventId, state);
+-            return new DecisionResult(operationId, routeId, decisionId, state, eventId, 2);
++                            + "VALUES (?, ?, ?, ?::jsonb, ?, ?, ?)",
++                    routeId, decisionId, operationId, request, eventId, state, sequence);
++            return new DecisionResult(operationId, routeId, decisionId, state, eventId, sequence);
+         });
+     }

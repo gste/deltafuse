@@ -822,7 +822,7 @@
       "green": "All target domain timelines pass on real reference stack without changing the public baseline tree.",
       "test": "python -m pytest tests/bench/document_flow/test_reference_approval.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-304.md",
       "result_path": "packages/03/cards/J03-304.md"
     },
