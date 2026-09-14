@@ -860,9 +860,9 @@
       "result_path": "packages/03/cards/J03-305.md"
     },
     {
-      "id": "J03-306",
+      "id": "J03-306A",
       "package": "03",
-      "title": "Implement hidden functional scenarios",
+      "title": "Freeze hidden functional scenario contract",
       "depends_on": [
         "J03-305"
       ],
@@ -876,16 +876,58 @@
         "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
         "tests/bench/document_flow/test_hidden_functional_contract.py"
       ],
-      "invariant": "Functional points are earned only by observable target behavior across private variants.",
+      "invariant": "All F01-F09 and C02/C03 subcases, weights and independent expectations are frozen before live results.",
       "steps": [
         "Implement F01–F09 plus C02/C03 scenarios from registry, with exact expected error/late/audit assertions.",
-        "Cover duplicate HTTP/decision identities, separate documents, early registrar, both reject roles, supersede before/after partial review.",
-        "Run against baseline and reference; retain each named assertion and evidence ref."
+        "Cover duplicate identities, separate documents, early registrar, both reject roles, supersede before/after partial review.",
+        "Prove points derive from all named subcase facts and keep the suite private."
       ],
-      "red": "Unchanged seed fails expected target IDs; a hardcoded happy-path candidate fails held-out schedules.",
-      "green": "Reference passes every functional scenario; points derive from fixed scenario outcomes, not pytest exit status alone.",
-      "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q; judge functional suite on seed/reference",
+      "red": "Missing hidden modules fail the complete fixed registry and held-out schedule checks.",
+      "green": "All named scenarios and subcases are frozen with interpreter-derived expectations and fixed weights.",
+      "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q",
       "kind": "implementation",
+      "status": "complete",
+      "card_path": "cards/J03-306A.md",
+      "result_path": "packages/03/cards/J03-306A.md"
+    },
+    {
+      "id": "J03-306B",
+      "package": "03",
+      "title": "Execute hidden functional scenarios on seed and reference",
+      "depends_on": ["J03-306A"],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
+        "scripts/document_flow/clients.py",
+        "scripts/document_flow/system_runner.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
+        "tests/bench/document_flow/test_hidden_functional_contract.py"
+      ],
+      "invariant": "Frozen named facts are observed through the live judge boundary on both seed and reference.",
+      "steps": ["Execute every frozen variant on unchanged seed and private reference.", "Retain per-subcase facts and demonstrate hardcoded happy-path failure.", "Derive fixed points from facts, never process exit alone."],
+      "red": "Seed and hardcoded happy-path candidate fail their preregistered target IDs.",
+      "green": "Reference passes all F01-F09/C02/C03 facts with complete live evidence.",
+      "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q; live hidden suite on seed/reference",
+      "kind": "implementation",
+      "status": "planned",
+      "card_path": "cards/J03-306B.md",
+      "result_path": "packages/03/cards/J03-306B.md"
+    },
+    {
+      "id": "J03-306",
+      "package": "03",
+      "title": "Implement hidden functional scenarios",
+      "depends_on": ["J03-306B"],
+      "read_set": [], "write_set": [],
+      "invariant": "Functional points are earned only by observable target behavior across private variants.",
+      "steps": ["Close only after both sequential children preserve every original acceptance requirement."],
+      "red": "Inherited from J03-306A/B.",
+      "green": "Inherited from J03-306A/B.",
+      "test": "child evidence review",
+      "kind": "integration",
       "status": "planned",
       "card_path": "cards/J03-306.md",
       "result_path": "packages/03/cards/J03-306.md"
