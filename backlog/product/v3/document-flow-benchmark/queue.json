@@ -534,7 +534,7 @@
       "green": "Single-step approve/reject and isolation tests pass; target multi-stage tests still cannot pass.",
       "test": "mvn --offline -f <seed>/pom.xml -pl workflow-service -am verify -Pdb-integration",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-205.md",
       "result_path": "packages/02/cards/J03-205.md"
     },

@@ -1,6 +1,6 @@
 # Package 02 — Working Java seed
 
-Status: in_progress; J03-201 through J03-204 are complete and later package cards remain planned.
+Status: in_progress; J03-201 through J03-205 are complete and later package cards remain planned.
 Commit boundary: `bench: add working Java document flow seed`.
 
 ## Cards in default order
@@ -9,7 +9,7 @@ Commit boundary: `bench: add working Java document flow seed`.
 - [J03-202 — Publish baseline event/API contracts](../../cards/J03-202.md) — [result](cards/J03-202.md)
 - [J03-203 — Create isolated service schemas and migrations](../../cards/J03-203.md) — [result](cards/J03-203.md)
 - [J03-204 — Implement document baseline commands](../../cards/J03-204.md) — [result](cards/J03-204.md)
-- [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md)
+- [J03-205 — Implement single-step workflow baseline](../../cards/J03-205.md) — [result](cards/J03-205.md)
 - [J03-206 — Implement reliable Kafka inbox/outbox delivery](../../cards/J03-206.md)
 - [J03-207 — Implement audit projection and canonical query](../../cards/J03-207.md)
 - [J03-208 — Wire pinned Compose stack and fault controls](../../cards/J03-208.md)
@@ -35,6 +35,7 @@ The next package cannot treat this README as completion evidence.
 - [J03-202 result](cards/J03-202.md)
 - [J03-203 result](cards/J03-203.md)
 - [J03-204 result](cards/J03-204.md)
+- [J03-205 result](cards/J03-205.md)
 - Java reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
 - Dependency inventory: `process/bench/cases/J03-document-flow/dependencies.lock.json`
 - Focused inventory tests: `tests/bench/document_flow/test_dependency_inventory.py`
@@ -47,3 +48,6 @@ The next package cannot treat this README as completion evidence.
 - Document command/API implementation: `process/bench/cases/J03-document-flow/seed/document-service/src/main/java/dev/deltafuse/bench/document/`
 - Document command receipts: `process/bench/cases/J03-document-flow/seed/document-service/src/main/resources/db/migration/V2__document_command_receipts.sql`
 - Document command/API tests: `process/bench/cases/J03-document-flow/seed/document-service/src/test/java/dev/deltafuse/bench/document/DocumentCommandServiceTest.java`, `DocumentControllerTest.java`
+- Workflow command/API implementation: `process/bench/cases/J03-document-flow/seed/workflow-service/src/main/java/dev/deltafuse/bench/workflow/`
+- Workflow receipts: `process/bench/cases/J03-document-flow/seed/workflow-service/src/main/resources/db/migration/V2__workflow_receipts.sql`
+- Workflow command/API tests: `process/bench/cases/J03-document-flow/seed/workflow-service/src/test/java/dev/deltafuse/bench/workflow/WorkflowCommandServiceTest.java`, `WorkflowControllerTest.java`
