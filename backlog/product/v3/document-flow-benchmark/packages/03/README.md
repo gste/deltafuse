@@ -10,7 +10,7 @@ Commit boundary: `bench: add generated document flow oracle`.
 - [J03-303 — Create private reference version-supersede implementation](../../cards/J03-303.md) — [result](cards/J03-303.md)
 - [J03-304 — Complete private reference parallel approval implementation](../../cards/J03-304.md) — [result](cards/J03-304.md)
 - [J03-305 — Build judge clients and stack execution harness](../../cards/J03-305.md) — [result](cards/J03-305.md)
-- [J03-306 — Implement hidden functional scenarios](../../cards/J03-306.md) — split: [J03-306A](../../cards/J03-306A.md) ([result](cards/J03-306A.md)), then [J03-306B](../../cards/J03-306B.md)
+- [J03-306 — Implement hidden functional scenarios](../../cards/J03-306.md) — split: [J03-306A](../../cards/J03-306A.md) ([result](cards/J03-306A.md)), then [J03-306B](../../cards/J03-306B.md) ([blocked result](cards/J03-306B.md))
 - [J03-307 — Implement hidden transaction and resilience scenarios](../../cards/J03-307.md)
 - [J03-308 — Implement hidden bounded load and resource checks](../../cards/J03-308.md)
 
@@ -46,3 +46,4 @@ The next package cannot treat this README as completion evidence.
 - Restricted judge clients and fault controls: `scripts/document_flow/clients.py`, `scripts/document_flow/faults.py`
 - [J03-306A result](cards/J03-306A.md)
 - Frozen private functional scenarios: `process/bench/cases/J03-document-flow/hidden_suite/test_functional.py`, `test_consistency.py`
+- [J03-306B blocked live result](cards/J03-306B.md): seed/reference facts retained externally; reference fails F01, F06 and C02, so J03-306 remains open.
