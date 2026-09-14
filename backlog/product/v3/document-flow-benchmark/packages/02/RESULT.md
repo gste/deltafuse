@@ -2,19 +2,26 @@
 
 Status: in_progress
 Package title: Working Java seed
-Cards: J03-201 complete; J03-202 through J03-210 planned
+Cards: J03-201 through J03-204 complete; J03-205 through J03-210 planned
 
 ## Evidence index
 
 - [J03-201 result](cards/J03-201.md)
+- [J03-202 result](cards/J03-202.md)
+- [J03-203 result](cards/J03-203.md)
+- [J03-204 result](cards/J03-204.md)
 - Java 21 reactor: `process/bench/cases/J03-document-flow/seed/pom.xml`
 - Four module POMs: `process/bench/cases/J03-document-flow/seed/*/pom.xml`
 - Reproducibility configuration: `process/bench/cases/J03-document-flow/seed/.mvn/`
 - Complete resolved artifact inventory: `process/bench/cases/J03-document-flow/dependencies.lock.json`
 - Focused inventory tests: `tests/bench/document_flow/test_dependency_inventory.py`
+- Baseline contracts: `process/bench/cases/J03-document-flow/seed/docs/spec/contracts/`
+- Isolated schemas: `process/bench/cases/J03-document-flow/seed/*-service/src/main/resources/db/migration/`
+- Document commands/API: `process/bench/cases/J03-document-flow/seed/document-service/src/`
 
 ## Handoff
 
-J03-201 establishes an empty four-module Java 21 reactor and a measured
-Central-only offline dependency closure. It does not implement product behavior
-or make package 02 complete. The first exact dependency-ready card is J03-202.
+J03-201 establishes the Java 21 reactor and measured offline closure; J03-202
+freezes the baseline contracts; J03-203 installs isolated schemas; J03-204 adds
+atomic document commands and their HTTP adapter. Package 02 remains incomplete.
+The first exact dependency-ready card is J03-205.

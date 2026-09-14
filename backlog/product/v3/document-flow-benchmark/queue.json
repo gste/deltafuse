@@ -505,7 +505,7 @@
       "green": "Baseline document unit/database tests pass for create/version/submit, rollback and duplicates.",
       "test": "mvn --offline -f <seed>/pom.xml -pl document-service -am verify -Pdb-integration",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-204.md",
       "result_path": "packages/02/cards/J03-204.md"
     },
