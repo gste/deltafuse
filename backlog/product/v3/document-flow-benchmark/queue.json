@@ -1326,7 +1326,7 @@
       "green": "Two replays of one sealed artifact yield identical semantic JSON and score; live nondeterministic reruns are separate evidence.",
       "test": "python -m pytest tests/bench/document_flow/test_replay.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-408.md",
       "result_path": "packages/04/cards/J03-408.md"
     },
