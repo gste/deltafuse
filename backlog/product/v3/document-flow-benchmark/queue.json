@@ -994,7 +994,7 @@
       "green": "Reference survives each measured fault; induced faulty candidates fail expected IDs without counting harness errors.",
       "test": "python -m pytest tests/bench/document_flow/test_hidden_resilience_contract.py -q; live resilience suite",
       "kind": "implementation",
-      "status": "blocked",
+      "status": "complete",
       "card_path": "cards/J03-307.md",
       "result_path": "packages/03/cards/J03-307.md"
     },
