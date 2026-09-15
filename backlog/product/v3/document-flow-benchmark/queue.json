@@ -1648,7 +1648,7 @@
       "green": "Every process mutant reaches its expected check, good control passes, mutation bytes and origins are recorded.",
       "test": "python -m pytest tests/bench/document_flow/test_process_mutants.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-601.md",
       "result_path": "packages/06/cards/J03-601.md"
     },

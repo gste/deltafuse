@@ -33,19 +33,41 @@ class CheckResult:
 
 
 def extract_frontmatter_and_body(text: str) -> tuple[dict[str, Any], str]:
-    """Parse YAML frontmatter if present."""
+    """Parse YAML frontmatter or YAML text."""
     if text.startswith("---"):
         parts = text.split("---", 2)
         if len(parts) >= 3:
             fm_text = parts[1]
             body = parts[2]
-            fm: dict[str, Any] = {}
-            for line in fm_text.splitlines():
-                if ":" in line:
-                    k, v = line.split(":", 1)
-                    fm[k.strip()] = v.strip()
-            return fm, body
-    return {}, text
+            return _parse_yaml_lines(fm_text), body
+    return _parse_yaml_lines(text), text
+
+
+def _parse_yaml_lines(text: str) -> dict[str, Any]:
+    fm: dict[str, Any] = {}
+    current_list_key = None
+    for line in text.splitlines():
+        trimmed = line.strip()
+        if not trimmed or trimmed.startswith("#"):
+            continue
+        if trimmed.startswith("- ") and current_list_key:
+            val = trimmed[2:].strip()
+            if isinstance(fm.get(current_list_key), list):
+                fm[current_list_key].append(val)
+            else:
+                fm[current_list_key] = [val]
+            continue
+        if ":" in trimmed:
+            k, v = trimmed.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if not v:
+                current_list_key = k
+                fm[k] = []
+            else:
+                current_list_key = None
+                fm[k] = v
+    return fm
 
 
 def has_dependency_cycles(tasks: dict[str, list[str]]) -> bool:
@@ -105,7 +127,11 @@ def evaluate_decompose_stage(
                 raw_text = p.read_text(encoding="utf-8", errors="ignore")
                 fm, body = extract_frontmatter_and_body(raw_text)
                 t_id = fm.get("id") or p.stem
-                deps = [d.strip() for d in fm.get("depends_on", "").strip("[]").split(",") if d.strip()]
+                raw_deps = fm.get("depends_on", [])
+                if isinstance(raw_deps, list):
+                    deps = [str(d).strip() for d in raw_deps if str(d).strip()]
+                else:
+                    deps = [d.strip() for d in str(raw_deps).strip("[]").split(",") if d.strip()]
                 task_graph[t_id] = deps
                 task_objects.append({"id": t_id, "fm": fm, "body": body, "path": path})
 
@@ -140,8 +166,14 @@ def evaluate_decompose_stage(
             failure_reason=reason,
         ))
 
-    # 2. Evaluate DE.C02 (160 pts) - Task bounded paths / scope envelopes
+    # 2. Evaluate DE.C02 (160 pts) - Task bounded paths / scope envelopes and dependency existence
     has_unbounded_paths = False
+    has_missing_deps = False
+    all_task_ids = set(task_graph.keys())
+    for t_id, deps in task_graph.items():
+        for d in deps:
+            if d not in all_task_ids:
+                has_missing_deps = True
     for t in task_objects:
         allowed = t["fm"].get("allowed_paths", "")
         # Check for unconstrained whole-repo paths like '/**' or '*' or '/*.*'
@@ -149,7 +181,7 @@ def evaluate_decompose_stage(
         if clean in ("/**", "/*", "*", ".*") or clean.startswith("/**") or clean == "['/**']":
             has_unbounded_paths = True
     
-    if not has_unbounded_paths:
+    if not has_unbounded_paths and not has_missing_deps:
         results.append(CheckResult(
             check_id="DE.C02",
             status="pass",
@@ -158,12 +190,13 @@ def evaluate_decompose_stage(
             failure_reason=None,
         ))
     else:
+        reason = "Missing task dependency reference in task graph" if has_missing_deps else "Unbounded wildcards detected in task allowed_paths"
         results.append(CheckResult(
             check_id="DE.C02",
             status="fail",
             awarded_points=0,
             evidence_refs=[ev_ref_dict],
-            failure_reason="Unbounded wildcards detected in task allowed_paths",
+            failure_reason=reason,
         ))
 
     # 3. Evaluate DE.C03 (140 pts) - Requirement delta & design refs traceability
