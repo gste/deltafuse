@@ -1162,7 +1162,7 @@
       "green": "Good multi-service artifacts pass; semantic adversarial fixtures fail without an LLM judge.",
       "test": "python -m pytest tests/bench/document_flow/test_intake_analyze.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-403.md",
       "result_path": "packages/04/cards/J03-403.md"
     },

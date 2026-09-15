@@ -2,3 +2,4 @@
 * text=auto eol=lf
 *.sh text eol=lf
 *.ps1 text eol=crlf
+process/bench/cases/** text eol=lf
