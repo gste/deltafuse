@@ -1391,7 +1391,7 @@
       "green": "Transport handles actual versioned event shapes, maintains same session/model and cleanly pauses at Human Gate.",
       "test": "python -m pytest tests/bench/document_flow/test_worker_transport.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-501.md",
       "result_path": "packages/05/cards/J03-501.md"
     },

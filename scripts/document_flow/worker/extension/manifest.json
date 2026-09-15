@@ -1,0 +1,13 @@
+// Judge-owned observer extension manifest for little-coder / Pi
+export default {
+  name: "deltafuse-j03-observer",
+  version: "1.0.0",
+  events: [
+    "before_provider_request",
+    "after_provider_response",
+    "tool_execution_start",
+    "tool_execution_end",
+    "compaction_start",
+    "compaction_end"
+  ]
+};
