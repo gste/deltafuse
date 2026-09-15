@@ -1520,7 +1520,7 @@
       "green": "Live boundary policy works in the same environment used by Worker commands; legitimate inference protocol remains possible.",
       "test": "python -m pytest tests/bench/document_flow/test_worker_isolation.py -q; live inspect/egress/mount probes",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-505.md",
       "result_path": "packages/05/cards/J03-505.md"
     },
