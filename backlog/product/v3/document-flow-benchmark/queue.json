@@ -1888,7 +1888,7 @@
       "green": "Pilot outcome is recorded honestly even if Worker fails; full provenance and failure classification survive.",
       "test": "python -m scripts.document_flow run --plan <pilot-plan> --run-id <pilot-id> --out <fresh-root>; replay afterward",
       "kind": "qualification",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-704.md",
       "result_path": "packages/07/cards/J03-704.md"
     },
