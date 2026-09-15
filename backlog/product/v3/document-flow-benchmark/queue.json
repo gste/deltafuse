@@ -1423,7 +1423,7 @@
       "green": "Scripted edge cases validate accounting; live measurement support is deferred to dedicated external probe/qualification, never fabricated.",
       "test": "python -m pytest tests/bench/document_flow/test_worker_measurements.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-502.md",
       "result_path": "packages/05/cards/J03-502.md"
     },
