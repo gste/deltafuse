@@ -1588,7 +1588,7 @@
       "green": "Scripted end-to-end fixture produces all report states with correct exits; synthetic evidence cannot become release-pass.",
       "test": "python -m pytest tests/bench/document_flow/test_runner_cli.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-507.md",
       "result_path": "packages/05/cards/J03-507.md"
     },
