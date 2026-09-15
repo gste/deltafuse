@@ -1358,7 +1358,7 @@
       "green": "Golden readable reports for pass/failed/invalid/early stop and two-profile comparison match pure evaluator.",
       "test": "python -m pytest tests/bench/document_flow/test_reports.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-409.md",
       "result_path": "packages/04/cards/J03-409.md"
     },
