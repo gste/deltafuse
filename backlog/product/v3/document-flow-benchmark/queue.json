@@ -1487,7 +1487,7 @@
       "green": "Native and shell actions share stage semantics and complete measurements; build outputs are bounded separate derived artifacts.",
       "test": "python -m pytest tests/bench/document_flow/test_command_boundary.py -q; live OS-boundary adversarial probe",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-504.md",
       "result_path": "packages/05/cards/J03-504.md"
     },
