@@ -1830,7 +1830,7 @@
       "green": "All mandatory checks pass with full commands/exits, logs and actual host/image versions; working tree stays clean.",
       "test": "See RUNBOOK Windows command matrix; save all raw output outside tracked tree.",
       "kind": "qualification",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-702.md",
       "result_path": "packages/07/cards/J03-702.md"
     },
