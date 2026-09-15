@@ -1859,7 +1859,7 @@
       "green": "All required POSIX checks pass, logical variants/scores reproduce and host distinctions are documented.",
       "test": "See RUNBOOK POSIX command matrix; no mandatory live check may silently skip.",
       "kind": "qualification",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-703.md",
       "result_path": "packages/07/cards/J03-703.md"
     },
