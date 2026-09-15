@@ -1099,7 +1099,7 @@
       "green": "Real installed 3.0.0 Core fixtures traverse expected states including task cycles and Gate pauses.",
       "test": "python -m pytest tests/bench/document_flow/test_core_bridge.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-401.md",
       "result_path": "packages/04/cards/J03-401.md"
     },
