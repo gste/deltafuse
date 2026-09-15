@@ -1263,7 +1263,7 @@
       "green": "Reference Change fixtures with real command receipts pass; valid product-build failures retain prior stage points.",
       "test": "python -m pytest tests/bench/document_flow/test_implement_verify.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-406.md",
       "result_path": "packages/04/cards/J03-406.md"
     },
