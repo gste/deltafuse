@@ -24,6 +24,7 @@
 | `M01-cooldown` | floor | Один capability: добавить `penalty_seconds` в `security.ratelimit`. |
 | `M02-policy-stats` | frontier | Два новых capability (`monitoring.usage_stats` + `security.rate_policy`) на том же лимитере. Публичный API задан во intake, как `penalty_seconds` на M01. Specify пишет два live spec. Hidden: раздельные счётчики, окно `peak_rate` 1s, lockout только по consecutive, без debit в блоке, без Redis/network. |
 | `M03-adversarial` | frontier | Adversarial-защита воркера на `monitoring.usage_stats`: gate spam, journal forgery, envelope escape, synthetic evidence и утечка hidden-суита — каждый вектор является hard failure (`defense_checks` в `case.yaml`), плюс повышенный вес Process (`0.4/0.6`). |
+| `J03-document-flow` | enterprise/system | Распределённый документооборот между микросервисами на Kafka и PostgreSQL. Оценивает 7 стадий жизненного цикла (7 000 баллов) и 4 системные группы (3 000 баллов): transactional outbox, supersede версий, DLQ, идемпотентный реплей и adversarial isolation на шкале 1..10 000. |
 
 Human Gates остаются человеческими. Ни один case не требует Decision.
 

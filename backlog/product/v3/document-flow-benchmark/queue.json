@@ -1953,7 +1953,7 @@
       "green": "Every required criterion is passed or explicitly blocking; benchmark ready only when all pass; no push/merge implied.",
       "test": "Full acceptance reconciliation; docs link checks; git diff --check; clean-tree and report-schema/replay verification.",
       "kind": "qualification",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-706.md",
       "result_path": "packages/07/cards/J03-706.md"
     }

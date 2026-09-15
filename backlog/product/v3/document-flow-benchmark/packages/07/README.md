@@ -1,6 +1,6 @@
 # Package 07 — Qualification and documentation
 
-Status: planned; no package implementation/result is asserted.
+Status: complete
 Commit boundary: `bench: qualify and document document flow benchmark`.
 
 ## Cards in default order
