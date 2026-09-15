@@ -1294,7 +1294,7 @@
       "green": "Hand-calculated factors/rounding and multi-task reentry fixtures agree exactly; outputs retain raw denominators/provenance.",
       "test": "python -m pytest tests/bench/document_flow/test_efficiency.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-407.md",
       "result_path": "packages/04/cards/J03-407.md"
     },
