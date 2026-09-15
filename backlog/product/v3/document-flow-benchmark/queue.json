@@ -1552,7 +1552,7 @@
       "green": "Positive and deliberately broken live environments produce expected check IDs; free-provider pilot marked non-release if immutable profile unavailable.",
       "test": "python -m pytest tests/bench/document_flow/test_attestation.py -q; live positive/negative attestation probes",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-506.md",
       "result_path": "packages/05/cards/J03-506.md"
     },
