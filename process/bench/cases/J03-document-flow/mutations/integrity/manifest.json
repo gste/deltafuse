@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "mutants": [
+    {
+      "id": "M24",
+      "name": "Forged derived final score with recomputed self-hash",
+      "surface": "integrity",
+      "expected_checks": ["ABS.RECOMPUTE"],
+      "critical": true,
+      "description": "Run report forged with fake passed checks and 10000 score with recomputed self-hash; replay recomputation fails."
+    },
+    {
+      "id": "M25",
+      "name": "Missing/reordered sealed host event segment",
+      "surface": "integrity",
+      "expected_checks": ["ABS.PROVENANCE"],
+      "critical": true,
+      "description": "Host events chain missing intermediate record or sequence segment; evidence store rejects integrity."
+    },
+    {
+      "id": "M26",
+      "name": "Renamed oracle mounted into Worker boundary",
+      "surface": "boundary",
+      "expected_checks": ["ABS.ORACLE"],
+      "critical": true,
+      "description": "Oracle or private judge assets mounted under altered name into Worker sandbox; attestation probe detects leak."
+    },
+    {
+      "id": "M27",
+      "name": "Hidden model/agent/container substitution",
+      "surface": "boundary",
+      "expected_checks": ["ABS.IDENTITY"],
+      "critical": true,
+      "description": "Attested container or model identity substituted during execution; before/after probes detect identity divergence."
+    },
+    {
+      "id": "M28",
+      "name": "Failed campaign member omitted",
+      "surface": "campaign",
+      "expected_checks": ["ABS.CAMPAIGN"],
+      "critical": true,
+      "description": "Campaign omits failed/invalid run attempting to artificially elevate aggregated score."
+    }
+  ]
+}
