@@ -31,13 +31,12 @@ diff --git a/workflow-service/src/main/java/dev/deltafuse/bench/workflow/Workflo
 +                        "route, version or document identity mismatch");
              }
              if ("SUPERSEDED".equals(route.state())) {
-@@ -137,3 +159,14 @@ public final class WorkflowCommandService {
+@@ -137,3 +159,13 @@ public final class WorkflowCommandService {
      }
 +
 +    private DecisionResult invalidDecision(Connection connection, String operationId, String eventId,
 +            String routeId, String decisionId, String request, long sequence, String code,
 +            ReferenceDecision decision) throws SQLException {
-+        insertOutbox(connection, eventId, routeId, sequence, code, decision);
 +        update(connection, "INSERT INTO decision_receipt (route_id, decision_id, operation_id, "
 +                        + "request_payload, result_event_id, result_state, result_domain_sequence) "
 +                        + "VALUES (?, ?, ?, ?::jsonb, ?, ?, ?)",
@@ -47,7 +46,7 @@ diff --git a/workflow-service/src/main/java/dev/deltafuse/bench/workflow/Workflo
 -
 +
      private RouteResult routeReplay(Connection connection, String inputEventId, String request) throws SQLException {
-@@ -249,7 +277,7 @@ public final class WorkflowCommandService {
+@@ -249,7 +276,7 @@ public final class WorkflowCommandService {
          return CanonicalJson.write(JsonObj.of(members));
      }
 -
@@ -57,7 +56,7 @@ diff --git a/workflow-service/src/main/java/dev/deltafuse/bench/workflow/Workflo
          Map<String, JsonValue> members = new LinkedHashMap<>(decision.toJson().members());
          members.put("operation_id", new JsonStr(operationId));
          members.put("event_id", new JsonStr(eventId));
-@@ -306,5 +334,55 @@ public final class WorkflowCommandService {
+@@ -306,5 +333,55 @@ public final class WorkflowCommandService {
          }
      }
 -

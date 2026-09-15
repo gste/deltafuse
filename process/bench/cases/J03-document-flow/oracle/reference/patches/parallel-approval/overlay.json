@@ -5,13 +5,18 @@
   "files": [
     {
       "path": "workflow-command-service.patch",
-      "sha256": "3861fcfea31f6d169814376ecb46ba2e414d48a0906b35135d17bf3ba490480b",
-      "byte_length": 7159
+      "sha256": "3f7ee7d628e2fd206c0f953acde72ba1490dba303a334c1d4edba3e4c144baf0",
+      "byte_length": 7080
     },
     {
       "path": "decision-state.patch",
       "sha256": "2941c17f08d2fb61e302e641e6c5402ad8eff256f6d433cab9dfb68130e4c68f",
       "byte_length": 3411
+    },
+    {
+      "path": "overlay/audit-service/src/main/java/dev/deltafuse/bench/audit/messaging/AuditProjectionService.java",
+      "sha256": "544cf78bc743a6c436a444cd9c397bd30800600e7dd193808bfc8a157a41a631",
+      "byte_length": 3905
     },
     {
       "path": "overlay/workflow-service/src/main/resources/db/migration/V5__reference_parallel_approval.sql",

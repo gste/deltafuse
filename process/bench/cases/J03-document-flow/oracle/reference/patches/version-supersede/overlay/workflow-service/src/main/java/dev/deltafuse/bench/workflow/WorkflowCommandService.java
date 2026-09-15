@@ -111,7 +111,7 @@ public final class WorkflowCommandService {
                         documentId, versionId, routeId, decisionId,
                         "route superseded before the decision arrived");
                 insertOutbox(connection, ignoredEventId, routeId, sequence,
-                        "IGNORED_LATE_DECISION", ignored);
+                        "j03.workflow.decision-ignored", ignored);
                 update(connection, "INSERT INTO decision_receipt (route_id, decision_id, operation_id, "
                                 + "request_payload, result_event_id, result_state, result_domain_sequence) "
                                 + "VALUES (?, ?, ?, ?::jsonb, ?, 'IGNORED_LATE_DECISION', ?)",

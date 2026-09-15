@@ -137,7 +137,9 @@ def test_live_reference_scenarios_match_the_interpreter(tmp_path):
         assert actual_states == expected_states, (
             scenario_id + ": reference diverged from the interpreter")
         expected_workflow_kinds = sorted(
-            entry.kind for entry in expected.audit[document_id]
+            ("j03.workflow.decision-ignored"
+             if entry.kind == "IGNORED_LATE_DECISION" else entry.kind)
+            for entry in expected.audit[document_id]
             if entry.kind.startswith(("j03.workflow.", "IGNORED_", "ACTOR_",
                                       "EXPERT_", "UNSUPPORTED_")))
         actual_workflow_kinds = sorted(

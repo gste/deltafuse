@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "overlay/workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java",
-      "sha256": "9010c2181078df64ca942f76445d23b7c05a32b104f88728f98dafec0a5bf542",
-      "byte_length": 20867
+      "sha256": "fcea29e3030a57e3ce137d5be44290ddbb840a992f44304c14632197cab1a740",
+      "byte_length": 20875
     },
     {
       "path": "overlay/workflow-service/src/main/resources/db/migration/V4__reference_supersede.sql",

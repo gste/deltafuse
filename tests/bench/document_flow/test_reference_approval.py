@@ -76,6 +76,17 @@ def test_patch_applies_only_after_supersede_overlay(tmp_path):
     assert (copied / "workflow-service/src/main/resources/db/migration/V5__reference_parallel_approval.sql").is_file()
 
 
+def test_cumulative_reference_routes_only_auditable_target_events(tmp_path):
+    copied = _reference_copy(tmp_path, approval=True)
+    service = (copied / "workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java").read_text(encoding="utf-8")
+    audit = (copied / "audit-service/src/main/java/dev/deltafuse/bench/audit/messaging/AuditProjectionService.java").read_text(encoding="utf-8")
+    assert '"j03.workflow.decision-ignored"' in service
+    assert 'insertOutbox(connection, eventId, routeId, sequence, code, decision)' not in service
+    for schema in ("j03.workflow.decision-applied", "j03.workflow.route-superseded",
+                   "j03.workflow.decision-ignored"):
+        assert schema in audit
+
+
 def test_public_seed_remains_single_approver_baseline():
     service = (SEED / "workflow-service/src/main/java/dev/deltafuse/bench/workflow/WorkflowCommandService.java").read_text(encoding="utf-8")
     assert "ACTOR_ROLE_MISMATCH" not in service
