@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "mutants": [
+    {
+      "id": "M14",
+      "name": "State update commits without atomic inbox/outbox",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.C01", "SYS.R01"],
+      "critical": true,
+      "description": "Domain state updates commit in separate database transaction from outbox event publishing."
+    },
+    {
+      "id": "M15",
+      "name": "Publisher sends directly without outbox",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.C01", "SYS.R02"],
+      "critical": true,
+      "description": "Message published directly over Kafka/network without transactional outbox pattern."
+    },
+    {
+      "id": "M16",
+      "name": "Synchronous mutation HTTP replaces Kafka",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.C01"],
+      "critical": true,
+      "description": "Service invokes downstream service synchronously over HTTP instead of asynchronous messaging."
+    },
+    {
+      "id": "M17",
+      "name": "Invalid message DLQ after partial domain update",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.C02"],
+      "critical": true,
+      "description": "Malformed/invalid payload routes to DLQ only after partially committing domain state mutations."
+    },
+    {
+      "id": "M18",
+      "name": "Replay duplicates audit rows",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.R03"],
+      "critical": true,
+      "description": "Audit consumer lacks deduplication / idempotent projection on event stream replay."
+    },
+    {
+      "id": "M19",
+      "name": "Consumer restart loses/doubles observable effect",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.R01"],
+      "critical": true,
+      "description": "Consumer crash/restart leaves duplicate state updates or drops unprocessed messages without transactional inbox."
+    },
+    {
+      "id": "M20",
+      "name": "Shared database transaction across services",
+      "surface": "Java resilience",
+      "expected_checks": ["SYS.C01"],
+      "critical": true,
+      "description": "Services share a database connection/transaction violating service isolation boundaries."
+    }
+  ]
+}

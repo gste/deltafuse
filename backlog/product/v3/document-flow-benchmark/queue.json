@@ -1708,7 +1708,7 @@
       "green": "All critical resilience mutants fail the expected IDs with evidence of actual fault trigger and observable violation.",
       "test": "python -m pytest tests/bench/document_flow/test_resilience_mutants.py -q; live resilience mutant matrix",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-603.md",
       "result_path": "packages/06/cards/J03-603.md"
     },
