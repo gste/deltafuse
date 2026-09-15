@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "budget_revision": "J03-resource-budgets-1",
+  "budgets": {
+    "max_sql_statements_per_command": 10,
+    "max_replayed_messages_on_request": 0,
+    "max_completion_seconds_per_operation": 5.0,
+    "max_heap_mb_per_service": 512,
+    "max_restarts_allowed": 0
+  }
+}

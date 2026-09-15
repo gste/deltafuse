@@ -1,6 +1,6 @@
 # Package 03 — Generated oracle and system judge
 
-Status: in_progress; J03-301 through J03-306 are complete; J03-307 is blocked pending live fault execution; J03-308 remains planned.
+Status: in_progress; J03-301 through J03-306 are complete; J03-307 is blocked pending live fault execution; J03-308 is complete ([result](cards/J03-308.md)).
 Commit boundary: `bench: add generated document flow oracle`.
 
 ## Cards in default order
@@ -51,3 +51,5 @@ The next package cannot treat this README as completion evidence.
 - [J03-306B closure](cards/J03-306B.md): retained seed, negative-control and cumulative-reference facts close every original acceptance requirement.
 - [J03-306 result](cards/J03-306.md): parent closed from the complete A/B child evidence.
 - [J03-307 result](cards/J03-307.md): frozen R01-R04/C01 contract layer and fail-closed fact derivation added; live fault execution remains blocked by the current quota limit.
+
+- [J03-308 result](cards/J03-308.md): hidden bounded load and resource checks (SYS.C04, SYS.E01-SYS.E04) and frozen budget contract.

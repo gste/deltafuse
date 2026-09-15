@@ -100,7 +100,7 @@
       ],
       "red": "Counterexample: a hidden expectation absent from intake/spec, a witness written outside the envelope, or a distributed-ACID promise is rejected.",
       "green": "Every requirement has a public contract anchor and observable check mapping; no unresolved choice affects scored behavior.",
-      "test": "Contract review against INSTRUCTION sections 3–4, Core envelope examples and SCORING-PLAN registry.",
+      "test": "Contract review against INSTRUCTION sections 3\u20134, Core envelope examples and SCORING-PLAN registry.",
       "kind": "contract",
       "status": "complete",
       "card_path": "cards/J03-002.md",
@@ -878,7 +878,7 @@
       ],
       "invariant": "All F01-F09 and C02/C03 subcases, weights and independent expectations are frozen before live results.",
       "steps": [
-        "Implement F01–F09 plus C02/C03 scenarios from registry, with exact expected error/late/audit assertions.",
+        "Implement F01\u2013F09 plus C02/C03 scenarios from registry, with exact expected error/late/audit assertions.",
         "Cover duplicate identities, separate documents, early registrar, both reject roles, supersede before/after partial review.",
         "Prove points derive from all named subcase facts and keep the suite private."
       ],
@@ -894,11 +894,26 @@
       "id": "J03-306B1",
       "package": "03",
       "title": "Repair live Kafka and DLQ judge boundary",
-      "depends_on": ["J03-306A"],
-      "read_set": ["scripts/document_flow/clients.py", "process/bench/cases/J03-document-flow/seed/compose.yaml", "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py"],
-      "write_set": ["scripts/document_flow/clients.py", "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py", "tests/bench/document_flow/test_system_runner.py", "tests/bench/document_flow/test_hidden_functional_contract.py"],
+      "depends_on": [
+        "J03-306A"
+      ],
+      "read_set": [
+        "scripts/document_flow/clients.py",
+        "process/bench/cases/J03-document-flow/seed/compose.yaml",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py"
+      ],
+      "write_set": [
+        "scripts/document_flow/clients.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
+        "tests/bench/document_flow/test_system_runner.py",
+        "tests/bench/document_flow/test_hidden_functional_contract.py"
+      ],
       "invariant": "C02 uses the pinned live Kafka boundary and hash-bound DLQ evidence without host leakage.",
-      "steps": ["Replace the nonexistent broker CLI path with a run-owned service-container Kafka client.", "Publish a valid unknown-schema envelope and consume its exact hash-bound DLQ record.", "Prove no workflow transition and preserve seed baseline."],
+      "steps": [
+        "Replace the nonexistent broker CLI path with a run-owned service-container Kafka client.",
+        "Publish a valid unknown-schema envelope and consume its exact hash-bound DLQ record.",
+        "Prove no workflow transition and preserve seed baseline."
+      ],
       "red": "The frozen Kafka client exits 127 because its pinned CLI path does not exist and has no publish operation.",
       "green": "Live C02.dlq and C02.no-transition facts are true on an identified unchanged seed stack.",
       "test": "python -m pytest tests/bench/document_flow/test_system_runner.py tests/bench/document_flow/test_hidden_functional_contract.py -q; live C02 seed probe",
@@ -911,11 +926,27 @@
       "id": "J03-306B2",
       "package": "03",
       "title": "Repair reference audit propagation and rerun frozen scenarios",
-      "depends_on": ["J03-306B1"],
-      "read_set": ["process/bench/cases/J03-document-flow/oracle/reference/**", "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py", "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py"],
-      "write_set": ["process/bench/cases/J03-document-flow/oracle/reference/**", "tests/bench/document_flow/test_reference_*.py", "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py", "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py", "tests/bench/document_flow/test_hidden_functional_contract.py"],
+      "depends_on": [
+        "J03-306B1"
+      ],
+      "read_set": [
+        "process/bench/cases/J03-document-flow/oracle/reference/**",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py"
+      ],
+      "write_set": [
+        "process/bench/cases/J03-document-flow/oracle/reference/**",
+        "tests/bench/document_flow/test_reference_*.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
+        "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
+        "tests/bench/document_flow/test_hidden_functional_contract.py"
+      ],
       "invariant": "Applied and ignored decisions propagate to audit and the cumulative reference passes every frozen fact live.",
-      "steps": ["Add reference-only applied and ignored decision event contracts/outbox propagation/audit projection.", "Demonstrate missing audit events as Red and live delivery as Green.", "Rerun seed, hardcoded control and cumulative reference for every F01-F09/C02/C03 fact."],
+      "steps": [
+        "Add reference-only applied and ignored decision event contracts/outbox propagation/audit projection.",
+        "Demonstrate missing audit events as Red and live delivery as Green.",
+        "Rerun seed, hardcoded control and cumulative reference for every F01-F09/C02/C03 fact."
+      ],
       "red": "The cumulative reference fails F01.audit-order and both F06 ignored-decision audit facts.",
       "green": "The cumulative reference passes all F01-F09/C02/C03 facts with retained live evidence.",
       "test": "reference audit tests; document-flow regression; clean live seed/reference hidden suite",
@@ -928,7 +959,9 @@
       "id": "J03-306B",
       "package": "03",
       "title": "Execute hidden functional scenarios on seed and reference",
-      "depends_on": ["J03-306B2"],
+      "depends_on": [
+        "J03-306B2"
+      ],
       "read_set": [
         "process/bench/cases/J03-document-flow/hidden_suite/test_functional.py",
         "process/bench/cases/J03-document-flow/hidden_suite/test_consistency.py",
@@ -941,7 +974,11 @@
         "tests/bench/document_flow/test_hidden_functional_contract.py"
       ],
       "invariant": "Frozen named facts are observed through the live judge boundary on both seed and reference.",
-      "steps": ["Execute every frozen variant on unchanged seed and private reference.", "Retain per-subcase facts and demonstrate hardcoded happy-path failure.", "Derive fixed points from facts, never process exit alone."],
+      "steps": [
+        "Execute every frozen variant on unchanged seed and private reference.",
+        "Retain per-subcase facts and demonstrate hardcoded happy-path failure.",
+        "Derive fixed points from facts, never process exit alone."
+      ],
       "red": "Seed and hardcoded happy-path candidate fail their preregistered target IDs.",
       "green": "Reference passes all F01-F09/C02/C03 facts with complete live evidence.",
       "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q; live hidden suite on seed/reference",
@@ -954,10 +991,15 @@
       "id": "J03-306",
       "package": "03",
       "title": "Implement hidden functional scenarios",
-      "depends_on": ["J03-306B"],
-      "read_set": [], "write_set": [],
+      "depends_on": [
+        "J03-306B"
+      ],
+      "read_set": [],
+      "write_set": [],
       "invariant": "Functional points are earned only by observable target behavior across private variants.",
-      "steps": ["Close only after both sequential children preserve every original acceptance requirement."],
+      "steps": [
+        "Close only after both sequential children preserve every original acceptance requirement."
+      ],
       "red": "Inherited from J03-306A/B.",
       "green": "Inherited from J03-306A/B.",
       "test": "child evidence review",
@@ -986,7 +1028,7 @@
       ],
       "invariant": "Measured faults prove inbox/outbox and replay safety; unavailable infrastructure is not a passing resilience test.",
       "steps": [
-        "Implement R01–R04 and C01 with actual commit/ack and publish/sent barriers, topic replay and DB/broker outage/recovery.",
+        "Implement R01\u2013R04 and C01 with actual commit/ack and publish/sent barriers, topic replay and DB/broker outage/recovery.",
         "Verify fault point receipts, duplicates, partial state, inbox/outbox rows and audit count via approved observations.",
         "Scope restoration and cleanup to run-owned resources."
       ],
@@ -1026,7 +1068,7 @@
       "green": "Reference meets all frozen budgets on fixed host profile; unit accounting resists missing/forged measurements.",
       "test": "python -m pytest tests/bench/document_flow/test_resource_accounting.py -q; bounded live system suite",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-308.md",
       "result_path": "packages/03/cards/J03-308.md"
     },
@@ -1598,7 +1640,7 @@
       ],
       "invariant": "Process calibration mutates real artifacts and authenticated action fixtures, not check-result booleans.",
       "steps": [
-        "Implement M01–M08 and M21/M23 from the frozen matrix with precise source patch/asserted action.",
+        "Implement M01\u2013M08 and M21/M23 from the frozen matrix with precise source patch/asserted action.",
         "Keep valid surrounding fixture evidence so the intended defect reaches the relevant oracle.",
         "Include corrected-keyword nonsense, bad routing, oversized slice, missing edge, bad Red, frozen test weakening, state edit and early write."
       ],
@@ -1628,7 +1670,7 @@
       ],
       "invariant": "Functional mutants are compiled faulty Java candidates tested by real hidden clients.",
       "steps": [
-        "Implement M09–M13 and M22 as separate patches on the private reference.",
+        "Implement M09\u2013M13 and M22 as separate patches on the private reference.",
         "Validate each patch applies cleanly and compiles before scoring; preserve unchanged reference control.",
         "Map duplicate/version/late/registrar/actor/hardcode defects to named semantic assertions."
       ],
@@ -1658,7 +1700,7 @@
       ],
       "invariant": "Fault/replay mutants are detected at measured transaction boundaries rather than by infrastructure accidents.",
       "steps": [
-        "Implement M14–M20, each changing one inbox/outbox/DLQ/replay/restart/transaction property.",
+        "Implement M14\u2013M20, each changing one inbox/outbox/DLQ/replay/restart/transaction property.",
         "Execute measured fault points and compare preserved observations against independent interpreter and SQL assertions.",
         "Keep correct reference rerun controls to diagnose harness instability."
       ],
@@ -1688,7 +1730,7 @@
       ],
       "invariant": "Recomputed totals and effective isolation reject forged summaries and missing/substituted provenance.",
       "steps": [
-        "Implement M24 plus M25–M28: rehashed totals/checks, truncated event chain, oracle mount/rename, identity substitution and omitted campaign member.",
+        "Implement M24 plus M25\u2013M28: rehashed totals/checks, truncated event chain, oracle mount/rename, identity substitution and omitted campaign member.",
         "Exercise replay on mutated disk trees including attacker-updated local hashes.",
         "Distinguish valid observed misconduct from invalid broken trust root."
       ],
@@ -1905,7 +1947,7 @@
       "steps": [
         "Reconcile every acceptance row, delivery requirement and 28-mutant row with immutable evidence refs and exact hashes.",
         "Document install/provision/run/replay/compare, 1..10000 semantics, invalidity, threats, limitations and next work in English/Russian.",
-        "Verify active J03 dispatch/inventory, preserve M01–M03/J01, check links and dirty state; write truthful completion verdict."
+        "Verify active J03 dispatch/inventory, preserve M01\u2013M03/J01, check links and dirty state; write truthful completion verdict."
       ],
       "red": "Missing live stack/pilot/platform evidence or stale hash prevents marking complete regardless of unit counts.",
       "green": "Every required criterion is passed or explicitly blocking; benchmark ready only when all pass; no push/merge implied.",
