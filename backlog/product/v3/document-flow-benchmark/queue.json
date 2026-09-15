@@ -920,7 +920,7 @@
       "green": "The cumulative reference passes all F01-F09/C02/C03 facts with retained live evidence.",
       "test": "reference audit tests; document-flow regression; clean live seed/reference hidden suite",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-306B2.md",
       "result_path": "packages/03/cards/J03-306B2.md"
     },
@@ -946,7 +946,7 @@
       "green": "Reference passes all F01-F09/C02/C03 facts with complete live evidence.",
       "test": "python -m pytest tests/bench/document_flow/test_hidden_functional_contract.py -q; live hidden suite on seed/reference",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-306B.md",
       "result_path": "packages/03/cards/J03-306B.md"
     },
@@ -962,7 +962,7 @@
       "green": "Inherited from J03-306A/B.",
       "test": "child evidence review",
       "kind": "integration",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-306.md",
       "result_path": "packages/03/cards/J03-306.md"
     },

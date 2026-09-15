@@ -1,6 +1,6 @@
 # Package 03 — Generated oracle and system judge
 
-Status: in_progress; J03-301 through J03-305 are complete and later package cards remain planned.
+Status: in_progress; J03-301 through J03-306 are complete; J03-307 is blocked pending live fault execution; J03-308 remains planned.
 Commit boundary: `bench: add generated document flow oracle`.
 
 ## Cards in default order
@@ -10,7 +10,7 @@ Commit boundary: `bench: add generated document flow oracle`.
 - [J03-303 — Create private reference version-supersede implementation](../../cards/J03-303.md) — [result](cards/J03-303.md)
 - [J03-304 — Complete private reference parallel approval implementation](../../cards/J03-304.md) — [result](cards/J03-304.md)
 - [J03-305 — Build judge clients and stack execution harness](../../cards/J03-305.md) — [result](cards/J03-305.md)
-- [J03-306 — Implement hidden functional scenarios](../../cards/J03-306.md) — B split: [J03-306B1](../../cards/J03-306B1.md) ([result](cards/J03-306B1.md)), then [J03-306B2](../../cards/J03-306B2.md), then B closure
+- [J03-306 — Implement hidden functional scenarios](../../cards/J03-306.md) — [result](cards/J03-306.md); child evidence: [B1](cards/J03-306B1.md), [B2](cards/J03-306B2.md), [B closure](cards/J03-306B.md)
 - [J03-307 — Implement hidden transaction and resilience scenarios](../../cards/J03-307.md)
 - [J03-308 — Implement hidden bounded load and resource checks](../../cards/J03-308.md)
 
@@ -46,5 +46,8 @@ The next package cannot treat this README as completion evidence.
 - Restricted judge clients and fault controls: `scripts/document_flow/clients.py`, `scripts/document_flow/faults.py`
 - [J03-306A result](cards/J03-306A.md)
 - Frozen private functional scenarios: `process/bench/cases/J03-document-flow/hidden_suite/test_functional.py`, `test_consistency.py`
-- [J03-306B blocked live result](cards/J03-306B.md): seed/reference facts retained externally; reference fails F01, F06 and C02, so J03-306 remains open.
-- [J03-306B1 result](cards/J03-306B1.md): live Kafka/DLQ boundary repaired; C02 passes on unchanged seed. Next: J03-306B2 reference audit repair.
+- [J03-306B1 result](cards/J03-306B1.md): live Kafka/DLQ boundary repaired; C02 passes on unchanged seed.
+- [J03-306B2 result](cards/J03-306B2.md): reference audit propagation repaired; cumulative reference passes F01-F09/C02/C03 live.
+- [J03-306B closure](cards/J03-306B.md): retained seed, negative-control and cumulative-reference facts close every original acceptance requirement.
+- [J03-306 result](cards/J03-306.md): parent closed from the complete A/B child evidence.
+- [J03-307 result](cards/J03-307.md): frozen R01-R04/C01 contract layer and fail-closed fact derivation added; live fault execution remains blocked by the current quota limit.
