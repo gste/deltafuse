@@ -1678,7 +1678,7 @@
       "green": "Each mutant executes real scenario and fails expected check ID; baseline/reference hashes remain untouched.",
       "test": "python -m pytest tests/bench/document_flow/test_functional_mutants.py -q; live functional mutant matrix",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-602.md",
       "result_path": "packages/06/cards/J03-602.md"
     },
