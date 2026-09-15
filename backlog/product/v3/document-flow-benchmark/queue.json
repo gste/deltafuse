@@ -1618,7 +1618,7 @@
       "green": "Real process boundary and transport tested; explicit synthetic/non-release classification retained.",
       "test": "python -m pytest tests/bench/document_flow/test_external_adapter_live.py -q (explicit live profile, not silent skip)",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-508.md",
       "result_path": "packages/05/cards/J03-508.md"
     },
