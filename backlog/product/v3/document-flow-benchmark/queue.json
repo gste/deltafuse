@@ -1917,7 +1917,7 @@
       "green": "All required run directories and source evidence exist; aggregate and diagnostic tables re-evaluate from disk; no guaranteed Worker success is assumed.",
       "test": "python -m scripts.document_flow campaign --plan <campaign-plan> --runs <root> --out <fresh-report>; replay each member twice",
       "kind": "qualification",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-705.md",
       "result_path": "packages/07/cards/J03-705.md"
     },
