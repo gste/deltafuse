@@ -1801,7 +1801,7 @@
       "green": "Immutable build and inventory manifest references real clean SHA and independent evidence store.",
       "test": "Read-only clean-tree checks; wheel evidence builder at verified interface; J03 preflight; asset sync --check",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-701.md",
       "result_path": "packages/07/cards/J03-701.md"
     },
