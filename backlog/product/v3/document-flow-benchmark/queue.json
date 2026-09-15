@@ -1129,7 +1129,7 @@
       "green": "Resume only same authenticated session state when supported; otherwise interrupted run closes without fabricated events.",
       "test": "python -m pytest tests/bench/document_flow/test_snapshots.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-402.md",
       "result_path": "packages/04/cards/J03-402.md"
     },
