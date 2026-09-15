@@ -1770,7 +1770,7 @@
       "green": "All critical killed; at least 26/28 total with zero unexplained invalid calibration cases; two replays agree.",
       "test": "python -m pytest tests/bench/document_flow/test_calibration.py -q; python -m scripts.document_flow calibrate --plan <manifest> --out <fresh-output>",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-605.md",
       "result_path": "packages/06/cards/J03-605.md"
     },
