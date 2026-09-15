@@ -1455,7 +1455,7 @@
       "green": "Denied actions are logged externally; legitimate stage writes work and actual Gate pauses remain human.",
       "test": "python -m pytest tests/bench/document_flow/test_tool_guard.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-503.md",
       "result_path": "packages/05/cards/J03-503.md"
     },
