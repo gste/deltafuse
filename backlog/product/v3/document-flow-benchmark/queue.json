@@ -1196,7 +1196,7 @@
       "green": "Good specification/task fixtures pass exact traceability checks; unsupported prose semantics are reported as limitations.",
       "test": "python -m pytest tests/bench/document_flow/test_specify_decompose.py -q",
       "kind": "implementation",
-      "status": "planned",
+      "status": "complete",
       "card_path": "cards/J03-404.md",
       "result_path": "packages/04/cards/J03-404.md"
     },
