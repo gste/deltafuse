@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deltafuse.invalid/schemas/run-report.schema.json",
+  "title": "DeltaFuse v3 per-run qualification report",
+  "description": "Per-run disk report per backlog/product/v3/thresholds.md (QF-008, strict per QF-017). Exactly one of: measured pass, measured fail, infrastructure failure.",
+  "type": "object",
+  "required": [
+    "schema_version", "run_id", "case", "verdict", "framework_commit",
+    "model", "threshold_failures", "stages", "calls", "tool_events", "totals"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "case": { "type": "string", "minLength": 1 },
+    "verdict": { "enum": ["pass", "fail"] },
+    "framework_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "model": { "type": "string", "minLength": 1 },
+    "threshold_failures": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "stages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "calls": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/call" }
+    },
+    "tool_events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/toolEvent" }
+    },
+    "totals": { "$ref": "#/$defs/totals" },
+    "t7_breakdown": { "$ref": "#/$defs/t7Breakdown" },
+    "hallucinated_breakdown": { "$ref": "#/$defs/breakdown" },
+    "framework_input_tokens_method": {
+      "enum": ["host-tokenize", "estimated-nonrelease", "unavailable", "mixed"]
+    },
+    "process": { "type": "number", "minimum": 0, "maximum": 100 },
+    "correctness": { "type": ["number", "null"] },
+    "points": {
+      "type": "object",
+      "description": "QF-021: scorecard points, the primary source of correctness.",
+      "required": ["earned", "max"],
+      "properties": {
+        "earned": { "type": ["integer", "null"], "minimum": 0 },
+        "max": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "defense_checks": {
+      "type": "object",
+      "description": "QF-021: T8 defense evidence embedded with receipt details.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "pass"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "pass": { "type": "boolean" },
+          "detail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "executor_kind": { "enum": ["isolated", "local-dev"] },
+    "thresholds": {
+      "type": "object",
+      "description": "QF-021: thresholds snapshot embedded in every report.",
+      "required": ["source", "revision", "absolute"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "minLength": 1 },
+        "absolute": {
+          "type": "object",
+          "required": [
+            "correctness_failed", "stages_completed", "gate_retries_max",
+            "context_peak_tokens_max", "framework_input_tokens_max",
+            "max_unique_files", "hallucinated_paths", "envelope_violations",
+            "evidence_authentic"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "stage_leash": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage_write_set", "violations"],
+        "properties": {
+          "stage_write_set": { "type": "array", "items": { "type": "string" } },
+          "violations": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "envelope_error": { "type": "string" },
+    "error": {
+      "type": "object",
+      "required": ["class", "detail"],
+      "properties": {
+        "class": { "enum": ["host_error", "score_error", "io_error", "schema_error", "boundary_error", "internal_error"] },
+        "detail": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "description": "QF-017: measured pass — every measurement non-null, no failures, no error.",
+      "properties": {
+        "verdict": { "const": "pass" },
+        "threshold_failures": { "maxItems": 0 },
+        "totals": {
+          "required": [
+            "correctness", "gate_retries", "context_peak_tokens",
+            "framework_input_tokens_max", "max_unique_files",
+            "hallucinated_paths", "envelope_violations", "evidence_authentic"
+          ],
+          "properties": {
+            "correctness": {
+              "type": "object",
+              "properties": {
+                "passed": { "type": "integer" },
+                "failed": { "const": 0 }
+              }
+            },
+            "gate_retries": { "type": "integer" },
+            "context_peak_tokens": { "type": "integer" },
+            "framework_input_tokens_max": { "type": "integer" },
+            "max_unique_files": { "type": "integer" },
+            "hallucinated_paths": { "type": "integer" },
+            "envelope_violations": { "type": "integer" },
+            "evidence_authentic": { "const": true }
+          }
+        }
+      },
+      "not": { "required": ["error"] }
+    },
+    {
+      "description": "QF-017: measured fail — measurements present, failures non-empty, no error.",
+      "properties": {
+        "verdict": { "const": "fail" },
+        "threshold_failures": { "minItems": 1 }
+      },
+      "not": { "required": ["error"] }
+    },
+    {
+      "description": "QF-017: infrastructure failure — error required, nullable measurements allowed.",
+      "properties": {
+        "verdict": { "const": "fail" },
+        "error": { "type": "object" }
+      },
+      "required": ["error"]
+    }
+  ],
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": ["stage", "status", "checks", "gate_retries"],
+      "properties": {
+        "stage": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["completed", "failed", "skipped", "aborted"] },
+        "checks": {
+          "type": "object",
+          "required": ["passed", "failed"],
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "gate_retries": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "call": {
+      "type": "object",
+      "description": "QF-017: every T4-T7 measurement per call, correctly typed.",
+      "required": [
+        "input_tokens", "framework_input_chars", "framework_input_tokens",
+        "framework_input_tokens_method", "unique_files",
+        "hallucinated_paths", "envelope_violations"
+      ],
+      "properties": {
+        "input_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "framework_input_chars": { "type": "integer", "minimum": 0 },
+        "framework_input_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "framework_input_tokens_method": {
+          "enum": ["host-tokenize", "estimated-nonrelease", "unavailable"]
+        },
+        "unique_files": { "type": "integer", "minimum": 0 },
+        "hallucinated_paths": { "type": "integer", "minimum": 0 },
+        "envelope_violations": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "toolEvent": {
+      "type": "object",
+      "required": [
+        "call_index", "seq", "tool", "outcome", "paths_read", "paths_written"
+      ],
+      "properties": {
+        "call_index": { "type": "integer", "minimum": 1 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "tool": { "enum": ["read", "write", "shell", "unknown"] },
+        "outcome": { "type": "string", "minLength": 1 },
+        "paths_read": { "type": "array", "items": { "type": "string" } },
+        "paths_written": { "type": "array", "items": { "type": "string" } },
+        "command": { "type": ["string", "null"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "envelope_globs": { "type": ["array", "null"], "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "correctness", "gate_retries", "context_peak_tokens",
+        "framework_input_tokens_max", "max_unique_files",
+        "hallucinated_paths", "envelope_violations", "evidence_authentic"
+      ],
+      "properties": {
+        "correctness": {
+          "type": "object",
+          "required": ["passed", "failed"],
+          "properties": {
+            "passed": { "type": ["integer", "null"], "minimum": 0 },
+            "failed": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "gate_retries": { "type": ["integer", "null"], "minimum": 0 },
+        "context_peak_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "framework_input_tokens_max": { "type": ["integer", "null"], "minimum": 0 },
+        "max_unique_files": { "type": ["integer", "null"], "minimum": 0 },
+        "hallucinated_paths": { "type": ["integer", "null"], "minimum": 0 },
+        "envelope_violations": { "type": ["integer", "null"], "minimum": 0 },
+        "evidence_authentic": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "breakdown": {
+      "type": "object",
+      "required": ["hallucinated", "envelope", "execution_policy"],
+      "properties": {
+        "hallucinated": { "type": "integer", "minimum": 0 },
+        "envelope": { "type": "integer", "minimum": 0 },
+        "execution_policy": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "t7Breakdown": {
+      "type": "object",
+      "required": [
+        "write_denied", "leash_violations", "unjournaled_change",
+        "inventory_tampered", "staging_escape", "execution_policy"
+      ],
+      "properties": {
+        "write_denied": { "type": "integer", "minimum": 0 },
+        "leash_violations": { "type": "integer", "minimum": 0 },
+        "unjournaled_change": { "type": "integer", "minimum": 0 },
+        "inventory_tampered": { "type": "integer", "minimum": 0 },
+        "staging_escape": { "type": "integer", "minimum": 0 },
+        "execution_policy": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

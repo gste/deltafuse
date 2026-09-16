@@ -9,6 +9,8 @@ import yaml
 import jsonschema
 from jsonschema.validators import validator_for
 
+from deltafuse.core.assets import AssetError, resolve_assets
+
 _UNEXP_PROPS = re.compile(
     r"Additional properties are not allowed \((.+) (?:was|were) unexpected\)"
 )
@@ -175,12 +177,10 @@ class SchemaRegistry:
 
     def __init__(self, schemas_dir: Path | str | None = None):
         if schemas_dir is None:
-            # Look relative to repository root or package
-            base = Path(__file__).resolve().parent.parent.parent.parent
-            candidate = base / "process" / "schemas"
-            if candidate.is_dir():
-                self.schemas_dir = candidate
-            else:
+            # DF3-005: packaged asset bundle first, source checkout fallback.
+            try:
+                self.schemas_dir = resolve_assets("schemas")
+            except AssetError:
                 self.schemas_dir = Path("process/schemas").resolve()
         else:
             self.schemas_dir = Path(schemas_dir).resolve()

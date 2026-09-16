@@ -18,11 +18,11 @@ def test_all_expected_schemas_loaded(registry: SchemaRegistry):
         schema = registry.get_schema(schema_name)
         assert schema is not None
         assert schema.get("$schema") == "https://json-schema.org/draft/2020-12/schema"
-        assert f"https://deltafuse.dev/schemas/v2/{schema_name}.schema.yaml" in schema.get("$id", "")
+        assert f"https://deltafuse.dev/schemas/v3/{schema_name}.schema.yaml" in schema.get("$id", "")
 
 def test_change_schema_valid_and_invalid(registry: SchemaRegistry):
     valid_change = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "CHG-042",
         "title": "Fix authentication expiration",
         "status": "normalized",
@@ -137,14 +137,14 @@ def test_coverage_schema_validation(registry: SchemaRegistry):
     }
     assert registry.validate("coverage", valid_coverage) == []
 
-    with_schema_version = dict(valid_coverage, schema_version=2)
+    with_schema_version = dict(valid_coverage, schema_version=3)
     assert registry.validate("coverage", with_schema_version) == []
     with_unknown = dict(valid_coverage, unexpected_key="ok")
     assert registry.validate("coverage", with_unknown) == []
 
 def test_evidence_schema_validation(registry: SchemaRegistry):
     valid_evidence = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-001",
         "task": "TASK-001",
         "phase": "red",
@@ -167,7 +167,7 @@ def test_evidence_schema_validation(registry: SchemaRegistry):
 
     # Regression phase requires task
     valid_regression = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-001",
         "task": "TASK-001",
         "phase": "regression",
@@ -206,7 +206,7 @@ def test_decision_schema_validation(registry: SchemaRegistry):
 
 def test_capability_schema_validation(registry: SchemaRegistry):
     valid_catalog = {
-        "schema_version": 2,
+        "schema_version": 3,
         "domains": {
             "identity": {
                 "summary": "User authentication and authorization",
@@ -256,7 +256,7 @@ def test_routing_schema_validation(registry: SchemaRegistry):
     assert registry.validate("routing", valid_routing) == []
 
     # AB-05 / RM-022: extra top-level keys (models copy schema_version) are ignored
-    with_schema_version = dict(valid_routing, schema_version=2)
+    with_schema_version = dict(valid_routing, schema_version=3)
     assert registry.validate("routing", with_schema_version) == []
     with_unknown = dict(valid_routing, unexpected_key="ok")
     assert registry.validate("routing", with_unknown) == []
@@ -288,7 +288,7 @@ def test_routing_schema_validation(registry: SchemaRegistry):
 
 def test_change_source_rejects_invented_keys(registry: SchemaRegistry):
     valid = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": "CHG-042",
         "title": "Fix authentication expiration",
         "status": "normalized",
@@ -345,3 +345,24 @@ def test_bootstrap_decision_schema_validation(registry: SchemaRegistry):
         "superseded_by": None,
     }
     assert registry.validate("decision", valid_bootstrap) == []
+
+
+STANDALONE_VERSIONED = ["change", "evidence", "capability"]
+CHANGE_NESTED = ["task", "slice", "decision", "spec-delta", "routing", "coverage"]
+
+
+def test_schema_id_version_matches_declared_schema_version():
+    """V3-FIX-012 / V3-FIX-013: the $id major version and the artifact
+    versioning model must agree for every canonical schema."""
+    from deltafuse.core.schemas import SchemaRegistry
+
+    registry = SchemaRegistry()
+    for name in ALL_SCHEMAS:
+        schema = registry.get_schema(name)
+        assert "/schemas/v3/" in schema["$id"], name
+        if name in STANDALONE_VERSIONED:
+            assert schema.get("required") and "schema_version" in schema["required"], name
+            assert schema["properties"]["schema_version"]["const"] == 3, name
+        else:
+            assert "schema_version" not in schema.get("required", []), name
+            assert "V3-FIX-013" in schema.get("description", ""), name

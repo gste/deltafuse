@@ -1,0 +1,8 @@
+change: CHG-000-example
+# Map keyed by CR-001 (three digits). Field name is primary_capability, not capability.
+claims:
+  CR-001:
+    primary_capability: unresolved
+    related_capabilities: []
+    policies: []
+    confidence: unknown

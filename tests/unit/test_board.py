@@ -79,7 +79,7 @@ def test_board_two_changes_and_no_side_effects(tmp_path: Path, repo_root: Path):
     first = MockChangeBuilder(tmp_path, change_id="CHG-030", title="Earlier").step_intake()
     (first.change_dir / "evidence" / "red").mkdir(parents=True)
     (first.change_dir / "evidence" / "red" / "TASK-001.yaml").write_text(
-        "schema_version: 2\n", encoding="utf-8"
+        "schema_version: 3\n", encoding="utf-8"
     )
     dec = tmp_path / "docs" / "decisions" / "DEC-0042-block.md"
     dec.write_text(
@@ -109,7 +109,7 @@ def test_board_two_changes_and_no_side_effects(tmp_path: Path, repo_root: Path):
     assert by_id["CHG-030"]["has_red"] is True
     assert by_id["CHG-030"]["has_green"] is False
     assert by_id["CHG-030"]["slice_count"] == 0
-    assert by_id["CHG-031"]["status"] == "analyzed"
+    assert by_id["CHG-031"]["status"] == "analyzing"
     assert by_id["CHG-031"]["slice_count"] == 1
     assert "request.md" not in json.dumps(snapshot)
     assert "CR-001" not in json.dumps(snapshot)
@@ -129,7 +129,7 @@ def test_board_archive_flag_only(tmp_path: Path, repo_root: Path):
     archived = tmp_path / "docs" / "archive" / "changes" / "2026-09-10-CHG-041"
     archived.mkdir(parents=True)
     (archived / "change.yaml").write_text(
-        "schema_version: 2\n"
+        "schema_version: 3\n"
         "id: CHG-041\n"
         "title: Done\n"
         "status: archived\n"
@@ -157,7 +157,7 @@ def test_board_uses_config_paths(tmp_path: Path, repo_root: Path):
     change_dir = tmp_path / "work" / "changes" / "CHG-050-alt"
     change_dir.mkdir(parents=True)
     (change_dir / "change.yaml").write_text(
-        "schema_version: 2\n"
+        "schema_version: 3\n"
         "id: CHG-050\n"
         "title: Alt path\n"
         "status: normalized\n"

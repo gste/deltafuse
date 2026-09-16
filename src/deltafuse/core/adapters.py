@@ -157,13 +157,16 @@ def _copy_skill(
             f"# deltafuse-content-hash: sha256:{content_hash}\n"
         )
         content = re.sub(r"\A---\r?\n", banner, content)
-        skill_md.write_text(content, encoding="utf-8")
+        # LF is part of the generated-snapshot contract: validators anchor
+        # patterns with `$`, which does not match before a CRLF's \n.
+        skill_md.write_text(content, encoding="utf-8", newline="\n")
     marker = dest / ADAPTER_MARKER_NAME
     marker.write_text(
         f"generated_by: deltafuse@{version}\n"
         f"source: deltafuse://v{version}/skills/{skill_name}\n"
         f"content_hash: sha256:{content_hash}\n",
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -186,6 +189,7 @@ def _skill_dirs(skills_src: Path) -> list[Path]:
 def install_adapter_skills(
     *,
     framework_root: Path,
+    skills_dir: Path | None = None,
     target_root: Path,
     adapter_rel: str,
     version: str,
@@ -196,7 +200,7 @@ def install_adapter_skills(
     """Install one adapter root. Returns (count, actual_mode); actual_mode may fall back to copy."""
     adapter_root = target_root / adapter_rel
     adapter_root.mkdir(parents=True, exist_ok=True)
-    skills_src = framework_root / "process" / "skills"
+    skills_src = skills_dir if skills_dir is not None else framework_root / "process" / "skills"
     if not skills_src.is_dir():
         return 0, mode
 

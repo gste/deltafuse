@@ -32,17 +32,17 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
     }])
     assert check_gate(builder.change_dir, "decomposed") == []
 
-    # Transition change.yaml status to targeting
+    # Transition change.yaml status to declaring
     cfile = builder.change_dir / "change.yaml"
     cdata = yaml.safe_load(cfile.read_text(encoding="utf-8"))
-    cdata["status"] = "targeting"
+    cdata["status"] = "declaring"
     cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
 
     # Declare evidence: not-reproduced
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
     ev_not_rep = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": "CHG-101",
         "task": "TASK-001",
         "phase": "red",
@@ -55,10 +55,10 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
         "spec_status": "unchanged",
     }
     write_stamped_evidence(red_dir / "TASK-001.yaml", ev_not_rep, tmp_path)
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
 
     # Transition change to terminal not-reproduced status
-    assert can_transition("targeting", "not-reproduced")
+    assert can_transition("declaring", "not-reproduced")
     cdata["status"] = "not-reproduced"
     cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
 
@@ -74,8 +74,8 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
 def test_not_reproduced_transitions_from_analyzing_and_verifying(tmp_path: Path, repo_root: Path):
     """Verify that not-reproduced is reachable directly from analyzing and verifying."""
     assert can_transition("analyzing", "not-reproduced")
-    assert can_transition("targeting", "not-reproduced")
+    assert can_transition("declaring", "not-reproduced")
     assert can_transition("verifying", "not-reproduced")
 
-    # Cannot transition from normalized or implemented directly without targeting/verifying
+    # Cannot transition from normalized or implemented directly without declaring/verifying
     assert not can_transition("normalized", "not-reproduced")

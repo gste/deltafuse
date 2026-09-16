@@ -103,7 +103,7 @@ Values under `layout` are producer-owned. The consumer treats them as data.
   "generated_at": "2026-09-10T06:00:00Z",
   "product": {
     "baseline": "accepted",
-    "framework_version": "2.5.0",
+    "framework_version": "3.0.0",
     "framework_content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "call_width": "wide",
     "changes_path": "docs/changes",
@@ -115,7 +115,7 @@ Values under `layout` are producer-owned. The consumer treats them as data.
       { "id": "analyzed", "statuses": ["analyzing", "blocked-on-decision", "analyzed"] },
       { "id": "specified", "statuses": ["specification-proposed", "specified"] },
       { "id": "decomposed", "statuses": ["decomposed"] },
-      { "id": "target-confirmed", "statuses": ["targeting", "target-confirmed"] },
+      { "id": "declared", "statuses": ["declaring", "declared"] },
       { "id": "implemented", "statuses": ["implementing", "implemented"] },
       { "id": "converged", "statuses": ["verifying", "converged"] }
     ],
@@ -124,8 +124,8 @@ Values under `layout` are producer-owned. The consumer treats them as data.
       { "id": "analyze", "from": "normalized", "to": "analyzed" },
       { "id": "specify", "from": "analyzed", "to": "specified" },
       { "id": "decompose", "from": "specified", "to": "decomposed" },
-      { "id": "declare", "from": "decomposed", "to": "target-confirmed" },
-      { "id": "implement", "from": "target-confirmed", "to": "implemented" },
+      { "id": "declare", "from": "decomposed", "to": "declared" },
+      { "id": "implement", "from": "declared", "to": "implemented" },
       { "id": "verify", "from": "implemented", "to": "converged" },
       { "id": "archive", "from": "converged" }
     ]

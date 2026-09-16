@@ -6,6 +6,19 @@ from typing import Any
 CALL_WIDTHS = frozenset({"narrow", "medium", "wide"})
 DEFAULT_CALL_WIDTH = "wide"
 LEASH_MODES = frozenset({"off", "advisory", "enforce"})
+LOCK_SCHEMA_VERSION = 3
+
+
+def lock_schema_version_errors(lock: dict[str, Any] | None) -> list[str]:
+    """Fail-closed check that the lock pin uses a supported lock contract."""
+    data = lock if isinstance(lock, dict) else {}
+    version = data.get("schema_version")
+    if version == LOCK_SCHEMA_VERSION:
+        return []
+    return [
+        f"Unsupported lock schema_version {version!r}; this Core supports lock "
+        f"schema_version {LOCK_SCHEMA_VERSION} only — re-run the installer"
+    ]
 
 
 def normalize_call_width(value: Any) -> str | None:
@@ -88,7 +101,7 @@ def format_lock_yaml(
     auto = "true" if auto_accept_decisions else "false"
     hash_value = content_hash if content_hash.startswith("sha256:") else f"sha256:{content_hash}"
     return (
-        f"schema_version: 2\n"
+        f"schema_version: {LOCK_SCHEMA_VERSION}\n"
         f"framework:\n"
         f"  version: {version}\n"
         f"  source: {source}\n"

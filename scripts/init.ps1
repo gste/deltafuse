@@ -9,10 +9,10 @@ $ErrorActionPreference = "Stop"
 $FrameworkRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
 $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
-$SchemaVersion = 2
+$SchemaVersion = 3
 
 function Get-FrameworkContentHash {
-    $roots = @("docs", "process", "scripts", "tests")
+    $roots = @("docs", "process", "scripts", "tests", "src")
     $records = foreach ($root in $roots) {
         $absolute = Join-Path $FrameworkRoot $root
         if (Test-Path -LiteralPath $absolute) {
@@ -28,6 +28,10 @@ function Get-FrameworkContentHash {
     $versionPath = Join-Path $FrameworkRoot "VERSION"
     $versionHash = (Get-FileHash -LiteralPath $versionPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $records += "version:$versionHash"
+    # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too
+    $pyprojectPath = Join-Path $FrameworkRoot "pyproject.toml"
+    $pyprojectHash = (Get-FileHash -LiteralPath $pyprojectPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $records += "pyproject:$pyprojectHash"
 
     $orderedRecords = [string[]]$records
     [System.Array]::Sort($orderedRecords, [System.StringComparer]::Ordinal)

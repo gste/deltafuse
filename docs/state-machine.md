@@ -23,10 +23,10 @@ stateDiagram-v2
     analyzed --> specified: implementation bug (spec unchanged)
     
     specified --> decomposed: decompose
-    decomposed --> targeting: declare
+    decomposed --> declaring: declare
     
-    targeting --> target_confirmed: red evidence verified
-    target_confirmed --> implementing: implement
+    declaring --> declared: red evidence verified
+    declared --> implementing: implement
     implementing --> implemented: green & regression evidence
     
     implemented --> verifying: verify
@@ -41,7 +41,7 @@ stateDiagram-v2
     analyzing --> duplicate: duplicate of existing change
     analyzing --> superseded: superseded by newer change
     analyzing --> not_reproduced: defect unreproducible
-    targeting --> not_reproduced: unable to reproduce red failure
+    declaring --> not_reproduced: unable to reproduce red failure
     verifying --> not_reproduced: no-op / unreproduced closure
     
     archived --> [*]
@@ -61,9 +61,9 @@ stateDiagram-v2
 | `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` added/modified files must stay in slice `spec_refs`. `spec-delta.md` is not sufficient alone. |
-| `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `targeting` | All tasks validated against `task.schema.yaml`. |
-| `targeting` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `target-confirmed`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
-| `target-confirmed` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
+| `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `declaring` | All tasks validated against `task.schema.yaml`. |
+| `declaring` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `declared`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
+| `declared` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
 | `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression. `docs`/`ops`: allowed files exist; no `src/**`. |
 | `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
 | `verifying` | End-to-end traceability and convergence check. | `converged`, `analyzing`, `not-reproduced` | All claims mapped to green tests and spec (or no-op closure). |
@@ -71,7 +71,7 @@ stateDiagram-v2
 | `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |
 | `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented (optional `analysis.md` or Change notes). |
 | `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
-| `not-reproduced` | Defect not reproduced during analysis, targeting, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
+| `not-reproduced` | Defect not reproduced during analysis, declaring, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
 | `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
 
 ---
@@ -114,9 +114,9 @@ A Task is an atomic, independently verifiable work unit owned by a specific Slic
 ```mermaid
 stateDiagram-v2
     [*] --> pending: decompose
-    pending --> targeting: declare
-    targeting --> target_confirmed: red evidence verified
-    target_confirmed --> implementing: implement
+    pending --> declaring: declare
+    declaring --> declared: red evidence verified
+    declared --> implementing: implement
     implementing --> implemented: green evidence verified
     implemented --> verified: verify
     
@@ -134,9 +134,9 @@ stateDiagram-v2
 
 | Status | Description | Allowed Next Statuses | Gate / Precondition |
 |---|---|---|---|
-| `pending` | Task defined in `tasks/TASK-NNN.md`. | `targeting`, `blocked`, `cancelled`, `superseded` | Task matches `task.schema.yaml`. |
-| `targeting` | Test target being written. | `target_confirmed` | Test runs and fails for expected reason. |
-| `target-confirmed` | Verified Red evidence recorded. | `implementing` | Evidence file in `evidence/red/<task-id>.yaml`. |
+| `pending` | Task defined in `tasks/TASK-NNN.md`. | `declaring`, `blocked`, `cancelled`, `superseded` | Task matches `task.schema.yaml`. |
+| `declaring` | Test target being written. | `declared` | Test runs and fails for expected reason. |
+| `declared` | Verified Red evidence recorded. | `implementing` | Evidence file in `evidence/red/<task-id>.yaml`. |
 | `implementing` | Implementation code being authored. | `implemented` | Tests pass; regression suite passes. |
 | `implemented` | Green & regression evidence recorded. | `verified` | Evidence in `evidence/green/` & `regression/`. |
 | `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
@@ -193,5 +193,5 @@ stateDiagram-v2
 
 ## Versioning Invariants
 
-1. **Schema Version Compatibility**: `change.yaml`, `_capabilities.yaml`, `evidence/*.yaml`, `tasks/*.md`, `slices/*.md`, and `decisions/DEC-*.md` use `schema_version: 2` where the schema requires it. `routing.yaml` and `coverage.yaml` do not require `schema_version`; unknown top-level keys there are ignored.
+1. **Schema Version Compatibility**: `change.yaml`, `_capabilities.yaml`, and `evidence/*.yaml` carry an explicit `schema_version: 3`. Change-nested artifacts (`tasks/*.md`, `slices/*.md`, `decisions/DEC-*.md`, `routing.yaml`, `coverage.yaml`) inherit the schema version of their parent Change and are validated fail-closed through the Change contract (V3-FIX-013); unknown top-level keys on `routing.yaml`/`coverage.yaml` are ignored.
 2. **Deterministic Locking**: The `.deltafuse/lock.yaml` file stamps the exact framework version, source URI, content hash, and `workflow.call_width` (`narrow` | `medium` | `wide`). Products cannot proceed through gates if `config.yaml` version or source mismatches `lock.yaml`. `auto_accept_decisions: true` does not bypass Human Gate on proposed Decisions.

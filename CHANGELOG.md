@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Nested framework checkout and git slug are `deltafuse` / `vendor/deltafuse` (same token as `.deltafuse` and the CLI). GitHub is `gste/deltafuse`. Do not put the submodule in `.deltafuse/`.
+- Framework version unified to `3.0.0` across `VERSION`, `pyproject.toml`, `__version__`, product templates, and version examples in docs (V3-FIX-003).
+
 ## [2.5.0] - 2026-09-11
 
 ### Added

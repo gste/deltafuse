@@ -33,11 +33,11 @@ def test_golden_lifecycle_flow(tmp_path: Path, repo_root: Path):
         "depends_on": [],
     }])
     assert check_gate(builder.change_dir, "decomposed") == []
-    assert len(check_gate(builder.change_dir, "targeting")) > 0
+    assert len(check_gate(builder.change_dir, "declaring")) > 0
 
     # Gate 5: Targeting (TDD Red)
     builder.step_declare("TASK-001")
-    assert check_gate(builder.change_dir, "targeting") == []
+    assert check_gate(builder.change_dir, "declaring") == []
     assert len(check_gate(builder.change_dir, "implemented")) > 0
 
     # Gate 6: Implemented (TDD Green + Regression)

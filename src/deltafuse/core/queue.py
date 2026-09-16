@@ -11,8 +11,9 @@ import yaml
 from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.fsm import find_repo_root
+from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
+from deltafuse.core.transitions import receipt_mismatch
 from deltafuse.core.context import PHASE_CONTRACTS
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -24,8 +25,8 @@ TERMINAL_CHANGE = {
     "not-reproduced",
     "converged",
 }
-TASK_DECLARE = {"pending", "targeting"}
-TASK_IMPLEMENT = {"target-confirmed", "implementing"}
+TASK_DECLARE = {"pending", "declaring"}
+TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
 
 
@@ -240,6 +241,24 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     if not isinstance(status, str) or status in TERMINAL_CHANGE:
         return [], []
     rel = _rel(product_root, change_path)
+    mismatch = receipt_mismatch(product_root, change_path)
+    if mismatch:
+        # DF3-004: change.yaml must agree with the last Core receipt; a
+        # hand-edited status without a receipt halts the Change.
+        return [], [
+            WorkItem(
+                kind="blocked",
+                step=None,
+                skill=None,
+                gate=None,
+                change_id=change_id,
+                path=rel,
+                task=None,
+                task_path=None,
+                reason=mismatch,
+                halt_kind="blocked",
+            )
+        ]
     intent = data.get("intent") if isinstance(data.get("intent"), str) else "unknown"
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
     if unresolved:
@@ -274,6 +293,10 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         ]
 
     tasks = _load_tasks(change_path)
+    from deltafuse.core.leash import task_envelope_errors
+
+    envelope_faults = task_envelope_errors(change_path)
+
     for tid, tstatus, tfile in tasks:
         if tstatus == "blocked":
             return [], [
@@ -287,6 +310,22 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason=f"Task {tid} is blocked",
+                    halt_kind="blocked",
+                )
+            ]
+        faults = [e for e in envelope_faults if e.startswith(f"Task {tid}:")]
+        if faults:
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="; ".join(faults),
                     halt_kind="blocked",
                 )
             ]
@@ -326,6 +365,18 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     cursor = next_analyze_pass(change_path, product_root)
     if cursor is not None:
         return [_item_for_analyze(change_id=change_id, path=rel, cursor=cursor)], []
+
+    if status in {"normalized", "analyzing"} and not check_gate(change_path, "analyzed"):
+        # DF3-004: artifacts prove the gate, but only Core may stamp the
+        # transition; point the Worker at the advance command.
+        return [
+            _item_for_step(
+                "analyze",
+                change_id=change_id,
+                path=rel,
+                reason="Gate 'analyzed' passes; confirm with: deltafuse advance <change> --gate analyzed",
+            )
+        ], []
 
     if status == "analyzed":
         if intent == "bugfix":

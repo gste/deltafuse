@@ -20,6 +20,8 @@ tests/
 │   ├── test_llm_adapter.py       # Skills bind Worker (LLM); Core selects the step
 │   ├── test_bench.py             # Agent-agnostic Worker bench (init / score / compare)
 │   └── test_fsm_mutations.py     # Semantic mutation tests (T1-T8)
+├── bench/
+│   └── document_flow/            # J03 Document Flow benchmark test suites (300+ tests)
 ├── integration/
 │   ├── test_installer.py         # Product initialization and framework upgrade
 │   ├── test_layout.py            # Product repository layout and adapter integrity

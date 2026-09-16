@@ -14,7 +14,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_ROOT="$(mkdir -p "$TARGET_DIR" && cd "$TARGET_DIR" && pwd)"
 FRAMEWORK_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
-SCHEMA_VERSION=2
+SCHEMA_VERSION=3
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -28,13 +28,15 @@ framework_hash() {
   local manifest result
   manifest="$(mktemp)"
   {
-    for root in docs process scripts tests; do
+    for root in docs process scripts tests src; do
       if [ -d "$SCRIPT_DIR/$root" ]; then
         # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches
         find "$SCRIPT_DIR/$root" -type f -print | grep -Ev '/(__pycache__|\.pytest_cache)/' || true
       fi
     done
     printf '%s\n' "$SCRIPT_DIR/VERSION"
+    # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too
+    printf '%s\n' "$SCRIPT_DIR/pyproject.toml"
   } | while IFS= read -r file; do
     relative="$(printf '%s' "${file#"$SCRIPT_DIR/"}" | tr '[:upper:]' '[:lower:]')"
     printf '%s:%s\n' "$relative" "$(sha256_file "$file")"

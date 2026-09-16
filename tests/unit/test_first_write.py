@@ -64,10 +64,40 @@ def _analyze_package(tmp_path: Path, repo_root: Path, templates_dir: Path) -> Pa
     data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))
     data["analysis"] = {"routing": "routing.yaml", "summary": None}
     data["slices"] = [{"id": "SLICE-01", "status": "draft", "file": "slices/SLICE-01.md"}]
-    data["status"] = "analyzed"
     _write_yaml(dest / "change.yaml", data)
     _rewrite_ids(dest)
+    _core_advance(tmp_path, dest, "intake")
+    _core_advance(tmp_path, dest, "analyzed")
     return dest
+
+
+def _core_advance(root: Path, dest: Path, gate: str) -> None:
+    """V3-FIX-009: record a Core transition like `deltafuse advance` does."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    from deltafuse.core.transitions import (
+        GATE_TARGETS,
+        _receipt,
+        transitions_path,
+    )
+
+    data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))
+    entry = {
+        "kind": "transition",
+        "change": data.get("id"),
+        "gate": gate,
+        "from": data.get("status"),
+        "to": GATE_TARGETS[gate],
+        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    entry["receipt"] = _receipt(entry)
+    path = transitions_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline=chr(10)) as handle:
+        handle.write(_json.dumps(entry, ensure_ascii=False) + chr(10))
+    data["status"] = GATE_TARGETS[gate]
+    _write_yaml(dest / "change.yaml", data)
 
 
 def _decompose_package(tmp_path: Path, repo_root: Path, templates_dir: Path) -> Path:
@@ -80,9 +110,9 @@ def _decompose_package(tmp_path: Path, repo_root: Path, templates_dir: Path) -> 
     )
     data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))
     data["tasks"] = ["TASK-001"]
-    data["status"] = "decomposed"
     _write_yaml(dest / "change.yaml", data)
     _rewrite_ids(dest)
+    _core_advance(tmp_path, dest, "decomposed")
     return dest
 
 

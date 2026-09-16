@@ -24,6 +24,7 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
+from deltafuse.core.transitions import TransitionError, advance_change
 from deltafuse.core.leash import (
     LeashError,
     check_paths,
@@ -74,14 +75,45 @@ def main(argv: list[str] | None = None) -> int:
     # check-gate command
     gate_parser = subparsers.add_parser("check-gate", help="Check lifecycle gate preconditions")
     gate_parser.add_argument("change_path", help="Path to Change package directory")
-    gate_parser.add_argument("--gate", "-g", required=True, help="Target gate (intake, analyzed, specified, decomposed, targeting, implemented, converged)")
+    gate_parser.add_argument("--gate", "-g", required=True, help="Target gate (intake, analyzed, specified, decomposed, declaring, implemented, converged)")
 
     # archive command
     arch_parser = subparsers.add_parser("archive", help="Archive a converged Change package")
     arch_parser.add_argument("change_path", help="Path to Change package directory")
     arch_parser.add_argument("--force", "-f", action="store_true", help="Force archive without converged check")
 
+    # advance command (DF3-004): Core-owned gate validation + transition
+    advance_parser = subparsers.add_parser(
+        "advance", help="Apply a gate transition: Core validates, writes status, records a receipt"
+    )
+    advance_parser.add_argument("change_path", help="Path to Change package directory")
+    advance_parser.add_argument(
+        "--gate", "-g", required=True,
+        help="Gate to apply (intake, analyzed, specified, decomposed, declaring, implemented, converged)",
+    )
+    advance_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
+
+    # V3-FIX-010: Core-owned artifact status writes
+    state_parser = subparsers.add_parser(
+        "state", help="Set a Core-owned task/slice/Change in-flight status (never hand-edit status)"
+    )
+    state_parser.add_argument("change_path", help="Path to Change package directory")
+    group = state_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--task", help="Task id like TASK-001")
+    group.add_argument("--slice", dest="slice_id", help="Slice id like SLICE-01")
+    group.add_argument("--change", action="store_true", help="Target the Change itself (in-flight status)")
+    state_parser.add_argument("--status", required=True, help="New status")
+    state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
+
     # validate-layout command (P6.1)
+    # new command (DF3-005 / C-03): deterministic Change scaffolding
+    new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
+    new_parser.add_argument("product_path", nargs="?", default=".", help="Product root (default: current dir)")
+    new_parser.add_argument("change_id", help="Change id like CHG-101 or CHG-101-auth")
+    new_parser.add_argument("--route", default="code", choices=["code", "docs", "ops"], help="Change route")
+    new_parser.add_argument("--title", default="", help="Short Change title")
+    new_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+
     layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
     layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
 
@@ -191,6 +223,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # lint-context command (P7.6)
+    # validate-config (DF3-009 item 5): one validator for config contracts
+    cfg_parser = subparsers.add_parser(
+        "validate-config", help="Validate .deltafuse/config.yaml as one contract"
+    )
+    cfg_parser.add_argument("product_path", nargs="?", default=".")
+    cfg_parser.add_argument("--json", action="store_true")
+
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
@@ -205,6 +244,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Product root (default: current dir)",
     )
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+    leash_parser.add_argument(
+        "--base",
+        default=None,
+        help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
+    )
+    leash_parser.add_argument(
+        "--head",
+        default=None,
+        help="Exact head SHA (default: HEAD); requires --base",
+    )
     leash_parser.add_argument(
         "--file",
         action="append",
@@ -320,6 +369,73 @@ def main(argv: list[str] | None = None) -> int:
             _journal(target, cmd="archive", ok=False, errors=[str(ex)])
             print(f"Unexpected error during archival: {ex}", file=sys.stderr)
             return 2
+
+    elif args.command == "advance":
+        target = Path(args.change_path)
+        try:
+            result = advance_change(target, args.gate)
+        except TransitionError as te:
+            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=[str(te)])
+            print(f"advance failed: {te}", file=sys.stderr)
+            return 1
+        receipt = dict(result)
+        receipt.pop("ok", None)
+        _journal(target, cmd="advance", ok=True, errors=[], n_errors=0, **receipt)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"advance: gate '{result['gate']}' applied: "
+                f"{result['from']} -> {result['to']} "
+                f"(receipt {result['receipt'][:12]})"
+            )
+        return 0
+
+    elif args.command == "state":
+        from deltafuse.core.transitions import TransitionError, set_artifact_status
+
+        target = Path(args.change_path)
+        try:
+            result = set_artifact_status(
+                target,
+                status=args.status,
+                task_id=args.task,
+                slice_id=args.slice_id,
+                change_status=args.change,
+            )
+        except TransitionError as te:
+            _journal(target, cmd="state", status=args.status, ok=False, errors=[str(te)])
+            print(f"state failed: {te}", file=sys.stderr)
+            return 1
+        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"state: {result['artifact']} status {result['from']} -> {result['to']} "
+                f"(receipt {result['receipt'][:12]})"
+            )
+        return 0
+
+    elif args.command == "new":
+        from deltafuse.core.scaffold import ScaffoldError, scaffold_change
+
+        try:
+            change_dir = scaffold_change(
+                Path(args.product_path),
+                args.change_id,
+                route=args.route,
+                title=args.title,
+            )
+        except ScaffoldError as se:
+            print(f"new failed: {se}", file=sys.stderr)
+            return 1
+        payload = {"ok": True, "change": args.change_id, "path": str(change_dir), "route": args.route}
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"new: scaffolded {args.change_id} at {change_dir} (Intake stays open)")
+        return 0
 
     elif args.command == "validate-layout":
         target = Path(args.product_path)
@@ -477,6 +593,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "leash":
+        if args.head and not args.base:
+            print("leash: --head requires --base", file=sys.stderr)
+            return 1
         target = Path(args.path)
         try:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
@@ -490,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.files:
                 dirty = list(args.files)
             else:
-                dirty = git_dirty_paths(root)
+                dirty = git_dirty_paths(root, base=args.base, head=args.head)
             errors = check_paths(dirty, covering, baseline=load_baseline(root))
             mode = load_leash_mode(root)
             skipped = envelope is None and not errors
@@ -546,6 +665,20 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        return 0
+
+    elif args.command == "validate-config":
+        from deltafuse.core.config import validate_config
+
+        errors = validate_config(Path(args.product_path))
+        _journal(Path(args.product_path), cmd="validate-config", ok=not errors, errors=errors, n_errors=len(errors))
+        if args.json:
+            print(json.dumps({"ok": not errors, "errors": errors}, ensure_ascii=False, indent=2))
+        elif errors:
+            for e in errors:
+                print(f"config: {e}", file=sys.stderr)
+            return 1
+        print("config: .deltafuse/config.yaml is a valid v3 contract")
         return 0
 
     elif args.command == "lint-context":

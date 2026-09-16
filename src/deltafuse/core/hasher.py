@@ -16,7 +16,10 @@ def compute_file_sha256(path: Path) -> str:
 
 def compute_framework_content_hash(framework_root: Path | str | None = None) -> str:
     """
-    Computes the canonical framework content hash across docs/, process/, scripts/, tests/ and VERSION.
+    Computes the canonical framework content hash across docs/, process/, scripts/,
+    tests/, src/ and pyproject.toml. DF3-003 / SEC-02: the executable Core
+    (src/deltafuse/**) and the declared entrypoints are part of the versioned
+    manifest, so tampering with Core code changes the pinned hash.
     Matches the algorithm in scripts/init.ps1 and scripts/init.sh.
     """
     if framework_root is None:
@@ -25,7 +28,7 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
         framework_root = Path(framework_root).resolve()
 
     records: list[str] = []
-    roots = ["docs", "process", "scripts", "tests"]
+    roots = ["docs", "process", "scripts", "tests", "src"]
     for root_name in roots:
         root_dir = framework_root / root_name
         if root_dir.is_dir():
@@ -42,6 +45,11 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
     if version_path.is_file():
         version_hash = compute_file_sha256(version_path)
         records.append(f"version:{version_hash}")
+
+    pyproject_path = framework_root / "pyproject.toml"
+    if pyproject_path.is_file():
+        pyproject_hash = compute_file_sha256(pyproject_path)
+        records.append(f"pyproject:{pyproject_hash}")
 
     records.sort()
     payload = "\n".join(records) + "\n"

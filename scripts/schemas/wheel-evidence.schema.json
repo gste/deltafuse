@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deltafuse.invalid/schemas/wheel-evidence.schema.json",
+  "title": "DeltaFuse durable wheel build evidence",
+  "type": "object",
+  "required": [
+    "schema_version", "commit", "tree_clean", "wheel", "sha256",
+    "wheel_size_bytes", "build_frontend", "build_backend", "python",
+    "platform", "created", "commands"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "tree_clean": { "const": true },
+    "wheel": { "type": "string" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "wheel_size_bytes": { "type": "integer", "minimum": 1 },
+    "build_frontend": { "type": "string" },
+    "build_backend": { "type": "string" },
+    "python": { "type": "string" },
+    "platform": { "type": "string" },
+    "created": { "type": "string", "format": "date-time" },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["command", "rc"],
+        "properties": {
+          "command": { "type": "string" },
+          "rc": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
+import re
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.context import (
@@ -42,8 +43,8 @@ VALID_CHANGE_STATUSES = {
     "specification-proposed",
     "specified",
     "decomposed",
-    "targeting",
-    "target-confirmed",
+    "declaring",
+    "declared",
     "implementing",
     "implemented",
     "verifying",
@@ -59,12 +60,12 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     "normalized": {"analyzing", "rejected", "duplicate"},
     "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
     "blocked-on-decision": {"analyzing"},
-    "analyzed": {"specification-proposed", "specified", "targeting"},  # targeting for bugfix
-    "specification-proposed": {"specified"},
+    "analyzed": {"specification-proposed", "specified", "declaring"},  # declaring for bugfix
+    "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
-    "decomposed": {"targeting"},
-    "targeting": {"target-confirmed", "not-reproduced"},
-    "target-confirmed": {"implementing"},
+    "decomposed": {"declaring"},
+    "declaring": {"declared", "not-reproduced"},
+    "declared": {"implementing"},
     "implementing": {"implemented"},
     "implemented": {"verifying"},
     "verifying": {"converged", "analyzing", "not-reproduced"},
@@ -106,6 +107,53 @@ class GateValidationError(Exception):
         self.errors = errors
 
 
+CONTRACT_VERSION = 3
+LEGACY_TOKENS = ("target-confirmed", "targeting")  # v2 vocabulary, never auto-converted
+
+
+def _contract_version_errors(change_path: Path) -> list[str]:
+    """DF3-008: unknown or partial versions stop with exact diagnostics."""
+    errors: list[str] = []
+    for rel in ("change.yaml",):
+        path = change_path / rel
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        version = data.get("schema_version")
+        if version is not None and version != CONTRACT_VERSION:
+            errors.append(
+                f"change.yaml: schema_version {version!r} is not supported by this "
+                f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
+                "automatic conversion is performed"
+            )
+    legacy_files = ["change.yaml"] + [
+        str(p.relative_to(change_path)).replace("\\", "/")
+        for p in sorted((change_path / "tasks").glob("*.md"))
+        if (change_path / "tasks").is_dir()
+    ] + [
+        str(p.relative_to(change_path)).replace("\\", "/")
+        for p in sorted((change_path / "slices").glob("*.md"))
+        if (change_path / "slices").is_dir()
+    ]
+    for rel in legacy_files:
+        path = change_path / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for token in LEGACY_TOKENS:
+            if re.search(rf"{token}", text):
+                errors.append(
+                    f"{rel}: legacy v2 vocabulary '{token}' is not valid in v3; "
+                    "rewrite the artifact for schema v3 (no automatic conversion)"
+                )
+    return errors
+
+
 def validate_change_package(
     change_dir: Path | str,
     registry: SchemaRegistry | None = None,
@@ -118,6 +166,11 @@ def validate_change_package(
 
     if not change_path.is_dir():
         return [f"Change package directory not found: {change_path}"]
+
+    # DF3-008: fail-closed contract version and legacy-vocabulary checks.
+    version_errors = _contract_version_errors(change_path)
+    if version_errors:
+        return version_errors
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
@@ -738,6 +791,9 @@ def _human_gate_errors(
     spec_delta_file: Path,
 ) -> list[str]:
     errors: list[str] = []
+    from deltafuse.core.receipts import journal_errors as receipt_journal_errors
+
+    errors.extend(receipt_journal_errors(repo_root))
     unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
     if unresolved:
         errors.append(
@@ -751,12 +807,15 @@ def _human_gate_errors(
     spec_status = _spec_delta_status(spec_delta_file)
     if spec_status in TERMINAL_STATUSES:
         rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
-        if not has_click(
+        from deltafuse.core.receipts import has_valid_receipt
+
+        if not has_valid_receipt(
             repo_root,
             kind="spec",
             status=spec_status,
             artifact_id=change_id,
             rel_path=rel,
+            artifact=spec_delta_file,
         ):
             errors.append(
                 f"Gate specified: spec-delta.md is {spec_status} without deltafuse decide"
@@ -778,6 +837,12 @@ def check_gate(
     errors = validate_change_package(change_path, registry=registry)
 
     repo_root = find_repo_root(change_path)
+
+    # V3-FIX-009: a gate may only be evaluated on top of an intact Core
+    # receipt chain; hand-edited statuses halt before gate logic.
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    errors.extend(receipt_chain_errors(repo_root, change_path))
     req_file = change_path / "request.md"
     spec_delta_file = change_path / "spec-delta.md"
     tasks_dir = change_path / "tasks"
@@ -852,15 +917,21 @@ def check_gate(
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
 
-    elif gate_lower == "targeting":
+        # DF3-006 / SEC-04: a task cannot widen its write envelope by
+        # editing YAML; allowed_paths must stay inside slice target_paths.
+        from deltafuse.core.leash import task_envelope_errors
+
+        errors.extend(task_envelope_errors(change_path))
+
+    elif gate_lower == "declaring":
         route, route_errs = load_change_route(change_path)
         errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
-            errors.append("Gate targeting: Red evidence in evidence/red/ is required")
+            errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(
             _validate_evidence_changed_paths_contract(
-                change_path, "red", "declare", gate="targeting", route=route
+                change_path, "red", "declare", gate="declaring", route=route
             )
         )
 
@@ -886,6 +957,16 @@ def check_gate(
                 )
             )
 
+
+        # DF3-006: Red and Green are bound to one test oracle — a Green stamp
+        # without the task's own Red evidence does not close the gate.
+        if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
+            for green_file in sorted(green_dir.glob("*.yaml")):
+                if not (change_path / "evidence" / "red" / green_file.name).is_file():
+                    errors.append(
+                        f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+                    )
+
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"
         ver_run = change_path / "evidence" / "verification" / "run.yaml"
@@ -909,8 +990,12 @@ def check_gate(
                 except Exception as ex:
                     errors.append(f"Gate converged: failed to parse task '{task_file.name}': {ex}")
 
-        # Coverage evidence mapping check (P4)
+        # Coverage evidence mapping check (P4). DF3-002 / F-02: route-aware —
+        # docs/ops routes keep their own green oracle and are not required to
+        # carry product-source regression evidence.
         cov_file = change_path / "coverage.yaml"
+        route, route_errs = load_change_route(change_path)
+        errors.extend(route_errs)
         if cov_file.is_file():
             try:
                 cov_data = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
@@ -918,9 +1003,14 @@ def check_gate(
                 for c_id, c_val in claims_map.items():
                     if isinstance(c_val, dict):
                         ev_map = c_val.get("evidence", {})
-                        if not ev_map.get("green") or not ev_map.get("regression"):
+                        missing = []
+                        if not ev_map.get("green"):
+                            missing.append("green")
+                        if route == "code" and not ev_map.get("regression"):
+                            missing.append("regression")
+                        if missing:
                             errors.append(
-                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing green or regression evidence mapping"
+                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
                             )
             except Exception:
                 pass

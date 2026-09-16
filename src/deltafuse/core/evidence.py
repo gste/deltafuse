@@ -17,6 +17,8 @@ from deltafuse.core.context import load_change_route
 from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
+from deltafuse.core.runners import runner_is_authorized
+from deltafuse.core.leash import git_dirty_paths, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
 RECORDED_BY = "deltafuse-evidence"
@@ -173,6 +175,15 @@ def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Pa
     return stamped
 
 
+
+def _core_computed_changed_paths(repo_root: Path) -> list[str]:
+    """Core-derived dirty paths; Worker lists are only an expected subset."""
+    try:
+        return git_dirty_paths(repo_root)
+    except LeashError:
+        # No git repository (bench sandbox, fresh install): nothing to derive.
+        return []
+
 def run_evidence(
     change_dir: Path | str,
     *,
@@ -240,7 +251,7 @@ def run_evidence(
         result = "passed" if exit_code == 0 else "failed"
 
     payload: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "change": change_id,
         "task": task,
         "phase": phase,
@@ -260,6 +271,21 @@ def run_evidence(
     payload = write_stamped_evidence(dest, payload, repo_root)
 
     errors = list(route_errs)
+    runner_ok = runner_is_authorized(argv, route=route, product_root=repo_root)
+    if not runner_ok:
+        errors.append(
+            f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
+            "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
+        )
+    computed = _core_computed_changed_paths(repo_root)
+    if computed:
+        worker_paths = set(rel_paths)
+        missing = sorted(p for p in computed if p not in worker_paths)
+        if missing:
+            errors.append(
+                "evidence: changed_paths must include the Core-computed dirty set; "
+                f"missing {missing}"
+            )
     errors.extend(private_errors)
     if (
         phase == "red"
@@ -282,6 +308,8 @@ def run_evidence(
         route=route,
         private_errors=private_errors,
     )
+    if runner_ok is False:
+        authentic = False
     if not authentic and not errors:
         errors.append(f"{phase} evidence is not authentic (result '{result}')")
 

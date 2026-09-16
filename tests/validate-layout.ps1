@@ -104,6 +104,9 @@ foreach ($forbidden in @("docs/process", "docs/init", "docs/todo")) {
 
 if (Test-Path -LiteralPath $lockPath) {
     $lock = Get-Content -LiteralPath $lockPath -Raw
+    if ($lock -notmatch '(?m)^schema_version:\s*3\s*$') {
+        $Errors.Add("Lock file schema_version must be 3 (lock contract v3; re-run the installer)")
+    }
     $versionMatch = [regex]::Match($lock, '(?m)^\s{2}version:\s*(\S+)\s*$')
     $sourceMatch = [regex]::Match($lock, '(?m)^\s{2}source:\s*(\S+)\s*$')
     $hashMatch = [regex]::Match($lock, '(?m)^\s{2}content_hash:\s*(sha256:[a-fA-F0-9]{64})\s*$')
@@ -139,8 +142,8 @@ if ($configSource -and $lockSource) {
 $capabilitiesPath = Join-Path $ProductRoot (Join-Path $paths.specification "_capabilities.yaml")
 if (Test-Path -LiteralPath $capabilitiesPath) {
     $capContent = Get-Content -LiteralPath $capabilitiesPath -Raw
-    if ($capContent -notmatch '(?m)^schema_version:\s*2\s*$') {
-        $Errors.Add("Capability catalog _capabilities.yaml missing or invalid schema_version (expected 2)")
+    if ($capContent -notmatch '(?m)^schema_version:\s*3\s*$') {
+        $Errors.Add("Capability catalog _capabilities.yaml missing or invalid schema_version (expected 3)")
     }
     if ($capContent -notmatch '(?m)^domains:\s*') {
         $Errors.Add("Capability catalog _capabilities.yaml missing required 'domains:' key")
@@ -167,8 +170,8 @@ if (Test-Path -LiteralPath $changesRoot) {
             $Errors.Add("Change $changeName is missing change.yaml")
         } else {
             $cyContent = Get-Content -LiteralPath $changeYamlPath -Raw
-            if ($cyContent -notmatch '(?m)^schema_version:\s*2\s*$') {
-                $Errors.Add("Change $changeName change.yaml missing or invalid schema_version (expected 2)")
+            if ($cyContent -notmatch '(?m)^schema_version:\s*3\s*$') {
+                $Errors.Add("Change $changeName change.yaml missing or invalid schema_version (expected 3)")
             }
             $idMatch = [regex]::Match($cyContent, '(?m)^id:\s*(\S+)\s*$')
             if (-not $idMatch.Success) {
@@ -178,8 +181,8 @@ if (Test-Path -LiteralPath $changesRoot) {
             }
             $validStatuses = @(
                 'normalized', 'analyzing', 'blocked-on-decision', 'analyzed',
-                'specification-proposed', 'specified', 'decomposed', 'targeting',
-                'target-confirmed', 'implementing', 'implemented', 'verifying',
+                'specification-proposed', 'specified', 'decomposed', 'declaring',
+                'declared', 'implementing', 'implemented', 'verifying',
                 'converged', 'archived', 'rejected', 'duplicate', 'not-reproduced', 'superseded'
             )
             $statusMatch = [regex]::Match($cyContent, '(?m)^status:\s*(\S+)\s*$')
@@ -256,7 +259,7 @@ if (Test-Path -LiteralPath $changesRoot) {
                     if ($fm -notmatch '(?m)^slice:\s*SLICE-[0-9]{2,}\s*$') {
                         $Errors.Add("Change $changeName task $($_.Name) missing or invalid 'slice:' in frontmatter")
                     }
-                    if ($fm -notmatch '(?m)^status:\s*(pending|targeting|target-confirmed|implementing|implemented|verified|blocked|cancelled|superseded)\s*$') {
+                    if ($fm -notmatch '(?m)^status:\s*(pending|declaring|declared|implementing|implemented|verified|blocked|cancelled|superseded)\s*$') {
                         $Errors.Add("Change $changeName task $($_.Name) missing or invalid 'status:' in frontmatter")
                     }
                     if ($fm -notmatch '(?m)^kind:\s*(feature|bugfix|refactor|maintenance|documentation)\s*$') {

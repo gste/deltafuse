@@ -9,17 +9,10 @@ from typing import Any
 import yaml
 
 from deltafuse.bench import BenchError, framework_root
+from deltafuse.core.lifecycle import LIFECYCLE
 
-
-STAGES = (
-    "intake",
-    "analyze",
-    "specify",
-    "decompose",
-    "declare",
-    "implement",
-    "verify",
-)
+# QF-014: the bench pack reuses the canonical lifecycle contract verbatim.
+STAGES = LIFECYCLE
 
 PACK_ENV = "DELTAFUSE_BENCH_PACK"
 
@@ -41,6 +34,8 @@ def normalize_pack(path: Path | str) -> Path:
         child.is_dir() and (child / "case.yaml").is_file() for child in pack.iterdir()
     ):
         return pack
+    if (pack.parent / "deltafuse-bench" / "cases").is_dir():
+        return pack.parent / "deltafuse-bench" / "cases"
     raise BenchError(
         f"{pack} is not a bench pack (expected process/bench/cases, cases/, or a case directory)"
     )
@@ -99,6 +94,14 @@ def load_case(
         extra = yaml.safe_load(oracle_file.read_text(encoding="utf-8")) or {}
         if not isinstance(extra, dict):
             raise BenchError(f"{oracle_file} must be a mapping")
+        # V3-FIX-007: Worker-visible case.yaml fields are single-source; the
+        # oracle may not redeclare (and silently override) them.
+        for reserved in ("score_mix", "stages", "adversarial", "defense_checks", "target_capabilities"):
+            if reserved in extra:
+                raise BenchError(
+                    f"{case_id}: {reserved} belongs to case.yaml only; "
+                    "oracle.yaml must not override Worker-visible case fields"
+                )
         data.update(extra)
     data["id"] = str(data.get("id") or case_id)
     data["dir"] = case_dir

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltafuse"
-version = "2.5.0"
+version = "3.0.0"
 description = "DeltaFuse Specification-Driven AI Engineering Framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,24 @@ dev = [
 
 [project.scripts]
 deltafuse = "deltafuse.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# DF3-005 / B-01: the immutable runtime bundle (schemas, templates, skills,
+# manifest) ships inside the wheel so an installed CLI needs no source checkout.
+[tool.setuptools.package-data]
+# V3-FIX-021: dot-directories (.deltafuse, .github) are not matched by the
+# generic globs; ship them explicitly — the installed wheel needs them.
+"deltafuse.assets" = [
+  "**/*.yaml",
+  "**/*.yml",
+  "**/*.md",
+  "**/*.json",
+  "**/*.py",
+  "templates/.deltafuse/**",
+  "templates/.github/**",
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

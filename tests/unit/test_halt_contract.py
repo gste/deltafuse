@@ -77,6 +77,8 @@ def test_next_json_decision_halt_matches_contract(tmp_path: Path, repo_root: Pat
 def test_next_json_spec_halt_matches_contract(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-081", title="Halt spec").step_intake().step_analyze()
+    # specification-proposed is reached from analyzed (intake + analyzed receipts).
+    builder._core_advance("analyzed")
     builder._update_change_yaml({"status": "specification-proposed"})
     ret, data = _next_json(tmp_path, capsys)
     assert ret == 1

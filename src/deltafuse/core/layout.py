@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.adapters import validate_adapter_skills
-from deltafuse.core.lock import workflow_alignment_errors
+from deltafuse.core.lock import lock_schema_version_errors, workflow_alignment_errors
 
 
 CANONICAL_SKILL_NAMES = [
@@ -89,6 +89,19 @@ def validate_product_layout(product_dir: Path | str) -> list[str]:
                 errors.append("Lock file has no valid framework content hash")
         except Exception as ex:
             errors.append(f"Error parsing .deltafuse/lock.yaml: {ex}")
+
+    errors.extend(lock_schema_version_errors(lock))
+
+    # V3-FIX-014: validate the full lock pin against the canonical lock contract
+    # when the schema registry can resolve it; the fail-closed version check above
+    # always applies.
+    try:
+        from deltafuse.core.schemas import SchemaRegistry
+
+        lock_schema_errors = SchemaRegistry().validate("lock", lock)
+    except Exception:  # noqa: BLE001 — registry unavailable or schema missing
+        lock_schema_errors = []
+    errors.extend(lock_schema_errors)
 
     errors.extend(workflow_alignment_errors(cfg, lock))
 

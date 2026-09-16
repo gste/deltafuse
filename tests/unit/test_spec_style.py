@@ -28,3 +28,24 @@ def test_declare_skill_pbt_is_optional_not_hidden_replacement(repo_root: Path):
 def test_optional_pbt_skips_without_local_runner():
     """RM-031 / KI-07: absence of Hypothesis is skip, not a gate fail."""
     pytest.importorskip("hypothesis", reason="no local PBT runner")
+
+
+def test_bench_docs_ru_en_section_parity(repo_root: Path):
+    """V3-FIX-019: bench.ru.md mirrors the bench.md section structure."""
+    def ordered(name: str) -> list[str]:
+        text = (repo_root / "docs" / name).read_text(encoding="utf-8")
+        return [line[3:].strip() for line in text.splitlines() if line.startswith("## ")]
+
+    assert len(ordered("bench.md")) == len(ordered("bench.ru.md")), (
+        f"EN: {ordered('bench.md')} RU: {ordered('bench.ru.md')}"
+    )
+    assert len(ordered("bench.md")) >= 1
+
+
+def test_docs_forbid_removed_lifecycle_tokens(repo_root: Path):
+    """V3-FIX-017: removed lifecycle terminology must not reappear in docs."""
+    forbidden = {"target_confirmed"}
+    for doc in (repo_root / "docs").rglob("*.md"):
+        text = doc.read_text(encoding="utf-8")
+        for token in forbidden:
+            assert token not in text, f"{doc.name} uses removed token '{token}'"

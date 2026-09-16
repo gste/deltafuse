@@ -85,6 +85,7 @@ for forbidden in docs/process docs/init docs/todo; do
 done
 
 if [ -f "$lock" ]; then
+  grep -Eq '^schema_version:[[:space:]]*3[[:space:]]*$' "$lock" || fail "Lock file schema_version must be 3 (lock contract v3; re-run the installer)"
   lock_version="$(sed -n 's/^[[:space:]]\{2\}version:[[:space:]]*//p' "$lock" | head -n 1)"
   lock_source="$(sed -n 's/^[[:space:]]\{2\}source:[[:space:]]*//p' "$lock" | head -n 1)"
   lock_hash="$(sed -n 's/^[[:space:]]\{2\}content_hash:[[:space:]]*//p' "$lock" | head -n 1)"
@@ -108,7 +109,7 @@ fi
 # 1. Validate capability catalog structure
 capabilities="$PRODUCT_ROOT/$path_spec/_capabilities.yaml"
 if [ -f "$capabilities" ]; then
-  grep -Eq '^schema_version:[[:space:]]*2[[:space:]]*$' "$capabilities" || fail "Capability catalog _capabilities.yaml missing or invalid schema_version (expected 2)"
+  grep -Eq '^schema_version:[[:space:]]*3[[:space:]]*$' "$capabilities" || fail "Capability catalog _capabilities.yaml missing or invalid schema_version (expected 3)"
   grep -Eq '^domains:' "$capabilities" || fail "Capability catalog _capabilities.yaml missing required domains key"
 fi
 
@@ -125,9 +126,9 @@ if [ -d "$PRODUCT_ROOT/$path_changes" ]; then
     if [ ! -f "$change_yaml" ]; then
       fail "Change $change_name is missing change.yaml"
     else
-      grep -Eq '^schema_version:[[:space:]]*2[[:space:]]*$' "$change_yaml" || fail "Change $change_name change.yaml missing or invalid schema_version (expected 2)"
+      grep -Eq '^schema_version:[[:space:]]*3[[:space:]]*$' "$change_yaml" || fail "Change $change_name change.yaml missing or invalid schema_version (expected 3)"
       grep -Eq "^id:[[:space:]]*$change_name[[:space:]]*$" "$change_yaml" || fail "Change $change_name change.yaml id does not match directory name '$change_name'"
-      grep -Eq '^status:[[:space:]]*(normalized|analyzing|blocked-on-decision|analyzed|specification-proposed|specified|decomposed|targeting|target-confirmed|implementing|implemented|verifying|converged|archived|rejected|duplicate|not-reproduced|superseded)[[:space:]]*$' "$change_yaml" || fail "Change $change_name change.yaml has missing or invalid status"
+      grep -Eq '^status:[[:space:]]*(normalized|analyzing|blocked-on-decision|analyzed|specification-proposed|specified|decomposed|declaring|declared|implementing|implemented|verifying|converged|archived|rejected|duplicate|not-reproduced|superseded)[[:space:]]*$' "$change_yaml" || fail "Change $change_name change.yaml has missing or invalid status"
       grep -Eq '^title:[[:space:]]*[^[:space:]]' "$change_yaml" || fail "Change $change_name change.yaml missing title"
       grep -Eq '^framework:' "$change_yaml" || fail "Change $change_name change.yaml missing framework section"
     fi
@@ -165,7 +166,7 @@ if [ -d "$PRODUCT_ROOT/$path_changes" ]; then
         esac
         grep -Eq '^id:[[:space:]]*TASK-[0-9]{3,}[[:space:]]*$' "$task_file" || fail "Change $change_name task $task_name missing or invalid id in frontmatter"
         grep -Eq '^slice:[[:space:]]*SLICE-[0-9]{2,}[[:space:]]*$' "$task_file" || fail "Change $change_name task $task_name missing or invalid slice in frontmatter"
-        grep -Eq '^status:[[:space:]]*(pending|targeting|target-confirmed|implementing|implemented|verified|blocked|cancelled|superseded)[[:space:]]*$' "$task_file" || fail "Change $change_name task $task_name missing or invalid status in frontmatter"
+        grep -Eq '^status:[[:space:]]*(pending|declaring|declared|implementing|implemented|verified|blocked|cancelled|superseded)[[:space:]]*$' "$task_file" || fail "Change $change_name task $task_name missing or invalid status in frontmatter"
         grep -Eq '^kind:[[:space:]]*(feature|bugfix|refactor|maintenance|documentation)[[:space:]]*$' "$task_file" || fail "Change $change_name task $task_name missing or invalid kind in frontmatter"
       done
     fi
