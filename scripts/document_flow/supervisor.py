@@ -202,6 +202,15 @@ class BenchmarkSupervisor:
 
         return True
 
+    def _git_commit(self, message: str) -> None:
+        """Commit current changes in sandbox git repo if git is present."""
+        if (self.sandbox / ".git").is_dir():
+            self._run_cmd(["git", "add", "."])
+            # Check if there is anything to commit
+            status = self._run_cmd(["git", "status", "--porcelain"])
+            if status.stdout.strip():
+                self._run_cmd(["git", "commit", "-m", message])
+
     def step(self, last_gate_feedback: str | None = None) -> tuple[SupervisorStepResult, str | None]:
         """Execute one iteration of the supervision loop."""
         state = self.get_current_state()
@@ -218,6 +227,7 @@ class BenchmarkSupervisor:
                         sys.executable, "-m", "deltafuse", "decide",
                         str(chg), "--spec", "--status", "accepted", "--json"
                     ])
+                    self._git_commit("gate(spec): accepted Human Gate for specify")
                     return SupervisorStepResult(
                         step="specify",
                         status="gate_accepted",
@@ -225,6 +235,7 @@ class BenchmarkSupervisor:
                         halt=halt,
                     ), None
             elif halt_kind == "done":
+                self._git_commit("converged: lifecycle completed successfully")
                 return SupervisorStepResult(
                     step=None,
                     status="converged",
@@ -254,6 +265,8 @@ class BenchmarkSupervisor:
         # 2. Invoke worker
         if step_name and (self.worker_callback or self.use_little_coder):
             worker_ok = self.run_worker_for_step(step_name, feedback=last_gate_feedback)
+            # Commit worker changes (even if failed/partial, for debug trajectory)
+            self._git_commit(f"worker({step_name}): iteration output (success={worker_ok})")
             if not worker_ok:
                 return SupervisorStepResult(
                     step=step_name,
@@ -272,6 +285,7 @@ class BenchmarkSupervisor:
                     sys.executable, "-m", "deltafuse", "advance",
                     str(chg_path), "--gate", gate_name, "--json"
                 ])
+                self._git_commit(f"advance({gate_name}): gate passed and state advanced")
                 return SupervisorStepResult(
                     step=step_name,
                     status="advanced",

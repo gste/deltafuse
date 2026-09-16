@@ -182,6 +182,16 @@ def install_document_flow(
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(source.read_bytes())
     checked = _assert_product_clean(product, verified)
+
+    # Initialize git repo in sandbox and create initial baseline commit for trajectory tracking
+    import subprocess
+    if not (product / ".git").is_dir():
+        subprocess.run(["git", "init"], cwd=str(product), capture_output=True, check=False)
+        subprocess.run(["git", "config", "user.name", "DeltaFuse Bench"], cwd=str(product), capture_output=True, check=False)
+        subprocess.run(["git", "config", "user.email", "bench@deltafuse.local"], cwd=str(product), capture_output=True, check=False)
+        subprocess.run(["git", "add", "."], cwd=str(product), capture_output=True, check=False)
+        subprocess.run(["git", "commit", "-m", "chore: initial baseline from J03 public pack"], cwd=str(product), capture_output=True, check=False)
+
     return {"case": "J03-document-flow", "product": str(product),
             "intake": meta.get("intake"), "verified_files": checked,
             "inventory_entries": len(verified)}
