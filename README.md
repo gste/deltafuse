@@ -87,7 +87,7 @@ A consuming product repository contains only product state and a pinned integrat
 
 ```text
 product/
-├── AGENTS.md
+├── AGENTS.md                  # optional, host-owned
 ├── .deltafuse/
 │   ├── config.yaml
 │   └── lock.yaml

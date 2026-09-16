@@ -60,7 +60,7 @@ Intake
 
 ```text
 product/
-├── AGENTS.md
+├── AGENTS.md                  # optional, host-owned
 ├── .deltafuse/
 │   ├── config.yaml
 │   └── lock.yaml
@@ -102,4 +102,3 @@ product/
 | [contracts/leash.ru.md](./contracts/leash.ru.md) ([en](./contracts/leash.md)) | Конверт записи для `next --json` и `deltafuse leash` |
 
 Исполняемые привязки воркера (LLM) — `process/skills/**`; машинный контракт Ядра — kernel. Схемы артефактов Change — в `process/schemas/**`. Схемы снимка доски, halt и leash — контракты совместимости с внешним UI/хостом (`docs/contracts/`), не схемы продукта; в consuming repository их не копировать.
-

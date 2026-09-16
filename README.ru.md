@@ -87,7 +87,7 @@ deltafuse/
 
 ```text
 product/
-├── AGENTS.md
+├── AGENTS.md                  # optional, host-owned
 ├── .deltafuse/
 │   ├── config.yaml
 │   └── lock.yaml

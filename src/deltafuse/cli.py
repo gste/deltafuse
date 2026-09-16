@@ -67,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     init_parser = subparsers.add_parser("init", help="Initialize DeltaFuse product layout")
     init_parser.add_argument("target", nargs="?", default=".", help="Target product directory (default: current dir)")
     init_parser.add_argument("--force", "-f", action="store_true", help="Force upgrade/overwrite existing lock")
+    init_parser.add_argument("--agents-md", choices=["prompt", "bridge", "preserve", "replace"], default=None,
+                             help="Host instruction integration: prompt (TTY), bridge, preserve, or replace")
 
     # validate command
     val_parser = subparsers.add_parser("validate", help="Validate Change package structural invariants")
@@ -310,9 +312,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         try:
-            result = install(target_dir=args.target, force=args.force)
+            result = install(target_dir=args.target, force=args.force, agents_md=args.agents_md)
             print(f"DeltaFuse {result.version} successfully installed into {result.target_dir}")
             print(f"Content hash: sha256:{result.content_hash}")
+            target = str(result.agents_md_target) if result.agents_md_target else "none"
+            print(f"agents_md_mode: {result.agents_md_mode}; effective target: {target}")
+            if result.agents_md_mode == "preserve":
+                print("Host instruction files were preserved; activate DeltaFuse explicitly with /run or deltafuse next --json.")
             if result.adapter_mode == "link":
                 print("Adapter skills are relative links into the nested framework checkout.")
             return 0
