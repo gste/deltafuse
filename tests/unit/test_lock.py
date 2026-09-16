@@ -81,8 +81,8 @@ def test_lock_pin_validates_against_lock_contract_v3():
     registry = SchemaRegistry()
     lock = yaml.safe_load(
         format_lock_yaml(
-            version="3.0.0",
-            source="deltafuse://v3.0.0",
+            version="3.1.0",
+            source="deltafuse://v3.1.0",
             content_hash="sha256:" + "0" * 64,
         )
     )
