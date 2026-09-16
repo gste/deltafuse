@@ -23,9 +23,76 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-def _log(msg: str) -> None:
+class Colors:
+    """ANSI color sequences with graceful Windows console fallback."""
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    
+    # Foreground
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    
+    # Bright
+    BRIGHT_RED = "\033[91m"
+    BRIGHT_GREEN = "\033[92m"
+    BRIGHT_YELLOW = "\033[93m"
+    BRIGHT_BLUE = "\033[94m"
+    BRIGHT_MAGENTA = "\033[95m"
+    BRIGHT_CYAN = "\033[96m"
+
+
+# Enable ANSI colors on Windows terminal
+if os.name == "nt":
+    os.system("")
+
+
+def log_info(tag: str, message: str) -> None:
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now}] {msg}", flush=True)
+    print(f"{Colors.DIM}[{now}]{Colors.RESET} {Colors.BRIGHT_CYAN}{Colors.BOLD}[{tag}]{Colors.RESET} {message}", flush=True)
+
+
+def log_step(iteration: int, max_iter: int, step: str | None, status: str, action: str) -> None:
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    status_color = Colors.WHITE
+    if status in ("advanced", "converged", "gate_accepted"):
+        status_color = Colors.BRIGHT_GREEN
+    elif status in ("gate_blocked", "worker_failed", "halted"):
+        status_color = Colors.BRIGHT_RED
+    elif status == "pending":
+        status_color = Colors.BRIGHT_YELLOW
+
+    step_label = f"{Colors.BRIGHT_MAGENTA}{Colors.BOLD}{step or 'none':^10}{Colors.RESET}"
+    iter_label = f"{Colors.DIM}[{iteration:>2}/{max_iter:>2}]{Colors.RESET}"
+    status_label = f"{status_color}{Colors.BOLD}{status:<14}{Colors.RESET}"
+
+    print(f"{Colors.DIM}[{now}]{Colors.RESET} {iter_label} {step_label} | {status_label} | {action}", flush=True)
+
+
+def log_worker_start(step: str, model: str, feedback: bool) -> None:
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    fb_label = f"{Colors.BRIGHT_YELLOW}(with gate feedback){Colors.RESET}" if feedback else ""
+    print(f"{Colors.DIM}[{now}]{Colors.RESET} {Colors.BRIGHT_BLUE}⚙ [WORKER-START]{Colors.RESET} Launching little-coder for {Colors.BOLD}{step}{Colors.RESET} (model: {model}) {fb_label}", flush=True)
+
+
+def log_worker_done(step: str, exit_code: int, duration_sec: float) -> None:
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if exit_code == 0:
+        res = f"{Colors.BRIGHT_GREEN}{Colors.BOLD}SUCCESS (code 0){Colors.RESET}"
+    else:
+        res = f"{Colors.BRIGHT_RED}{Colors.BOLD}FAILED (code {exit_code}){Colors.RESET}"
+    print(f"{Colors.DIM}[{now}]{Colors.RESET} {Colors.BRIGHT_BLUE}⚙ [WORKER-END]  {Colors.RESET} Completed step {Colors.BOLD}{step}{Colors.RESET} in {duration_sec:.1f}s -> {res}", flush=True)
+
+
+def log_gate_error(error_text: str) -> None:
+    for line in error_text.strip().splitlines():
+        print(f"    {Colors.RED}│{Colors.RESET} {line}", flush=True)
 
 
 @dataclass
@@ -119,12 +186,16 @@ class BenchmarkSupervisor:
                 "--thinking", "medium",
                 "-p", prompt,
             ]
-            _log(f"[SUPERVISOR] Launching little-coder for step '{step}' (feedback={'yes' if feedback else 'no'})...")
+            log_worker_start(step, self.model, bool(feedback))
+            t0 = time.time()
             proc = self._run_cmd(cmd)
-            _log(f"[SUPERVISOR] little-coder completed step '{step}' with exit code {proc.returncode}")
+            duration = time.time() - t0
+            log_worker_done(step, proc.returncode, duration)
             if proc.returncode != 0:
-                _log(f"[SUPERVISOR] little-coder stdout:\n{proc.stdout}")
-                _log(f"[SUPERVISOR] little-coder stderr:\n{proc.stderr}")
+                if proc.stdout.strip():
+                    log_gate_error(proc.stdout)
+                if proc.stderr.strip():
+                    log_gate_error(proc.stderr)
             return proc.returncode == 0
 
         return True
@@ -148,7 +219,7 @@ class BenchmarkSupervisor:
                     return SupervisorStepResult(
                         step="specify",
                         status="gate_accepted",
-                        action_taken=f"accepted spec gate: {dec_proc.stdout.strip()}",
+                        action_taken=f"accepted spec gate -> {dec_proc.stdout.strip()}",
                         halt=halt,
                     ), None
             elif halt_kind == "done":
@@ -202,14 +273,14 @@ class BenchmarkSupervisor:
                 return SupervisorStepResult(
                     step=step_name,
                     status="advanced",
-                    action_taken=f"advanced gate '{gate_name}': {adv.stdout.strip()}",
+                    action_taken=f"gate '{gate_name}' valid, stamped transition",
                 ), None
             else:
-                gate_err = chk.stderr or chk.stdout
+                gate_err = chk.stderr.strip() or chk.stdout.strip()
                 return SupervisorStepResult(
                     step=step_name,
                     status="gate_blocked",
-                    action_taken=f"check-gate '{gate_name}' failed:\n{gate_err}",
+                    action_taken=f"check-gate '{gate_name}' failed",
                 ), gate_err
 
         return SupervisorStepResult(
@@ -226,7 +297,9 @@ class BenchmarkSupervisor:
             res, feedback = self.step(last_gate_feedback=last_feedback)
             results.append(res)
             self._history.append(res)
-            _log(f"[{i+1}/{self.max_iterations}] step={res.step} status={res.status} -> {res.action_taken}")
+            log_step(i + 1, self.max_iterations, res.step, res.status, res.action_taken)
+            if feedback:
+                log_gate_error(feedback)
             
             if res.status in ("converged", "halted", "worker_failed", "no_ready_step"):
                 break
@@ -255,13 +328,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.step_once:
         res, _ = supervisor.step()
-        _log(f"Step outcome: step={res.step}, status={res.status}, action={res.action_taken}")
+        log_step(1, 1, res.step, res.status, res.action_taken)
         return 0 if res.status in ("advanced", "gate_accepted", "converged") else 1
 
-    _log(f"Supervising sandbox: {args.sandbox_dir} (little_coder={args.little_coder}, model={args.model})")
+    log_info("SUPERVISOR", f"Starting supervised benchmark run on {Colors.BOLD}{args.sandbox_dir}{Colors.RESET}")
+    log_info("CONFIG", f"Worker: little-coder | Model: {args.model} | Max Iterations: {args.max_iterations}")
+    print("-" * 80)
     outcomes = supervisor.run_until_complete()
+    print("-" * 80)
     final = outcomes[-1] if outcomes else None
-    return 0 if final and final.status == "converged" else 1
+    if final and final.status == "converged":
+        log_info("SUCCESS", f"Benchmark run {Colors.BRIGHT_GREEN}CONVERGED{Colors.RESET} successfully!")
+        return 0
+    else:
+        log_info("STOP", f"Benchmark run ended with status: {Colors.BRIGHT_RED}{final.status if final else 'unknown'}{Colors.RESET}")
+        return 1
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             max_iterations=args.max_iterations,
         )
         if args.step_once:
-            res = supervisor.step()
+            res, _ = supervisor.step()
             print(f"Step outcome: step={res.step}, status={res.status}, action={res.action_taken}")
             return 0 if res.status in ("advanced", "gate_accepted", "converged") else 1
         outcomes = supervisor.run_until_complete()
