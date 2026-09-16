@@ -2,7 +2,7 @@
 
 Case: J03-document-flow
 Status: target intake for the Worker Change
-Contract revision: `J03-public-contract-1` (see `seed/docs/spec/contracts/`)
+Contract revision: `J03-public-contract-1` (see `docs/spec/contracts/`)
 
 The seed implements a working single-step flow: create a draft, add an
 immutable version, submit it into a one-approver route, decide, and observe
