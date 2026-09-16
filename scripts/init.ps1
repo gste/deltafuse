@@ -240,6 +240,31 @@ content_hash: sha256:$ContentHash
 Write-Host "Installing DeltaFuse $FrameworkVersion into $TargetRoot..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
+# Append DeltaFuse-generated artifacts to host project .gitignore
+$gitignorePath = Join-Path $TargetRoot ".gitignore"
+$gitignoreEntries = @(
+    ".deltafuse/hooks/",
+    ".agents/skills/",
+    ".cursor/skills/",
+    ".gemini/skills/"
+)
+$gitignoreContent = ""
+if (Test-Path -LiteralPath $gitignorePath) {
+    $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw
+}
+$newEntries = $gitignoreEntries | ForEach-Object {
+    if (-not $gitignoreContent -match [regex]::Escape($_)) {
+        "$_`n"
+    } else {
+        ""
+    }
+}
+if ($newEntries) {
+    $updatedContent = $gitignoreContent.TrimEnd() + $newEntries
+    Set-Content -LiteralPath $gitignorePath -Value $updatedContent -Encoding utf8 -NoNewline
+    Write-Host "Updated host .gitignore with DeltaFuse entries" -ForegroundColor DarkYellow
+}
+
 $FrameworkHash = Get-FrameworkContentHash
 $configPath = Join-Path $TargetRoot ".deltafuse/config.yaml"
 $configExisted = Test-Path -LiteralPath $configPath

@@ -169,6 +169,27 @@ def install(
     for d in DIRECTORIES_TO_CREATE:
         (target_root / d).mkdir(parents=True, exist_ok=True)
 
+    # Append DeltaFuse-generated artifacts to host project .gitignore
+    gitignore_path = target_root / ".gitignore"
+    gitignore_entries = [
+        ".deltafuse/hooks/",
+        ".agents/skills/",
+        ".cursor/skills/",
+        ".gemini/skills/",
+    ]
+    gitignore_content = ""
+    if gitignore_path.is_file():
+        gitignore_content = gitignore_path.read_text(encoding="utf-8")
+    new_entries = []
+    for entry in gitignore_entries:
+        if entry not in gitignore_content:
+            new_entries.append(entry)
+    if new_entries:
+        gitignore_path.write_text(
+            gitignore_content.rstrip() + "\n" + "\n".join(new_entries) + "\n",
+            encoding="utf-8",
+        )
+
     config_path = target_root / ".deltafuse" / "config.yaml"
     config_existed = config_path.is_file()
 

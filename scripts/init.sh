@@ -219,7 +219,24 @@ EOF
 
 printf 'Installing DeltaFuse %s into %s...\n' "$FRAMEWORK_VERSION" "$TARGET_ROOT"
 FRAMEWORK_HASH="$(framework_hash)"
-LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
+
+# Append DeltaFuse-generated artifacts to host project .gitignore
+GITIGNORE="$TARGET_ROOT/.gitignore"
+GITIGNORE_ENTRIES=(
+    ".deltafuse/hooks/"
+    ".agents/skills/"
+    ".cursor/skills/"
+    ".gemini/skills/"
+)
+if [ -f "$GITIGNORE" ]; then
+    for entry in "${GITIGNORE_ENTRIES[@]}"; do
+        if ! grep -F -q "$entry" "$GITIGNORE"; then
+            echo "$entry" >> "$GITIGNORE"
+        fi
+    done
+fi
+
+Locker_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 
 if [ -f "$LOCK_PATH" ] && [ "$FORCE" -ne 1 ] && ! grep -Fq "content_hash: sha256:$FRAMEWORK_HASH" "$LOCK_PATH"; then
   printf 'A different DeltaFuse lock already exists. Rerun with --force for an explicit upgrade.\n' >&2
