@@ -29,3 +29,9 @@ htmlcov/
 dist/
 build/
 _builder.py
+
+# DeltaFuse generated artifacts (host project .gitignore)
+.deltafuse/hooks/
+.agents/skills/
+.cursor/skills/
+.gemini/skills/
