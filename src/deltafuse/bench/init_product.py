@@ -43,16 +43,30 @@ def _looks_like_framework(path: Path) -> bool:
     return (path / "src" / "deltafuse").is_dir() and (path / "process" / "bench" / "cases").is_dir()
 
 
+def _remove_readonly(func, path, excinfo):
+    import os, stat
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
+
 def _recreate(product: Path, *, framework: Path) -> None:
     resolved = product.resolve()
     if resolved == resolved.anchor or len(resolved.parts) < 2:
         raise BenchError(f"refusing to recreate {resolved}")
     if _looks_like_framework(resolved) or resolved == framework.resolve():
         raise BenchError(f"refusing to recreate the framework at {resolved}")
-    try:
-        shutil.rmtree(resolved)
-    except OSError as ex:
-        raise BenchError(f"could not recreate {resolved}: {ex}") from ex
+    import time
+    for attempt in range(3):
+        try:
+            shutil.rmtree(resolved, onerror=_remove_readonly)
+            break
+        except OSError as ex:
+            if attempt == 2:
+                raise BenchError(f"could not recreate {resolved}: {ex}") from ex
+            time.sleep(0.5)
 
 
 def init_bench_product(
