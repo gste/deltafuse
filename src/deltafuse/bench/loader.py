@@ -34,6 +34,8 @@ def normalize_pack(path: Path | str) -> Path:
         child.is_dir() and (child / "case.yaml").is_file() for child in pack.iterdir()
     ):
         return pack
+    if (pack.parent / "deltafuse-bench" / "cases").is_dir():
+        return pack.parent / "deltafuse-bench" / "cases"
     raise BenchError(
         f"{pack} is not a bench pack (expected process/bench/cases, cases/, or a case directory)"
     )

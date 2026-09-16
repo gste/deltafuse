@@ -1,6 +1,0 @@
-[project]
-name = "m02-policy-stats"
-version = "0.0.1"
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
