@@ -193,6 +193,21 @@ class BenchmarkSupervisor:
             proc = self._run_cmd(cmd)
             duration = time.time() - t0
             log_worker_done(step, proc.returncode, duration)
+
+            # Persist full worker execution trace for analysis
+            logs_dir = self.sandbox / ".bench" / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_base = logs_dir / f"{ts}_{step}"
+            try:
+                (log_base.with_suffix(".prompt.txt")).write_text(prompt, encoding="utf-8")
+                if proc.stdout:
+                    (log_base.with_suffix(".stdout.log")).write_text(proc.stdout, encoding="utf-8")
+                if proc.stderr:
+                    (log_base.with_suffix(".stderr.log")).write_text(proc.stderr, encoding="utf-8")
+            except Exception:
+                pass
+
             if proc.returncode != 0:
                 if proc.stdout.strip():
                     log_gate_error(proc.stdout)
