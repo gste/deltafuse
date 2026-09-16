@@ -26,8 +26,23 @@ def main(argv: list[str] | None = None) -> int:
     sup_p.add_argument("sandbox", help="Path to product sandbox directory")
     sup_p.add_argument("--step-once", action="store_true", help="Execute single supervisor step")
     sup_p.add_argument("--little-coder", action="store_true", help="Drive local little-coder worker")
-    sup_p.add_argument("--model", default="poolside/laguna-xs-2.1", help="Worker model ID")
-    sup_p.add_argument("--max-iterations", type=int, default=50, help="Maximum supervisor iterations")
+    sup_p.add_argument(
+        "--model",
+        default="poolside/laguna-xs-2.1",
+        help="Model string to pass to little-coder (default: poolside/laguna-xs-2.1).",
+    )
+    sup_p.add_argument(
+        "--thinking",
+        default="off",
+        choices=["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+        help="Thinking level for little-coder (default: off).",
+    )
+    sup_p.add_argument(
+        "--max-iterations",
+        type=int,
+        default=50,
+        help="Maximum supervisor steps before halting (default: 50).",
+    )
 
     args = parser.parse_args(argv)
 
@@ -37,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
             args.sandbox,
             use_little_coder=args.little_coder,
             model=args.model,
+            thinking=args.thinking,
             max_iterations=args.max_iterations,
         )
         if args.step_once:

@@ -114,12 +114,14 @@ class BenchmarkSupervisor:
         worker_callback: Callable[[str, str], bool] | None = None,
         use_little_coder: bool = False,
         model: str = "poolside/laguna-xs-2.1",
+        thinking: str = "off",
         max_iterations: int = 50,
     ) -> None:
         self.sandbox = Path(sandbox_dir).resolve()
         self.worker_callback = worker_callback
         self.use_little_coder = use_little_coder
         self.model = model
+        self.thinking = thinking
         self.max_iterations = max_iterations
         self._history: list[SupervisorStepResult] = []
 
@@ -183,7 +185,7 @@ class BenchmarkSupervisor:
             cmd = [
                 launcher,
                 "--model", self.model,
-                "--thinking", "medium",
+                "--thinking", self.thinking,
                 "-p", prompt,
             ]
             log_worker_start(step, self.model, bool(feedback))
