@@ -143,17 +143,17 @@ def _verify_bundle(bundle: Path) -> None:
     # QF-023: the manifest must cover EVERY packaged regular file, the
     # package marker included — only the manifest itself is self-describing.
     expected = set(files) | {"manifest.json"}
-    for path in sorted(bundle.rglob("*")):
-        # the generator never packages these; runtime imports may drop them
-        # into a development source tree and they are not bundle contract
-        if "__pycache__" in path.parts or ".pytest_cache" in path.parts:
-            continue
-        rel = path.relative_to(bundle).as_posix()
-        if _is_reparse_point(path):
-            raise RuntimeError(f"bundle contains symlink/junction: {rel}")
-        if path.is_file():
-            if rel not in expected:
-                raise RuntimeError(f"extra packaged file in bundle: {rel}")
+    for root, dirnames, filenames in os.walk(bundle, followlinks=False):
+        for name in list(dirnames) + list(filenames):
+            path = Path(root) / name
+            if "__pycache__" in path.parts or ".pytest_cache" in path.parts:
+                continue
+            rel = path.relative_to(bundle).as_posix()
+            if _is_reparse_point(path):
+                raise RuntimeError(f"bundle contains symlink/junction: {rel}")
+            if path.is_file():
+                if rel not in expected:
+                    raise RuntimeError(f"extra packaged file in bundle: {rel}")
     for rel, digest in sorted(files.items()):
         path = bundle / rel
         if not path.is_file():
