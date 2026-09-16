@@ -1,8 +1,13 @@
-"""V3-FIX-003: every declared framework version source must agree on 3.0.0."""
-
 import re
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        tomllib = None
 
 import yaml
 
@@ -14,8 +19,13 @@ def test_version_file_is_release_version() -> None:
 
 
 def test_pyproject_and_dunder_version_match() -> None:
-    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert pyproject["project"]["version"] == "3.0.0"
+    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    if tomllib is not None:
+        pyproject = tomllib.loads(pyproject_text)
+        assert pyproject["project"]["version"] == "3.0.0"
+    else:
+        match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproject_text)
+        assert match and match.group(1) == "3.0.0"
     init = (REPO_ROOT / "src" / "deltafuse" / "__init__.py").read_text(encoding="utf-8")
     assert '__version__ = "3.0.0"' in init
 

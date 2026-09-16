@@ -301,7 +301,7 @@ ADVERSARIAL_COMMANDS = [
     "python exploit.py",
     "node -e 1",
     "deltafuse ../../etc/passwd",
-    "cat C:\Windows\win.ini",
+    "cat C:\\Windows\\win.ini",
     "cat /etc/passwd",
     "git push origin main",
     "deltafuse bench score .",
