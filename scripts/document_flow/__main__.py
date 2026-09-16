@@ -25,20 +25,25 @@ def main(argv: list[str] | None = None) -> int:
     sup_p = subparsers.add_parser("supervise", help="Supervise product sandbox through DeltaFuse lifecycle")
     sup_p.add_argument("sandbox", help="Path to product sandbox directory")
     sup_p.add_argument("--step-once", action="store_true", help="Execute single supervisor step")
-    sup_p.add_argument("--max-iterations", type=int, default=30, help="Maximum supervisor iterations")
+    sup_p.add_argument("--little-coder", action="store_true", help="Drive local little-coder worker")
+    sup_p.add_argument("--model", default="poolside/laguna-xs-2.1", help="Worker model ID")
+    sup_p.add_argument("--max-iterations", type=int, default=50, help="Maximum supervisor iterations")
 
     args = parser.parse_args(argv)
 
     if args.command == "supervise":
         from scripts.document_flow.supervisor import BenchmarkSupervisor
-        supervisor = BenchmarkSupervisor(args.sandbox, max_iterations=args.max_iterations)
+        supervisor = BenchmarkSupervisor(
+            args.sandbox,
+            use_little_coder=args.little_coder,
+            model=args.model,
+            max_iterations=args.max_iterations,
+        )
         if args.step_once:
             res = supervisor.step()
             print(f"Step outcome: step={res.step}, status={res.status}, action={res.action_taken}")
             return 0 if res.status in ("advanced", "gate_accepted", "converged") else 1
         outcomes = supervisor.run_until_complete()
-        for idx, out in enumerate(outcomes, 1):
-            print(f"[{idx}] step={out.step} status={out.status} -> {out.action_taken}")
         final = outcomes[-1] if outcomes else None
         return 0 if final and final.status == "converged" else 1
 
