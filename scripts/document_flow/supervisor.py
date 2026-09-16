@@ -11,6 +11,7 @@ This supervisor automates the closed control loop:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import shutil
@@ -20,6 +21,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+
+
+def _log(msg: str) -> None:
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{now}] {msg}", flush=True)
 
 
 @dataclass
@@ -84,8 +90,8 @@ class BenchmarkSupervisor:
             return skill_file.read_text(encoding="utf-8")
         return f"Execute lifecycle step: {step}"
 
-    def run_worker_for_step(self, step: str) -> bool:
-        """Invoke the configured worker for the current step."""
+    def run_worker_for_step(self, step: str, feedback: str | None = None) -> bool:
+        """Invoke the configured worker for the current step with optional gate feedback."""
         skill_text = self.read_skill_prompt(step)
         
         if self.worker_callback:
@@ -93,26 +99,37 @@ class BenchmarkSupervisor:
         
         if self.use_little_coder:
             launcher = "little-coder.cmd" if os.name == "nt" else "little-coder"
-            prompt = (
-                f"You are the Worker in this DeltaFuse product at {self.sandbox}.\n"
-                f"Execute the ready step: {step}.\n"
-                f"Follow the skill instructions below strictly:\n\n"
-                f"{skill_text}\n"
-            )
+            prompt_parts = [
+                f"You are the Worker in this DeltaFuse product at {self.sandbox}.",
+                f"Working directory: {self.sandbox}",
+                f"Current lifecycle step to execute: {step}",
+            ]
+            if feedback:
+                prompt_parts.append(
+                    f"\nATTENTION: The previous attempt failed validation with the following gate errors:\n"
+                    f"{feedback}\n"
+                    f"Please fix all errors strictly according to the schema and instructions below.\n"
+                )
+            prompt_parts.append(f"Follow the skill instructions below strictly:\n\n{skill_text}\n")
+            prompt = "\n".join(prompt_parts)
+
             cmd = [
                 launcher,
                 "--model", self.model,
                 "--thinking", "medium",
                 "-p", prompt,
             ]
-            print(f"[SUPERVISOR] Launching little-coder for step '{step}'...")
+            _log(f"[SUPERVISOR] Launching little-coder for step '{step}' (feedback={'yes' if feedback else 'no'})...")
             proc = self._run_cmd(cmd)
-            print(f"[SUPERVISOR] little-coder completed step '{step}' with exit code {proc.returncode}")
+            _log(f"[SUPERVISOR] little-coder completed step '{step}' with exit code {proc.returncode}")
+            if proc.returncode != 0:
+                _log(f"[SUPERVISOR] little-coder stdout:\n{proc.stdout}")
+                _log(f"[SUPERVISOR] little-coder stderr:\n{proc.stderr}")
             return proc.returncode == 0
 
         return True
 
-    def step(self) -> SupervisorStepResult:
+    def step(self, last_gate_feedback: str | None = None) -> tuple[SupervisorStepResult, str | None]:
         """Execute one iteration of the supervision loop."""
         state = self.get_current_state()
         selected = state.get("selected")
@@ -122,7 +139,6 @@ class BenchmarkSupervisor:
         if halt:
             halt_kind = halt.get("kind")
             if halt_kind == "spec":
-                # Spec approval Human Gate: apply accept
                 chg = self.find_change_dir()
                 if chg:
                     dec_proc = self._run_cmd([
@@ -134,28 +150,28 @@ class BenchmarkSupervisor:
                         status="gate_accepted",
                         action_taken=f"accepted spec gate: {dec_proc.stdout.strip()}",
                         halt=halt,
-                    )
+                    ), None
             elif halt_kind == "done":
                 return SupervisorStepResult(
                     step=None,
                     status="converged",
                     action_taken="product converged successfully",
                     halt=halt,
-                )
+                ), None
             else:
                 return SupervisorStepResult(
                     step=None,
                     status="halted",
                     action_taken=f"halted on kind={halt_kind}",
                     halt=halt,
-                )
+                ), None
 
         if not selected:
             return SupervisorStepResult(
                 step=None,
                 status="no_ready_step",
                 action_taken="no ready steps in work queue",
-            )
+            ), None
 
         step_name = selected.get("step")
         gate_name = selected.get("gate") or step_name
@@ -164,13 +180,13 @@ class BenchmarkSupervisor:
 
         # 2. Invoke worker
         if step_name and (self.worker_callback or self.use_little_coder):
-            worker_ok = self.run_worker_for_step(step_name)
+            worker_ok = self.run_worker_for_step(step_name, feedback=last_gate_feedback)
             if not worker_ok:
                 return SupervisorStepResult(
                     step=step_name,
                     status="worker_failed",
                     action_taken="worker execution failed",
-                )
+                ), last_gate_feedback
 
         # 3. Check gate and advance if ready
         if chg_path and chg_path.is_dir() and gate_name:
@@ -187,33 +203,36 @@ class BenchmarkSupervisor:
                     step=step_name,
                     status="advanced",
                     action_taken=f"advanced gate '{gate_name}': {adv.stdout.strip()}",
-                )
+                ), None
             else:
+                gate_err = chk.stderr or chk.stdout
                 return SupervisorStepResult(
                     step=step_name,
                     status="gate_blocked",
-                    action_taken=f"check-gate '{gate_name}' failed:\n{chk.stderr or chk.stdout}",
-                )
+                    action_taken=f"check-gate '{gate_name}' failed:\n{gate_err}",
+                ), gate_err
 
         return SupervisorStepResult(
             step=step_name,
             status="pending",
             action_taken=f"step {step_name} in progress",
-        )
+        ), None
 
     def run_until_complete(self) -> list[SupervisorStepResult]:
         """Run control loop until convergence, unrecoverable stop, or max iterations."""
         results = []
+        last_feedback: str | None = None
         for i in range(self.max_iterations):
-            res = self.step()
+            res, feedback = self.step(last_gate_feedback=last_feedback)
             results.append(res)
             self._history.append(res)
-            print(f"[{i+1}/{self.max_iterations}] step={res.step} status={res.status} -> {res.action_taken}")
+            _log(f"[{i+1}/{self.max_iterations}] step={res.step} status={res.status} -> {res.action_taken}")
             
             if res.status in ("converged", "halted", "worker_failed", "no_ready_step"):
                 break
             if res.status == "gate_blocked" and not (self.worker_callback or self.use_little_coder):
                 break
+            last_feedback = feedback
             time.sleep(1.0)
         return results
 
@@ -235,11 +254,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.step_once:
-        res = supervisor.step()
-        print(f"Step outcome: step={res.step}, status={res.status}, action={res.action_taken}")
+        res, _ = supervisor.step()
+        _log(f"Step outcome: step={res.step}, status={res.status}, action={res.action_taken}")
         return 0 if res.status in ("advanced", "gate_accepted", "converged") else 1
 
-    print(f"Supervising sandbox: {args.sandbox_dir} (little_coder={args.little_coder})")
+    _log(f"Supervising sandbox: {args.sandbox_dir} (little_coder={args.little_coder}, model={args.model})")
     outcomes = supervisor.run_until_complete()
     final = outcomes[-1] if outcomes else None
     return 0 if final and final.status == "converged" else 1
