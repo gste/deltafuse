@@ -26,12 +26,12 @@ jobs:
           # Canonical nested path is vendor/deltafuse. Hyphenated dirs are leftover checkouts.
           if [ -d vendor/deltafuse ]; then
             python -m pip install -e ./vendor/deltafuse
-          elif [ -d vendor/delta-fuse ]; then
-            python -m pip install -e ./vendor/delta-fuse
+          elif [ -d vendor/deltafuse ]; then
+            python -m pip install -e ./vendor/deltafuse
           elif [ -d deltafuse ]; then
             python -m pip install -e ./deltafuse
-          elif [ -d delta-fuse ]; then
-            python -m pip install -e ./delta-fuse
+          elif [ -d deltafuse ]; then
+            python -m pip install -e ./deltafuse
           else
             echo "Checkout the framework version pinned in .deltafuse/lock.yaml (submodule or vendor path), then re-run." >&2
             exit 1
