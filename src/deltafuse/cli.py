@@ -230,10 +230,10 @@ def main(argv: list[str] | None = None) -> int:
         "--phase",
         "-p",
         required=True,
-        choices=["red", "green", "regression"],
+        choices=["red", "green", "regression", "verification"],
         help="Evidence phase to record",
     )
-    ev_parser.add_argument("--task", "-t", required=True, help="Task id (TASK-NNN)")
+    ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
     ev_parser.add_argument(
         "--changed-path",
         action="append",

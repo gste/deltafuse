@@ -39,6 +39,12 @@ allOf:
         task: {type: string, pattern: '^TASK-[0-9]{3,}$'}
   - if:
       properties:
+        phase: {const: verification}
+    then:
+      properties:
+        task: {type: 'null'}
+  - if:
+      properties:
         phase: {enum: [green, regression, verification]}
     then:
       required: [base_revision]

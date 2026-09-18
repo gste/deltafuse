@@ -212,3 +212,37 @@ def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path
     errs = check_gate(builder.change_dir, "declaring")
     assert any("stamp does not match the recorded payload" in e for e in errs)
 
+
+def test_verification_phase_requires_task_none(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-050")
+    import pytest
+    from deltafuse.core.evidence import EvidenceRunError
+    with pytest.raises(EvidenceRunError) as exc_info:
+        run_evidence(
+            builder.change_dir,
+            phase="verification",
+            task="TASK-001",
+            argv=_run_file_cmd("tests/test_task-001.py"),
+        )
+    assert "verification" in str(exc_info.value).lower() or "task" in str(exc_info.value).lower()
+
+
+def test_verification_phase_writes_run_yaml(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-051")
+    runner_file = tmp_path / "tests" / "test_verif.py"
+    runner_file.parent.mkdir(parents=True, exist_ok=True)
+    runner_file.write_text("raise SystemExit(0)\n", encoding="utf-8")
+
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="verification",
+        task=None,
+        argv=_run_file_cmd("tests/test_verif.py"),
+    )
+    assert outcome.dest == builder.change_dir / "evidence" / "verification" / "run.yaml"
+    assert outcome.dest.is_file()
+    assert outcome.payload["phase"] == "verification"
+    assert outcome.payload["task"] is None
+    assert "base_revision" in outcome.payload
+
+

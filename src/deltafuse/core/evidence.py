@@ -103,7 +103,7 @@ def _is_authentic(
         if route == "code":
             return failure_category == AUTHENTIC_RED_CATEGORY
         return True
-    if phase in {"green", "regression"}:
+    if phase in {"green", "regression", "verification"}:
         return result == "passed"
     return False
 
@@ -167,13 +167,19 @@ def evidence_stamp_error(payload: dict[str, Any], product_root: Path) -> str | N
 
 
 def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
-    """Stamp *payload* and write YAML. Used by the runner and test fixtures."""
+    """Stamp *payload* and write YAML after validated storage schema check."""
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+    registry = ArtifactRegistry()
+    val_res = registry.validate_storage_schema("evidence", payload)
+    if not val_res.valid:
+        diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
+        raise EvidenceRunError(f"Evidence storage schema validation failed: {'; '.join(diag_msgs)}")
+
     stamped = stamp_evidence(payload, product_root)
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return stamped
-
 
 
 def _core_computed_changed_paths(repo_root: Path) -> list[str]:
@@ -188,16 +194,25 @@ def run_evidence(
     change_dir: Path | str,
     *,
     phase: str,
-    task: str,
+    task: str | None = None,
     argv: list[str],
     changed_paths: list[str] | None = None,
     timeout: int = 90,
 ) -> EvidenceOutcome:
-    """Execute *argv* at the product root and write evidence/<phase>/<task>.yaml."""
-    if phase not in {"red", "green", "regression"}:
+    """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml."""
+    if phase not in {"red", "green", "regression", "verification"}:
         raise EvidenceRunError(f"Unsupported evidence phase '{phase}'")
     if not argv:
         raise EvidenceRunError("Command argv is required after '--'")
+
+    if phase == "verification":
+        if task is not None and task != "null" and task != "":
+            raise EvidenceRunError(f"Verification phase requires task=None, got '{task}'")
+        task = None
+    else:
+        if not task:
+            raise EvidenceRunError(f"Evidence phase '{phase}' requires task ID (e.g. TASK-001)")
+
     change_path = Path(change_dir).resolve()
     if not change_path.is_dir():
         raise EvidenceRunError(f"Change package directory not found: {change_path}")
@@ -264,10 +279,14 @@ def run_evidence(
         "changed_paths": rel_paths,
         "spec_status": "unchanged",
     }
-    if phase in {"green", "regression"}:
+    if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
 
-    dest = change_path / "evidence" / phase / f"{task}.yaml"
+    if phase == "verification":
+        dest = change_path / "evidence" / "verification" / "run.yaml"
+    else:
+        dest = change_path / "evidence" / phase / f"{task}.yaml"
+
     payload = write_stamped_evidence(dest, payload, repo_root)
 
     errors = list(route_errs)
