@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-05",
+  "entry": "AW-06",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -159,7 +159,7 @@
       "id": "AW-05",
       "phase": "B",
       "title": "Implement typed patches and immutable-field protection",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-04"
       ],
