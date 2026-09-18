@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltafuse"
-version = "3.1.0"
+dynamic = ["version"]
 description = "DeltaFuse Specification-Driven AI Engineering Framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,9 @@ deltafuse = "deltafuse.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
 
 # DF3-005 / B-01: the immutable runtime bundle (schemas, templates, skills,
 # manifest) ships inside the wheel so an installed CLI needs no source checkout.

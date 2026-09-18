@@ -4,7 +4,7 @@ title: Change title
 status: normalized
 
 framework:
-  version: 3.1.0
+  version: 0.0.0 # deltafuse:version-template
   content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 intent: unknown

@@ -179,15 +179,27 @@ DIRECTORIES_TO_CREATE = [
     "docs/archive/changes",
 ]
 
+VERSION_TEMPLATE_MARKER = "0.0.0 # deltafuse:version-template"
 
-def _copy_template_file(framework_root: Path, target_root: Path, src_rel: str, dst_rel: str) -> bool:
+
+def _render_version_markers(content: str, version: str) -> str:
+    return content.replace(VERSION_TEMPLATE_MARKER, version)
+
+
+def _copy_template_file(
+    framework_root: Path, target_root: Path, src_rel: str, dst_rel: str, version: str
+) -> bool:
     """Copies template file to target if target does not already exist. Returns True if created."""
     src = framework_root / src_rel
     dst = target_root / dst_rel
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         return False
-    shutil.copyfile(src, dst)
+    content = src.read_text(encoding="utf-8")
+    if VERSION_TEMPLATE_MARKER in content:
+        _atomic_write(dst, _render_version_markers(content, version))
+    else:
+        shutil.copyfile(src, dst)
     return True
 
 
@@ -295,6 +307,11 @@ def install(
 
     config_path = target_root / ".deltafuse" / "config.yaml"
     config_existed = config_path.is_file()
+    if config_existed:
+        config_content = config_path.read_text(encoding="utf-8")
+        rendered_config = _render_version_markers(config_content, version)
+        if rendered_config != config_content:
+            _atomic_write(config_path, rendered_config)
 
     # Host instructions are never a normal template: choose their policy explicitly.
     agents_md_mode, agents_md_target = _apply_agents_policy(target_root, agents_md, framework_root, bundle_assets)
@@ -303,7 +320,7 @@ def install(
     for src_rel, dst_rel in TEMPLATE_MAPPINGS:
         if bundle_assets is not None:
             src_rel = src_rel.replace('process/templates/', 'templates/', 1)
-        _copy_template_file(framework_root, target_root, src_rel, dst_rel)
+        _copy_template_file(framework_root, target_root, src_rel, dst_rel, version)
 
     adapter_roots: list[str] = []
     config_dict: dict = {}

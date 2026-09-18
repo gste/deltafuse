@@ -52,6 +52,8 @@ git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 
 `.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 
+Для framework release файл `VERSION` является единственным machine-readable источником версии. Package metadata читает его динамически, а installer templates содержат schema-valid marker `0.0.0`, который каждый installer заменяет значением из `VERSION`. Поэтому version bump меняет `VERSION` и человекочитаемую release-запись в `CHANGELOG.md`; generated assets синхронизируются без встраивания номера релиза.
+
 Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config и lock. Linked adapters следуют за nested checkout; copied adapters перегенерируются. Product-owned specification, Changes, Decisions, host instruction files и существующие templates сохраняются. До изменения lock:
 
 1. Проверить active Changes и записанные в них framework/schema versions.

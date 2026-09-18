@@ -57,7 +57,23 @@ copy_template() {
     printf 'Preserving existing %s\n' "$target_relative"
     return
   fi
-  cp "$SCRIPT_DIR/$source_relative" "$target"
+  if grep -Fq '0.0.0 # deltafuse:version-template' "$SCRIPT_DIR/$source_relative"; then
+    temporary="$(mktemp)"
+    sed "s/0\.0\.0 # deltafuse:version-template/$FRAMEWORK_VERSION/g" "$SCRIPT_DIR/$source_relative" > "$temporary"
+    mv "$temporary" "$target"
+  else
+    cp "$SCRIPT_DIR/$source_relative" "$target"
+  fi
+}
+
+resolve_version_markers() {
+  local path="$1" temporary
+  [ -f "$path" ] || return
+  if grep -Fq '0.0.0 # deltafuse:version-template' "$path"; then
+    temporary="$(mktemp)"
+    sed "s/0\.0\.0 # deltafuse:version-template/$FRAMEWORK_VERSION/g" "$path" > "$temporary"
+    mv "$temporary" "$path"
+  fi
 }
 
 sync_host_instructions() {
@@ -284,6 +300,7 @@ fi
 
 agents_md_mode="$(sync_host_instructions)"
 copy_template process/templates/.deltafuse/config.yaml .deltafuse/config.yaml
+resolve_version_markers "$TARGET_ROOT/.deltafuse/config.yaml"
 copy_template process/templates/docs/intake/README.md docs/intake/README.md
 copy_template process/templates/docs/changes/README.md docs/changes/README.md
 copy_template process/templates/docs/spec/README.md docs/spec/README.md

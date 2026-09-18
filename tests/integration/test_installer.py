@@ -36,6 +36,8 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert lock["workflow"]["call_width"] == "wide"
     assert lock["workflow"]["auto_accept_decisions"] is False
     cfg = yaml.safe_load((tmp_path / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["framework"]["version"] == result.version
+    assert cfg["framework"]["source"] == f"deltafuse://v{result.version}"
     assert cfg["workflow"]["call_width"] == "wide"
     assert cfg["workflow"]["leash"] == "off"
     assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()

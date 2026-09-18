@@ -42,7 +42,8 @@ def test_evidence_refuses_dirty_tree(tmp_path, monkeypatch):
 def test_evidence_no_silent_overwrite(tmp_path, monkeypatch):
     """An existing evidence file is never overwritten without --force."""
     monkeypatch.setattr(wheel_evidence, "tree_dirty", lambda repo: [])
-    target = tmp_path / "deltafuse-3.1.0-py3-none-any-build-manifest.json"
+    release = (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip()
+    target = tmp_path / f"deltafuse-{release}-py3-none-any-build-manifest.json"
     target.write_text('{"existing": true}\n', encoding="utf-8")
     before = hashlib.sha256(target.read_bytes()).hexdigest()
     rc = wheel_evidence.main(["--output-dir", str(tmp_path)])

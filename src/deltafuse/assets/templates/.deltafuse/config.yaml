@@ -1,8 +1,8 @@
 schema_version: 3
 
 framework:
-  source: deltafuse://v3.1.0
-  version: 3.1.0
+  source: deltafuse://v0.0.0 # deltafuse:version-template
+  version: 0.0.0 # deltafuse:version-template
 
 paths:
   intake: docs/intake

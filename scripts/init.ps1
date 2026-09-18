@@ -61,7 +61,23 @@ function Copy-TemplateFile {
         return
     }
 
-    Copy-Item -LiteralPath $source -Destination $target -Force
+    $content = [IO.File]::ReadAllText($source)
+    $versionMarker = "0.0.0 # deltafuse:version-template"
+    if ($content.Contains($versionMarker)) {
+        [IO.File]::WriteAllText($target, $content.Replace($versionMarker, $FrameworkVersion), (New-Object Text.UTF8Encoding $false))
+    } else {
+        Copy-Item -LiteralPath $source -Destination $target -Force
+    }
+}
+
+function Resolve-VersionMarkers {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $content = [IO.File]::ReadAllText($Path)
+    $marker = "0.0.0 # deltafuse:version-template"
+    if ($content.Contains($marker)) {
+        [IO.File]::WriteAllText($Path, $content.Replace($marker, $FrameworkVersion), (New-Object Text.UTF8Encoding $false))
+    }
 }
 
 function Sync-HostInstructions {
@@ -325,6 +341,7 @@ foreach ($directory in $directories) {
 
 $agentsMdMode = Sync-HostInstructions
 Copy-TemplateFile "process/templates/.deltafuse/config.yaml" ".deltafuse/config.yaml"
+Resolve-VersionMarkers (Join-Path $TargetRoot ".deltafuse/config.yaml")
 Copy-TemplateFile "process/templates/docs/intake/README.md" "docs/intake/README.md"
 Copy-TemplateFile "process/templates/docs/changes/README.md" "docs/changes/README.md"
 Copy-TemplateFile "process/templates/docs/spec/README.md" "docs/spec/README.md"
