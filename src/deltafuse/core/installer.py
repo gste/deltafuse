@@ -5,6 +5,8 @@ import hashlib
 import os
 import re
 import shutil
+import sys
+import tempfile
 from pathlib import Path
 from typing import NamedTuple
 import yaml
@@ -26,6 +28,8 @@ class InstallResult(NamedTuple):
     content_hash: str
     skills_installed: int
     adapter_mode: str
+    agents_md_mode: str
+    agents_md_target: Path | None
 
 
 class InstallationError(Exception):
@@ -53,7 +57,6 @@ def _active_change_ids(target_root: Path) -> list[str]:
 
 
 TEMPLATE_MAPPINGS = [
-    ("process/templates/AGENTS.md", "AGENTS.md"),
     ("process/templates/.deltafuse/config.yaml", ".deltafuse/config.yaml"),
     ("process/templates/docs/intake/README.md", "docs/intake/README.md"),
     ("process/templates/docs/changes/README.md", "docs/changes/README.md"),
@@ -69,6 +72,103 @@ TEMPLATE_MAPPINGS = [
     ("process/templates/.github/workflows/deltafuse-leash.yml", ".github/workflows/deltafuse-leash.yml"),
 ]
 
+BRIDGE_BEGIN = "<!-- deltafuse:bridge -->"
+BRIDGE_END = "<!-- /deltafuse:bridge -->"
+BRIDGE = """<!-- deltafuse:bridge -->
+## DeltaFuse
+
+When work is explicitly run through DeltaFuse, load the installed DeltaFuse
+`run` skill and follow `deltafuse next --json`. DeltaFuse governs lifecycle
+artifacts; repository rules continue to govern code, tests, security, and style.
+<!-- /deltafuse:bridge -->
+"""
+
+
+def _effective_agents_path(target_root: Path) -> Path | None:
+    """The override wins because it is the instruction file an agent will see."""
+    override = target_root / "AGENTS.override.md"
+    agents = target_root / "AGENTS.md"
+    if override.is_file():
+        return override
+    if agents.is_file():
+        return agents
+    return None
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(content)
+        os.replace(name, path)
+    except Exception:
+        try:
+            os.unlink(name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _bridge_agents(path: Path) -> None:
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    begins, ends = existing.count(BRIDGE_BEGIN), existing.count(BRIDGE_END)
+    if begins != ends or begins > 1:
+        raise InstallationError(
+            f"Cannot add DeltaFuse bridge to {path.name}: damaged or ambiguous DeltaFuse bridge markers."
+        )
+    if begins == 1:
+        start, end = existing.find(BRIDGE_BEGIN), existing.find(BRIDGE_END)
+        if start > end:
+            raise InstallationError(f"Cannot add DeltaFuse bridge to {path.name}: damaged DeltaFuse bridge markers.")
+        return
+    separator = "" if not existing or existing.endswith(("\n", "\r")) else "\n"
+    _atomic_write(path, existing + separator + ("\n" if existing else "") + BRIDGE)
+
+
+def _select_agents_mode(target_root: Path, requested: str | None) -> tuple[str, Path | None]:
+    if requested is not None and requested not in {"prompt", "bridge", "preserve", "replace"}:
+        raise InstallationError("Invalid --agents-md value; expected prompt, bridge, preserve, or replace.")
+    effective = _effective_agents_path(target_root)
+    mode = requested
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if mode is None:
+        mode = "prompt" if interactive else "preserve"
+    if mode == "prompt":
+        if not interactive:
+            raise InstallationError("--agents-md=prompt requires an interactive TTY.")
+        target_name = effective.name if effective else "AGENTS.md (new)"
+        print(f"Effective host instruction file: {target_name}")
+        if (target_root / "AGENTS.override.md").is_file() and (target_root / "AGENTS.md").is_file():
+            print("AGENTS.override.md takes precedence; changing AGENTS.md alone would not activate DeltaFuse.")
+        print("[b] Add minimal bridge and preserve host rules; [p] leave unchanged (use /run or deltafuse next --json); [r] replace completely (removes host rules)")
+        choice = input("Choose b, p, or r: ").strip().lower()
+        mode = {"b": "bridge", "p": "preserve", "r": "replace"}.get(choice, "")
+        if not mode:
+            raise InstallationError("No valid AGENTS.md integration choice was made.")
+    if mode == "replace" and effective is None:
+        raise InstallationError("--agents-md=replace requires an existing effective host instruction file.")
+    return mode, effective
+
+
+def _apply_agents_policy(target_root: Path, requested: str | None, framework_root: Path, bundle_assets: Path | None) -> tuple[str, Path | None]:
+    mode, effective = _select_agents_mode(target_root, requested)
+    if mode == "preserve":
+        return mode, effective
+    if mode == "bridge":
+        target = effective or target_root / "AGENTS.md"
+        _bridge_agents(target)
+        return mode, target
+    assert effective is not None
+    template = (framework_root / ("templates/AGENTS.md" if bundle_assets is not None else "process/templates/AGENTS.md")).read_text(encoding="utf-8")
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        import difflib
+        print("".join(difflib.unified_diff(effective.read_text(encoding="utf-8").splitlines(True), template.splitlines(True), fromfile=str(effective), tofile="DeltaFuse template")))
+        if input("Replace this host instruction file? Type replace: ").strip() != "replace":
+            raise InstallationError("AGENTS.md replacement cancelled.")
+    _atomic_write(effective, template)
+    return mode, effective
+
 DIRECTORIES_TO_CREATE = [
     ".deltafuse",
     "docs/intake",
@@ -79,15 +179,27 @@ DIRECTORIES_TO_CREATE = [
     "docs/archive/changes",
 ]
 
+VERSION_TEMPLATE_MARKER = "0.0.0 # deltafuse:version-template"
 
-def _copy_template_file(framework_root: Path, target_root: Path, src_rel: str, dst_rel: str) -> bool:
+
+def _render_version_markers(content: str, version: str) -> str:
+    return content.replace(VERSION_TEMPLATE_MARKER, version)
+
+
+def _copy_template_file(
+    framework_root: Path, target_root: Path, src_rel: str, dst_rel: str, version: str
+) -> bool:
     """Copies template file to target if target does not already exist. Returns True if created."""
     src = framework_root / src_rel
     dst = target_root / dst_rel
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         return False
-    shutil.copyfile(src, dst)
+    content = src.read_text(encoding="utf-8")
+    if VERSION_TEMPLATE_MARKER in content:
+        _atomic_write(dst, _render_version_markers(content, version))
+    else:
+        shutil.copyfile(src, dst)
     return True
 
 
@@ -106,10 +218,13 @@ def install(
     target_dir: Path | str = ".",
     force: bool = False,
     framework_root: Path | str | None = None,
+    agents_md: str | None = None,
 ) -> InstallResult:
     """
     Installs or updates DeltaFuse product layout in target_dir.
     """
+    if agents_md is not None and agents_md not in {"prompt", "bridge", "preserve", "replace"}:
+        raise InstallationError("Invalid --agents-md value; expected prompt, bridge, preserve, or replace.")
     target_root = Path(target_dir).resolve()
     target_root.mkdir(parents=True, exist_ok=True)
 
@@ -169,14 +284,43 @@ def install(
     for d in DIRECTORIES_TO_CREATE:
         (target_root / d).mkdir(parents=True, exist_ok=True)
 
+    # Append DeltaFuse-generated artifacts to host project .gitignore
+    gitignore_path = target_root / ".gitignore"
+    gitignore_entries = [
+        ".deltafuse/hooks/",
+        ".agents/skills/",
+        ".cursor/skills/",
+        ".gemini/skills/",
+    ]
+    gitignore_content = ""
+    if gitignore_path.is_file():
+        gitignore_content = gitignore_path.read_text(encoding="utf-8")
+    new_entries = []
+    for entry in gitignore_entries:
+        if entry not in gitignore_content:
+            new_entries.append(entry)
+    if new_entries:
+        gitignore_path.write_text(
+            gitignore_content.rstrip() + "\n" + "\n".join(new_entries) + "\n",
+            encoding="utf-8",
+        )
+
     config_path = target_root / ".deltafuse" / "config.yaml"
     config_existed = config_path.is_file()
+    if config_existed:
+        config_content = config_path.read_text(encoding="utf-8")
+        rendered_config = _render_version_markers(config_content, version)
+        if rendered_config != config_content:
+            _atomic_write(config_path, rendered_config)
 
-    # Copy template files
+    # Host instructions are never a normal template: choose their policy explicitly.
+    agents_md_mode, agents_md_target = _apply_agents_policy(target_root, agents_md, framework_root, bundle_assets)
+
+    # Copy product-owned template files.
     for src_rel, dst_rel in TEMPLATE_MAPPINGS:
         if bundle_assets is not None:
             src_rel = src_rel.replace('process/templates/', 'templates/', 1)
-        _copy_template_file(framework_root, target_root, src_rel, dst_rel)
+        _copy_template_file(framework_root, target_root, src_rel, dst_rel, version)
 
     adapter_roots: list[str] = []
     config_dict: dict = {}
@@ -309,4 +453,6 @@ def install(
         content_hash=content_hash,
         skills_installed=total_skills,
         adapter_mode=actual_mode,
+        agents_md_mode=agents_md_mode,
+        agents_md_target=agents_md_target,
     )

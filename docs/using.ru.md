@@ -23,7 +23,6 @@ Installer создаёт без перезаписи существующих pr
 ```text
 .deltafuse/config.yaml
 .deltafuse/lock.yaml
-AGENTS.md
 docs/intake/
 docs/changes/
 docs/spec/
@@ -33,6 +32,10 @@ docs/archive/changes/
 ```
 
 Также ставит adapter skills в `.agents/skills/`, `.cursor/skills/` и `.gemini/skills/`. `adapters.mode`: `auto` (по умолчанию), `link` или `copy`.
+
+### Host instructions
+
+`AGENTS.md` и `AGENTS.override.md` — необязательная integration surface, которой владеет host. По умолчанию DeltaFuse не создаёт и не меняет ни один из них. В интерактивном terminal `init` спрашивает способ интеграции; в CI/non-interactive режиме оба файла сохраняются, а явная активация выполняется через `/run` или `deltafuse next --json`. Детерминированный выбор: `--agents-md=bridge|preserve|replace`. `bridge` добавляет один короткий размеченный bridge в effective file (`AGENTS.override.md` имеет приоритет); `replace` заменяет существующий effective file и в интерактивном режиме требует второго подтверждения. Полный Worker contract остаётся в generated `run` и lifecycle skills.
 
 - **link**, если checkout фреймворка лежит внутри продукта (git submodule или vendor path, рекомендуется `vendor/deltafuse`): каждый скилл — относительный symlink на `process/skills/<name>`. Cursor видит живые скиллы после `git submodule update`. `init --force` только обновляет `.deltafuse/lock.yaml`. Сами ссылки в git не коммитить. На Windows без права на symlink installer может сделать directory junction (абсолютный, только локально).
 - **copy** в остальных случаях и если ОС отказывает в symlink: stamped snapshots с `DO NOT EDIT`, version, source URI и content hash.
@@ -49,13 +52,15 @@ git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 
 `.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
 
-Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config и lock. Linked adapters следуют за nested checkout; copied adapters перегенерируются. Product-owned specification, Changes, Decisions, `AGENTS.md` и существующие templates сохраняются. До изменения lock:
+Для framework release файл `VERSION` является единственным machine-readable источником версии. Package metadata читает его динамически, а installer templates содержат schema-valid marker `0.0.0`, который каждый installer заменяет значением из `VERSION`. Поэтому version bump меняет `VERSION` и человекочитаемую release-запись в `CHANGELOG.md`; generated assets синхронизируются без встраивания номера релиза.
+
+Повторный запуск installer с `-Force` (PowerShell) или `--force` (Bash) является явным framework upgrade. Он обновляет requested version в config и lock. Linked adapters следуют за nested checkout; copied adapters перегенерируются. Product-owned specification, Changes, Decisions, host instruction files и существующие templates сохраняются. До изменения lock:
 
 1. Проверить active Changes и записанные в них framework/schema versions.
 2. Завершить их на прежней версии либо закрыть Change.
 3. Перезапустить installer и проверить product layout.
 
-Нельзя вручную править adapter skills (копии или канонические файлы, на которые они ссылаются) и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и тонком product `AGENTS.md`.
+Нельзя вручную править adapter skills (копии или канонические файлы, на которые они ссылаются) и создавать локальный process fork. Product-specific routing и repository conventions находятся в `.deltafuse/config.yaml` и, если host выбрал его, собственном тонком `AGENTS.md`.
 
 ## First operation
 

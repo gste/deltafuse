@@ -23,7 +23,6 @@ The installer creates the following product structure without overwriting existi
 ```text
 .deltafuse/config.yaml
 .deltafuse/lock.yaml
-AGENTS.md
 docs/intake/
 docs/changes/
 docs/spec/
@@ -33,6 +32,10 @@ docs/archive/changes/
 ```
 
 It also installs adapter skills in `.agents/skills/`, `.cursor/skills/`, and `.gemini/skills/`. `adapters.mode` is `auto` (default), `link`, or `copy`.
+
+### Host instructions
+
+`AGENTS.md` and `AGENTS.override.md` are host-owned optional integration surfaces. DeltaFuse never creates or changes either by default. In an interactive terminal, `init` asks how to integrate; in CI/non-interactive use it preserves both files and reports that `/run` or `deltafuse next --json` is the explicit activation path. Choose deterministically with `--agents-md=bridge|preserve|replace`. `bridge` appends one small marked bridge to the effective file (`AGENTS.override.md` takes precedence); `replace` replaces that existing effective file and requires an interactive second confirmation. The full Worker contract stays in generated `run` and lifecycle skills.
 
 - **link** when the framework checkout lives inside the product (git submodule or vendor path, recommended `vendor/deltafuse`): each adapter skill is a relative symlink to `process/skills/<name>`. Cursor sees live skills after `git submodule update`. `init --force` only refreshes `.deltafuse/lock.yaml`. Do not commit the adapter links. On Windows without symlink privilege the installer may create a directory junction instead (absolute, machine-local).
 - **copy** otherwise, and when the OS refuses symlinks: stamped snapshots marked `DO NOT EDIT`, with version, source URI, and content hash.
@@ -49,13 +52,15 @@ git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 
 `.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`). `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and the Analyze call-width profile. Re-run the installer after changing `call_width` so lock matches config.
 
-Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config and lock. Linked adapters follow the nested checkout; copied adapters are regenerated. Product-owned specification, Changes, Decisions, `AGENTS.md`, and existing templates stay. Before updating lock:
+For framework releases, `VERSION` is the single machine-readable version source. Package metadata reads it dynamically, and installer templates contain a schema-valid `0.0.0` marker that each installer replaces from `VERSION`. A version bump therefore edits `VERSION` plus the human release entry in `CHANGELOG.md`; generated assets are synchronized without embedding the release number.
+
+Re-running the installer with `-Force` (PowerShell) or `--force` (Bash) performs an explicit framework upgrade. It updates the requested version in config and lock. Linked adapters follow the nested checkout; copied adapters are regenerated. Product-owned specification, Changes, Decisions, host instruction files, and existing templates stay. Before updating lock:
 
 1. Review active Changes and their recorded framework/schema versions.
 2. Complete them on the current version or explicitly close the Change.
 3. Re-run the installer and validate product layout.
 
-Never edit adapter skills (copied snapshots or the canonical files they link to) or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and the product's concise `AGENTS.md`.
+Never edit adapter skills (copied snapshots or the canonical files they link to) or create a local process fork. Product-specific routing and repository conventions belong in `.deltafuse/config.yaml` and, if the host chooses one, its own concise `AGENTS.md`.
 
 ## First operation
 

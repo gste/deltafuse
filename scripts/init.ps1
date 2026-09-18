@@ -2,7 +2,9 @@
 [CmdletBinding()]
 param(
     [string]$TargetDir = ".",
-    [switch]$Force
+    [switch]$Force,
+    [ValidateSet("prompt", "bridge", "preserve", "replace")]
+    [string]$AgentsMd = "preserve"
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,7 +61,55 @@ function Copy-TemplateFile {
         return
     }
 
-    Copy-Item -LiteralPath $source -Destination $target -Force
+    $content = [IO.File]::ReadAllText($source)
+    $versionMarker = "0.0.0 # deltafuse:version-template"
+    if ($content.Contains($versionMarker)) {
+        [IO.File]::WriteAllText($target, $content.Replace($versionMarker, $FrameworkVersion), (New-Object Text.UTF8Encoding $false))
+    } else {
+        Copy-Item -LiteralPath $source -Destination $target -Force
+    }
+}
+
+function Resolve-VersionMarkers {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $content = [IO.File]::ReadAllText($Path)
+    $marker = "0.0.0 # deltafuse:version-template"
+    if ($content.Contains($marker)) {
+        [IO.File]::WriteAllText($Path, $content.Replace($marker, $FrameworkVersion), (New-Object Text.UTF8Encoding $false))
+    }
+}
+
+function Sync-HostInstructions {
+    $override = Join-Path $TargetRoot "AGENTS.override.md"
+    $agents = Join-Path $TargetRoot "AGENTS.md"
+    $effective = if (Test-Path -LiteralPath $override) { $override } elseif (Test-Path -LiteralPath $agents) { $agents } else { $null }
+    $mode = $AgentsMd
+    if ($mode -eq "prompt") {
+        if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { throw "-AgentsMd prompt requires an interactive TTY." }
+        $choice = Read-Host "Effective $(if ($effective) { Split-Path -Leaf $effective } else { 'AGENTS.md (new)' }): [b]ridge, [p]reserve, [r]eplace"
+        $mode = @{ b = "bridge"; p = "preserve"; r = "replace" }[$choice.ToLowerInvariant()]
+        if (-not $mode) { throw "No valid AGENTS.md integration choice was made." }
+    }
+    if ($mode -eq "preserve") { return $mode }
+    if ($mode -eq "bridge") {
+        $target = if ($effective) { $effective } else { $agents }
+        $text = if (Test-Path -LiteralPath $target) { [IO.File]::ReadAllText($target) } else { "" }
+        $begin = ([regex]::Matches($text, '<!-- deltafuse:bridge -->')).Count; $end = ([regex]::Matches($text, '<!-- /deltafuse:bridge -->')).Count
+        if ($begin -ne $end -or $begin -gt 1) { throw "Damaged or ambiguous DeltaFuse bridge markers in $target" }
+        if ($begin -eq 0) { [IO.File]::WriteAllText($target, $text + $(if ($text) { "`n" } else { "" }) + "<!-- deltafuse:bridge -->`n## DeltaFuse`n`nWhen work is explicitly run through DeltaFuse, load the installed DeltaFuse ``run`` skill and follow ``deltafuse next --json``. DeltaFuse governs lifecycle artifacts; repository rules continue to govern code, tests, security, and style.`n<!-- /deltafuse:bridge -->`n", (New-Object Text.UTF8Encoding $false)) }
+        return $mode
+    }
+    if (-not $effective) { throw "-AgentsMd replace requires an existing effective host instruction file." }
+    if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and (Read-Host "Replace $effective completely? Type replace") -ne "replace") { throw "AGENTS.md replacement cancelled." }
+    $temporary = Join-Path (Split-Path -Parent $effective) ("." + (Split-Path -Leaf $effective) + ".deltafuse.tmp")
+    try {
+        Copy-Item -LiteralPath (Join-Path $FrameworkRoot "process/templates/AGENTS.md") -Destination $temporary -Force
+        [IO.File]::Replace($temporary, $effective, $null)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+    return $mode
 }
 
 function Sync-LeashHook {
@@ -240,6 +290,31 @@ content_hash: sha256:$ContentHash
 Write-Host "Installing DeltaFuse $FrameworkVersion into $TargetRoot..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
+# Append DeltaFuse-generated artifacts to host project .gitignore
+$gitignorePath = Join-Path $TargetRoot ".gitignore"
+$gitignoreEntries = @(
+    ".deltafuse/hooks/",
+    ".agents/skills/",
+    ".cursor/skills/",
+    ".gemini/skills/"
+)
+$gitignoreContent = ""
+if (Test-Path -LiteralPath $gitignorePath) {
+    $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw
+}
+$newEntries = $gitignoreEntries | ForEach-Object {
+    if (-not $gitignoreContent -match [regex]::Escape($_)) {
+        "$_`n"
+    } else {
+        ""
+    }
+}
+if ($newEntries) {
+    $updatedContent = $gitignoreContent.TrimEnd() + $newEntries
+    Set-Content -LiteralPath $gitignorePath -Value $updatedContent -Encoding utf8 -NoNewline
+    Write-Host "Updated host .gitignore with DeltaFuse entries" -ForegroundColor DarkYellow
+}
+
 $FrameworkHash = Get-FrameworkContentHash
 $configPath = Join-Path $TargetRoot ".deltafuse/config.yaml"
 $configExisted = Test-Path -LiteralPath $configPath
@@ -264,8 +339,9 @@ foreach ($directory in $directories) {
     New-Item -ItemType Directory -Path (Join-Path $TargetRoot $directory) -Force | Out-Null
 }
 
-Copy-TemplateFile "process/templates/AGENTS.md" "AGENTS.md"
+$agentsMdMode = Sync-HostInstructions
 Copy-TemplateFile "process/templates/.deltafuse/config.yaml" ".deltafuse/config.yaml"
+Resolve-VersionMarkers (Join-Path $TargetRoot ".deltafuse/config.yaml")
 Copy-TemplateFile "process/templates/docs/intake/README.md" "docs/intake/README.md"
 Copy-TemplateFile "process/templates/docs/changes/README.md" "docs/changes/README.md"
 Copy-TemplateFile "process/templates/docs/spec/README.md" "docs/spec/README.md"
@@ -427,6 +503,7 @@ workflow:
 Sync-LeashHook $leashMode
 
 Write-Host "DeltaFuse installed. Canonical process remains external; product state is under docs/." -ForegroundColor Green
+Write-Host "agents_md_mode: $agentsMdMode" -ForegroundColor Green
 if ($adapterMode -eq "link") {
     Write-Host "Adapter skills are relative links into the nested framework checkout." -ForegroundColor Green
 }

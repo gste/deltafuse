@@ -86,7 +86,8 @@ def test_wheel_mode_install_uses_bundle_without_source_checkout(
     result = install(target_dir=tmp_path, framework_root=None)
 
     assert result.version, "wheel install takes the version from the package"
-    assert (tmp_path / "AGENTS.md").is_file()
+    assert not (tmp_path / "AGENTS.md").exists()
+    assert result.agents_md_mode == "preserve"
     assert (tmp_path / ".deltafuse" / "config.yaml").is_file()
     bundle = resolve_assets("templates", prefer="bundle")
     manifest_path = bundle.parent / "manifest.json"

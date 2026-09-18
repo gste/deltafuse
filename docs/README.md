@@ -60,7 +60,7 @@ Intake
 
 ```text
 product/
-├── AGENTS.md
+├── AGENTS.md                  # optional, host-owned
 ├── .deltafuse/
 │   ├── config.yaml
 │   └── lock.yaml
@@ -103,4 +103,3 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [contracts/leash.md](./contracts/leash.md) ([ru](./contracts/leash.ru.md)) | Write envelope for `next --json` and `deltafuse leash` |
 
 Executable Worker (LLM) bindings live in `process/skills/**`; the Core machine contract lives in the kernel. Change/artifact schemas live in `process/schemas/**`. Board snapshot, halt, and leash schemas are **tool compatibility** contracts under `docs/contracts/`, not product artifact schemas; do not copy them into consuming products.
-

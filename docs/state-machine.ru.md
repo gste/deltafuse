@@ -193,7 +193,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 ```yaml
 schema_version: 3
 framework:
-  version: 3.0.0
+  version: <framework-version>
   content_hash: sha256:...
 ```
 

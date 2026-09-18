@@ -11,13 +11,15 @@ jobs:
   leash:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v5 runs on Node 24; v4 is force-migrated from deprecated Node 20.
+      - uses: actions/checkout@v5
         with:
           # DF3-003 / SEC-01: leash diffs an exact base..head SHA range, so the
           # runner needs history to resolve the base commit.
           fetch-depth: 0
           submodules: recursive
-      - uses: actions/setup-python@v5
+      # v6 runs on Node 24; the product Python version remains pinned below.
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install pinned DeltaFuse
@@ -26,12 +28,12 @@ jobs:
           # Canonical nested path is vendor/deltafuse. Hyphenated dirs are leftover checkouts.
           if [ -d vendor/deltafuse ]; then
             python -m pip install -e ./vendor/deltafuse
-          elif [ -d vendor/delta-fuse ]; then
-            python -m pip install -e ./vendor/delta-fuse
+          elif [ -d vendor/deltafuse ]; then
+            python -m pip install -e ./vendor/deltafuse
           elif [ -d deltafuse ]; then
             python -m pip install -e ./deltafuse
-          elif [ -d delta-fuse ]; then
-            python -m pip install -e ./delta-fuse
+          elif [ -d deltafuse ]; then
+            python -m pip install -e ./deltafuse
           else
             echo "Checkout the framework version pinned in .deltafuse/lock.yaml (submodule or vendor path), then re-run." >&2
             exit 1
