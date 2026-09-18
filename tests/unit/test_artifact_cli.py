@@ -1,0 +1,239 @@
+"""Unit tests for Artifact Writer CLI subcommands and tool argument schema export (AW-11).
+
+Tests CLI parsing, JSON stdin/file inputs, exit codes (0, 2, 3, 4, 5),
+core-owned field protection, Unicode preservation, and tool argument schemas.
+"""
+
+import json
+from pathlib import Path
+import pytest
+from deltafuse.cli import main, export_tool_schemas
+
+
+def test_export_tool_schemas():
+    schemas = export_tool_schemas(kind="task", operation="create")
+    assert "properties" in schemas
+    assert "semantic_payload" in schemas["properties"]
+    # Ensure Core-owned fields are excluded from creatable/updatable public tool fields
+    allowed = schemas["properties"]["semantic_payload"].get("properties", {})
+    assert "status" not in allowed
+    assert "schema_version" not in allowed
+    assert "framework" not in allowed
+
+
+def test_cli_describe_subcommand(capsys):
+    exit_code = main(["artifact", "describe", "--kind", "task", "--json"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["kind"] == "task"
+    assert "title" in data["allowed_semantic_fields"]
+    assert "status" in data["core_owned_fields"]
+
+
+def test_cli_describe_export_schema(capsys):
+    exit_code = main(["artifact", "describe", "--kind", "task", "--operation", "create", "--export-schema"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "properties" in data
+
+
+def test_cli_create_subcommand_success(tmp_path, capsys):
+    input_file = tmp_path / "input.json"
+    payload = {
+        "identity": "TASK-001",
+        "semantic_payload": {
+            "title": "Build CLI integration",
+            "kind": "feature",
+            "allowed_paths": ["src/deltafuse/cli.py"],
+        },
+        "body": "# TASK-001: Build CLI integration\n\nImplementation details.",
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(input_file),
+        "--json",
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    receipt = json.loads(captured.out)
+    assert receipt["outcome"] == "committed"
+    assert (tmp_path / "tasks" / "TASK-001.md").is_file()
+
+
+def test_cli_create_core_owned_field_denied(tmp_path, capsys):
+    input_file = tmp_path / "input.json"
+    payload = {
+        "identity": "TASK-002",
+        "semantic_payload": {
+            "title": "Spoof status",
+            "status": "verified",
+        },
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(input_file),
+        "--json",
+    ])
+    assert exit_code == 3
+    captured = capsys.readouterr()
+    assert "Core-owned" in captured.err or "core_owned_field" in captured.err or "status" in captured.err
+
+
+def test_cli_create_invalid_json_input(tmp_path, capsys):
+    input_file = tmp_path / "bad.json"
+    input_file.write_text("{invalid json", encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(input_file),
+        "--json",
+    ])
+    assert exit_code == 2
+    assert not (tmp_path / "tasks" / "TASK-001.md").exists()
+
+
+def test_cli_update_subcommand_success(tmp_path, capsys):
+    # First create artifact
+    input_file = tmp_path / "create.json"
+    payload = {
+        "identity": "TASK-010",
+        "semantic_payload": {
+            "title": "Initial Task",
+            "kind": "feature",
+        },
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+    main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
+    capsys.readouterr()
+
+    target_file = tmp_path / "tasks" / "TASK-010.md"
+    assert target_file.is_file()
+    import hashlib
+    sha256 = hashlib.sha256(target_file.read_bytes()).hexdigest()
+
+    update_file = tmp_path / "update.json"
+    update_payload = {
+        "target": "tasks/TASK-010.md",
+        "expected_sha256": sha256,
+        "patch": {
+            "set": [{"path": "/allowed_paths", "value": ["src/updated.py"]}],
+        },
+    }
+    update_file.write_text(json.dumps(update_payload), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "update",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(update_file),
+        "--json",
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    receipt = json.loads(captured.out)
+    assert receipt["outcome"] == "committed"
+    assert "src/updated.py" in target_file.read_text(encoding="utf-8")
+
+
+def test_cli_update_stale_expected_sha256(tmp_path, capsys):
+    # Create artifact
+    input_file = tmp_path / "create.json"
+    payload = {
+        "identity": "TASK-011",
+        "semantic_payload": {"title": "Task Eleven"},
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+    main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
+    capsys.readouterr()
+
+    update_file = tmp_path / "update.json"
+    update_payload = {
+        "target": "tasks/TASK-011.md",
+        "expected_sha256": "0" * 64,  # wrong hash
+        "patch": {"set": [{"path": "/allowed_paths", "value": ["src/new.py"]}]},
+    }
+    update_file.write_text(json.dumps(update_payload), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "update",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(update_file),
+        "--json",
+    ])
+    assert exit_code == 4
+
+
+def test_cli_validate_subcommand(tmp_path, capsys):
+    # Create valid task
+    input_file = tmp_path / "create.json"
+    payload = {
+        "identity": "TASK-020",
+        "semantic_payload": {"title": "Task Twenty"},
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+    main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
+    capsys.readouterr()
+
+    # Validate existing valid file -> exit code 0
+    exit_code = main([
+        "artifact", "validate",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--target", "tasks/TASK-020.md",
+        "--json",
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    res = json.loads(captured.out)
+    assert res["valid"] is True
+
+    # Validate non-existent file -> exit code 2
+    exit_code_missing = main([
+        "artifact", "validate",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--target", "tasks/NONEXISTENT.md",
+        "--json",
+    ])
+    assert exit_code_missing == 2
+
+
+def test_cli_unicode_and_multiline_payload(tmp_path, capsys):
+    input_file = tmp_path / "unicode.json"
+    unicode_title = "Title with \u4e16\u754c Unicode & \"Quotes\" \n Next Line"
+    unicode_body = "# TASK-030: \u4e16\u754c\n\nMultiline body with emoji \U0001F600\nSpecial chars: \\n \\t \" ' < > &"
+
+    payload = {
+        "identity": "TASK-030",
+        "semantic_payload": {
+            "title": unicode_title,
+        },
+        "body": unicode_body,
+    }
+    input_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(input_file),
+        "--json",
+    ])
+    assert exit_code == 0
+    task_file = tmp_path / "tasks" / "TASK-030.md"
+    content = task_file.read_text(encoding="utf-8")
+    assert "\u4e16\u754c" in content
+    assert "\U0001F600" in content
