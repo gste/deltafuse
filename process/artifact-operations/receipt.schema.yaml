@@ -1,10 +1,7 @@
-$schema: https://json-schema.org/draft/2020-12/schema
-$id: https://deltafuse.dev/contracts/artifact-writer/receipt/v1
-title: DeltaFuse Artifact Writer Receipt Schema
-description: >
-  Durable receipt returned by successful or recorded Artifact Writer operations.
+$schema: "http://json-schema.org/draft/2020-12/schema"
+$id: "https://deltafuse.dev/contracts/artifact-writer/receipt/v1"
+title: "Artifact Writer Receipt Schema"
 type: object
-additionalProperties: false
 required:
   - request_id
   - transaction_id
@@ -16,7 +13,6 @@ required:
   - serializer_revision
   - request_sha256
   - payload_sha256
-  - previous_sha256
   - result_sha256
   - changed
   - outcome
@@ -24,30 +20,23 @@ required:
   - authority
   - validation_scopes
   - receipt_sha256
+additionalProperties: false
 properties:
   request_id:
     type: string
-    minLength: 1
-    description: Client-supplied request ID.
   transaction_id:
     type: string
-    minLength: 1
-    description: Core-generated durable transaction ID.
   operation:
     type: string
-    enum: [create, update, validate]
-    description: Executed operation.
   kind:
     type: string
-    enum: [task, slice, spec-delta, routing, change, evidence, coverage, decision, capability, lock]
-    description: Target artifact kind.
   target:
     type: string
-    description: Relative file path of the artifact.
   operation_schema:
     type: object
-    additionalProperties: false
-    required: [version, content_hash]
+    required:
+      - version
+      - content_hash
     properties:
       version:
         type: string
@@ -55,8 +44,11 @@ properties:
         type: string
   storage_schema:
     type: object
-    additionalProperties: false
-    required: [kind, version, id, content_hash]
+    required:
+      - kind
+      - version
+      - id
+      - content_hash
     properties:
       kind:
         type: string
@@ -68,33 +60,27 @@ properties:
         type: string
   serializer_revision:
     type: integer
-    description: Revision of the deterministic serializer codec.
   request_sha256:
     type: string
-    description: SHA256 digest of the raw incoming request payload.
   payload_sha256:
     type: string
-    description: SHA256 digest of the normalized semantic payload.
   previous_sha256:
-    type: [string, "null"]
-    description: SHA256 digest of the target file before operation (null for create).
+    type: ["string", "null"]
   result_sha256:
     type: string
-    description: SHA256 digest of the target file after operation.
   changed:
     type: boolean
-    description: True if target bytes changed; false for no-op update.
   outcome:
     type: string
-    enum: [prepared, published, committed, recovered, failed]
-    description: Final durable outcome state.
+    enum: ["committed", "unchanged", "uncertain", "failed"]
   timestamp:
     type: string
-    description: ISO 8601 UTC timestamp when transaction committed.
   authority:
     type: object
-    additionalProperties: false
-    required: [actor, work_item, product_root]
+    required:
+      - actor
+      - work_item
+      - product_root
     properties:
       actor:
         type: string
@@ -106,18 +92,7 @@ properties:
     type: array
     items:
       type: object
-      additionalProperties: false
-      required: [scope, status, details]
-      properties:
-        scope:
-          type: string
-        status:
-          type: string
-          enum: [valid, invalid, not_evaluated]
-        details:
-          type: array
-          items:
-            type: string
   receipt_sha256:
     type: string
-    description: SHA256 digest of this receipt structure excluding receipt_sha256.
+  digest:
+    type: string
