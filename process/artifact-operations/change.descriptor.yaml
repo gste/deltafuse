@@ -1,0 +1,28 @@
+kind: change
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/change.schema.yaml
+allowed_operations:
+  - update
+  - validate
+  - describe
+creatable_semantic_fields: []
+updatable_semantic_fields:
+  - /title
+  - /intent
+  - /risk
+  - /source/request
+  - /source/intake_refs
+  - /analysis/summary
+core_owned_fields:
+  - schema_version
+  - id
+  - status
+  - framework
+  - analysis/routing
+  - deltas
+  - slices
+  - decisions
+  - tasks
+  - verification
+initial_defaults: {}
+body_allowed: false

@@ -1,0 +1,24 @@
+kind: spec-delta
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/spec-delta.schema.yaml
+allowed_operations:
+  - create
+  - update
+  - validate
+  - describe
+creatable_semantic_fields:
+  - slices
+  - added
+  - modified
+  - removed
+updatable_semantic_fields:
+  - /slices
+  - /added
+  - /modified
+  - /removed
+core_owned_fields:
+  - change
+  - status
+initial_defaults:
+  status: proposed
+body_allowed: true

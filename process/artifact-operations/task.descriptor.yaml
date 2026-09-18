@@ -1,0 +1,36 @@
+kind: task
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/task.schema.yaml
+allowed_operations:
+  - create
+  - update
+  - validate
+  - describe
+creatable_semantic_fields:
+  - title
+  - kind
+  - depends_on
+  - requirement_delta
+  - spec_refs
+  - design_ref
+  - allowed_paths
+  - forbidden_paths
+  - context_budget
+updatable_semantic_fields:
+  - /title
+  - /kind
+  - /depends_on
+  - /requirement_delta
+  - /spec_refs
+  - /design_ref
+  - /allowed_paths
+  - /forbidden_paths
+  - /context_budget
+core_owned_fields:
+  - id
+  - change
+  - slice
+  - status
+initial_defaults:
+  status: pending
+body_allowed: true
