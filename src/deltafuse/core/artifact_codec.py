@@ -193,26 +193,35 @@ def serialize_artifact(
     kind: str = "task",
     existing_raw_content: str | None = None,
     canonicalize_metadata: bool = False,
+    has_frontmatter_delimiters: bool | None = None,
 ) -> str:
-    """Serialize metadata and body into canonical frontmatter Markdown text.
+    """Serialize metadata and body into canonical frontmatter Markdown text or YAML text.
 
     If *existing_raw_content* is provided and differs in metadata formatting from canonical output,
     requires *canonicalize_metadata=True* to authorize re-formatting.
     """
+    if has_frontmatter_delimiters is None:
+        has_frontmatter_delimiters = kind not in ("routing", "change", "coverage", "capability")
+
     canonical_yaml = strict_encode_yaml(metadata, kind=kind)
-    if canonical_yaml.endswith("\n"):
-        candidate_output = f"---\n{canonical_yaml}---\n{body}"
+    if has_frontmatter_delimiters:
+        if canonical_yaml.endswith("\n"):
+            candidate_output = f"---\n{canonical_yaml}---\n{body}"
+        else:
+            candidate_output = f"---\n{canonical_yaml}\n---\n{body}"
     else:
-        candidate_output = f"---\n{canonical_yaml}\n---\n{body}"
+        candidate_output = canonical_yaml
 
     if existing_raw_content is not None:
         try:
-            old_res = strict_read_artifact(existing_raw_content)
+            old_res = strict_read_artifact(existing_raw_content, has_frontmatter_delimiters=has_frontmatter_delimiters)
             old_raw_meta = old_res.raw_metadata.strip()
+            old_canonical_meta = strict_encode_yaml(old_res.metadata, kind=kind).strip()
         except ArtifactReaderError:
             old_raw_meta = None
+            old_canonical_meta = None
 
-        if old_raw_meta is not None and old_raw_meta != canonical_yaml.strip():
+        if old_raw_meta is not None and old_canonical_meta is not None and old_raw_meta != old_canonical_meta:
             if not canonicalize_metadata:
                 preview_hash = "sha256:" + hashlib.sha256(candidate_output.encode("utf-8")).hexdigest()
                 raise ArtifactCodecError(

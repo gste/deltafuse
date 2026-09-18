@@ -89,6 +89,9 @@ def find_repo_root(start_path: Path) -> Path:
     if cur.is_file():
         cur = cur.parent
     while cur != cur.parent:
+        if (cur / "change.yaml").is_file():
+            cur = cur.parent
+            continue
         if (cur / ".deltafuse").is_dir() or ((cur / "docs").is_dir() and cur.name != "docs"):
             return cur
         cur = cur.parent

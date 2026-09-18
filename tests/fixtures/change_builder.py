@@ -23,10 +23,11 @@ class MockChangeBuilder:
         self.title = title
         self.route = route
         spec_dir = self.root_dir / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
         spec_core = spec_dir / "core.md"
-        if spec_dir.is_dir() and not spec_core.exists():
+        if not spec_core.exists():
             spec_core.write_text("# Core Spec\n## REQ-01\nCore requirement.\n", encoding="utf-8")
-        if spec_dir.is_dir() and spec_core.is_file():
+        if spec_core.is_file():
             self._ensure_core_capability()
 
     def _ensure_core_capability(self) -> None:

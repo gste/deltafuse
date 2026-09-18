@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-14",
+  "entry": "AW-17",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -501,7 +501,7 @@
       "id": "AW-16",
       "phase": "F",
       "title": "Prove backwards compatibility and full workflow integration",
-      "status": "ready",
+      "status": "completed",
       "depends_on": [
         "AW-15"
       ],
@@ -531,7 +531,7 @@
       "id": "AW-17",
       "phase": "F",
       "title": "Run security, crash and platform acceptance matrix",
-      "status": "planned",
+      "status": "ready",
       "depends_on": [
         "AW-16"
       ],

@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from deltafuse.core.artifact_codec import serialize_artifact
+from deltafuse.core.artifact_codec import ArtifactCodecError, serialize_artifact
 from deltafuse.core.artifact_lock import (
     ArtifactLockError,
     ProductMutationLock,
@@ -220,7 +220,8 @@ class ArtifactService:
         existing_bytes = target_path.read_bytes()
         validate_expected_hash(target_path, expected_sha256)
 
-        parse_res = strict_read_artifact(existing_bytes)
+        has_frontmatter = not target_path.name.endswith((".yaml", ".yml"))
+        parse_res = strict_read_artifact(existing_bytes, has_frontmatter_delimiters=has_frontmatter)
         existing_meta = parse_res.metadata
         existing_body = parse_res.raw_body
 
@@ -249,12 +250,24 @@ class ArtifactService:
                 path=str(target_path),
             )
 
-        candidate_str = serialize_artifact(
-            updated_meta,
-            body_text,
-            kind=kind,
-            canonicalize_metadata=canonicalize_metadata,
-        )
+        canon_optin = canonicalize_metadata or bool(patch.get("canonicalize_metadata", False))
+        existing_text = existing_bytes.decode("utf-8")
+        try:
+            candidate_str = serialize_artifact(
+                updated_meta,
+                body_text,
+                kind=kind,
+                existing_raw_content=existing_text,
+                canonicalize_metadata=canon_optin,
+                has_frontmatter_delimiters=has_frontmatter,
+            )
+        except ArtifactCodecError as ex:
+            raise ArtifactServiceError(
+                str(ex),
+                code="invalid_payload" if ex.code == "format_change_required" else ex.code,
+                path=str(target_path),
+            ) from ex
+
         candidate_bytes = candidate_str.encode("utf-8")
         candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
 
@@ -320,7 +333,8 @@ class ArtifactService:
 
         content_bytes = target_path.read_bytes()
         try:
-            parse_res = strict_read_artifact(content_bytes)
+            has_frontmatter = not target_path.name.endswith((".yaml", ".yml"))
+            parse_res = strict_read_artifact(content_bytes, has_frontmatter_delimiters=has_frontmatter)
         except Exception as ex:
             return {
                 "valid": False,
