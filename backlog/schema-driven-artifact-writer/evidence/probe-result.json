@@ -1,0 +1,27 @@
+{
+  "source_commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627",
+  "framework_version": "3.1.0",
+  "scope": "read-only in-memory characterization, not implementation/qualification",
+  "command": ".venv/Scripts/python.exe -B - < probe.py",
+  "exit_code": 0,
+  "observations": {
+    "probe_kind": "read-only in-memory characterization",
+    "python": "3.12.14",
+    "yaml": "6.0.3",
+    "duplicate_frontmatter_id": "TASK-002",
+    "original_body_suffix": "'\\n\\n# Body\\n\\n'",
+    "parsed_body": "'# Body'",
+    "updated_body_suffix": "'\\n# Body\\n'",
+    "scaffold_schema_errors": [
+      "[root] Additional properties are not allowed ('created' was unexpected)",
+      "[root] 'framework' is a required property",
+      "[root] 'source' is a required property; required key is source (not provenance)",
+      "[root] 'deltas' is a required property",
+      "[root] 'slices' is a required property",
+      "[root] 'decisions' is a required property",
+      "[root] 'tasks' is a required property",
+      "[title] '' should be non-empty"
+    ],
+    "invalid_date_schema_errors": []
+  }
+}

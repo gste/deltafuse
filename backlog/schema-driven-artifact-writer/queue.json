@@ -1,0 +1,650 @@
+{
+  "schema_version": 1,
+  "status": "in_progress",
+  "planning_only": false,
+  "feature": "schema-driven-artifact-writer",
+  "framework_snapshot": {
+    "version": "3.1.0",
+    "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
+  },
+  "entry": "AW-01",
+  "order": "first planned card with verified completed dependencies",
+  "cards": [
+    {
+      "id": "AW-00",
+      "phase": "A",
+      "title": "Freeze the artifact and authority catalog",
+      "status": "completed",
+      "depends_on": [],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/INTENTION.md",
+        "backlog/schema-driven-artifact-writer/ANALYSIS.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "process/schemas/*.schema.yaml",
+        "src/deltafuse/core/transitions.py",
+        "src/deltafuse/core/evidence.py"
+      ],
+      "writes": [
+        "backlog/schema-driven-artifact-writer/decisions.md",
+        "backlog/schema-driven-artifact-writer/results/AW-00.md"
+      ],
+      "work": [
+        "Remeasure HEAD/version and preserve unrelated changes; inventory actual schemas, template validity, consumers and status authority.",
+        "Freeze per-kind public semantic fields, Core fields, initialization defaults, reference phases and explicit two-step child/index update semantics.",
+        "Resolve compatibility policy for format assertions, metadata canonicalization and nested extension fields; document version impact before code."
+      ],
+      "red": "A schema-valid status patch, illustrative nonexistent requirement_delta kind, or universal injected schema_version must be rejected by the ownership design.",
+      "green": "Catalog covers all ten existing storage schemas and every initial public operation; no unresolved policy permits bypass or silent content loss.",
+      "test": "Read-only schema/template/source cross-check; record current hashes and negative contract examples.",
+      "card_path": "cards/AW-00.md",
+      "result_path": "results/AW-00.md"
+    },
+    {
+      "id": "AW-01",
+      "phase": "A",
+      "title": "Define typed operation and receipt contracts",
+      "status": "planned",
+      "depends_on": [
+        "AW-00"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/schemas.py",
+        "docs/contracts/leash.schema.yaml"
+      ],
+      "writes": [
+        "docs/contracts/artifact-writer.md",
+        "docs/contracts/artifact-writer.schema.yaml",
+        "process/artifact-operations/**",
+        "tests/unit/test_artifact_contracts.py"
+      ],
+      "work": [
+        "Specify create/update/validate/describe envelopes, strict JSON diagnostics, request IDs, JSON Pointer patch semantics and receipt scopes.",
+        "Create per-kind operation descriptors referencing authoritative storage fields instead of copying a universal schema.",
+        "Define bundle location/resolution for descriptors and backward compatibility of operation v1 separately from schema v3."
+      ],
+      "red": "Unknown fields, missing semantic inputs, protected-field request and conflicting operation paths fail protocol tests.",
+      "green": "Closed nested input/receipt shapes, version/hash identities and exact error/exit semantics pass; no runtime writes yet.",
+      "test": "python -m pytest tests/unit/test_artifact_contracts.py -q",
+      "card_path": "cards/AW-01.md",
+      "result_path": "results/AW-01.md"
+    },
+    {
+      "id": "AW-02",
+      "phase": "A",
+      "title": "Implement strict bounded input and artifact readers",
+      "status": "planned",
+      "depends_on": [
+        "AW-01"
+      ],
+      "reads": [
+        "src/deltafuse/core/frontmatter.py",
+        "src/deltafuse/core/schemas.py",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_reader.py",
+        "tests/unit/test_artifact_reader.py"
+      ],
+      "work": [
+        "Reject duplicate JSON/YAML keys, custom tags, aliases/merges outside policy, nonfinite values, excessive depth/bytes and malformed encodings.",
+        "Split frontmatter at byte-defined delimiters without stripping body; return raw metadata/body segments and typed mapping.",
+        "Characterize legacy valid scalar/date behavior; separate parse failure from schema failure and preserve existing read-only consumers until migration."
+      ],
+      "red": "Duplicate ID currently last-wins; trailing body blank lines vanish; strict reader tests expose both and cyclic/large malformed input.",
+      "green": "Deterministic field-specific parse errors; body segment preserved byte-for-byte including CRLF/non-ASCII/BOM policy.",
+      "test": "python -m pytest tests/unit/test_artifact_reader.py -q",
+      "card_path": "cards/AW-02.md",
+      "result_path": "results/AW-02.md"
+    },
+    {
+      "id": "AW-03",
+      "phase": "A",
+      "title": "Resolve pinned schemas and structured validation",
+      "status": "planned",
+      "depends_on": [
+        "AW-02"
+      ],
+      "reads": [
+        "src/deltafuse/core/schemas.py",
+        "src/deltafuse/core/assets.py",
+        "src/deltafuse/core/lock.py",
+        "process/artifact-operations/**"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_registry.py",
+        "src/deltafuse/core/schemas.py",
+        "tests/unit/test_artifact_registry.py"
+      ],
+      "work": [
+        "Resolve operation/storage schema bytes through verified installed bundle and exact product lock; reject mismatch rather than fallback to CWD.",
+        "Add structured diagnostics while preserving existing human-readable SchemaRegistry API consumers.",
+        "Apply explicit format/type rules and per-kind reference adapters; label whole-gate checks not evaluated."
+      ],
+      "red": "Wrong schema hash, corrupt bundle, date annotation wrongly assumed enforced, missing current reference or inherited-version mismatch must fail.",
+      "green": "Valid legacy extension fields remain supported; projected operation schemas reject unexposed new keys without silently closing storage schema.",
+      "test": "python -m pytest tests/unit/test_artifact_registry.py tests/unit/test_schemas.py -q",
+      "card_path": "cards/AW-03.md",
+      "result_path": "results/AW-03.md"
+    },
+    {
+      "id": "AW-04",
+      "phase": "B",
+      "title": "Implement deterministic YAML/frontmatter codec",
+      "status": "planned",
+      "depends_on": [
+        "AW-03"
+      ],
+      "reads": [
+        "src/deltafuse/core/artifact_reader.py",
+        "src/deltafuse/core/artifact_registry.py",
+        "process/templates/change/**"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_codec.py",
+        "tests/unit/test_artifact_codec.py"
+      ],
+      "work": [
+        "Define stable key/scalar/multiline policies, Unicode, ordered lists and null/date distinctions.",
+        "Pre-serialize round-trip equality validates emitted bytes against exact typed candidate.",
+        "Preserve body bytes; detect noncanonical old metadata and require explicit format-change opt-in with preview hash."
+      ],
+      "red": "Quoted yes/date/leading-zero string changes type, list order changes, comments disappear without opt-in or body suffix changes.",
+      "green": "Equivalent key-order inputs yield equal canonical bytes under same context; every adversarial scalar/body fixture survives or fails before write.",
+      "test": "python -m pytest tests/unit/test_artifact_codec.py -q",
+      "card_path": "cards/AW-04.md",
+      "result_path": "results/AW-04.md"
+    },
+    {
+      "id": "AW-05",
+      "phase": "B",
+      "title": "Implement typed patches and immutable-field protection",
+      "status": "planned",
+      "depends_on": [
+        "AW-04"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifact_registry.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_patch.py",
+        "tests/unit/test_artifact_patch.py"
+      ],
+      "work": [
+        "Implement set/remove pointers, explicit null and whole-array replacement; reject overlap/index edits and required removals.",
+        "Preserve every untouched schema-valid field, including allowed extension trees and exact body unless explicit replacement.",
+        "Enforce per-kind semantic field masks recursively and verify complete post-patch candidate."
+      ],
+      "red": "Nested status replacement, ancestor replacement bypass, accidental null deletion or lost unrelated extension values must fail.",
+      "green": "Positive patches leave unselected values intact; malformed/unauthorized patches produce zero persistence actions.",
+      "test": "python -m pytest tests/unit/test_artifact_patch.py -q",
+      "card_path": "cards/AW-05.md",
+      "result_path": "results/AW-05.md"
+    },
+    {
+      "id": "AW-06",
+      "phase": "B",
+      "title": "Bind Core authorization, paths and source identity",
+      "status": "planned",
+      "depends_on": [
+        "AW-05"
+      ],
+      "reads": [
+        "src/deltafuse/core/leash.py",
+        "src/deltafuse/core/queue.py",
+        "src/deltafuse/core/transitions.py",
+        "docs/contracts/leash.md"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_policy.py",
+        "tests/unit/test_artifact_policy.py"
+      ],
+      "work": [
+        "Resolve configured roots, selected Change/task/pass and separate Worker versus authenticated Core operation policies.",
+        "Bind envelope/lock/schema/source inputs to authorization fingerprint; revalidation API used under commit lock.",
+        "Reject path traversal, links/reparse escapes, case/ADS/device aliases and protected .deltafuse paths; no public core flag."
+      ],
+      "red": "Null envelope, forged actor=core, stale pass context, immutable intake target or symlink escaping a product root must deny without writes.",
+      "green": "Authorized intended stage writes succeed; real decide/evidence internal caller cannot be confused with a generic Worker permission.",
+      "test": "python -m pytest tests/unit/test_artifact_policy.py -q",
+      "card_path": "cards/AW-06.md",
+      "result_path": "results/AW-06.md"
+    },
+    {
+      "id": "AW-07",
+      "phase": "C",
+      "title": "Implement single-file atomic publication primitives",
+      "status": "planned",
+      "depends_on": [
+        "AW-06"
+      ],
+      "reads": [
+        "src/deltafuse/core/artifact_codec.py",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "tests/unit/test_sync_assets_recovery.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_storage.py",
+        "tests/integration/test_artifact_atomic_io.py"
+      ],
+      "work": [
+        "Stage bytes beside destination, validate/read-back staged content and fsync; implement platform-correct no-replace create and atomic replacement update.",
+        "Preserve existing artifact on serialization/permission/sharing failure; avoid truncate-and-rewrite fallback.",
+        "Define file permissions, staging cleanup ownership and precise durability limits on Windows/POSIX."
+      ],
+      "red": "Two creates race on one absent path; truncated existing file after crash; cross-filesystem temp or Windows sharing error loses original.",
+      "green": "Exactly one concurrent create succeeds; old-or-new full bytes visible, not partial content; real platform checks pass.",
+      "test": "python -m pytest tests/integration/test_artifact_atomic_io.py -q",
+      "card_path": "cards/AW-07.md",
+      "result_path": "results/AW-07.md"
+    },
+    {
+      "id": "AW-08",
+      "phase": "C",
+      "title": "Implement mutation locking and optimistic concurrency",
+      "status": "planned",
+      "depends_on": [
+        "AW-07"
+      ],
+      "reads": [
+        "src/deltafuse/core/artifact_storage.py",
+        "src/deltafuse/core/artifact_policy.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_lock.py",
+        "tests/unit/test_artifact_concurrency.py",
+        "tests/integration/test_artifact_locking.py"
+      ],
+      "work": [
+        "Use shared product-level lock for cooperating Core mutations, required whole-file expected hash and current authority/source recheck.",
+        "Specify lock liveness/recovery and no-op behavior; no blind age-based stale lock deletion.",
+        "Test target changes and changed governing spec/envelope separately; disclose external-editor limitations."
+      ],
+      "red": "Two updates read same hash and both succeed; wrong-body hash accepted; authority revoked between prepare and commit but write proceeds.",
+      "green": "Only one competing stale update commits; other fails unchanged; same payload no-op preserves bytes; explicit hostile-writer scope documented.",
+      "test": "python -m pytest tests/unit/test_artifact_concurrency.py tests/integration/test_artifact_locking.py -q",
+      "card_path": "cards/AW-08.md",
+      "result_path": "results/AW-08.md"
+    },
+    {
+      "id": "AW-09",
+      "phase": "C",
+      "title": "Implement durable receipts, idempotency and crash recovery",
+      "status": "planned",
+      "depends_on": [
+        "AW-08"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifact_storage.py",
+        "src/deltafuse/core/transitions.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_transactions.py",
+        "process/artifact-operations/receipt.schema.yaml",
+        "tests/unit/test_artifact_recovery.py",
+        "tests/integration/test_artifact_crash_recovery.py"
+      ],
+      "work": [
+        "Define prepared/published/committed records binding request/input/schema/before/after/Core identity and durable receipt refs.",
+        "Recover by exact hashes, detect ambiguous third-party edit, and reuse request_id only for identical payload.",
+        "Handle failure after publication as explicit recoverable/unknown outcome; never replay evidence execution or gate acceptance."
+      ],
+      "red": "Crash at each persistence boundary, reused ID with new payload, lost receipt after replace, or retry rolling back a newer external edit.",
+      "green": "Recovery yields known committed or unchanged state with no fabricated receipt; ambiguous state stops; post-readback failure never reports success.",
+      "test": "python -m pytest tests/unit/test_artifact_recovery.py tests/integration/test_artifact_crash_recovery.py -q",
+      "card_path": "cards/AW-09.md",
+      "result_path": "results/AW-09.md"
+    },
+    {
+      "id": "AW-10",
+      "phase": "D",
+      "title": "Assemble the typed Artifact Writer service",
+      "status": "planned",
+      "depends_on": [
+        "AW-09"
+      ],
+      "reads": [
+        "src/deltafuse/core/artifact_registry.py",
+        "src/deltafuse/core/artifact_patch.py",
+        "src/deltafuse/core/artifact_policy.py",
+        "src/deltafuse/core/artifact_transactions.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifacts.py",
+        "tests/unit/test_artifact_service.py"
+      ],
+      "work": [
+        "Wire create/update/validate/describe through one implementation with correct transaction sequencing.",
+        "Implement task/slice/spec-delta/routing and permitted Change metadata operations; Core supplies initial states only.",
+        "Return exact receipt/diagnostics; validate is strictly read-only and refuses unsupported kinds without guessing."
+      ],
+      "red": "Generic task create advances status; failed validation leaves files/journal changed; receipt says semantic_verified for an untested narrative.",
+      "green": "Supported artifacts created without raw YAML; failed requests do not alter artifacts; validate changes no receipt/journal; correct scoped results.",
+      "test": "python -m pytest tests/unit/test_artifact_service.py -q",
+      "card_path": "cards/AW-10.md",
+      "result_path": "results/AW-10.md"
+    },
+    {
+      "id": "AW-11",
+      "phase": "D",
+      "title": "Expose CLI and small tool-call schemas",
+      "status": "planned",
+      "depends_on": [
+        "AW-10"
+      ],
+      "reads": [
+        "src/deltafuse/cli.py",
+        "src/deltafuse/core/artifacts.py",
+        "process/artifact-operations/**"
+      ],
+      "writes": [
+        "src/deltafuse/cli.py",
+        "tests/unit/test_artifact_cli.py",
+        "tests/integration/test_artifact_cli.py"
+      ],
+      "work": [
+        "Add describe/create/update/validate CLI over same service with JSON stdin/file, bounded output and documented exits.",
+        "Export per-kind/operation tool argument schema; do not build provider-specific LLM or IDE/MCP server here.",
+        "Test dry formatting preview/opt-in, Unicode shell transport and actual subprocess calls without unsafe shell interpolation."
+      ],
+      "red": "CLI bypasses Python service policy, invalid JSON writes file, escaping multiline payload alters content, or public tool offers core-only fields.",
+      "green": "Python/CLI produce equivalent artifacts/errors and show schema hash/version; no raw YAML authoring required.",
+      "test": "python -m pytest tests/unit/test_artifact_cli.py tests/integration/test_artifact_cli.py -q",
+      "card_path": "cards/AW-11.md",
+      "result_path": "results/AW-11.md"
+    },
+    {
+      "id": "AW-12",
+      "phase": "E",
+      "title": "Integrate Core execution evidence including verification",
+      "status": "planned",
+      "depends_on": [
+        "AW-11"
+      ],
+      "reads": [
+        "src/deltafuse/core/evidence.py",
+        "src/deltafuse/core/fsm.py",
+        "src/deltafuse/cli.py",
+        "process/schemas/evidence.schema.yaml",
+        "docs/workflow.md"
+      ],
+      "writes": [
+        "src/deltafuse/core/evidence.py",
+        "src/deltafuse/cli.py",
+        "process/schemas/evidence.schema.yaml",
+        "tests/unit/test_evidence.py",
+        "tests/integration/test_artifact_evidence.py"
+      ],
+      "work": [
+        "Route existing stamped evidence serialization through internal validated persistence without exposing a public arbitrary stamp call.",
+        "Add authorized change-level --phase verification execution with task=null and fixed evidence/verification/run.yaml; retain old three phases/task rules.",
+        "Bind actual command/result/source baseline before stamping; handle timeouts/unapproved runner/source drift independently from serialization."
+      ],
+      "red": "Worker supplies passed+stamp, verification requests task evidence semantics, baseline drifts or retries rerun a command merely to repair a receipt.",
+      "green": "Actual verification command produces gate-consumable Core evidence; forgery/stale snapshot still rejected; old evidence tests remain green.",
+      "test": "python -m pytest tests/unit/test_evidence.py tests/integration/test_artifact_evidence.py -q",
+      "card_path": "cards/AW-12.md",
+      "result_path": "results/AW-12.md"
+    },
+    {
+      "id": "AW-13",
+      "phase": "E",
+      "title": "Integrate status and Human Gate persistence safely",
+      "status": "planned",
+      "depends_on": [
+        "AW-12"
+      ],
+      "reads": [
+        "src/deltafuse/core/transitions.py",
+        "src/deltafuse/core/decide.py",
+        "tests/integration/test_core_transitions.py",
+        "src/deltafuse/core/artifact_transactions.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/transitions.py",
+        "src/deltafuse/core/decide.py",
+        "tests/integration/test_core_transitions.py",
+        "tests/unit/test_decide.py",
+        "tests/integration/test_artifact_transitions.py"
+      ],
+      "work": [
+        "Share lock/persistence beneath state/advance/decide but retain exact authorization/gate tables and existing receipt semantics.",
+        "Design compatibility for old receipts and incomplete transitions; avoid dual uncoordinated journals.",
+        "Make all relevant cooperating status writers use same lock, including rollback/recovery entrypoints."
+      ],
+      "red": "Generic patch verified/accepted, nested status smuggling, crash between transition log and target, or duplicated Human Gate action.",
+      "green": "Legal current commands behave identically; unauthorized requests fail; old receipt replay and explicit recovery are proven with real files.",
+      "test": "python -m pytest tests/integration/test_core_transitions.py tests/unit/test_decide.py tests/integration/test_artifact_transitions.py -q",
+      "card_path": "cards/AW-13.md",
+      "result_path": "results/AW-13.md"
+    },
+    {
+      "id": "AW-14",
+      "phase": "E",
+      "title": "Repair scaffold and integrate derived indexes",
+      "status": "planned",
+      "depends_on": [
+        "AW-13"
+      ],
+      "reads": [
+        "src/deltafuse/core/scaffold.py",
+        "src/deltafuse/core/analyze.py",
+        "process/templates/change/change.yaml",
+        "src/deltafuse/core/artifact_registry.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/scaffold.py",
+        "src/deltafuse/core/analyze.py",
+        "src/deltafuse/cli.py",
+        "process/templates/change/**",
+        "tests/integration/test_artifact_indexes.py"
+      ],
+      "work": [
+        "Reconcile new scaffold with Change schema: resolve pin/source/structural initial collections from explicit creation contract, require semantic fields or clearly label incomplete scaffold.",
+        "Route coverage derived serialization through internal service; no Worker-editable derived coverage truth.",
+        "Implement explicit Change child-index update from existing child identity and Core-resolved status; second operation is independently atomic and gate checks detect incomplete indexing."
+      ],
+      "red": "Scaffold silently invents title/intent, bogus created field survives, copied parent child-status can override actual child, or coverage self-certifies nonexistent evidence.",
+      "green": "Supported full scaffold validates; incomplete scaffold not misreported valid; deterministic indexes reflect actual artifacts and remain gated.",
+      "test": "python -m pytest tests/integration/test_artifact_indexes.py tests/unit/test_analyze.py -q",
+      "card_path": "cards/AW-14.md",
+      "result_path": "results/AW-14.md"
+    },
+    {
+      "id": "AW-15",
+      "phase": "F",
+      "title": "Synchronize docs, skills, templates and packaged assets",
+      "status": "planned",
+      "depends_on": [
+        "AW-14"
+      ],
+      "reads": [
+        "docs/workflow.md",
+        "docs/core-and-worker.md",
+        "process/skills/**",
+        "process/templates/**",
+        "scripts/sync_assets.py",
+        "src/deltafuse/core/installer.py"
+      ],
+      "writes": [
+        "docs/contracts/artifact-writer.md",
+        "docs/contracts/artifact-writer.ru.md",
+        "docs/using.md",
+        "docs/using.ru.md",
+        "docs/core-and-worker.md",
+        "docs/core-and-worker.ru.md",
+        "docs/workflow.md",
+        "docs/workflow.ru.md",
+        "process/skills/**",
+        "process/templates/**",
+        "scripts/sync_assets.py",
+        "src/deltafuse/core/assets.py",
+        "src/deltafuse/core/installer.py",
+        "src/deltafuse/assets/**",
+        "pyproject.toml",
+        "tests/unit/test_artifact_assets.py"
+      ],
+      "work": [
+        "Document service vs runtime roles, field ownership, validation scopes, compatibility and read-only validate behavior in EN/RU.",
+        "Update relevant skill/examples to typed operations and actual evidence/state commands; never make structured output provider support mandatory.",
+        "Bundle operation descriptors with hashes, preserve DO NOT EDIT version/source/hash snapshots and validate against pins; generated assets via tooling only."
+      ],
+      "red": "Wheel without descriptors, stale adapters, docs instruct raw passed evidence, or skill auto-accepts Gate.",
+      "green": "Source/bundle/installed skill contracts match; field/schema examples validate; installer retains manually maintained product artifacts.",
+      "test": "python -m pytest tests/unit/test_artifact_assets.py tests/unit/test_templates.py -q; python scripts/sync_assets.py --check",
+      "card_path": "cards/AW-15.md",
+      "result_path": "results/AW-15.md"
+    },
+    {
+      "id": "AW-16",
+      "phase": "F",
+      "title": "Prove backwards compatibility and full workflow integration",
+      "status": "planned",
+      "depends_on": [
+        "AW-15"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "tests/e2e/**",
+        "tests/fixtures/change_builder.py",
+        "tests/integration/test_installer.py"
+      ],
+      "writes": [
+        "tests/integration/test_artifact_compatibility.py",
+        "tests/e2e/test_artifact_workflow.py",
+        "tests/fixtures/artifacts/**"
+      ],
+      "work": [
+        "Capture valid manual artifacts including open extension fields, comments, CRLF bodies, old receipts and all route types.",
+        "Run a complete feature and unchanged-spec bugfix lifecycle using writer plus genuine Core commands, including Human Gate pause semantics.",
+        "Assert raw/manual authoring remains valid, no automatic migration and format opt-in exact-hash binding."
+      ],
+      "red": "Valid manual extension dropped, normalization bypasses decision gate, docs/ops forced into product pytest or bugfix needs invented spec delta.",
+      "green": "Both manual and typed flows retain semantic/gate behavior; body preservation and explicit formatting compatibility pass.",
+      "test": "python -m pytest tests/integration/test_artifact_compatibility.py tests/e2e/test_artifact_workflow.py -q",
+      "card_path": "cards/AW-16.md",
+      "result_path": "results/AW-16.md"
+    },
+    {
+      "id": "AW-17",
+      "phase": "F",
+      "title": "Run security, crash and platform acceptance matrix",
+      "status": "planned",
+      "depends_on": [
+        "AW-16"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "tests/integration/test_artifact_atomic_io.py",
+        "tests/integration/test_artifact_crash_recovery.py",
+        "tests/smoke-test.ps1",
+        "tests/smoke-test.sh"
+      ],
+      "writes": [
+        "tests/integration/test_artifact_security.py",
+        "backlog/schema-driven-artifact-writer/results/AW-17.md"
+      ],
+      "work": [
+        "Run malformed/unknown/status/path/receipt attacks, concurrent creates/updates and hard-crash recovery on Windows and actual POSIX.",
+        "Run full pytest, both smoke/layout validators on fresh product installs, asset drift, legacy runtime search and wheel-without-checkout check.",
+        "Classify mandatory skips/platform limitations as open acceptance, preserve immutable external evidence and source hashes."
+      ],
+      "red": "Any hidden fallback to direct write, missing mandatory live platform test or successful unauthorized state/evidence mutation blocks acceptance.",
+      "green": "All deterministic safety/regression checks pass with commands/exit/log hashes; limitations explicit, no synthetic substitute for platform behavior.",
+      "test": "python -m pytest tests -q -p no:cacheprovider; platform smoke/layout and installed-wheel checks in VALIDATION.md",
+      "card_path": "cards/AW-17.md",
+      "result_path": "results/AW-17.md"
+    },
+    {
+      "id": "AW-18",
+      "phase": "G",
+      "title": "Build paired small-model evaluation protocol and corpus",
+      "status": "planned",
+      "depends_on": [
+        "AW-17"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "process/skills/**",
+        "src/deltafuse/bench/**"
+      ],
+      "writes": [
+        "tests/fixtures/artifact_writer_eval/**",
+        "scripts/evaluate_artifact_writer.py",
+        "backlog/schema-driven-artifact-writer/evaluation/protocol.md",
+        "tests/unit/test_artifact_writer_eval.py"
+      ],
+      "work": [
+        "Freeze matched raw-YAML/manual versus typed-writer cases, same model/profile/budgets/semantic oracle, randomized order and fresh sessions.",
+        "Include meaningful prose/metadata, partial updates, missing semantic values, legacy comments and denied authority; retain every attempt/dropout.",
+        "Separate JSON/YAML/field/policy/evidence failures; optional constrained-output arm isolated from writer effect; harness invokes external configured agent, no fake score."
+      ],
+      "red": "Parser-only score ignores semantic regressions, hides formatting refusals/JSON failures, excludes failed sessions or alters oracle by arm.",
+      "green": "Protocol/power-or-exploratory label, sample/seed schedule, metrics and acceptance criteria frozen before live runs; fixture tests prove unbiased accounting.",
+      "test": "python -m pytest tests/unit/test_artifact_writer_eval.py -q",
+      "card_path": "cards/AW-18.md",
+      "result_path": "results/AW-18.md"
+    },
+    {
+      "id": "AW-19",
+      "phase": "G",
+      "title": "Run paired external small-model evaluation",
+      "status": "planned",
+      "depends_on": [
+        "AW-18"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/evaluation/protocol.md",
+        "scripts/evaluate_artifact_writer.py"
+      ],
+      "writes": [
+        "backlog/schema-driven-artifact-writer/evaluation/RESULT.md",
+        "backlog/schema-driven-artifact-writer/evaluation/evidence-index.json"
+      ],
+      "work": [
+        "Use authorized available smaller-model endpoint with fixed actual identity and no hidden substitution; attest both arm profiles.",
+        "Run preregistered pairs; preserve raw prompts/tool attempts/outcomes/receipts and independently evaluate semantics/gates.",
+        "Report paired mechanical retry differences, first-pass rates, end-to-end semantic success, tokens/time diagnostics and uncertainty; no fabricated missing runs."
+      ],
+      "red": "Only tool syntax improves while semantic mistakes rise, results omit unsupported cases, or measured model identity absent.",
+      "green": "Real data demonstrates or falsifies benefit honestly; mechanical improvement alone cannot satisfy acceptance without unchanged independent semantic safeguards.",
+      "test": "Execute frozen evaluation protocol with documented endpoint; record exact argv/exit and external run evidence.",
+      "card_path": "cards/AW-19.md",
+      "result_path": "results/AW-19.md"
+    },
+    {
+      "id": "AW-20",
+      "phase": "G",
+      "title": "Close acceptance and publish migration/handoff",
+      "status": "planned",
+      "depends_on": [
+        "AW-19"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "backlog/schema-driven-artifact-writer/evaluation/RESULT.md",
+        "docs/contracts/artifact-writer.md",
+        "CHANGELOG.md"
+      ],
+      "writes": [
+        "docs/using.md",
+        "docs/using.ru.md",
+        "CHANGELOG.md",
+        "backlog/schema-driven-artifact-writer/RESULT.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "work": [
+        "Reconcile every source acceptance criterion with actual evidence; keep any inconclusive performance result or unsupported platform open.",
+        "Publish practical examples, old/new capability detection, manual-authoring fallback, canonicalization opt-in and recovery procedure.",
+        "Record tested implementation/contract/wheel identities and next backlog step without pushing or default-branch merge."
+      ],
+      "red": "Unit success substitutes for real small-model result, old client silently rewrites unknown schemas, or migration instructions auto-change manual artifacts.",
+      "green": "All required evidence mapped, supported scope accurate and independently reviewable; done only when source acceptance is actually satisfied.",
+      "test": "Final evidence hash/link/schema audit; git diff --check; scoped source status; no unrequested commit/push.",
+      "card_path": "cards/AW-20.md",
+      "result_path": "results/AW-20.md"
+    }
+  ]
+}
