@@ -12,6 +12,19 @@ sys = pytest.importorskip("sys")
 sys.path.insert(0, "scripts")
 
 import wheel_evidence  # noqa: E402
+import build_qual_image  # noqa: E402
+
+
+def test_release_tools_read_canonical_version_file(tmp_path):
+    """Dynamic pyproject metadata must never be mistaken for a version string."""
+    (tmp_path / "VERSION").write_text("4.2.1\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "deltafuse"\ndynamic = ["version"]\n\n'
+        '[tool.setuptools.dynamic]\nversion = {file = ["VERSION"]}\n',
+        encoding="utf-8",
+    )
+    assert wheel_evidence._expected_stem(tmp_path) == "deltafuse-4.2.1-py3-none-any"
+    assert build_qual_image.package_version(tmp_path) == "4.2.1"
 
 
 def test_evidence_written_only_on_explicit_call(tmp_path, monkeypatch):

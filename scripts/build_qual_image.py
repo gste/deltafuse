@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -59,10 +60,13 @@ def framework_commit(repo: Path) -> str:
 
 
 def package_version(repo: Path) -> str:
-    for line in (repo / "pyproject.toml").read_text(encoding="utf-8").splitlines():
-        if line.startswith("version ="):
-            return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise SystemExit("cannot determine package version from pyproject.toml")
+    version_path = repo / "VERSION"
+    if not version_path.is_file():
+        raise SystemExit("cannot determine package version: VERSION is missing")
+    version = version_path.read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise SystemExit(f"cannot determine package version: invalid VERSION {version!r}")
+    return version
 
 
 def _build_wheel(repo: Path, dist: Path, record) -> Path:

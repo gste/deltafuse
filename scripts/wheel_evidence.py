@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -51,11 +52,13 @@ def _validate(evidence: dict) -> None:
 def _expected_stem(repo: Path) -> str:
     """Wheel stem is predictable from the version, so an existing evidence
     file is detected BEFORE the (expensive) build."""
-    for line in (repo / "pyproject.toml").read_text(encoding="utf-8").splitlines():
-        if line.startswith("version ="):
-            version = line.split("=", 1)[1].strip().strip('"').strip("'")
-            return f"deltafuse-{version}-py3-none-any"
-    raise SystemExit("cannot determine package version from pyproject.toml")
+    version_path = repo / "VERSION"
+    if not version_path.is_file():
+        raise SystemExit("cannot determine package version: VERSION is missing")
+    version = version_path.read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise SystemExit(f"cannot determine package version: invalid VERSION {version!r}")
+    return f"deltafuse-{version}-py3-none-any"
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
