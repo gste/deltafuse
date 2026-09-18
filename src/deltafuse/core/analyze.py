@@ -398,9 +398,26 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
 
 
 def write_coverage(change_path: Path | str) -> Path:
-    """Write coverage.yaml. Does not set Change status or touch spec/code."""
-    path = Path(change_path)
+    """Write coverage.yaml via validated internal serialization and ProductMutationLock. Does not set Change status or touch spec/code."""
+    from deltafuse.core.artifact_codec import strict_encode_yaml
+    from deltafuse.core.artifact_lock import ProductMutationLock
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+    from deltafuse.core.fsm import find_repo_root
+
+    path = Path(change_path).resolve()
     dest = path / "coverage.yaml"
     document = build_coverage_document(path)
-    dest.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+    registry = ArtifactRegistry()
+    val_res = registry.validate_storage_schema("coverage", document)
+    if not val_res.valid:
+        diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
+        raise CoverageError(f"Coverage schema validation failed: {'; '.join(diag_msgs)}")
+
+    product_root = find_repo_root(path)
+    content_str = strict_encode_yaml(document, kind="coverage")
+
+    with ProductMutationLock(product_root):
+        dest.write_text(content_str, encoding="utf-8")
+
     return dest

@@ -424,7 +424,7 @@
       "id": "AW-14",
       "phase": "E",
       "title": "Repair scaffold and integrate derived indexes",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-13"
       ],
@@ -456,7 +456,7 @@
       "id": "AW-15",
       "phase": "F",
       "title": "Synchronize docs, skills, templates and packaged assets",
-      "status": "planned",
+      "status": "ready",
       "depends_on": [
         "AW-14"
       ],

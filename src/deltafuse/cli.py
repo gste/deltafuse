@@ -440,6 +440,12 @@ def main(argv: list[str] | None = None) -> int:
     art_val.add_argument("--target", "-t", required=True, help="Relative target file path or artifact ID")
     art_val.add_argument("--json", action="store_true", help="Output JSON validation result to stdout")
 
+    art_idx = art_sub.add_parser("update-index", help="Explicit Change child-index update from existing child on disk")
+    art_idx.add_argument("--change", "-c", default=".", help="Change package directory path")
+    art_idx.add_argument("--child-kind", "-k", required=True, choices=["task", "slice", "spec-delta", "decision"], help="Child artifact kind")
+    art_idx.add_argument("--child-id", "-id", required=True, help="Child artifact ID")
+    art_idx.add_argument("--json", action="store_true", help="Output JSON result to stdout")
+
     args = parser.parse_args(raw)
 
     if args.command == "init":
@@ -1171,6 +1177,35 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"  - [{d.get('code')}] {d.get('json_pointer')}: {d.get('message')}", file=sys.stderr)
 
             return 0 if result["valid"] else 2
+
+        elif args.artifact_cmd == "update-index":
+            from deltafuse.core.scaffold import ScaffoldError, update_change_child_index
+
+            change_dir = Path(args.change).resolve()
+            try:
+                update_change_child_index(
+                    change_dir,
+                    child_kind=args.child_kind,
+                    child_id=args.child_id,
+                )
+            except ScaffoldError as se:
+                print(f"update-index failed: {se}", file=sys.stderr)
+                return 1
+            except Exception as ex:
+                print(f"Unexpected error: {ex}", file=sys.stderr)
+                return 2
+
+            payload = {
+                "ok": True,
+                "change": change_dir.name,
+                "child_kind": args.child_kind,
+                "child_id": args.child_id,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(f"artifact update-index: updated {args.child_kind} '{args.child_id}' in {change_dir.name}")
+            return 0
 
     return 0
 
