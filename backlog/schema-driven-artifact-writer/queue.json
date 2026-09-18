@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-10",
+  "entry": "AW-11",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -271,7 +271,7 @@
       "id": "AW-09",
       "phase": "C",
       "title": "Implement durable receipts, idempotency and crash recovery",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-08"
       ],
@@ -301,7 +301,7 @@
       "id": "AW-10",
       "phase": "D",
       "title": "Assemble the typed Artifact Writer service",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-09"
       ],
