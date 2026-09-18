@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
@@ -286,73 +287,74 @@ def advance_change(
         raise TransitionError(f"Change directory not found: {change_path}")
     product_root = find_repo_root(change_path)
 
-    # Crash residue from a previous advance: the receipt is authoritative,
-    # so finishing the pending write completes the transition.
-    resumed = resume_incomplete(product_root, change_path)
-    if resumed is not None:
+    with ProductMutationLock(product_root):
+        # Crash residue from a previous advance: the receipt is authoritative,
+        # so finishing the pending write completes the transition.
+        resumed = resume_incomplete(product_root, change_path)
+        if resumed is not None:
+            return {
+                "ok": True,
+                "gate": resumed["gate"],
+                "from": resumed["from"],
+                "to": resumed["to"],
+                "receipt": resumed["receipt"],
+                "resumed": True,
+            }
+
+        data = _load_change_yaml(change_path)
+        change_id = data.get("id") or change_path.name
+        current = data.get("status")
+        target = GATE_TARGETS[gate]
+        allowed_from = GATE_ALLOWED_FROM[gate]
+
+        # V3-FIX-009: the existing receipt chain must be intact before this gate
+        # may append to it — a hand-rewound or hand-advanced status halts here.
+        chain_errors = receipt_chain_errors(product_root, change_path)
+        if chain_errors:
+            raise TransitionError(
+                f"transition chain invalid: {'; '.join(chain_errors)}"
+            )
+
+        errors = check_gate(change_path, gate, registry=registry)
+        if errors:
+            raise TransitionError(
+                f"gate '{gate}' failed: {'; '.join(errors)}"
+            )
+        if current not in allowed_from:
+            raise TransitionError(
+                f"cannot apply gate '{gate}' from status '{current}'; "
+                f"allowed: {sorted(allowed_from)}"
+            )
+        if not can_transition(current, target) and target != current:
+            raise TransitionError(
+                f"transition table rejects '{current}' -> '{target}'"
+            )
+
+        entry: dict[str, Any] = {
+            "kind": "transition",
+            "change": change_id,
+            "gate": gate,
+            "from": current,
+            "to": target,
+            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        entry["receipt"] = _receipt(entry)
+
+        path = transitions_path(product_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        _write_change_status(change_path, data, target)
+
         return {
             "ok": True,
-            "gate": resumed["gate"],
-            "from": resumed["from"],
-            "to": resumed["to"],
-            "receipt": resumed["receipt"],
-            "resumed": True,
+            "gate": gate,
+            "from": current,
+            "to": target,
+            "receipt": entry["receipt"],
+            "resumed": resumed is not None,
         }
-
-    data = _load_change_yaml(change_path)
-    change_id = data.get("id") or change_path.name
-    current = data.get("status")
-    target = GATE_TARGETS[gate]
-    allowed_from = GATE_ALLOWED_FROM[gate]
-
-    # V3-FIX-009: the existing receipt chain must be intact before this gate
-    # may append to it — a hand-rewound or hand-advanced status halts here.
-    chain_errors = receipt_chain_errors(product_root, change_path)
-    if chain_errors:
-        raise TransitionError(
-            f"transition chain invalid: {'; '.join(chain_errors)}"
-        )
-
-    errors = check_gate(change_path, gate, registry=registry)
-    if errors:
-        raise TransitionError(
-            f"gate '{gate}' failed: {'; '.join(errors)}"
-        )
-    if current not in allowed_from:
-        raise TransitionError(
-            f"cannot apply gate '{gate}' from status '{current}'; "
-            f"allowed: {sorted(allowed_from)}"
-        )
-    if not can_transition(current, target) and target != current:
-        raise TransitionError(
-            f"transition table rejects '{current}' -> '{target}'"
-        )
-
-    entry: dict[str, Any] = {
-        "kind": "transition",
-        "change": change_id,
-        "gate": gate,
-        "from": current,
-        "to": target,
-        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    entry["receipt"] = _receipt(entry)
-
-    path = transitions_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    _write_change_status(change_path, data, target)
-
-    return {
-        "ok": True,
-        "gate": gate,
-        "from": current,
-        "to": target,
-        "receipt": entry["receipt"],
-        "resumed": resumed is not None,
-    }
 
 
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
@@ -392,63 +394,64 @@ def set_artifact_status(
         raise TransitionError(f"Change directory not found: {change_path}")
     product_root = find_repo_root(change_path)
 
-    chain_errors = receipt_chain_errors(product_root, change_path)
-    if chain_errors:
-        raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
+    with ProductMutationLock(product_root):
+        chain_errors = receipt_chain_errors(product_root, change_path)
+        if chain_errors:
+            raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
 
-    if task_id:
-        allowed = TASK_STATUS_TRANSITIONS
-        file = change_path / "tasks" / f"{task_id}.md"
-        if not file.is_file():
-            raise TransitionError(f"task file not found: {file}")
-    elif slice_id:
-        allowed = SLICE_STATUS_TRANSITIONS
-        file = change_path / "slices" / f"{slice_id}.md"
-        if not file.is_file():
-            raise TransitionError(f"slice file not found: {file}")
-    else:
-        allowed = None  # change-level, handled below
-        file = change_path / "change.yaml"
+        if task_id:
+            allowed = TASK_STATUS_TRANSITIONS
+            file = change_path / "tasks" / f"{task_id}.md"
+            if not file.is_file():
+                raise TransitionError(f"task file not found: {file}")
+        elif slice_id:
+            allowed = SLICE_STATUS_TRANSITIONS
+            file = change_path / "slices" / f"{slice_id}.md"
+            if not file.is_file():
+                raise TransitionError(f"slice file not found: {file}")
+        else:
+            allowed = None  # change-level, handled below
+            file = change_path / "change.yaml"
 
-    if file.name == "change.yaml":
-        data = _load_change_yaml(change_path)
-        change_id = data.get("id") or change_path.name
-        current = data.get("status")
-        if status not in CHANGE_INFLIGHT_STATUSES:
-            raise TransitionError(
-                f"Change status '{status}' is Core-gated; use deltafuse advance"
-            )
-        if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
-            raise TransitionError(
-                f"cannot set Change status '{status}' from '{current}'"
-            )
-        _write_change_status(change_path, data, status)
-    else:
-        data = _load_change_yaml(change_path)
-        change_id = data.get("id") or change_path.name
-        from deltafuse.core.frontmatter import parse_frontmatter
+        if file.name == "change.yaml":
+            data = _load_change_yaml(change_path)
+            change_id = data.get("id") or change_path.name
+            current = data.get("status")
+            if status not in CHANGE_INFLIGHT_STATUSES:
+                raise TransitionError(
+                    f"Change status '{status}' is Core-gated; use deltafuse advance"
+                )
+            if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
+                raise TransitionError(
+                    f"cannot set Change status '{status}' from '{current}'"
+                )
+            _write_change_status(change_path, data, status)
+        else:
+            data = _load_change_yaml(change_path)
+            change_id = data.get("id") or change_path.name
+            from deltafuse.core.frontmatter import parse_frontmatter
 
-        meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
-        current = meta.get("status")
-        if current not in allowed or status not in allowed[current]:
-            raise TransitionError(
-                f"cannot set status '{status}' from '{current}' for {file.name}"
-            )
-        meta["status"] = status
-        file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+            meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
+            current = meta.get("status")
+            if current not in allowed or status not in allowed[current]:
+                raise TransitionError(
+                    f"cannot set status '{status}' from '{current}' for {file.name}"
+                )
+            meta["status"] = status
+            file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
 
-    entry: dict[str, Any] = {
-        "kind": "artifact-status",
-        "change": change_id,
-        "artifact": "change" if change_status else ("task" if task_id else "slice"),
-        "artifact_id": task_id or slice_id,
-        "from": current,
-        "to": status,
-        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    entry["receipt"] = _receipt(entry)
-    path = transitions_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}
+        entry: dict[str, Any] = {
+            "kind": "artifact-status",
+            "change": change_id,
+            "artifact": "change" if change_status else ("task" if task_id else "slice"),
+            "artifact_id": task_id or slice_id,
+            "from": current,
+            "to": status,
+            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        entry["receipt"] = _receipt(entry)
+        path = transitions_path(product_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}

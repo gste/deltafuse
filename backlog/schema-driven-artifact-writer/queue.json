@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-13",
+  "entry": "AW-14",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -392,7 +392,7 @@
       "id": "AW-13",
       "phase": "E",
       "title": "Integrate status and Human Gate persistence safely",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-12"
       ],
