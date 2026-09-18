@@ -47,7 +47,9 @@ REPO = Path(os.environ.get("DELTAFUSE_TEST_REPO")
             or Path(__file__).resolve().parent.parent)
 ASSETS = Path(os.environ.get("DELTAFUSE_TEST_ASSETS")
               or REPO / "src" / "deltafuse" / "assets")
-BUNDLE_ROOTS = ("schemas", "templates", "skills")
+MANDATORY_BUNDLE_ROOTS = ("schemas", "templates", "skills")
+OPTIONAL_BUNDLE_ROOTS = ("artifact-operations",)
+BUNDLE_ROOTS = MANDATORY_BUNDLE_ROOTS + OPTIONAL_BUNDLE_ROOTS
 SCHEMA_VERSION = 1
 JOURNAL_NAME = "assets.journal.json"
 
@@ -89,7 +91,8 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
     for root in BUNDLE_ROOTS:
         source_dir = REPO / "process" / root
         if not source_dir.is_dir():
-            problems.append(f"missing process/{root}")
+            if root in MANDATORY_BUNDLE_ROOTS:
+                problems.append(f"missing process/{root}")
             continue
         for path in sorted(source_dir.rglob("*")):
             if not path.is_file():

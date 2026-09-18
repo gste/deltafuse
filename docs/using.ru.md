@@ -144,6 +144,21 @@ deltafuse leash <product-root>
 deltafuse leash <product-root> --file src/foo.py
 ```
 
+## Artifact Writer
+
+Ядро предоставляет управляемую схемам службу сериализации и валидации для артефактов пакетов Change ([artifact-writer.ru.md](./contracts/artifact-writer.ru.md)).
+
+```text
+deltafuse artifact describe --kind task --operation create
+deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
+```
+
+Операции Artifact Writer строго валидируют семантические поля по схемам хранения. Поля Ядра (например, `/status`) нельзя изменять через `deltafuse artifact update`. Read-only операция `validate` не изменяет файлы на диске.
+
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя. Этот репозиторий UI доски не содержит.

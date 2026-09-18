@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "operation_contract_version": "1",
+  "storage_contract_version": "3",
+  "descriptors": {
+    "task": {
+      "file": "task.descriptor.yaml",
+      "allowed_operations": ["create", "update", "validate", "describe"]
+    },
+    "slice": {
+      "file": "slice.descriptor.yaml",
+      "allowed_operations": ["create", "update", "validate", "describe"]
+    },
+    "spec-delta": {
+      "file": "spec-delta.descriptor.yaml",
+      "allowed_operations": ["create", "update", "validate", "describe"]
+    },
+    "routing": {
+      "file": "routing.descriptor.yaml",
+      "allowed_operations": ["create", "update", "validate", "describe"]
+    },
+    "change": {
+      "file": "change.descriptor.yaml",
+      "allowed_operations": ["update", "validate", "describe"]
+    },
+    "decision": {
+      "file": "decision.descriptor.yaml",
+      "allowed_operations": ["validate", "describe"]
+    },
+    "evidence": {
+      "file": "evidence.descriptor.yaml",
+      "allowed_operations": ["validate", "describe"]
+    },
+    "coverage": {
+      "file": "coverage.descriptor.yaml",
+      "allowed_operations": ["validate", "describe"]
+    },
+    "capability": {
+      "file": "capability.descriptor.yaml",
+      "allowed_operations": ["validate", "describe"]
+    },
+    "lock": {
+      "file": "lock.descriptor.yaml",
+      "allowed_operations": ["validate", "describe"]
+    }
+  }
+}

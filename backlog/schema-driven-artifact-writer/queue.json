@@ -456,7 +456,7 @@
       "id": "AW-15",
       "phase": "F",
       "title": "Synchronize docs, skills, templates and packaged assets",
-      "status": "ready",
+      "status": "completed",
       "depends_on": [
         "AW-14"
       ],
@@ -501,7 +501,7 @@
       "id": "AW-16",
       "phase": "F",
       "title": "Prove backwards compatibility and full workflow integration",
-      "status": "planned",
+      "status": "ready",
       "depends_on": [
         "AW-15"
       ],

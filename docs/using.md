@@ -144,6 +144,21 @@ deltafuse leash <product-root>
 deltafuse leash <product-root> --file src/foo.py
 ```
 
+## Artifact Writer
+
+Core provides a schema-driven serialization and validation service for Change package artifacts ([artifact-writer.md](./contracts/artifact-writer.md)).
+
+```text
+deltafuse artifact describe --kind task --operation create
+deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
+```
+
+Artifact Writer operations validate semantic fields strictly against target storage schemas. Core-owned fields (e.g. `/status`) cannot be modified through `deltafuse artifact update`. Read-only `validate` does not mutate files on disk.
+
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository. This framework does not ship a board UI.

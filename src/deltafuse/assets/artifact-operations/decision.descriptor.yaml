@@ -1,0 +1,28 @@
+kind: decision
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/decision.schema.yaml
+allowed_operations:
+  - validate
+  - describe
+creatable_semantic_fields:
+  - title
+  - kind
+  - owner
+  - date
+  - affects
+  - supersedes
+  - superseded_by
+updatable_semantic_fields:
+  - /title
+  - /kind
+  - /owner
+  - /date
+  - /affects
+  - /supersedes
+  - /superseded_by
+core_owned_fields:
+  - id
+  - change
+  - status
+initial_defaults: {}
+body_allowed: true

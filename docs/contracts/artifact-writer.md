@@ -32,7 +32,7 @@ semantic_payload:
 
 ### Fields:
 - `request_id`: Required string identifier for transaction tracking and idempotency.
-- `operation`: Required enum (`create`, `update`, `validate`, `describe`).
+- `operation`: Required enum (`create`, `update`, `validate`, `describe`, `update-index`).
 - `kind`: Required enum corresponding to one of the 10 storage schemas.
 - `change`: Owning Change ID or relative directory path.
 - `identity`: Specific artifact identifier (e.g. `TASK-001`) for `create` / `describe`.
@@ -41,6 +41,7 @@ semantic_payload:
 - `semantic_payload`: Object containing initial semantic fields on `create`.
 - `patch`: Object containing JSON Pointer edits on `update`.
 - `body`: Optional opaque markdown body content.
+- `update-index`: Atomic update operation synchronizing `change.yaml` child lists from disk.
 
 ---
 
