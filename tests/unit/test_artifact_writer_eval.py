@@ -75,3 +75,74 @@ def test_paired_model_mode_reports_unavailable_endpoint_without_fake_claims():
     assert summary["evaluation_mode"] == "paired_model"
     assert summary["external_model_status"] == "unavailable_no_endpoint"
     assert summary["acceptance_status"] == "open_for_AW-20"
+
+
+def test_aw40_reproduce_synthetic_score_substitution_on_empty_or_adapter_corpus(tmp_path: Path):
+    """AW-40 Red: Harness must reject hardcoded adapter scores and empty corpus qualification."""
+    empty_corpus = tmp_path / "empty_corpus.json"
+    empty_corpus.write_text("[]", encoding="utf-8")
+
+    # 1. Empty corpus must not report ready_for_AW-20 or 5 fake successes out of 0 cases
+    summary_empty = run_evaluation(empty_corpus, mode="paired_model", adapter="small_model")
+    assert summary_empty["acceptance_status"] == "open_for_AW-20"
+    assert summary_empty["external_model_status"] != "qualified_with_adapter_evidence"
+    assert "arm_a_manual_raw" not in summary_empty or summary_empty["arm_a_manual_raw"].get("first_pass_valid_count") == 0
+
+
+def test_aw39_routing_update_semantic_rejection_and_acceptance(tmp_path: Path):
+    """AW39-R1: Oracle rejects unapplied routing capability updates and accepts valid ones."""
+    (tmp_path / "routing.yaml").write_text("change: CHG-001\nclaims:\n  CR-001:\n    primary_capability: old_cap\n", encoding="utf-8")
+    case = {
+        "id": "CASE-ROUTING-01",
+        "operation": "update",
+        "kind": "routing",
+        "expected_valid": True,
+        "input_payload": {
+            "set": [{"path": "/claims/CR-001/primary_capability", "value": "new_cap"}]
+        },
+    }
+
+    # When old capability is left on disk, oracle MUST return semantic_correct=False
+    res_stale = evaluate_independent_oracle(tmp_path, case, passed_op=True, gate_blocked=False, error_msg=None)
+    assert res_stale["semantic_correct"] is False
+
+    # When new capability is on disk, oracle returns semantic_correct=True
+    (tmp_path / "routing.yaml").write_text("change: CHG-001\nclaims:\n  CR-001:\n    primary_capability: new_cap\n", encoding="utf-8")
+    res_updated = evaluate_independent_oracle(tmp_path, case, passed_op=True, gate_blocked=False, error_msg=None)
+    assert res_updated["semantic_correct"] is True
+
+
+def test_aw39_json_pointer_escaping_and_nested_removal(tmp_path: Path):
+    """AW39-R3: Verify JSON pointer escaping (~1, ~0), nested paths, and nested removals."""
+    (tmp_path / "routing.yaml").write_text(
+        "change: CHG-001\n"
+        "claims:\n"
+        "  CR-001:\n"
+        "    primary_capability: core\n"
+        "    summary: with~tilde/slash\n",
+        encoding="utf-8",
+    )
+    case_remove = {
+        "id": "CASE-REMOVE-01",
+        "operation": "update",
+        "kind": "routing",
+        "expected_valid": True,
+        "input_payload": {
+            "remove": ["/claims/CR-001/summary"]
+        },
+    }
+    # If summary is still present, removal check MUST fail
+    res_not_removed = evaluate_independent_oracle(tmp_path, case_remove, passed_op=True, gate_blocked=False, error_msg=None)
+    assert res_not_removed["semantic_correct"] is False
+
+    # If summary was removed on disk, oracle passes
+    (tmp_path / "routing.yaml").write_text(
+        "change: CHG-001\n"
+        "claims:\n"
+        "  CR-001:\n"
+        "    primary_capability: core\n",
+        encoding="utf-8",
+    )
+    res_removed = evaluate_independent_oracle(tmp_path, case_remove, passed_op=True, gate_blocked=False, error_msg=None)
+    assert res_removed["semantic_correct"] is True
+

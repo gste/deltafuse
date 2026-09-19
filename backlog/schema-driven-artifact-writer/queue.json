@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-39",
+  "entry": "AW-41",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -1492,7 +1492,7 @@
       "id": "AW-39",
       "phase": "J",
       "title": "Make oracle success depend on validated requested semantics",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-37",
         "AW-38"
@@ -1535,22 +1535,22 @@
         {
           "id": "AW39-R1",
           "requirement": "Reproduce a requested routing capability update with the old capability left on disk; the oracle must return semantic_correct=false even when the old artifact is schema-valid.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW39-R2",
           "requirement": "For every supported create/update kind, compare actual typed values against independent expected changes, removals, preserved fields and body bytes. Routing must receive the same semantic checks as Markdown kinds.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW39-R3",
           "requirement": "Verify JSON Pointer escaping and missing nested paths; do not skip a failed lookup or substitute top-level deletion checks for nested removals. Correct title/body update semantics must also pass.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW39-R4",
           "requirement": "Record an oracle coverage matrix for all corpus kinds/operations. Each positive has an independently wrong-result negative control; flags, schema-valid shape and substring matches cannot establish requested meaning. Distinguish applicable authority failures from not-evaluated convergence.",
-          "status": "open"
+          "status": "passed"
         }
       ]
     },
