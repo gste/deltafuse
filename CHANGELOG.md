@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AW-41`: Restored packaged-schema removal and byte-corruption probes under isolated installed wheel fixture returning exit code 5 (`asset_resolution_failed`), with honest open blocker recorded for native POSIX / symlink runner.
   - `AW-42`: Reconciled final source and artifact hashes, audited restored test coverage, and established full qualification baseline.
   - `AW-20`: Published open-acceptance reconciliation report honestly documenting completed capabilities alongside live model and platform prerequisites.
+  - `AW-43`: Reconciled literal acceptance criteria across `AW-37`..`AW-42`/`AW-20` in a verbatim criterion ledger; kept `AW41-R3`, `AW42-R3/R4/F1` and `AW40-F1/F2` execution rows open; superseded unsupported "fully verified/all checks remediated" wording without inventing executions. Reporting card only: acceptance remains open and `AW-40`/`AW-41`/`AW-42`/`AW-20` stay in_progress.
 
 
 ## [3.1.0] - 2026-09-16

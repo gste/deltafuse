@@ -7,8 +7,8 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-20",
-  "order": "first planned card with verified completed dependencies",
+  "entry": "AW-44",
+  "order": "First unfinished card in execution_order with completed, evidence-verified dependencies; report environmental blockers explicitly.",
   "cards": [
     {
       "id": "AW-00",
@@ -1669,7 +1669,9 @@
       "status": "in_progress",
       "depends_on": [
         "AW-37",
-        "AW-39"
+        "AW-39",
+        "AW-44",
+        "AW-45"
       ],
       "remediates": [
         "AW-36a",
@@ -1725,7 +1727,7 @@
         {
           "id": "AW41-R3",
           "requirement": "Run actual Windows and POSIX public-operation concurrency and hard-crash boundaries, capable-host symlink/reparse checks, both smoke/layout scripts and fresh install/upgrade. Disclose missing mandatory host/privileges and keep this task open.",
-          "status": "passed"
+          "status": "open"
         },
         {
           "id": "AW41-R4",
@@ -1815,22 +1817,248 @@
         {
           "id": "AW42-R3",
           "requirement": "Replay or rerun every required check affected by source drift and verify referenced raw logs, commands, exits, environment, wheel and model provenance; identify missing evidence as NOT RUN.",
-          "status": "passed"
+          "status": "open"
         },
         {
           "id": "AW42-R4",
           "requirement": "Audit restored/removed test coverage and every original acceptance criterion through AW-37/AW-39/AW-40/AW-41; all mandatory checks must pass before preparing the final AW-20 closure evidence.",
-          "status": "passed"
+          "status": "open"
         },
         {
           "id": "AW42-F1",
           "requirement": "Reconcile the exact original requirement text, card/queue acceptance IDs and result rows before reading their PASS labels. Detect narrowed paraphrases: using an oracle does not prove live paired sessions, and disclosing Windows skips does not prove POSIX execution.",
-          "status": "passed"
+          "status": "open"
         },
         {
           "id": "AW42-F2",
           "requirement": "Current matching source hashes are verified progress, not a waiver of missing model/platform/package-corruption evidence. Any mandatory NOT RUN/FAIL from AW-37/AW-40/AW-41 prevents completion; preserve earlier hash evidence with its actual tested source and rerun affected final-tree checks.",
           "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AW-43",
+      "phase": "L",
+      "title": "Reconcile literal acceptance criteria and unsupported PASS labels",
+      "status": "completed",
+      "depends_on": [],
+      "remediates": [
+        "AW-41",
+        "AW-42",
+        "AW-20"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-6.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+        "backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+        "backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "writes": [
+        "backlog/schema-driven-artifact-writer/cards/AW-40.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-41.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-42.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-20.md",
+        "backlog/schema-driven-artifact-writer/results/AW-40.md",
+        "backlog/schema-driven-artifact-writer/results/AW-41.md",
+        "backlog/schema-driven-artifact-writer/results/AW-42.md",
+        "backlog/schema-driven-artifact-writer/results/AW-20.md",
+        "backlog/schema-driven-artifact-writer/RESULT.md",
+        "CHANGELOG.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-43.md",
+        "backlog/schema-driven-artifact-writer/results/AW-43.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "work": [
+        "Preserve every original and reopened requirement verbatim in a criterion ledger; retain compound parents and map each mandatory subrow to evidence. Audit all current AW-37 through AW-42 and AW-20 claims, not only named examples.",
+        "AW41-R3 and AW42-R4 must remain open until every mandatory execution requirement passes. Audit AW42-R3 and AW42-F1 evidence claims too. A PASS subcheck, matching hashes or honest disclosure cannot qualify a parent.",
+        "Replace current fully verified/all checks remediated wording with scope-accurate statements; retain dated historical claims and explicitly supersede them without inventing past executions.",
+        "Align current card, queue and result dispositions for every audited ID. Show Red using the actual contradictory claims and Green using the same ledger after correction. Do not change original requirements to make the comparison pass.",
+        "This reporting card may complete with qualification prerequisites open only when all reporting checks pass and every unavailable runtime/platform/model check remains explicitly open in its owning card. AW-42 and AW-20 remain in_progress."
+      ],
+      "red": "Capture the existing passed AW41-R3 versus missing POSIX execution and passed AW42-R4 versus open mandatory checks, plus abbreviated result requirements.",
+      "green": "All audited current claims have literal requirements, consistent conservative dispositions and inspected evidence references; no qualification requirement is waived.",
+      "test": "Apply exact acceptance matrix, meaningful negative controls and source-bound evidence; run repository checks appropriate to any implementation changes.",
+      "card_path": "cards/AW-43.md",
+      "result_path": "results/AW-43.md",
+      "acceptance_checks": [
+        {
+          "id": "AW43-R1",
+          "requirement": "Preserve every original and reopened requirement verbatim in a criterion ledger; retain compound parents and map each mandatory subrow to evidence. Audit all current AW-37 through AW-42 and AW-20 claims, not only named examples.",
+          "status": "passed"
+        },
+        {
+          "id": "AW43-R2",
+          "requirement": "AW41-R3 and AW42-R4 must remain open until every mandatory execution requirement passes. Audit AW42-R3 and AW42-F1 evidence claims too. A PASS subcheck, matching hashes or honest disclosure cannot qualify a parent.",
+          "status": "passed"
+        },
+        {
+          "id": "AW43-R3",
+          "requirement": "Replace current fully verified/all checks remediated wording with scope-accurate statements; retain dated historical claims and explicitly supersede them without inventing past executions.",
+          "status": "passed"
+        },
+        {
+          "id": "AW43-R4",
+          "requirement": "Align current card, queue and result dispositions for every audited ID. Show Red using the actual contradictory claims and Green using the same ledger after correction. Do not change original requirements to make the comparison pass.",
+          "status": "passed"
+        },
+        {
+          "id": "AW43-R5",
+          "requirement": "This reporting card may complete with qualification prerequisites open only when all reporting checks pass and every unavailable runtime/platform/model check remains explicitly open in its owning card. AW-42 and AW-20 remain in_progress.",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AW-44",
+      "phase": "L",
+      "title": "Recover reproducible isolated-wheel qualification evidence",
+      "status": "planned",
+      "depends_on": [
+        "AW-43"
+      ],
+      "remediates": [
+        "AW-41",
+        "AW-42"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-6.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+        "backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+        "backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "writes": [
+        "tests/integration/test_artifact_cli.py",
+        "tests/integration/test_wheel_smoke.py",
+        "tests/integration/test_wheel_evidence.py",
+        "backlog/schema-driven-artifact-writer/evidence/reconciliation/**",
+        "backlog/schema-driven-artifact-writer/results/AW-41.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-44.md",
+        "backlog/schema-driven-artifact-writer/results/AW-44.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "work": [
+        "Reproduce and retain the wheel-fixture build-dependency failure separately from behavioral Red. The review rerun had 32 passed, 2 skipped and 4 setup errors because PyPI access failed with WinError 10013; this is not proof of a Writer defect or a wheel pass.",
+        "Use a real built wheel and fresh isolated installation. Resolve dependencies using authorized access or a provenance-recorded local wheelhouse; retain build/install argv, actual exits, dependency versions, wheel SHA256 and import origin. Never add checkout PYTHONPATH, fake site-packages, mocks, skips or generic CLI substitutes.",
+        "Execute intact describe/create/update/validate controls and physically remove then separately corrupt the installed schema without manifest repair. Restore exact bytes between probes. Assert expected exit/error, unchanged protected product bytes and absence of success receipts or unauthorized journal effects, not only target-file existence.",
+        "Preserve raw stdout/stderr, inputs, before/after hashes, source/contract/test/asset manifests and OS/interpreter/filesystem identities in a hash-indexed evidence bundle. Verify every referenced object is retrievable and its digest matches; a command summary, this_file token or invented old log is insufficient.",
+        "Audit existing AW-41/AW-42 qualification summaries for absent raw evidence. Retain historical claims as unverified where necessary and rerun available affected checks with new identities. Map unresolved Windows/POSIX/symlink/model evidence to the existing owning cards without marking it passed.",
+        "Complete only after the local real-wheel invariants and evidence checks all pass. If build/install access remains unavailable, leave this card in_progress with the exact prerequisite. Local success does not complete AW-41, AW-40, AW-42 or AW-20."
+      ],
+      "red": "Capture actual setup failure or identify unbacked historical evidence. For added behavioral assertions, show an adversarial control that detects mutation/receipt leakage without altering production semantics.",
+      "green": "Real isolated wheel tests and evidence-integrity checks pass with retrievable source-bound logs; external qualification remains separately open.",
+      "test": "Apply exact acceptance matrix, meaningful negative controls and source-bound evidence; run repository checks appropriate to any implementation changes.",
+      "card_path": "cards/AW-44.md",
+      "result_path": "results/AW-44.md",
+      "acceptance_checks": [
+        {
+          "id": "AW44-R1",
+          "requirement": "Reproduce and retain the wheel-fixture build-dependency failure separately from behavioral Red. The review rerun had 32 passed, 2 skipped and 4 setup errors because PyPI access failed with WinError 10013; this is not proof of a Writer defect or a wheel pass.",
+          "status": "open"
+        },
+        {
+          "id": "AW44-R2",
+          "requirement": "Use a real built wheel and fresh isolated installation. Resolve dependencies using authorized access or a provenance-recorded local wheelhouse; retain build/install argv, actual exits, dependency versions, wheel SHA256 and import origin. Never add checkout PYTHONPATH, fake site-packages, mocks, skips or generic CLI substitutes.",
+          "status": "open"
+        },
+        {
+          "id": "AW44-R3",
+          "requirement": "Execute intact describe/create/update/validate controls and physically remove then separately corrupt the installed schema without manifest repair. Restore exact bytes between probes. Assert expected exit/error, unchanged protected product bytes and absence of success receipts or unauthorized journal effects, not only target-file existence.",
+          "status": "open"
+        },
+        {
+          "id": "AW44-R4",
+          "requirement": "Preserve raw stdout/stderr, inputs, before/after hashes, source/contract/test/asset manifests and OS/interpreter/filesystem identities in a hash-indexed evidence bundle. Verify every referenced object is retrievable and its digest matches; a command summary, this_file token or invented old log is insufficient.",
+          "status": "open"
+        },
+        {
+          "id": "AW44-R5",
+          "requirement": "Audit existing AW-41/AW-42 qualification summaries for absent raw evidence. Retain historical claims as unverified where necessary and rerun available affected checks with new identities. Map unresolved Windows/POSIX/symlink/model evidence to the existing owning cards without marking it passed.",
+          "status": "open"
+        },
+        {
+          "id": "AW44-R6",
+          "requirement": "Complete only after the local real-wheel invariants and evidence checks all pass. If build/install access remains unavailable, leave this card in_progress with the exact prerequisite. Local success does not complete AW-41, AW-40, AW-42 or AW-20.",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "AW-45",
+      "phase": "L",
+      "title": "Validate dependency-ready queue and consistent continuation handoffs",
+      "status": "planned",
+      "depends_on": [
+        "AW-43"
+      ],
+      "remediates": [
+        "AW-20",
+        "AW-42"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-6.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+        "backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+        "backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "writes": [
+        "backlog/schema-driven-artifact-writer/README.md",
+        "backlog/schema-driven-artifact-writer/PLAN.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+        "backlog/schema-driven-artifact-writer/RESULT.md",
+        "backlog/schema-driven-artifact-writer/results/AW-20.md",
+        "backlog/schema-driven-artifact-writer/results/AW-42.md",
+        "backlog/schema-driven-artifact-writer/check_backlog.py",
+        "backlog/schema-driven-artifact-writer/tests/test_check_backlog.py",
+        "backlog/schema-driven-artifact-writer/cards/AW-45.md",
+        "backlog/schema-driven-artifact-writer/results/AW-45.md",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "work": [
+        "Add a bounded backlog consistency checker that validates unique card/check IDs, existing references, an acyclic dependency graph, queue/card current statuses and dependency-ready entry selection. Treat planned and in_progress as unfinished; completed dependencies also require inspected evidence before execution.",
+        "Add meaningful negative fixtures for the observed AW-20 entry with unfinished dependencies, stale AW-37 handoff, false no-work-remaining claim, unknown dependency, duplicate IDs and cycles. Add valid ready and all-blocked fixtures. A checker must not claim to verify live evidence merely from status strings.",
+        "Synchronize README, PLAN, EXECUTOR, queue and current summary/handoff pointers using the same selection rule. Clearly separate dated historical next-task notes from current instructions. No unfinished-work message may imply acceptance or completion.",
+        "If the first dependency-ready card has an unavailable environmental prerequisite, report it as ready by dependency but blocked by environment with the exact requirement. Independent ready work may proceed; dependent work may not. Never route directly to AW-42 or AW-20 while qualification predecessors remain open.",
+        "Run the checker against the real backlog and all negative fixtures. At closure recompute the next ready card after the proposed status change, recheck dirty state, and provide one bounded continuation prompt. Keep AW-40/AW-41/AW-42/AW-20 open until their own original criteria pass."
+      ],
+      "red": "Demonstrate contradictory pre-review entry/handoff pointers and reject them with focused fixtures; do not manufacture a runtime failure for a documentation task.",
+      "green": "Real backlog structural checks and adversarial fixtures pass, and every current handoff agrees with dependency readiness and explicit blockers.",
+      "test": "Apply exact acceptance matrix, meaningful negative controls and source-bound evidence; run repository checks appropriate to any implementation changes.",
+      "card_path": "cards/AW-45.md",
+      "result_path": "results/AW-45.md",
+      "acceptance_checks": [
+        {
+          "id": "AW45-R1",
+          "requirement": "Add a bounded backlog consistency checker that validates unique card/check IDs, existing references, an acyclic dependency graph, queue/card current statuses and dependency-ready entry selection. Treat planned and in_progress as unfinished; completed dependencies also require inspected evidence before execution.",
+          "status": "open"
+        },
+        {
+          "id": "AW45-R2",
+          "requirement": "Add meaningful negative fixtures for the observed AW-20 entry with unfinished dependencies, stale AW-37 handoff, false no-work-remaining claim, unknown dependency, duplicate IDs and cycles. Add valid ready and all-blocked fixtures. A checker must not claim to verify live evidence merely from status strings.",
+          "status": "open"
+        },
+        {
+          "id": "AW45-R3",
+          "requirement": "Synchronize README, PLAN, EXECUTOR, queue and current summary/handoff pointers using the same selection rule. Clearly separate dated historical next-task notes from current instructions. No unfinished-work message may imply acceptance or completion.",
+          "status": "open"
+        },
+        {
+          "id": "AW45-R4",
+          "requirement": "If the first dependency-ready card has an unavailable environmental prerequisite, report it as ready by dependency but blocked by environment with the exact requirement. Independent ready work may proceed; dependent work may not. Never route directly to AW-42 or AW-20 while qualification predecessors remain open.",
+          "status": "open"
+        },
+        {
+          "id": "AW45-R5",
+          "requirement": "Run the checker against the real backlog and all negative fixtures. At closure recompute the next ready card after the proposed status change, recheck dirty state, and provide one bounded continuation prompt. Keep AW-40/AW-41/AW-42/AW-20 open until their own original criteria pass.",
+          "status": "open"
         }
       ]
     }
@@ -1869,5 +2097,21 @@
     "source_state": "clean committed tree at review",
     "report": "REVIEW-5.md",
     "acceptance": "open"
+  },
+  "execution_order": [
+    "AW-43",
+    "AW-44",
+    "AW-45",
+    "AW-41",
+    "AW-40",
+    "AW-42",
+    "AW-20"
+  ],
+  "sixth_review_snapshot": {
+    "date": "2026-09-19",
+    "commit": "a5c58137ad7a45ec7b8b68263863dfbd19ef7bed",
+    "report": "REVIEW-6.md",
+    "acceptance": "open",
+    "note": "15 AW-42 concrete hashes matched; focused rerun 32 passed, 2 skipped, 4 wheel setup errors. Historical result PASS claims disputed by this review are not current acceptance evidence."
   }
 }
