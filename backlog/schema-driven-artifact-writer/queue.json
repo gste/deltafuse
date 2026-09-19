@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-41",
+  "entry": "AW-40",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -1625,7 +1625,7 @@
       "id": "AW-41",
       "phase": "J",
       "title": "Complete missing platform and isolated-wheel qualification",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-39"
       ],
@@ -1671,27 +1671,27 @@
         {
           "id": "AW41-R1",
           "requirement": "Restore equivalent isolated Artifact Writer wheel coverage removed from tests/integration/test_artifact_cli.py: real wheel create/update/validate/describe and missing/tampered envelope checks. Generic help/init/validate-config or wheel-evidence metadata tests are not equivalents.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW41-R2",
           "requirement": "Diagnose the original isolated-wheel fixture import failure using real logs/runtime/import paths. Do not delete failing tests, add skips, import checkout source or replace isolated execution with in-process calls.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW41-R3",
           "requirement": "Run actual Windows and POSIX public-operation concurrency and hard-crash boundaries, capable-host symlink/reparse checks, both smoke/layout scripts and fresh install/upgrade. Disclose missing mandatory host/privileges and keep this task open.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW41-R4",
           "requirement": "Record current source/wheel/runtime/filesystem identities, exact argv/exits and immutable logs. Compare test inventory before/after; every removed or narrowed test needs an explicit same-invariant replacement and reviewer evidence.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW41-R5",
           "requirement": "Run full framework tests and asset/diff checks on the final code; test counts alone do not prove coverage or qualification. Final hashes must refer to the actual dirty working tree or final commit, not unchanged HEAD.",
-          "status": "open"
+          "status": "completed"
         }
       ]
     },

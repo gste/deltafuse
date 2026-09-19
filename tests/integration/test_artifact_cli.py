@@ -1,14 +1,54 @@
-"""Integration tests for Artifact Writer CLI subprocess invocations (AW-11).
-
-Executes `python -m deltafuse.cli artifact ...` in external subprocesses without
-shell interpolation to verify exit codes, stdin piping, and file outputs.
-"""
-
+import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import venv
 import pytest
+
+
+from deltafuse.core.assets import get_installed_lock_hash
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(scope="module")
+def isolated_wheel_venv(tmp_path_factory):
+    """Builds and installs deltafuse wheel into a clean isolated virtualenv."""
+    if importlib.util.find_spec("pip") is None:
+        pytest.fail("blocked: pip is unavailable; wheel smoke cannot run silently skipped")
+    root_tmp = tmp_path_factory.mktemp("isolated_wheel_fixture")
+    dist = root_tmp / "dist"
+
+    check = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "sync_assets.py"), "--check"],
+        capture_output=True, text=True,
+    )
+    assert check.returncode == 0, f"asset sync drift: {check.stdout}\n{check.stderr}"
+
+    build = subprocess.run(
+        [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(dist), str(REPO_ROOT)],
+        capture_output=True, text=True,
+    )
+    assert build.returncode == 0, f"wheel build failed: {build.stdout}\n{build.stderr}"
+    wheels = list(dist.glob("deltafuse-*.whl"))
+    assert wheels, "No wheel built"
+    wheel = wheels[0]
+
+    venv_dir = root_tmp / "venv"
+    venv.create(venv_dir, with_pip=True)
+    pip_python = venv_dir / "Scripts" / "python.exe"
+    if not pip_python.is_file():
+        pip_python = venv_dir / "bin" / "python"
+
+    install = subprocess.run(
+        [str(pip_python), "-I", "-m", "pip", "install", str(wheel)],
+        capture_output=True, text=True,
+    )
+    assert install.returncode == 0, f"wheel install failed: {install.stdout}\n{install.stderr}"
+
+    return str(pip_python)
 
 
 def test_subprocess_artifact_describe():
@@ -22,21 +62,26 @@ def test_subprocess_artifact_describe():
 
 def test_subprocess_artifact_create_via_stdin(tmp_path):
     (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    lock_hash = get_installed_lock_hash()
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {lock_hash}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
         encoding="utf-8",
     )
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-001"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
     (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
     (tmp_path / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
     (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
     (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
 
     cmd = [
         sys.executable, "-m", "deltafuse.cli",
@@ -74,17 +119,21 @@ def test_subprocess_artifact_create_via_stdin(tmp_path):
 
 def test_subprocess_artifact_core_owned_field_denied(tmp_path):
     (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    lock_hash = get_installed_lock_hash()
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {lock_hash}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
         encoding="utf-8",
     )
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-001"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
     cmd = [
         sys.executable, "-m", "deltafuse.cli",
         "artifact", "create",
@@ -111,21 +160,26 @@ def test_subprocess_artifact_update_retry_and_idempotency(tmp_path):
     import hashlib
 
     (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    lock_hash = get_installed_lock_hash()
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {lock_hash}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
         encoding="utf-8",
     )
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-001"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
     (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
     (tmp_path / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
     (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
     (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
 
     cmd_create = [
         sys.executable, "-m", "deltafuse.cli",
@@ -183,3 +237,336 @@ def test_subprocess_artifact_update_retry_and_idempotency(tmp_path):
     assert up_receipt2["transaction_id"] == up_receipt1["transaction_id"]
     assert up_receipt2["changed"] is True
 
+
+def test_aw37_cli_create_missing_change_authority_rejected(tmp_path):
+    from deltafuse.core.assets import get_installed_lock_hash
+    (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {get_installed_lock_hash()}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-370\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+    # Ensure no change.yaml exists
+    change_yaml = tmp_path / "change.yaml"
+    if change_yaml.is_file():
+        change_yaml.unlink()
+
+    cmd = [
+        sys.executable, "-m", "deltafuse.cli",
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", "-",
+        "--json",
+    ]
+    payload = {
+        "identity": "TASK-370",
+        "semantic_payload": {
+            "title": "Missing Change Authority Task",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "Body",
+    }
+    proc = subprocess.run(cmd, input=json.dumps(payload), capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode == 3
+    assert not (tmp_path / "tasks" / "TASK-370.md").exists()
+
+
+def test_aw38_cli_create_missing_content_hash_rejected(tmp_path):
+    (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    # Lock retains source but omits content_hash
+    (tmp_path / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "change.yaml").write_text(
+        "schema_version: 3\nid: CHG-380\ntitle: AW38 Test\nstatus: implement\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-380\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+    cmd = [
+        sys.executable, "-m", "deltafuse.cli",
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", "-",
+        "--json",
+    ]
+    payload = {
+        "identity": "TASK-380",
+        "semantic_payload": {
+            "title": "Missing Content Hash Lock Task",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "Body",
+    }
+    proc = subprocess.run(cmd, input=json.dumps(payload), capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode != 0
+    assert not (tmp_path / "tasks" / "TASK-380.md").exists()
+
+
+def test_isolated_wheel_artifact_describe(isolated_wheel_venv, tmp_path):
+    clean_workdir = tmp_path / "clean_describe"
+    clean_workdir.mkdir()
+    clean_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    cmd = [isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "describe", "--kind", "task", "--json"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", cwd=str(clean_workdir), env=clean_env)
+    assert proc.returncode == 0, f"describe failed: {proc.stdout}\n{proc.stderr}"
+    data = json.loads(proc.stdout)
+    assert data["kind"] == "task"
+    assert "creatable_semantic_fields" in data or "allowed_semantic_fields" in data
+
+
+def test_isolated_wheel_artifact_create_update_validate(isolated_wheel_venv, tmp_path):
+    clean_workdir = tmp_path / "clean_ops"
+    clean_workdir.mkdir()
+    clean_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    repo_dir = clean_workdir / "repo"
+    init_res = subprocess.run(
+        [isolated_wheel_venv, "-m", "deltafuse", "init", str(repo_dir)],
+        capture_output=True, text=True, cwd=str(clean_workdir), env=clean_env,
+    )
+    assert init_res.returncode == 0, f"init failed: {init_res.stdout}\n{init_res.stderr}"
+
+    chg_dir = repo_dir / "docs" / "changes" / "CHG-100"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-100\nstatus: active\n", encoding="utf-8")
+    (repo_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "slices" / "SLICE-01.md").write_text(
+        "---\nid: SLICE-01\nchange: CHG-100\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (repo_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+    # 1. Create artifact via wheel
+    create_payload = {
+        "identity": "TASK-100",
+        "semantic_payload": {
+            "title": "Wheel Isolated Task",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "# TASK-100: Wheel Isolated Task\n\nBody content.",
+    }
+    create_cmd = [
+        isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+        "--kind", "task",
+        "--change", str(repo_dir),
+        "--input", "-",
+        "--json",
+    ]
+    proc_cr = subprocess.run(
+        create_cmd,
+        input=json.dumps(create_payload),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_cr.returncode == 0, f"wheel create failed: {proc_cr.stdout}\n{proc_cr.stderr}"
+    receipt = json.loads(proc_cr.stdout)
+    assert receipt["outcome"] == "committed"
+
+    task_file = repo_dir / "tasks" / "TASK-100.md"
+    assert task_file.is_file()
+    assert "Wheel Isolated Task" in task_file.read_text(encoding="utf-8")
+
+    # 2. Validate artifact via wheel
+    val_cmd = [
+        isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "validate",
+        "--kind", "task",
+        "--change", str(repo_dir),
+        "--target", "tasks/TASK-100.md",
+        "--json",
+    ]
+    proc_val = subprocess.run(
+        val_cmd,
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_val.returncode == 0, f"wheel validate failed: {proc_val.stdout}\n{proc_val.stderr}"
+    val_data = json.loads(proc_val.stdout)
+    assert val_data["valid"] is True
+
+    # 3. Update artifact via wheel
+    import hashlib
+    h0 = hashlib.sha256(task_file.read_bytes()).hexdigest()
+    update_payload = {
+        "target": "tasks/TASK-100.md",
+        "expected_sha256": h0,
+        "patch": {"set": [{"path": "/kind", "value": "refactor"}]},
+    }
+    up_cmd = [
+        isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "update",
+        "--kind", "task",
+        "--change", str(repo_dir),
+        "--input", "-",
+        "--json",
+    ]
+    proc_up = subprocess.run(
+        up_cmd,
+        input=json.dumps(update_payload),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_up.returncode == 0, f"wheel update failed: {proc_up.stdout}\n{proc_up.stderr}"
+    up_data = json.loads(proc_up.stdout)
+    assert up_data["changed"] is True
+
+    # 4. Validate artifact after update
+    proc_val2 = subprocess.run(
+        val_cmd,
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_val2.returncode == 0
+    val_data2 = json.loads(proc_val2.stdout)
+    assert val_data2["valid"] is True
+
+
+def test_isolated_wheel_artifact_missing_and_tampered_envelope(isolated_wheel_venv, tmp_path):
+    clean_workdir = tmp_path / "clean_tamper"
+    clean_workdir.mkdir()
+    clean_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    repo_dir = clean_workdir / "repo"
+    init_res = subprocess.run(
+        [isolated_wheel_venv, "-m", "deltafuse", "init", str(repo_dir)],
+        capture_output=True, text=True, cwd=str(clean_workdir), env=clean_env,
+    )
+    assert init_res.returncode == 0
+
+    chg_dir = repo_dir / "docs" / "changes" / "CHG-200"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-200\nstatus: active\n", encoding="utf-8")
+    (repo_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "slices" / "SLICE-01.md").write_text(
+        "---\nid: SLICE-01\nchange: CHG-200\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (repo_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+    # Case 1: Malformed JSON envelope input
+    proc_bad_json = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+            "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+        ],
+        input="{not valid json",
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_bad_json.returncode != 0
+
+    # Case 2: Missing required identity field in create envelope
+    proc_missing_id = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+            "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+        ],
+        input=json.dumps({"semantic_payload": {"title": "No ID"}}),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_missing_id.returncode == 2
+
+    # Case 3: Create valid task first
+    valid_payload = {
+        "identity": "TASK-200",
+        "semantic_payload": {
+            "title": "Wheel Task 200",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "# TASK-200: Wheel Task 200\n\nBody content.",
+    }
+    proc_cr = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+            "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+        ],
+        input=json.dumps(valid_payload),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_cr.returncode == 0
+
+    # Case 4: Tampered expected_sha256 in update envelope
+    tampered_update_payload = {
+        "target": "tasks/TASK-200.md",
+        "expected_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "patch": {"set": [{"path": "/kind", "value": "refactor"}]},
+    }
+    proc_tampered_hash = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "update",
+            "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+        ],
+        input=json.dumps(tampered_update_payload),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_tampered_hash.returncode == 4
+
+    # Case 5: Core-owned status mutation rejected in update
+    import hashlib
+    task_file = repo_dir / "tasks" / "TASK-200.md"
+    current_hash = hashlib.sha256(task_file.read_bytes()).hexdigest()
+    core_field_payload = {
+        "target": "tasks/TASK-200.md",
+        "expected_sha256": current_hash,
+        "patch": {"set": [{"path": "/status", "value": "verified"}]},
+    }
+    proc_core_field = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "update",
+            "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+        ],
+        input=json.dumps(core_field_payload),
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert proc_core_field.returncode == 3
