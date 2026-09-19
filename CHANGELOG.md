@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Schema-driven Artifact Writer: `deltafuse artifact describe|create|update|validate|update-index` CLI subcommands and typed Python `ArtifactService` for schema-valid Change artifact creation and atomic JSON Pointer updates.
+- Bounded artifact reader (`strict_read_artifact`), frontmatter/YAML codec with explicit formatting canonicalization opt-in (`canonicalize_metadata`), product mutation locking, durable transaction receipts, and authority policy enforcement.
+- Small-model paired evaluation protocol (`evaluate_artifact_writer.py`) and evaluation corpus (`tests/fixtures/artifact_writer_eval/eval_corpus.json`).
+
 ## [3.1.0] - 2026-09-16
 
 ### Changed
