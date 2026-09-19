@@ -101,3 +101,60 @@ def test_security_unauthorized_context_denied(tmp_path: Path, repo_root: Path):
                 "title": "Forged evidence",
             },
         )
+
+
+def test_aw21_reproduce_security_failures(tmp_path: Path):
+    """AW-21 Red: Reproduce outside-Change write, missing-context write, and stale-envelope write."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".deltafuse").mkdir()
+    change1_dir = repo_root / "docs" / "changes" / "CHG-001"
+    change1_dir.mkdir(parents=True)
+    outside_file = tmp_path / "outside_target.md"
+
+    auth = create_authorization_context(
+        actor="worker",
+        work_item="CHG-001",
+        product_root=repo_root,
+        change_id="CHG-001",
+        stage="implement",
+    )
+    service = ArtifactService(product_root=change1_dir, auth_context=auth)
+
+    # 1. Outside-Change write attempt with absolute path outside product/change root
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError), match="outside|escapes|denied|traversal"):
+        service.create(
+            kind="task",
+            identity=str(outside_file),
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+            body="evil",
+        )
+    assert not outside_file.exists()
+
+    # 2. Missing-context write attempt
+    service_no_auth = ArtifactService(product_root=change1_dir, auth_context=None)
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError)):
+        service_no_auth.create(
+            kind="task",
+            identity="TASK-100",
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+        )
+    assert not (change1_dir / "tasks" / "TASK-100.md").exists()
+
+    # 3. Stale-envelope / halted stage write attempt
+    auth_halted = create_authorization_context(
+        actor="worker",
+        work_item="CHG-001",
+        product_root=repo_root,
+        change_id="CHG-001",
+        stage="halted",
+    )
+    service_halted = ArtifactService(product_root=change1_dir, auth_context=auth_halted)
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError), match="halted|stage|policy_denied|unauthorized"):
+        service_halted.create(
+            kind="task",
+            identity="TASK-101",
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+        )
+    assert not (change1_dir / "tasks" / "TASK-101.md").exists()
+

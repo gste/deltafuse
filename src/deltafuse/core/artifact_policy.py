@@ -184,11 +184,40 @@ def validate_artifact_policy(
     if auth_ctx is None:
         raise ArtifactPolicyError("Null authorization context", code="null_authorization_context")
 
+    stage = (auth_ctx.stage or "").lower()
+    if stage in {"halted", "accepted", "converged", "archived"}:
+        raise ArtifactPolicyError(
+            f"Worker mutation denied for stage '{auth_ctx.stage}'",
+            code="stage_halted" if stage == "halted" else "unauthorized_stage",
+            path=str(target_path),
+        )
+
     if auth_ctx.actor == "worker":
         if kind in _CORE_ONLY_KINDS:
             raise ArtifactPolicyError(
                 f"Worker cannot write Core-only kind '{kind}'",
                 code="unauthorized_kind",
+                path=str(target_path),
+            )
+
+    resolved_target = Path(target_path).resolve()
+    try:
+        resolved_target.relative_to(auth_ctx.product_root)
+    except ValueError:
+        raise ArtifactPolicyError(
+            f"Target path '{target_path}' escapes product root '{auth_ctx.product_root}'",
+            code="path_traversal_denied",
+            path=str(target_path),
+        )
+
+    if auth_ctx.change_id and "docs/changes/" in resolved_target.as_posix():
+        posix_str = resolved_target.as_posix()
+        expected_prefix = (auth_ctx.product_root / "docs" / "changes" / auth_ctx.change_id).as_posix()
+        if not posix_str.startswith(expected_prefix) and auth_ctx.product_root.name != auth_ctx.change_id:
+            raise ArtifactPolicyError(
+                f"Target path '{target_path}' outside Change boundary '{auth_ctx.change_id}'",
+                code="change_boundary_violation",
+                path=str(target_path),
             )
 
     return PolicyOutcome(authorized=True, reason="Authorized")

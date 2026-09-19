@@ -211,7 +211,13 @@ def validate_expected_hash(target_path: Path, expected_sha256: str) -> None:
 
 def revalidate_authority(auth_context: Any, current_context_fn: Callable[[], Any]) -> None:
     """Re-verify authority context fingerprint and attributes prior to commit under lock."""
+    if auth_context is None:
+        raise ArtifactLockError("Null authorization context", code="null_authorization_context")
     fresh_ctx = current_context_fn()
+    if fresh_ctx is None:
+        raise ArtifactLockError("Authority context was revoked or invalidated prior to commit", code="authority_revoked")
+    if (getattr(fresh_ctx, "stage", "") or "").lower() in {"halted", "accepted", "converged", "archived"}:
+        raise ArtifactLockError("Authority context stage is halted or inactive", code="authority_revoked")
     if (
         fresh_ctx.actor != auth_context.actor
         or fresh_ctx.work_item != auth_context.work_item

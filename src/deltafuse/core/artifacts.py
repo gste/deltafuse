@@ -23,8 +23,11 @@ from deltafuse.core.artifact_lock import (
 )
 from deltafuse.core.artifact_patch import ArtifactPatchError, apply_artifact_patch
 from deltafuse.core.artifact_policy import (
+    _INTERNAL_CORE_SECRET,
     ArtifactPolicyError,
     AuthorizationContext,
+    create_authorization_context,
+    resolve_artifact_path,
     validate_artifact_policy,
 )
 from deltafuse.core.artifact_reader import strict_read_artifact
@@ -58,29 +61,63 @@ class ArtifactService:
         self.product_root = Path(product_root).resolve()
         self.auth_context = auth_context
         self.registry = registry or ArtifactRegistry()
-        self.transaction_mgr = TransactionManager(self.product_root)
+        self._transaction_mgr: TransactionManager | None = None
+
+    @property
+    def transaction_mgr(self) -> TransactionManager:
+        if self._transaction_mgr is None:
+            self._transaction_mgr = TransactionManager(self.product_root)
+        return self._transaction_mgr
 
     def _resolve_target_path(self, kind: str, identity_or_target: str | Path) -> Path:
+        raw_str = str(identity_or_target).replace("\\", "/")
         p = Path(identity_or_target)
         if p.is_absolute():
-            return p.resolve()
-
-        rel_str = str(identity_or_target).replace("\\", "/")
-        if "/" in rel_str or rel_str.endswith(".md") or rel_str.endswith(".yaml"):
-            return (self.product_root / rel_str).resolve()
-
-        if kind == "task":
-            return (self.product_root / "tasks" / f"{identity_or_target}.md").resolve()
+            resolved = p.resolve()
+            try:
+                resolved.relative_to(self.product_root)
+            except ValueError:
+                raise ArtifactPolicyError(
+                    f"Target absolute path '{identity_or_target}' escapes product root '{self.product_root}'",
+                    code="path_traversal_denied",
+                    path=str(identity_or_target),
+                )
+            target_path = resolved
+        elif "/" in raw_str or raw_str.endswith(".md") or raw_str.endswith(".yaml"):
+            target_path = (self.product_root / raw_str).resolve()
+        elif kind == "task":
+            target_path = (self.product_root / "tasks" / f"{identity_or_target}.md").resolve()
         elif kind == "slice":
-            return (self.product_root / "slices" / f"{identity_or_target}.md").resolve()
+            target_path = (self.product_root / "slices" / f"{identity_or_target}.md").resolve()
         elif kind == "spec-delta":
-            return (self.product_root / "spec-delta.md").resolve()
+            target_path = (self.product_root / "spec-delta.md").resolve()
         elif kind == "routing":
-            return (self.product_root / "routing.yaml").resolve()
+            target_path = (self.product_root / "routing.yaml").resolve()
         elif kind == "change":
-            return (self.product_root / "change.yaml").resolve()
+            target_path = (self.product_root / "change.yaml").resolve()
         else:
-            return (self.product_root / f"{identity_or_target}.md").resolve()
+            target_path = (self.product_root / f"{identity_or_target}.md").resolve()
+
+        try:
+            rel = target_path.relative_to(self.product_root)
+            resolve_artifact_path(self.product_root, rel.as_posix())
+        except ValueError:
+            raise ArtifactPolicyError(
+                f"Target path '{identity_or_target}' escapes product root",
+                code="path_traversal_denied",
+                path=str(identity_or_target),
+            )
+
+        if self.auth_context and self.auth_context.change_id and "docs/changes/" in target_path.as_posix():
+            expected_prefix = (self.product_root / "docs" / "changes" / self.auth_context.change_id).as_posix()
+            if not target_path.as_posix().startswith(expected_prefix) and self.product_root.name != self.auth_context.change_id:
+                raise ArtifactPolicyError(
+                    f"Target path '{identity_or_target}' outside Change boundary '{self.auth_context.change_id}'",
+                    code="change_boundary_violation",
+                    path=str(identity_or_target),
+                )
+
+        return target_path
 
     def create(
         self,
@@ -106,10 +143,9 @@ class ArtifactService:
 
         target_path = self._resolve_target_path(kind, identity)
 
-        if self.auth_context:
-            outcome = validate_artifact_policy(self.auth_context, kind=kind, operation="create", target_path=target_path)
-            if not outcome.authorized:
-                raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
+        outcome = validate_artifact_policy(self.auth_context, kind=kind, operation="create", target_path=target_path)
+        if not outcome.authorized:
+            raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
 
         descriptor = self.registry.get_descriptor(kind)
         allowed_fields = descriptor.get("creatable_semantic_fields") or descriptor.get("allowed_semantic_fields") or []
@@ -173,8 +209,7 @@ class ArtifactService:
         raw_req_bytes = json.dumps({"kind": kind, "identity": identity, "payload": semantic_payload}, sort_keys=True).encode("utf-8")
 
         with ProductMutationLock(self.product_root):
-            if self.auth_context:
-                revalidate_authority(self.auth_context, lambda: self.auth_context)
+            revalidate_authority(self.auth_context, lambda: self.auth_context)
 
             tx = self.transaction_mgr.prepare_transaction(
                 request_id=req_id,
@@ -214,10 +249,9 @@ class ArtifactService:
                 path=str(target_path),
             )
 
-        if self.auth_context:
-            outcome = validate_artifact_policy(self.auth_context, kind=kind, operation="update", target_path=target_path)
-            if not outcome.authorized:
-                raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
+        outcome = validate_artifact_policy(self.auth_context, kind=kind, operation="update", target_path=target_path)
+        if not outcome.authorized:
+            raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
 
         existing_bytes = target_path.read_bytes()
         validate_expected_hash(target_path, expected_sha256)
@@ -293,8 +327,7 @@ class ArtifactService:
 
         with ProductMutationLock(self.product_root):
             validate_expected_hash(target_path, expected_sha256)
-            if self.auth_context:
-                revalidate_authority(self.auth_context, lambda: self.auth_context)
+            revalidate_authority(self.auth_context, lambda: self.auth_context)
 
             tx = self.transaction_mgr.prepare_transaction(
                 request_id=req_id,

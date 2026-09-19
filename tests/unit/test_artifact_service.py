@@ -87,9 +87,9 @@ def test_validate_is_strictly_read_only(product_root: Path, auth_context: Author
     res = service.validate(kind="task", target="tasks/TASK-002.md")
 
     assert res["valid"] is True
-    # Zero journal or receipt files created
-    assert not journal_dir.exists() or len(list(journal_dir.glob("*"))) == 0
-    assert not receipts_dir.exists() or len(list(receipts_dir.glob("*"))) == 0
+    # Zero journal or receipt directories created
+    assert not journal_dir.exists()
+    assert not receipts_dir.exists()
 
 
 def test_create_task_success(product_root: Path, auth_context: AuthorizationContext):

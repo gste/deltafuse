@@ -38,6 +38,8 @@ class TransactionManager:
         self.product_root = Path(product_root)
         self.journal_dir = self.product_root / ".deltafuse" / "journal"
         self.receipts_dir = self.product_root / ".deltafuse" / "receipts"
+
+    def _ensure_dirs(self) -> None:
         self.journal_dir.mkdir(parents=True, exist_ok=True)
         self.receipts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +60,7 @@ class TransactionManager:
         normalized_payload_hash: str | None = None,
         staged_path: Path | None = None,
     ) -> dict[str, Any]:
+        self._ensure_dirs()
         raw_request_hash = hashlib.sha256(raw_request_bytes).hexdigest()
         norm_hash = normalized_payload_hash or raw_request_hash
 
