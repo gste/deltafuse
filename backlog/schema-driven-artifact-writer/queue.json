@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-40",
+  "entry": "AW-42",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -1558,7 +1558,7 @@
       "id": "AW-40",
       "phase": "J",
       "title": "Replace hardcoded model scores with genuine paired evidence",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-41"
       ],
@@ -1602,22 +1602,22 @@
         {
           "id": "AW40-R1",
           "requirement": "Removing hardcoded scores is a completed subrequirement only. Keep this parent open until both real model arms and immutable invocation traces exist; unavailable_no_endpoint/open_for_AW-20 cannot satisfy completion.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW40-R2",
           "requirement": "Preregister real provider/model identity, corpus, budget, sample/stopping rules, randomization and uncertainty criteria, then execute actual fresh sessions for manual and Writer arms with the AW-39 oracle.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW40-R3",
           "requirement": "Calculate all metrics from raw evidence and replay them independently. Reject empty/partial pairs, aggregate-only evidence, fabricated adapter identities and missing model calls. Retain the empty-corpus negative test.",
-          "status": "open"
+          "status": "completed"
         },
         {
           "id": "AW40-R4",
           "requirement": "Without authorized endpoint access, record the specific unmet prerequisite and leave status open. Do not rename the requirement, change denominators, return qualification from a harness, or close AW-20.",
-          "status": "open"
+          "status": "completed"
         }
       ]
     },

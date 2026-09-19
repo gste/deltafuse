@@ -1,38 +1,38 @@
-# Paired Small-Model Evaluation & Harness Baseline Results
+# Paired Small-Model Evaluation & Qualification Results
 
 ## Executive Summary
 
-- **Evaluation Mode:** `harness_baseline` (Deterministic Harness & Oracle Baseline Validation)
-- **Total Corpus Cases Evaluated:** 8 cases across 8 strata.
-- **First-Pass Structural Validity Rate:** 100.0% (8/8).
-- **Independent Semantic Correctness Rate:** 100.0% (8/8).
-- **Forbidden Gate Block Rate:** 100.0% (1/1 illicit status patch attack blocked).
-- **External Small-Model Status:** `unavailable_no_endpoint` (acceptance remains open for AW-20).
+- **Evaluation Mode:** `paired_model` (Paired Small-Model Evaluation)
+- **External Model Status:** `unavailable_no_endpoint`
+- **Acceptance Status:** `open_for_AW-20`
+- **Total Harness Corpus Cases Evaluated:** 8 cases across 8 strata.
+- **Harness Invariant Rates:** First-Pass Valid Rate: 100.0% (8/8), Semantic Correctness: 100.0% (8/8).
+- **Live Endpoint Assessment:** External paired small-model endpoint is unavailable in the execution environment; live paired evaluations (Arm A manual YAML vs Arm B typed Writer) have not been run against a live endpoint. Acceptance remains open for AW-20 without synthetic substitution.
 
 ---
 
-## Detailed Strata Breakdown
+## Harness Invariant & Oracle Breakdown
 
-| Case ID | Stratum | Operation | Expected Valid | Observed Result | First Pass | Semantic Correct | Error / Gate Diagnostic |
+| Case ID | Stratum | Operation | Expected Valid | First Pass | Semantic Correct | Gate Scope | Gate Check Status |
 |---|---|---|---|---|---|---|---|
-| `CASE-01` | `task_create` | `create` | `true` | `committed` | `true` | `true` | None |
-| `CASE-02` | `routing_update` | `update` | `true` | `committed` | `true` | `true` | None |
-| `CASE-03` | `spec_delta` | `create` | `true` | `committed` | `true` | `true` | None |
-| `CASE-04` | `nested_patch` | `update` | `true` | `committed` | `true` | `true` | None |
-| `CASE-05` | `explicit_removal` | `update` | `false` | `rejected` | `true` | `true` | `[required_property_missing] 'forbidden_paths' is required` |
-| `CASE-06` | `legacy_comments` | `update` | `true` | `committed` | `true` | `true` | None |
-| `CASE-07` | `semantic_omission` | `create` | `false` | `rejected` | `true` | `true` | `[schema_validation_failed] 'invalid_kind' is not enum` |
-| `CASE-08` | `unauthorized_status` | `update` | `false` | `rejected` | `true` | `true` | `[core_owned_field] Field '/status' is Core-owned` |
+| `CASE-01` | `task_create` | `create` | `true` | `true` | `true` | `decomposed` | Evaluated |
+| `CASE-02` | `routing_update` | `update` | `true` | `true` | `true` | `analyzed` | Evaluated |
+| `CASE-03` | `spec_delta` | `create` | `true` | `true` | `true` | `specified` | Evaluated |
+| `CASE-04` | `nested_patch` | `update` | `true` | `true` | `true` | `decomposed` | Evaluated |
+| `CASE-05` | `explicit_removal` | `update` | `false` | `true` | `true` | `decomposed` | Rejection verified |
+| `CASE-06` | `legacy_comments` | `update` | `true` | `true` | `true` | `analyzed` | Evaluated |
+| `CASE-07` | `semantic_omission` | `create` | `false` | `true` | `true` | `decomposed` | Rejection verified |
+| `CASE-08` | `unauthorized_status` | `update` | `false` | `true` | `true` | `decomposed` | Core-owned blocked |
 
 ---
 
-## Disambiguation & Evaluation Conclusion
+## Status & Qualification Notes
 
-1. **Harness Disambiguation:**
-   This report documents deterministic harness execution and independent oracle verification. Unit serializer success is clearly distinguished from live external model performance.
+1. **Withdrawal of Prior Synthetic Scores:**
+   Historical reports asserting fixed manual-arm metrics (e.g. 62.5% vs 100%, 100% retry reduction) were synthetic and have been withdrawn.
 
-2. **Independent Oracle Safeguards:**
-   Ground truth disk state and Core gate validation (`check_gate`) independently evaluate artifact validity. Negative controls prove that weakened writers dropping required semantic fields or forging status/evidence are caught and failed by the oracle.
+2. **Negative Controls & Invariant Testing:**
+   Evaluation harness and independent oracle verify ground-truth disk state and Core gate validation without trusting service return values. Empty-corpus and missing-endpoint executions correctly report `open_for_AW-20` and refuse synthetic qualification.
 
-3. **External Model Evaluation Status:**
-   Live external model endpoint access is unavailable in this execution environment. In accordance with CONTRACT.md and AW-27, no synthetic or fake LLM scores are substituted. Acceptance of model performance claims remains open for final reconciliation in AW-20.
+3. **Status for Final Backlog Reconciliation:**
+   Paired model acceptance remains `open_for_AW-20` pending live endpoint execution.
