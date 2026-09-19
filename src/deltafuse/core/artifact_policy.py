@@ -64,6 +64,95 @@ def _get_lock_hash(product_root: Path) -> str:
     return "sha256:" + hashlib.sha256(lock.read_bytes()).hexdigest()
 
 
+_VALID_CHANGE_STATUSES = {
+    "normalized",
+    "analyzing",
+    "blocked-on-decision",
+    "analyzed",
+    "specification-proposed",
+    "specified",
+    "decomposed",
+    "declaring",
+    "declared",
+    "implementing",
+    "implemented",
+    "verifying",
+    "converged",
+    "archived",
+    "rejected",
+    "duplicate",
+    "superseded",
+    "not-reproduced",
+}
+
+_INACTIVE_STAGES = {
+    "archived",
+    "halted",
+    "accepted",
+    "converged",
+    "rejected",
+    "duplicate",
+    "superseded",
+    "not-reproduced",
+}
+
+_VALID_ACTIVE_STAGES = {
+    "normalized",
+    "analyzing",
+    "blocked-on-decision",
+    "analyzed",
+    "specification-proposed",
+    "specified",
+    "decomposed",
+    "declaring",
+    "declared",
+    "implementing",
+    "implemented",
+    "verifying",
+    "active",
+    "implement",
+}
+
+
+def resolve_change_stage(product_root: Path | str, change_id: str | None) -> str:
+    """Resolve live lifecycle stage/status of Change package from disk."""
+    if not change_id:
+        return "missing_change_authority"
+    root = Path(product_root).resolve()
+
+    possible_dirs = [
+        root / "docs" / "changes" / change_id,
+        root / "docs" / "archive" / "changes" / change_id,
+        root,
+    ]
+
+    for cdir in possible_dirs:
+        yaml_file = cdir / "change.yaml"
+        if yaml_file.is_file():
+            try:
+                data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    file_cid = data.get("id") or data.get("change")
+                    if file_cid and file_cid != change_id:
+                        # Mismatched Change ID: e.g. CHG-999 inside CHG-905
+                        return "missing_change_authority"
+                    status = data.get("status")
+                    if status and isinstance(status, str):
+                        norm_status = status.strip().lower()
+                        if norm_status in _INACTIVE_STAGES:
+                            return norm_status
+                        if norm_status in _VALID_ACTIVE_STAGES:
+                            return norm_status
+                        return "invalid_change_stage"
+            except Exception:
+                return "missing_change_authority"
+            return "missing_change_authority"
+        if "archive" in cdir.parts and cdir.is_dir():
+            return "archived"
+
+    return "missing_change_authority"
+
+
 def create_authorization_context(
     *,
     actor: str = "worker",
@@ -71,7 +160,7 @@ def create_authorization_context(
     product_root: Path | str,
     change_id: str | None = None,
     task_id: str | None = None,
-    stage: str = "implement",
+    stage: str | None = None,
     schema_hash: str = "v3",
     internal_auth_token: str | None = None,
 ) -> AuthorizationContext:
@@ -92,7 +181,21 @@ def create_authorization_context(
     root = Path(product_root).resolve()
     lock_hash = _get_lock_hash(root)
 
-    material = f"{actor}|{work_item}|{root.as_posix()}|{change_id or ''}|{task_id or ''}|{stage}|{schema_hash}|{lock_hash}"
+    disk_stage = resolve_change_stage(root, change_id)
+    if disk_stage in _INACTIVE_STAGES:
+        effective_stage = disk_stage
+    elif disk_stage in ("missing_change_authority", "invalid_change_stage"):
+        effective_stage = disk_stage
+    elif stage and stage.strip().lower() in _INACTIVE_STAGES:
+        effective_stage = stage.strip().lower()
+    elif stage and stage.strip().lower() not in _VALID_ACTIVE_STAGES:
+        effective_stage = "invalid_change_stage"
+    elif stage:
+        effective_stage = stage.strip().lower()
+    else:
+        effective_stage = disk_stage
+
+    material = f"{actor}|{work_item}|{root.as_posix()}|{change_id or ''}|{task_id or ''}|{effective_stage}|{schema_hash}|{lock_hash}"
     fingerprint = "sha256:" + hashlib.sha256(material.encode("utf-8")).hexdigest()
 
     return AuthorizationContext(
@@ -101,7 +204,7 @@ def create_authorization_context(
         product_root=root,
         change_id=change_id,
         task_id=task_id,
-        stage=stage,
+        stage=effective_stage,
         schema_hash=schema_hash,
         lock_hash=lock_hash,
         fingerprint=fingerprint,
@@ -185,14 +288,38 @@ def validate_artifact_policy(
         raise ArtifactPolicyError("Null authorization context", code="null_authorization_context")
 
     stage = (auth_ctx.stage or "").lower()
-    if stage in {"halted", "accepted", "converged", "archived"}:
+    disk_stage = resolve_change_stage(auth_ctx.product_root, auth_ctx.change_id)
+    if disk_stage in _INACTIVE_STAGES or disk_stage in ("missing_change_authority", "invalid_change_stage"):
+        effective_stage = disk_stage
+    elif stage in _INACTIVE_STAGES or stage in ("missing_change_authority", "invalid_change_stage"):
+        effective_stage = stage
+    elif disk_stage in _VALID_ACTIVE_STAGES:
+        effective_stage = disk_stage
+    elif stage in _VALID_ACTIVE_STAGES:
+        effective_stage = stage
+    else:
+        effective_stage = "invalid_change_stage"
+
+    if effective_stage in _INACTIVE_STAGES:
         raise ArtifactPolicyError(
-            f"Worker mutation denied for stage '{auth_ctx.stage}'",
-            code="stage_halted" if stage == "halted" else "unauthorized_stage",
+            f"Worker mutation denied for stage '{effective_stage}'",
+            code="stage_halted" if effective_stage == "halted" else "unauthorized_stage",
             path=str(target_path),
         )
 
     if auth_ctx.actor == "worker":
+        if effective_stage == "missing_change_authority":
+            raise ArtifactPolicyError(
+                f"Worker mutation denied: missing, unreadable, or malformed change.yaml for Change '{auth_ctx.change_id or 'unknown'}'",
+                code="missing_change_authority",
+                path=str(target_path),
+            )
+        if effective_stage == "invalid_change_stage" or effective_stage not in _VALID_ACTIVE_STAGES:
+            raise ArtifactPolicyError(
+                f"Worker mutation denied for invalid or unauthorized stage '{effective_stage}'",
+                code="unauthorized_stage",
+                path=str(target_path),
+            )
         if kind in _CORE_ONLY_KINDS:
             raise ArtifactPolicyError(
                 f"Worker cannot write Core-only kind '{kind}'",

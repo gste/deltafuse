@@ -58,11 +58,24 @@ def _is_pid_alive(pid: int) -> bool:
             return False
 
 
+def resolve_product_root(path: Path | str) -> Path:
+    from deltafuse.core.fsm import find_repo_root
+    p = Path(path).resolve()
+    if p.is_file():
+        p = p.parent
+    if (p / ".deltafuse").is_dir():
+        return p
+    root = find_repo_root(p)
+    if not (root / ".deltafuse").is_dir() and not (root / "docs").is_dir() and root == p.parent:
+        return p
+    return root
+
+
 class ProductMutationLock:
     """Shared product-level mutation lock ensuring single-writer concurrency."""
 
     def __init__(self, product_root: Path, timeout: float = 5.0):
-        self.product_root = Path(product_root)
+        self.product_root = resolve_product_root(product_root)
         self.timeout = timeout
         self.lock_dir = self.product_root / ".deltafuse" / "locks"
         self.lock_file = self.lock_dir / "mutation.lock"
@@ -214,16 +227,38 @@ def revalidate_authority(auth_context: Any, current_context_fn: Callable[[], Any
     if auth_context is None:
         raise ArtifactLockError("Null authorization context", code="null_authorization_context")
     fresh_ctx = current_context_fn()
-    if fresh_ctx is None:
-        raise ArtifactLockError("Authority context was revoked or invalidated prior to commit", code="authority_revoked")
-    if (getattr(fresh_ctx, "stage", "") or "").lower() in {"halted", "accepted", "converged", "archived"}:
-        raise ArtifactLockError("Authority context stage is halted or inactive", code="authority_revoked")
-    if (
-        fresh_ctx.actor != auth_context.actor
-        or fresh_ctx.work_item != auth_context.work_item
-        or fresh_ctx.stage != auth_context.stage
-        or fresh_ctx.fingerprint != auth_context.fingerprint
-    ):
+    inactive_stages = {
+        "halted",
+        "accepted",
+        "converged",
+        "archived",
+        "rejected",
+        "duplicate",
+        "superseded",
+        "not-reproduced",
+        "missing_change_authority",
+        "invalid_change_stage",
+    }
+    stage_val = (getattr(fresh_ctx, "stage", "") or "").lower()
+    if stage_val in inactive_stages:
+        raise ArtifactLockError(f"Authority context stage '{stage_val}' is invalid, revoked or inactive", code="authority_revoked")
+
+    actor1 = (getattr(auth_context, "actor", "") or "").lower()
+    actor2 = (getattr(fresh_ctx, "actor", "") or "").lower()
+    work1 = str(getattr(auth_context, "work_item", "") or "").lower()
+    work2 = str(getattr(fresh_ctx, "work_item", "") or "").lower()
+    stage1 = (getattr(auth_context, "stage", "") or "").lower()
+    stage2 = (getattr(fresh_ctx, "stage", "") or "").lower()
+
+    if actor1 != actor2 or work1 != work2 or stage1 != stage2:
+        raise ArtifactLockError(
+            "Authority context was revoked or invalidated prior to commit",
+            code="authority_revoked",
+        )
+
+    fp1 = str(getattr(auth_context, "fingerprint", ""))
+    fp2 = str(getattr(fresh_ctx, "fingerprint", ""))
+    if fp1 != fp2:
         raise ArtifactLockError(
             "Authority context was revoked or invalidated prior to commit",
             code="authority_revoked",

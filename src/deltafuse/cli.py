@@ -149,6 +149,28 @@ def export_tool_schemas(kind: str | None = None, operation: str | None = None) -
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Bound installation/registry failures at the public Artifact CLI boundary."""
+    from deltafuse.core.artifact_registry import ArtifactRegistryError
+    from deltafuse.core.assets import AssetError
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    try:
+        return _main(raw)
+    except (ArtifactRegistryError, AssetError) as ex:
+        if not raw or raw[0] != "artifact":
+            raise
+        message = str(ex)[:512]
+        if "--json" in raw:
+            print(json.dumps({"ok": False, "error": {
+                "code": "asset_resolution_failed", "stage": "schema",
+                "path": "/", "message": message,
+                "hint": "Reinstall a verified framework bundle; in a source checkout run scripts/sync_assets.py.",
+            }}, ensure_ascii=False, indent=2))
+        print(f"Artifact assets unavailable: {message}", file=sys.stderr)
+        return 5
+
+
+def _main(argv: list[str] | None = None) -> int:
     try:
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -940,7 +962,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "artifact":
         from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
         from deltafuse.core.artifact_policy import ArtifactPolicyError, create_authorization_context
-        from deltafuse.core.artifact_lock import ArtifactLockError
+        from deltafuse.core.artifact_lock import ArtifactLockError, resolve_product_root
         from deltafuse.core.artifact_transactions import ArtifactTransactionError
         from deltafuse.core.artifact_patch import ArtifactPatchError
 
@@ -1052,8 +1074,9 @@ def main(argv: list[str] | None = None) -> int:
 
             change_dir = Path(args.change).resolve()
             cid = None
+            expected_cid = None
             if change_dir.name.startswith("CHG-"):
-                cid = change_dir.name
+                expected_cid = change_dir.name
             elif (change_dir / "change.yaml").is_file():
                 try:
                     from deltafuse.core.artifact_reader import strict_read_artifact
@@ -1062,16 +1085,39 @@ def main(argv: list[str] | None = None) -> int:
                     cid = pres.metadata.get("id") or pres.metadata.get("change")
                 except Exception:
                     pass
-            if not cid and ((change_dir / ".deltafuse").is_dir() or (change_dir / "tasks").is_dir() or (change_dir / "slices").is_dir()):
-                cid = "CHG-001"
 
+            if not cid:
+                if envelope.get("change"):
+                    cid = envelope.get("change")
+                elif (change_dir / "docs" / "changes").is_dir():
+                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
+                    if len(chg_subdirs) == 1:
+                        cid = chg_subdirs[0]
+                elif expected_cid:
+                    cid = expected_cid
+
+            if (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    actual_file_cid = pres.metadata.get("id") or pres.metadata.get("change")
+                    if expected_cid and actual_file_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                except Exception:
+                    pass
+
+            root = resolve_product_root(change_dir)
             auth = create_authorization_context(
                 actor="worker",
                 work_item="CLI",
-                product_root=change_dir,
+                product_root=root,
                 change_id=cid,
             )
-            service = ArtifactService(product_root=change_dir, auth_context=auth, registry=reg)
+            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
 
             try:
                 receipt = service.create(
@@ -1095,7 +1141,7 @@ def main(argv: list[str] | None = None) -> int:
                 return ret
             except ArtifactServiceError as se:
                 code = se.code
-                if code in ("core_owned_field", "policy_denied", "missing_core_context"):
+                if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority", "stage_halted", "unauthorized_stage"):
                     ret = 3
                 elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
                     ret = 4
@@ -1236,13 +1282,51 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
 
             change_dir = Path(args.change).resolve()
+            cid = None
+            expected_cid = None
+            if change_dir.name.startswith("CHG-"):
+                expected_cid = change_dir.name
+            elif (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    cid = pres.metadata.get("id") or pres.metadata.get("change")
+                except Exception:
+                    pass
+
+            if not cid:
+                if envelope.get("change"):
+                    cid = envelope.get("change")
+                elif (change_dir / "docs" / "changes").is_dir():
+                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
+                    if len(chg_subdirs) == 1:
+                        cid = chg_subdirs[0]
+                elif expected_cid:
+                    cid = expected_cid
+
+            if (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    actual_file_cid = pres.metadata.get("id") or pres.metadata.get("change")
+                    if expected_cid and actual_file_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                except Exception:
+                    pass
+
+            root = resolve_product_root(change_dir)
             auth = create_authorization_context(
                 actor="worker",
                 work_item="CLI",
-                product_root=change_dir,
-                change_id=change_dir.name if change_dir.name.startswith("CHG-") else None,
+                product_root=root,
+                change_id=cid,
             )
-            service = ArtifactService(product_root=change_dir, auth_context=auth, registry=reg)
+            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
 
             try:
                 receipt = service.update(
@@ -1307,7 +1391,8 @@ def main(argv: list[str] | None = None) -> int:
 
         elif args.artifact_cmd == "validate":
             change_dir = Path(args.change).resolve()
-            service = ArtifactService(product_root=change_dir)
+            root = resolve_product_root(change_dir)
+            service = ArtifactService(product_root=root, change_dir=change_dir)
             result = service.validate(kind=args.kind, target=args.target)
 
             if args.json:

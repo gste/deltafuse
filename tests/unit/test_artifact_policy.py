@@ -63,6 +63,9 @@ def test_symlink_escaping_root_denied(tmp_path: Path):
 
 
 def test_worker_cannot_write_core_kinds(tmp_path: Path):
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-001"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
     ctx = create_authorization_context(
         actor="worker",
         work_item="CHG-001",
@@ -73,6 +76,7 @@ def test_worker_cannot_write_core_kinds(tmp_path: Path):
     target = tmp_path / "docs/changes/CHG-001/evidence/green/TASK-001.yaml"
     with pytest.raises(ArtifactPolicyError, match="Worker cannot write Core-only kind"):
         validate_artifact_policy(ctx, kind="evidence", operation="create", target_path=target)
+
 
 
 def test_internal_core_actor_authorization(tmp_path: Path):
@@ -109,3 +113,38 @@ def test_revalidate_authorization_context(tmp_path: Path):
         stage="implement",
     )
     assert revalidate_authorization_context(ctx) is True
+
+
+def test_aw37_mismatched_change_id_rejected(tmp_path: Path):
+    """AW37-R1: Reject a valid-YAML Change whose id differs from directory/owner (e.g. CHG-999 in CHG-905)."""
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-905"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-999\nstatus: implementing\n", encoding="utf-8")
+
+    ctx = create_authorization_context(
+        actor="worker",
+        work_item="CLI",
+        product_root=tmp_path,
+        change_id="CHG-905",
+    )
+    target = tmp_path / "docs" / "changes" / "CHG-905" / "tasks" / "TASK-001.md"
+    with pytest.raises(ArtifactPolicyError, match="missing, unreadable, or malformed change.yaml"):
+        validate_artifact_policy(ctx, kind="task", operation="create", target_path=target)
+
+
+def test_aw37_invalid_or_invented_stage_rejected(tmp_path: Path):
+    """AW37-R2: Reject unknown or invalid lifecycle states such as invented-stage."""
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-905"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-905\nstatus: invented-stage\n", encoding="utf-8")
+
+    ctx = create_authorization_context(
+        actor="worker",
+        work_item="CLI",
+        product_root=tmp_path,
+        change_id="CHG-905",
+    )
+    target = tmp_path / "docs" / "changes" / "CHG-905" / "tasks" / "TASK-001.md"
+    with pytest.raises(ArtifactPolicyError, match="Worker mutation denied for invalid or unauthorized stage"):
+        validate_artifact_policy(ctx, kind="task", operation="create", target_path=target)
+
