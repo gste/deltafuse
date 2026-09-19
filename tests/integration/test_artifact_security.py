@@ -12,6 +12,7 @@ from deltafuse.core.artifact_policy import (
     resolve_artifact_path,
     ArtifactPolicyError,
 )
+from deltafuse.core.artifact_lock import ArtifactLockError
 from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
 from deltafuse.core.assets import get_installed_lock_hash
 from deltafuse.core.installer import install
@@ -297,7 +298,20 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
     assert ret3 == 3
     assert not (chg905 / "tasks" / "TASK-001.md").exists()
 
-    # 4. Service-level mutation denial when change.yaml corrupted before commit
+    # 4. AW37-F1/F2: Status-only change.yaml (missing ID), null ID, empty ID, wrong type, alternate field
+    for invalid_yaml in [
+        "status: normalized\n",
+        "id: null\nstatus: normalized\n",
+        "id: ''\nstatus: normalized\n",
+        "id: 123\nstatus: normalized\n",
+        "change: CHG-905\nstatus: normalized\n",
+    ]:
+        (chg905 / "change.yaml").write_text(invalid_yaml, encoding="utf-8")
+        ret_f2 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+        assert ret_f2 == 3, f"Expected exit 3 for change.yaml:\n{invalid_yaml}"
+        assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 5. Service-level mutation denial when change.yaml corrupted before commit
     (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: implementing\n", encoding="utf-8")
     auth = create_authorization_context(actor="worker", work_item="CLI", product_root=repo, change_id="CHG-905")
     service = ArtifactService(product_root=repo, change_dir=chg905, auth_context=auth)
@@ -321,5 +335,25 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
         )
     assert not (chg905 / "tasks" / "TASK-001.md").exists()
 
-
-
+    # 6. Service-level mutation denial when change.yaml loses ID before commit (status-only)
+    (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: implementing\n", encoding="utf-8")
+    auth2 = create_authorization_context(actor="worker", work_item="CLI", product_root=repo, change_id="CHG-905")
+    service2 = ArtifactService(product_root=repo, change_dir=chg905, auth_context=auth2)
+    (chg905 / "change.yaml").write_text("status: normalized\n", encoding="utf-8")
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError, ArtifactLockError)):
+        service2.create(
+            kind="task",
+            identity="TASK-001",
+            semantic_payload={
+                "title": "Task 1",
+                "kind": "feature",
+                "slice": "SLICE-01",
+                "depends_on": [],
+                "requirement_delta": "none",
+                "spec_refs": ["docs/spec/core.md"],
+                "allowed_paths": ["src/app.py"],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 5},
+            },
+        )
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()

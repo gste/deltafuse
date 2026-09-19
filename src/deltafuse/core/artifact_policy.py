@@ -116,7 +116,7 @@ _VALID_ACTIVE_STAGES = {
 
 def resolve_change_stage(product_root: Path | str, change_id: str | None) -> str:
     """Resolve live lifecycle stage/status of Change package from disk."""
-    if not change_id:
+    if not change_id or not isinstance(change_id, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", change_id):
         return "missing_change_authority"
     root = Path(product_root).resolve()
 
@@ -131,22 +131,23 @@ def resolve_change_stage(product_root: Path | str, change_id: str | None) -> str
         if yaml_file.is_file():
             try:
                 data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    file_cid = data.get("id") or data.get("change")
-                    if file_cid and file_cid != change_id:
-                        # Mismatched Change ID: e.g. CHG-999 inside CHG-905
-                        return "missing_change_authority"
-                    status = data.get("status")
-                    if status and isinstance(status, str):
-                        norm_status = status.strip().lower()
-                        if norm_status in _INACTIVE_STAGES:
-                            return norm_status
-                        if norm_status in _VALID_ACTIVE_STAGES:
-                            return norm_status
-                        return "invalid_change_stage"
+                if not isinstance(data, dict):
+                    return "missing_change_authority"
+                file_cid = data.get("id")
+                if not isinstance(file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", file_cid) or file_cid != change_id:
+                    # Missing, null, empty, wrong type, or mismatched Change ID (no alternate-field fallback)
+                    return "missing_change_authority"
+                status = data.get("status")
+                if not isinstance(status, str):
+                    return "invalid_change_stage"
+                norm_status = status.strip().lower()
+                if norm_status in _INACTIVE_STAGES:
+                    return norm_status
+                if norm_status in _VALID_ACTIVE_STAGES:
+                    return norm_status
+                return "invalid_change_stage"
             except Exception:
                 return "missing_change_authority"
-            return "missing_change_authority"
         if "archive" in cdir.parts and cdir.is_dir():
             return "archived"
 

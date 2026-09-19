@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -1077,16 +1078,30 @@ def _main(argv: list[str] | None = None) -> int:
             expected_cid = None
             if change_dir.name.startswith("CHG-"):
                 expected_cid = change_dir.name
-            elif (change_dir / "change.yaml").is_file():
+
+            if (change_dir / "change.yaml").is_file():
                 try:
                     from deltafuse.core.artifact_reader import strict_read_artifact
                     has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
                     pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    cid = pres.metadata.get("id") or pres.metadata.get("change")
-                except Exception:
-                    pass
-
-            if not cid:
+                    actual_file_cid = pres.metadata.get("id")
+                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    if expected_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    cid = actual_file_cid
+                except Exception as ex:
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
+                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
+                    return 3
+            else:
                 if envelope.get("change"):
                     cid = envelope.get("change")
                 elif (change_dir / "docs" / "changes").is_dir():
@@ -1095,20 +1110,6 @@ def _main(argv: list[str] | None = None) -> int:
                         cid = chg_subdirs[0]
                 elif expected_cid:
                     cid = expected_cid
-
-            if (change_dir / "change.yaml").is_file():
-                try:
-                    from deltafuse.core.artifact_reader import strict_read_artifact
-                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
-                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    actual_file_cid = pres.metadata.get("id") or pres.metadata.get("change")
-                    if expected_cid and actual_file_cid and actual_file_cid != expected_cid:
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                except Exception:
-                    pass
 
             root = resolve_product_root(change_dir)
             auth = create_authorization_context(
@@ -1286,16 +1287,30 @@ def _main(argv: list[str] | None = None) -> int:
             expected_cid = None
             if change_dir.name.startswith("CHG-"):
                 expected_cid = change_dir.name
-            elif (change_dir / "change.yaml").is_file():
+
+            if (change_dir / "change.yaml").is_file():
                 try:
                     from deltafuse.core.artifact_reader import strict_read_artifact
                     has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
                     pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    cid = pres.metadata.get("id") or pres.metadata.get("change")
-                except Exception:
-                    pass
-
-            if not cid:
+                    actual_file_cid = pres.metadata.get("id")
+                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    if expected_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    cid = actual_file_cid
+                except Exception as ex:
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
+                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
+                    return 3
+            else:
                 if envelope.get("change"):
                     cid = envelope.get("change")
                 elif (change_dir / "docs" / "changes").is_dir():
@@ -1304,20 +1319,6 @@ def _main(argv: list[str] | None = None) -> int:
                         cid = chg_subdirs[0]
                 elif expected_cid:
                     cid = expected_cid
-
-            if (change_dir / "change.yaml").is_file():
-                try:
-                    from deltafuse.core.artifact_reader import strict_read_artifact
-                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
-                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    actual_file_cid = pres.metadata.get("id") or pres.metadata.get("change")
-                    if expected_cid and actual_file_cid and actual_file_cid != expected_cid:
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                except Exception:
-                    pass
 
             root = resolve_product_root(change_dir)
             auth = create_authorization_context(

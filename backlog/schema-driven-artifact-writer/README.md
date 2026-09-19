@@ -5,7 +5,7 @@ Source intent: [INTENTION.md](INTENTION.md), preserved from the user's proposal.
 Analysis: [ANALYSIS.md](ANALYSIS.md). Plan: [PLAN.md](PLAN.md).
 Contracts: [CONTRACT.md](CONTRACT.md). Test/evaluation: [VALIDATION.md](VALIDATION.md).
 Next task: [AW-37](cards/AW-37.md). Machine queue: [queue.json](queue.json).
-Current review: [REVIEW-4.md](REVIEW-4.md). Reopened AW-37/AW-39/AW-40/AW-41; new AW-42 reconciles evidence.
+Current review: [REVIEW-5.md](REVIEW-5.md). AW-37/AW-40/AW-41/AW-42/AW-20 are reopened; AW-38/AW-39 fixes remain verified.
 AW-20 closure is reopened; earlier completion reports are historical claims.
 
 ## Recommendation

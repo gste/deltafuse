@@ -6,7 +6,7 @@ to external services. User instructions and canonical Process contracts prevail.
 
 ## Start one bounded task
 
-1. Read repository AGENTS.md, REVIEW-4.md, README.md, PLAN.md, this file, the
+1. Read repository AGENTS.md, REVIEW-5.md, README.md, PLAN.md, this file, the
    selected card, relevant CONTRACT.md/VALIDATION.md and actual predecessor evidence.
 2. Select the first planned card whose dependencies have verified relevant
    completion evidence. Current entry: AW-37. Historical completed labels are
@@ -19,13 +19,14 @@ to external services. User instructions and canonical Process contracts prevail.
    hashes before edits. Preserve concurrent work and all files outside the write
    set. Do not reset, stash, clean or rewrite user changes to obtain a clean tree.
 
-Current sequence: AW-37 -> AW-39 -> AW-41 -> AW-40 -> AW-42 -> AW-20.
+Current sequence: AW-37 -> AW-41 -> AW-40 -> AW-42 -> AW-20.
+AW-39 remains completed for the verified routing-patch fix; retain its regressions.
 AW-38 remains completed for the proven missing-hash fix; retain its regressions.
 
 ## Freeze acceptance before coding
 
 Create an acceptance matrix in the task result using RESULT-TEMPLATE.md. Include
-EVERY original criterion plus the fourth-review acceptance IDs on the card/queue.
+EVERY original criterion plus the all review acceptance IDs on the card/queue.
 For each, state the observable invariant, public operation/probe and evidence
 needed for PASS. Use PASS, FAIL or NOT RUN for checks. Initially unexecuted checks
 are NOT RUN, not PASS. No count of passing tests can replace this mapping.
@@ -35,6 +36,49 @@ Routine fixes within the authorized contract do not require another permission
 request. Reducing a user requirement or mandatory live check requires explicit
 user authorization; never infer a waiver from cost, time, unavailable tools,
 context pressure, a prior completion label or a smaller implementation model.
+
+## Mandatory literal-criterion and evidence gate (fifth review)
+
+Before implementation, copy each original criterion and each reopened acceptance
+ID VERBATIM into the result matrix. Do not shorten a requirement in its result
+row. In particular, keep words such as actual, both arms, Windows and POSIX,
+installed package, missing/tampered schema, and before publication. A shorter
+label may be added separately, but cannot replace the authoritative requirement.
+
+Split compound criteria into subrows, preserving the original parent row. The
+parent is PASS only when every required subrow passes. Example: honest endpoint
+status may PASS while actual paired sessions remain NOT RUN; their task is OPEN.
+Windows execution may PASS while POSIX or required symlink coverage is NOT RUN;
+the platform task is OPEN. Disclosure is evidence of honesty, not execution.
+
+For each PASS, answer all five questions with concrete evidence:
+
+1. What exact required action ran, against which public operation and input?
+2. Which actual source/wheel/model/OS/filesystem was used?
+3. What raw output, exit, artifact bytes or independent oracle proves the result?
+4. Does that evidence prove the original requirement, or only a weaker neighbor?
+5. What adversarial control would fail if the required behavior were absent?
+
+If any answer is missing, the row is FAIL or NOT RUN, not PASS. A future command,
+a renamed adapter/test, a broad test count or a test asserting a status string
+cannot answer these questions. Never replace unexecuted qualification with a
+unit test asserting that its absence is honestly reported.
+
+Specific required negative tests are NOT interchangeable:
+
+| Required invariant | Necessary probe | Insufficient substitute |
+|---|---|---|
+| Required Change ID | Missing/null/empty/wrong-type ID in otherwise usable live context must deny | Only a different nonempty ID |
+| Packaged schema missing | Remove installed schema file, invoke isolated Writer mutation | Missing JSON request identity |
+| Packaged schema tampered | Change installed schema bytes without updating verified manifest | Wrong target expected_sha256 |
+| Actual POSIX qualification | Run on POSIX host/filesystem and preserve raw logs | Windows/Git Bash or disclosed skip |
+| Genuine paired model benefit | Actual model calls in both preregistered arms and replayable raw traces | Oracle use, fixed corpus, adapter label or unavailable status |
+
+Before changing a status to completed, reread the card and the original source
+criteria, compare them word-for-word to the result requirements, and inspect raw
+evidence rather than trusting another completion table. Run the gap audit in
+RECONCILIATION-CHECKLIST.md. Keep the task open if any mandatory gap remains.
+There is no completed-with-limitations shortcut under this backlog's contract.
 
 ## Required implementation loop
 
@@ -148,11 +192,12 @@ based on intended future runs. Stop after the selected bounded card.
 ## Copy-paste continuation prompt
 
 Implement ONE dependency-ready Artifact Writer card in the canonical DeltaFuse
-repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-4.md,
+repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-5.md,
 README.md, EXECUTOR.md, RESULT-TEMPLATE.md, PLAN.md, the selected queue.json card
 and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-37.
 Recheck actual dependencies and dirty source; preserve unrelated work. Freeze an
-acceptance matrix for every original criterion and reopened acceptance ID. Capture
+acceptance matrix with VERBATIM original criteria and reopened acceptance IDs;
+split compound criteria into mandatory evidence subrows without weakening them. Capture
 behavioral Red through the public entry point, implement the smallest contract-
 correct fix, run Green and required regressions, and preserve raw evidence with
 actual working-tree byte identities. Do not weaken/delete failing test invariants,

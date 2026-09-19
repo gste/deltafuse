@@ -21,7 +21,7 @@ HEAD alone is insufficient for a dirty checkout. Never invent a hash or runtime.
 
 ## Acceptance matrix
 
-| Criterion ID | Original requirement / invariant | Probe or test | PASS / FAIL / NOT RUN | Raw evidence ref and hash | Remaining limitation |
+| Criterion ID | VERBATIM authoritative requirement / invariant | Probe or test | PASS / FAIL / NOT RUN | Raw evidence ref and hash | Remaining limitation |
 |---|---|---|---|---|---|
 
 Include original criteria and all reopened IDs. Every mandatory row must be PASS
@@ -63,3 +63,17 @@ platform/setup errors from behavioral failures. Do not hide mandatory skips.
 
 Keep historical results distinguishable. Do not use this template as a reason to
 claim unperformed work or fabricate raw evidence. No self-referential report hash.
+
+## Literal requirement gap audit (required before status update)
+
+- Card/queue criterion text preserved verbatim, including all required actions:
+- Compound parent criteria have subrows and require all subrows PASS:
+- Every PASS has inspected raw evidence for that exact action/environment:
+- Model sessions, POSIX/capable-host checks and installed-schema damage tests
+  are actual runs, not renamed or adjacent tests:
+- Mandatory FAIL/NOT RUN count (must be zero for completion):
+- No evaluator/open-prerequisite status contradicts card/queue/result closure:
+- RECONCILIATION-CHECKLIST.md reviewed and remaining gaps listed:
+
+If any mandatory evidence is absent, report partial implementation and the exact
+external prerequisite. Do not mark completed merely because code tests pass.

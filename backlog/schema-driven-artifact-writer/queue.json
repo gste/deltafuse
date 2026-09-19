@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "status": "completed",
+  "status": "in_progress",
   "planning_only": false,
   "feature": "schema-driven-artifact-writer",
   "framework_snapshot": {
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": null,
+  "entry": "AW-41",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -618,11 +618,12 @@
       "id": "AW-20",
       "phase": "G",
       "title": "Close acceptance and publish migration/handoff",
-      "status": "completed",
+      "status": "planned",
       "depends_on": [
         "AW-42"
       ],
       "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-5.md",
         "backlog/schema-driven-artifact-writer/REVIEW-4.md",
         "backlog/schema-driven-artifact-writer/VALIDATION.md",
         "backlog/schema-driven-artifact-writer/evaluation/RESULT.md",
@@ -640,6 +641,7 @@
         "backlog/schema-driven-artifact-writer/queue.json"
       ],
       "work": [
+        "Fifth-review reopening: preserve every original requirement verbatim and satisfy additional AW20-F1, AW20-F2. Result-table paraphrases do not override card requirements.",
         "Final closure requires AW-42 reconciliation and every original mandatory runtime/model/platform/wheel acceptance check. Do not equate removal of false claims with execution of missing qualification.",
         "Reopened after third review: reconcile AW-37 through AW-41 against original requirements; reject hardcoded model metrics, unavailable mandatory platforms and any unresolved runtime or isolated-wheel failures.",
         "Reopened after second review: independently reconcile AW-29 through AW-36 and their child cards against original criteria; never close unavailable live evaluation/platform evidence or remaining runtime blockers.",
@@ -652,7 +654,19 @@
       "green": "All required evidence mapped, supported scope accurate and independently reviewable; done only when source acceptance is actually satisfied.",
       "test": "Final evidence hash/link/schema audit; git diff --check; scoped source status; no unrequested commit/push.",
       "card_path": "cards/AW-20.md",
-      "result_path": "results/AW-20.md"
+      "result_path": "results/AW-20.md",
+      "acceptance_checks": [
+        {
+          "id": "AW20-F1",
+          "requirement": "Do not publish completed/accepted while any original mandatory check is FAIL or NOT RUN. Independently verify AW-42 against raw evidence and verbatim requirements; output an open-acceptance summary when live model or platform prerequisites are absent.",
+          "status": "open"
+        },
+        {
+          "id": "AW20-F2",
+          "requirement": "Final result, queue, card and evaluation statuses must agree. An evaluator reporting open_for_AW-20 cannot coexist with a completed AW-40/AW-20 closure claim under the current contract. Only explicit user scope revision can change required acceptance; record any such revision rather than silently paraphrasing it.",
+          "status": "open"
+        }
+      ]
     },
     {
       "id": "AW-21",
@@ -1395,6 +1409,7 @@
       ],
       "review_finding": 3,
       "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-5.md",
         "backlog/schema-driven-artifact-writer/REVIEW-4.md",
         "backlog/schema-driven-artifact-writer/REVIEW-3.md",
         "backlog/schema-driven-artifact-writer/CONTRACT.md",
@@ -1415,6 +1430,7 @@
         "backlog/schema-driven-artifact-writer/results/AW-37.md"
       ],
       "work": [
+        "Fifth-review reopening: preserve every original requirement verbatim and satisfy additional AW37-F1, AW37-F2. Result-table paraphrases do not override card requirements.",
         "Fourth review reopening: Identity and legal-stage validation remain open. Satisfy every acceptance check below and every original criterion; retain historical results without treating them as current closure.",
         "Replace permissive missing/unreadable/malformed Change-state fallback with explicit denial for public mutation; do not infer implement or another stage.",
         "Resolve and validate the owning Change and actual Core-selected operation/work envelope under configured roots. Existing noninactive status alone is not authorization.",
@@ -1445,6 +1461,16 @@
         {
           "id": "AW37-R4",
           "requirement": "Reproduce missing/malformed/mismatched identity, unknown stage, stale selection and wrong-task writes through real CLI and service entry points; denial changes no artifact, receipt or journal. Retain previously passing missing-Change and archived-state tests.",
+          "status": "passed"
+        },
+        {
+          "id": "AW37-F1",
+          "requirement": "Identity must exist, have the authoritative type/format and equal the authorized Change ID. Reject missing id, null, empty, wrong type and alternate-field fallback unless explicitly allowed by the canonical schema. The reproduced status-only change.yaml must return denial before mutation.",
+          "status": "passed"
+        },
+        {
+          "id": "AW37-F2",
+          "requirement": "Capture public CLI and service Red with change.yaml containing only status: normalized; add null/empty/wrong-type ID variants. Preserve wrong-ID, unknown-stage, missing-file and archived-Change regressions. Repeat identity validation under the commit lock against actual Core-selected work.",
           "status": "passed"
         }
       ]
@@ -1558,7 +1584,7 @@
       "id": "AW-40",
       "phase": "J",
       "title": "Replace hardcoded model scores with genuine paired evidence",
-      "status": "completed",
+      "status": "planned",
       "depends_on": [
         "AW-41"
       ],
@@ -1569,6 +1595,7 @@
       ],
       "review_finding": 1,
       "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-5.md",
         "backlog/schema-driven-artifact-writer/REVIEW-4.md",
         "backlog/schema-driven-artifact-writer/REVIEW-3.md",
         "backlog/schema-driven-artifact-writer/CONTRACT.md",
@@ -1585,6 +1612,7 @@
         "backlog/schema-driven-artifact-writer/results/AW-40.md"
       ],
       "work": [
+        "Fifth-review reopening: preserve every original requirement verbatim and satisfy additional AW40-F1, AW40-F2. Result-table paraphrases do not override card requirements.",
         "Fourth review reopening: Live paired experiment remains unexecuted. Satisfy every acceptance check below and every original criterion; retain historical results without treating them as current closure.",
         "Preserve prior reports as historical unsupported claims and clearly withdraw their model-benefit/qualification assertions. Remove hardcoded manual-arm results and unconditional qualification.",
         "Require nonempty complete paired runs, actual provider/model identity and traceable raw invocation evidence. Empty/missing/partial data must remain unqualified with valid denominators.",
@@ -1618,15 +1646,29 @@
           "id": "AW40-R4",
           "requirement": "Without authorized endpoint access, record the specific unmet prerequisite and leave status open. Do not rename the requirement, change denominators, return qualification from a harness, or close AW-20.",
           "status": "completed"
+        },
+        {
+          "id": "AW40-F1",
+          "requirement": "The original requirement is actual fresh manual-arm and Writer-arm model sessions, not honest reporting of an unavailable endpoint. Required evidence: real provider/model identity, preregistered protocol, raw prompts/tool attempts/responses for both arms, independent oracle results and replayed metrics/uncertainty.",
+          "status": "open"
+        },
+        {
+          "id": "AW40-F2",
+          "requirement": "If no live endpoint or paired traces exist, mark live-execution rows NOT RUN and this card planned/in_progress with a blocker. unavailable_no_endpoint or open_for_AW-20 can PASS the honest-reporting subcheck only; they cannot PASS model execution, qualify the card or unblock AW-42/AW-20.",
+          "status": "open"
         }
+      ],
+      "completion_blockers": [
+        "No genuine paired-model sessions or endpoint evidence established; removing synthetic scores is partial progress only."
       ]
     },
     {
       "id": "AW-41",
       "phase": "J",
       "title": "Complete missing platform and isolated-wheel qualification",
-      "status": "completed",
+      "status": "planned",
       "depends_on": [
+        "AW-37",
         "AW-39"
       ],
       "remediates": [
@@ -1635,6 +1677,7 @@
       ],
       "review_finding": 5,
       "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-5.md",
         "backlog/schema-driven-artifact-writer/REVIEW-4.md",
         "backlog/schema-driven-artifact-writer/REVIEW-3.md",
         "backlog/schema-driven-artifact-writer/CONTRACT.md",
@@ -1654,6 +1697,7 @@
         "backlog/schema-driven-artifact-writer/results/AW-41.md"
       ],
       "work": [
+        "Fifth-review reopening: preserve every original requirement verbatim and satisfy additional AW41-F1, AW41-F2, AW41-F3, AW41-F4. Result-table paraphrases do not override card requirements.",
         "Fourth review reopening: Required platform and Writer wheel checks are still absent. Satisfy every acceptance check below and every original criterion; retain historical results without treating them as current closure.",
         "Diagnose the isolated-wheel build/install/import fixture using its real logs and interpreter/import identity; distinguish environment/setup defects from package defects. Do not waive errors or import checkout source to make the test pass.",
         "Run real Windows and actual POSIX public Writer/Core concurrency and prepare/publish/readback/receipt hard-crash recovery, including capable-host symlink/reparse checks.",
@@ -1692,14 +1736,38 @@
           "id": "AW41-R5",
           "requirement": "Run full framework tests and asset/diff checks on the final code; test counts alone do not prove coverage or qualification. Final hashes must refer to the actual dirty working tree or final commit, not unchanged HEAD.",
           "status": "completed"
+        },
+        {
+          "id": "AW41-F1",
+          "requirement": "Actually execute required POSIX concurrency/hard-crash checks and capable-host symlink/reparse checks as well as Windows checks and both smoke/layout validators. Disclosure of an unavailable host or privilege does not satisfy execution: those rows are NOT RUN and the card remains open.",
+          "status": "open"
+        },
+        {
+          "id": "AW41-F2",
+          "requirement": "Restore the original packaged-schema corruption invariant: in an isolated installed wheel, physically remove the packaged artifact-writer.schema.yaml, then separately corrupt its bytes without repairing its manifest. Invoke actual Writer create/update and assert contract-specific asset/envelope failure with unchanged product artifacts and no success receipt.",
+          "status": "open"
+        },
+        {
+          "id": "AW41-F3",
+          "requirement": "Use separate disposable installed environments or restore exact bytes between package-damage probes. Assert the expected schema path existed and was removed/changed, verify module import origin is inside the isolated installation, strip checkout import paths, and capture stderr/stdout/exits and before/after hashes.",
+          "status": "open"
+        },
+        {
+          "id": "AW41-F4",
+          "requirement": "Missing JSON identity, a stale expected_sha256 and Core-owned-field denial remain useful independent input tests but MUST NOT be named or counted as missing/tampered packaged-schema tests. Run valid describe/create/update/validate controls in the intact installation.",
+          "status": "open"
         }
+      ],
+      "completion_blockers": [
+        "Actual mandatory POSIX/capable-host evidence not established.",
+        "Installed packaged-envelope removal/tamper invariant not exercised by the currently cited negative test."
       ]
     },
     {
       "id": "AW-42",
       "phase": "K",
       "title": "Reconcile final source identity, test coverage and acceptance evidence",
-      "status": "completed",
+      "status": "planned",
       "depends_on": [
         "AW-40",
         "AW-41"
@@ -1710,6 +1778,7 @@
         "AW-41"
       ],
       "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW-5.md",
         "backlog/schema-driven-artifact-writer/REVIEW-4.md",
         "backlog/schema-driven-artifact-writer/EXECUTOR.md",
         "backlog/schema-driven-artifact-writer/VALIDATION.md",
@@ -1722,6 +1791,7 @@
         "backlog/schema-driven-artifact-writer/evidence/reconciliation/**"
       ],
       "work": [
+        "Fifth-review reopening: preserve every original requirement verbatim and satisfy additional AW42-F1, AW42-F2. Result-table paraphrases do not override card requirements.",
         "Inventory current final source, schema, generated assets and tests with byte hashes, full HEAD, dirty tracked diff and relevant untracked-file identities; HEAD alone is never labeled tested source for a dirty checkout.",
         "Reconcile recorded versus actual hashes, particularly AW-40 evaluator and AW-41 storage hashes; distinguish historical evidence from current verification and do not invent replacement logs or past results.",
         "Replay or rerun every required check affected by source drift and verify referenced raw logs, commands, exits, environment, wheel and model provenance; identify missing evidence as NOT RUN.",
@@ -1752,6 +1822,16 @@
           "id": "AW42-R4",
           "requirement": "Audit restored/removed test coverage and every original acceptance criterion through AW-37/AW-39/AW-40/AW-41; all mandatory checks must pass before preparing the final AW-20 closure evidence.",
           "status": "completed"
+        },
+        {
+          "id": "AW42-F1",
+          "requirement": "Reconcile the exact original requirement text, card/queue acceptance IDs and result rows before reading their PASS labels. Detect narrowed paraphrases: using an oracle does not prove live paired sessions, and disclosing Windows skips does not prove POSIX execution.",
+          "status": "open"
+        },
+        {
+          "id": "AW42-F2",
+          "requirement": "Current matching source hashes are verified progress, not a waiver of missing model/platform/package-corruption evidence. Any mandatory NOT RUN/FAIL from AW-37/AW-40/AW-41 prevents completion; preserve earlier hash evidence with its actual tested source and rerun affected final-tree checks.",
+          "status": "open"
         }
       ]
     }
@@ -1782,6 +1862,13 @@
     "head": "ab7778b3431a164b64c55a1b1fcdb5ed479fb88b",
     "source_state": "uncommitted working tree; historical result hashes do not identify current tested bytes",
     "report": "REVIEW-4.md",
+    "acceptance": "open"
+  },
+  "fifth_review_snapshot": {
+    "date": "2026-09-19",
+    "commit": "60415a9071826d1c0a7781cccdcc743175b485bf",
+    "source_state": "clean committed tree at review",
+    "report": "REVIEW-5.md",
     "acceptance": "open"
   }
 }

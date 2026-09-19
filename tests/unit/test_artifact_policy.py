@@ -6,6 +6,7 @@ import pytest
 from deltafuse.core.artifact_policy import (
     create_authorization_context,
     resolve_artifact_path,
+    resolve_change_stage,
     validate_artifact_policy,
     revalidate_authorization_context,
     ArtifactPolicyError,
@@ -148,3 +149,32 @@ def test_aw37_invalid_or_invented_stage_rejected(tmp_path: Path):
     with pytest.raises(ArtifactPolicyError, match="Worker mutation denied for invalid or unauthorized stage"):
         validate_artifact_policy(ctx, kind="task", operation="create", target_path=target)
 
+
+def test_aw37_f1_missing_null_empty_wrong_type_id_rejected(tmp_path: Path):
+    """AW37-F1: Identity must exist, have authoritative format, and equal Change ID; reject missing/null/empty/wrong-type/alternate-field."""
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-905"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    target = tmp_path / "docs" / "changes" / "CHG-905" / "tasks" / "TASK-001.md"
+
+    invalid_contents = [
+        ("status: normalized\n", "status-only"),
+        ("id: null\nstatus: normalized\n", "null id"),
+        ("id: ''\nstatus: normalized\n", "empty id"),
+        ("id: 12345\nstatus: normalized\n", "integer id"),
+        ("id: ['CHG-905']\nstatus: normalized\n", "list id"),
+        ("change: CHG-905\nstatus: normalized\n", "alternate-field fallback"),
+        ("id: INVALID-FORMAT\nstatus: normalized\n", "invalid format id"),
+    ]
+
+    for yaml_content, desc in invalid_contents:
+        (chg_dir / "change.yaml").write_text(yaml_content, encoding="utf-8")
+        assert resolve_change_stage(tmp_path, "CHG-905") == "missing_change_authority", f"Failed for {desc}"
+
+        ctx = create_authorization_context(
+            actor="worker",
+            work_item="CLI",
+            product_root=tmp_path,
+            change_id="CHG-905",
+        )
+        with pytest.raises(ArtifactPolicyError, match="missing, unreadable, or malformed change.yaml"):
+            validate_artifact_policy(ctx, kind="task", operation="create", target_path=target)

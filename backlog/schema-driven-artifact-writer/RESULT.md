@@ -1,4 +1,9 @@
-# Schema-driven Artifact Writer — Backlog Result & Acceptance Reconciliation
+# Schema-driven Artifact Writer вЂ” Backlog Result & Acceptance Reconciliation
+
+> **Acceptance reopened after fifth review.** The completion claims below are
+> historical. [REVIEW-5.md](REVIEW-5.md) records missing Change identity validation,
+> unexecuted model/POSIX qualification and a substituted package-corruption test.
+> AW-37/AW-40/AW-41/AW-42/AW-20 remain open until their exact criteria pass.
 
 ## Overview
 
