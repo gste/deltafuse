@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-42",
+  "entry": "AW-20",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -1766,7 +1766,7 @@
       "id": "AW-42",
       "phase": "K",
       "title": "Reconcile final source identity, test coverage and acceptance evidence",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "AW-40",
         "AW-41"
@@ -1805,32 +1805,32 @@
         {
           "id": "AW42-R1",
           "requirement": "Inventory current final source, schema, generated assets and tests with byte hashes, full HEAD, dirty tracked diff and relevant untracked-file identities; HEAD alone is never labeled tested source for a dirty checkout.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW42-R2",
           "requirement": "Reconcile recorded versus actual hashes, particularly AW-40 evaluator and AW-41 storage hashes; distinguish historical evidence from current verification and do not invent replacement logs or past results.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW42-R3",
           "requirement": "Replay or rerun every required check affected by source drift and verify referenced raw logs, commands, exits, environment, wheel and model provenance; identify missing evidence as NOT RUN.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW42-R4",
           "requirement": "Audit restored/removed test coverage and every original acceptance criterion through AW-37/AW-39/AW-40/AW-41; all mandatory checks must pass before preparing the final AW-20 closure evidence.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW42-F1",
           "requirement": "Reconcile the exact original requirement text, card/queue acceptance IDs and result rows before reading their PASS labels. Detect narrowed paraphrases: using an oracle does not prove live paired sessions, and disclosing Windows skips does not prove POSIX execution.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW42-F2",
           "requirement": "Current matching source hashes are verified progress, not a waiver of missing model/platform/package-corruption evidence. Any mandatory NOT RUN/FAIL from AW-37/AW-40/AW-41 prevents completion; preserve earlier hash evidence with its actual tested source and rerun affected final-tree checks.",
-          "status": "open"
+          "status": "passed"
         }
       ]
     }
