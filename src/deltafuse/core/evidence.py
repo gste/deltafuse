@@ -166,9 +166,17 @@ def evidence_stamp_error(payload: dict[str, Any], product_root: Path) -> str | N
     return None
 
 
-def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
-    """Stamp *payload* and write YAML after validated storage schema check."""
+def write_stamped_evidence(
+    path: Path,
+    payload: dict[str, Any],
+    product_root: Path,
+    lock_timeout: float = 5.0,
+) -> dict[str, Any]:
+    """Stamp *payload* and write YAML under ProductMutationLock using atomic storage."""
     from deltafuse.core.artifact_registry import ArtifactRegistry
+    from deltafuse.core.artifact_lock import ProductMutationLock
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+
     registry = ArtifactRegistry()
     val_res = registry.validate_storage_schema("evidence", payload)
     if not val_res.valid:
@@ -178,8 +186,16 @@ def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Pa
     stamped = stamp_evidence(payload, product_root)
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    yaml_bytes = yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True).encode("utf-8")
+
+    with ProductMutationLock(product_root, timeout=lock_timeout):
+        if dest.is_file():
+            atomic_replace(dest, yaml_bytes)
+        else:
+            atomic_create(dest, yaml_bytes)
+
     return stamped
+
 
 
 def _core_computed_changed_paths(repo_root: Path) -> list[str]:

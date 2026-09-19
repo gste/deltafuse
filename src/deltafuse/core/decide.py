@@ -8,7 +8,9 @@ from typing import Any
 import yaml
 
 from deltafuse.core.artifact_lock import ProductMutationLock
+from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
+
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.gate_journal import TERMINAL_STATUSES
 from deltafuse.core import receipts
@@ -37,7 +39,13 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
 
 
 def _write_yaml_mapping(path: Path, data: dict[str, Any]) -> None:
-    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+    content_bytes = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
+    if path.is_file():
+        atomic_replace(path, content_bytes)
+    else:
+        atomic_create(path, content_bytes)
+
 
 
 def find_decision_file(product_root: Path, decision: str) -> Path:
@@ -149,7 +157,8 @@ def apply_decision(
                 text = replace_frontmatter(delta.read_text(encoding="utf-8"), {"status": status})
             except FrontmatterParseError as ex:
                 raise DecideError(f"spec-delta.md: {ex}") from ex
-            delta.write_text(text, encoding="utf-8")
+            atomic_replace(delta, text.encode("utf-8"))
+
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
             receipts.record_receipt(
@@ -201,10 +210,9 @@ def apply_decision(
                 f"{dec_path.name} status is '{meta.get('status')}', expected proposed"
             )
         change_id = _optional_change_id(meta.get("change"))
-        dec_path.write_text(
-            replace_frontmatter(dec_path.read_text(encoding="utf-8"), {"status": status}),
-            encoding="utf-8",
-        )
+        new_text = replace_frontmatter(dec_path.read_text(encoding="utf-8"), {"status": status})
+        atomic_replace(dec_path, new_text.encode("utf-8"))
+
         written = [_rel(product_root, dec_path)]
         dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
         receipts.record_receipt(

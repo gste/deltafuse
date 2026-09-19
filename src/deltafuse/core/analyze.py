@@ -416,8 +416,14 @@ def write_coverage(change_path: Path | str) -> Path:
 
     product_root = find_repo_root(path)
     content_str = strict_encode_yaml(document, kind="coverage")
+    content_bytes = content_str.encode("utf-8")
 
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     with ProductMutationLock(product_root):
-        dest.write_text(content_str, encoding="utf-8")
+        if dest.is_file():
+            atomic_replace(dest, content_bytes)
+        else:
+            atomic_create(dest, content_bytes)
 
     return dest
+

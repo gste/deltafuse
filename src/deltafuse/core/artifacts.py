@@ -313,7 +313,17 @@ class ArtifactService:
 
             atomic_create(target_path, content_bytes)
             self.transaction_mgr.mark_published(tx["transaction_id"])
-            return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+            try:
+                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+            except Exception as ex:
+                if isinstance(ex, ArtifactTransactionError):
+                    raise
+                raise ArtifactTransactionError(
+                    f"Receipt finalization failed after publication of '{target_path}': {ex}",
+                    code="receipt_finalization_failed",
+                    path=str(target_path),
+                ) from ex
+
 
     def update(
         self,
@@ -521,7 +531,17 @@ class ArtifactService:
 
             atomic_replace(target_path, candidate_bytes, expected_sha256=expected_sha256)
             self.transaction_mgr.mark_published(tx["transaction_id"])
-            return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+            try:
+                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+            except Exception as ex:
+                if isinstance(ex, ArtifactTransactionError):
+                    raise
+                raise ArtifactTransactionError(
+                    f"Receipt finalization failed after publication of '{target_path}': {ex}",
+                    code="receipt_finalization_failed",
+                    path=str(target_path),
+                ) from ex
+
 
 
 

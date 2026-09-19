@@ -113,16 +113,18 @@ def scaffold_change(
     (change_dir / "tasks").mkdir()
     (change_dir / "evidence").mkdir()
 
+    from deltafuse.core.artifact_storage import atomic_create
     content_str = strict_encode_yaml(data, kind="change")
-    (change_dir / "change.yaml").write_text(content_str, encoding="utf-8")
+    atomic_create(change_dir / "change.yaml", content_str.encode("utf-8"))
 
-    (change_dir / "request.md").write_text(
+    req_str = (
         f"---\nchange: {change_id}\nstatus: drafted\nslices: []\n---\n\n"
         f"# {title or change_id}\n\n"
-        "<!-- Raw intent. Claims stay unverified; Intake is not closed by scaffolding. -->\n",
-        encoding="utf-8",
+        "<!-- Raw intent. Claims stay unverified; Intake is not closed by scaffolding. -->\n"
     )
+    atomic_create(change_dir / "request.md", req_str.encode("utf-8"))
     return change_dir
+
 
 
 def update_change_child_index(change_dir: Path | str, child_kind: str, child_id: str) -> None:

@@ -31,6 +31,15 @@ def compute_receipt_digest(receipt_dict: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
+def _write_atomic_json(target_path: Path, content_dict: dict[str, Any]) -> None:
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+    content_bytes = json.dumps(content_dict, indent=2, ensure_ascii=False).encode("utf-8")
+    if target_path.is_file():
+        atomic_replace(target_path, content_bytes)
+    else:
+        atomic_create(target_path, content_bytes)
+
+
 class TransactionManager:
     """Core transaction manager for artifact updates, receipts, and crash recovery."""
 
@@ -55,15 +64,24 @@ class TransactionManager:
     def find_transaction_by_request_id(self, request_id: str) -> dict[str, Any] | None:
         if not self.journal_dir.is_dir():
             return None
-        for record_path in self.journal_dir.glob("*.json"):
+        for record_path in sorted(self.journal_dir.glob("*.json")):
             try:
                 rec = json.loads(record_path.read_text(encoding="utf-8"))
-                if rec.get("request_id") == request_id:
-                    return rec
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as ex:
+                raise ArtifactTransactionError(
+                    f"Corrupt transaction record '{record_path.name}': {ex}",
+                    code="corrupt_journal",
+                    path=str(record_path),
+                ) from ex
+            if not isinstance(rec, dict) or "request_id" not in rec:
+                raise ArtifactTransactionError(
+                    f"Corrupt transaction record '{record_path.name}': missing request_id",
+                    code="corrupt_journal",
+                    path=str(record_path),
+                )
+            if rec.get("request_id") == request_id:
+                return rec
         return None
-
 
     def prepare_transaction(
         self,
@@ -91,20 +109,30 @@ class TransactionManager:
         raw_request_hash = hashlib.sha256(raw_request_bytes).hexdigest()
         norm_hash = normalized_payload_hash or raw_request_hash
 
-        for record_path in self.journal_dir.glob("*.json"):
+        for record_path in sorted(self.journal_dir.glob("*.json")):
             try:
                 rec = json.loads(record_path.read_text(encoding="utf-8"))
-                if rec.get("request_id") == request_id:
-                    if rec.get("raw_request_hash") == raw_request_hash:
-                        return rec
-                    else:
-                        raise ArtifactTransactionError(
-                            f"Request ID '{request_id}' re-used with different payload",
-                            code="idempotency_conflict",
-                            path=str(record_path),
-                        )
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as ex:
+                raise ArtifactTransactionError(
+                    f"Corrupt transaction record '{record_path.name}': {ex}",
+                    code="corrupt_journal",
+                    path=str(record_path),
+                ) from ex
+            if not isinstance(rec, dict) or "request_id" not in rec:
+                raise ArtifactTransactionError(
+                    f"Corrupt transaction record '{record_path.name}': missing request_id",
+                    code="corrupt_journal",
+                    path=str(record_path),
+                )
+            if rec.get("request_id") == request_id:
+                if rec.get("raw_request_hash") == raw_request_hash:
+                    return rec
+                else:
+                    raise ArtifactTransactionError(
+                        f"Request ID '{request_id}' re-used with different payload",
+                        code="idempotency_conflict",
+                        path=str(record_path),
+                    )
 
         transaction_id = f"tx-{uuid.uuid4().hex}"
         try:
@@ -160,7 +188,7 @@ class TransactionManager:
         }
 
         record_file = self.journal_dir / f"{transaction_id}.json"
-        record_file.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        _write_atomic_json(record_file, record)
         return record
 
     def mark_published(self, transaction_id: str) -> None:
@@ -171,9 +199,17 @@ class TransactionManager:
                 code="transaction_not_found",
             )
 
-        rec = json.loads(record_file.read_text(encoding="utf-8"))
+        try:
+            rec = json.loads(record_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as ex:
+            raise ArtifactTransactionError(
+                f"Corrupt transaction record '{record_file.name}': {ex}",
+                code="corrupt_journal",
+                path=str(record_file),
+            ) from ex
+
         rec["state"] = "published"
-        record_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+        _write_atomic_json(record_file, rec)
 
     def _validate_receipt_against_schema(self, receipt_dict: dict[str, Any]) -> None:
         try:
@@ -204,7 +240,14 @@ class TransactionManager:
                 code="transaction_not_found",
             )
 
-        rec = json.loads(record_file.read_text(encoding="utf-8"))
+        try:
+            rec = json.loads(record_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as ex:
+            raise ArtifactTransactionError(
+                f"Corrupt transaction record '{record_file.name}': {ex}",
+                code="corrupt_journal",
+                path=str(record_file),
+            ) from ex
 
         raw_req_hash = rec["raw_request_hash"]
         req_sha256 = raw_req_hash if raw_req_hash.startswith("sha256:") else f"sha256:{raw_req_hash}"
@@ -268,11 +311,11 @@ class TransactionManager:
         self._validate_receipt_against_schema(receipt_dict)
 
         receipt_file = self.receipts_dir / f"{transaction_id}.json"
-        receipt_file.write_text(json.dumps(receipt_dict, indent=2), encoding="utf-8")
+        _write_atomic_json(receipt_file, receipt_dict)
 
         rec["state"] = "committed"
         rec["receipt_file"] = str(receipt_file)
-        record_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+        _write_atomic_json(record_file, rec)
 
         return receipt_dict
 
@@ -282,11 +325,25 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
     tm = TransactionManager(product_root)
     outcomes: list[dict[str, Any]] = []
 
+    if not tm.journal_dir.is_dir():
+        return outcomes
+
     for record_file in sorted(tm.journal_dir.glob("*.json")):
         try:
             rec = json.loads(record_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
+        except (json.JSONDecodeError, OSError) as ex:
+            raise ArtifactTransactionError(
+                f"Corrupt transaction record '{record_file.name}': {ex}",
+                code="corrupt_journal",
+                path=str(record_file),
+            ) from ex
+
+        if not isinstance(rec, dict) or "state" not in rec or "transaction_id" not in rec:
+            raise ArtifactTransactionError(
+                f"Corrupt transaction record '{record_file.name}': missing required fields",
+                code="corrupt_journal",
+                path=str(record_file),
+            )
 
         state = rec.get("state")
         if state in ("committed", "cancelled", "ambiguous_stopped"):
@@ -309,7 +366,7 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
             })
         elif current_hash == prev_hash:
             rec["state"] = "cancelled"
-            record_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+            _write_atomic_json(record_file, rec)
             staged = rec.get("staged_path")
             if staged and Path(staged).exists():
                 try:
@@ -323,7 +380,7 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
             })
         else:
             rec["state"] = "ambiguous_stopped"
-            record_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+            _write_atomic_json(record_file, rec)
             outcomes.append({
                 "transaction_id": tx_id,
                 "outcome": "ambiguous_stopped",
@@ -333,3 +390,4 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
             })
 
     return outcomes
+

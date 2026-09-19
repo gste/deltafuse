@@ -78,3 +78,39 @@ def test_active_pid_lock_refused(tmp_path: Path):
             pass
 
     assert exc_info.value.code == "lock_acquisition_failed"
+
+
+def test_evidence_contends_on_product_mutation_lock(tmp_path: Path):
+    """Core evidence writing must contend on ProductMutationLock."""
+    from deltafuse.core.evidence import write_stamped_evidence
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / ".deltafuse").mkdir()
+    dest = root / "docs" / "changes" / "CHG-01" / "evidence" / "verification" / "run.yaml"
+
+    payload = {
+        "schema_version": 3,
+        "change": "CHG-001",
+        "task": None,
+        "phase": "verification",
+        "timestamp": "2026-09-19T00:00:00Z",
+        "command": "pytest",
+        "exit_code": 0,
+        "result": "passed",
+        "failure_category": None,
+        "summary": "OK",
+        "changed_paths": [],
+        "spec_status": "unchanged",
+        "base_revision": "sha256:" + ("0" * 64),
+    }
+
+
+
+    lock = ProductMutationLock(root, timeout=0.1)
+    with lock:
+        # Calling write_stamped_evidence while lock is held must fail/contend on lock
+        with pytest.raises(ArtifactLockError) as exc_info:
+            write_stamped_evidence(dest, payload, root, lock_timeout=0.1)
+        assert exc_info.value.code == "lock_acquisition_failed"
+

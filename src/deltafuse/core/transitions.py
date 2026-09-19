@@ -106,10 +106,15 @@ def _load_change_yaml(change_path: Path) -> dict[str, Any]:
 
 
 def _write_change_status(change_path: Path, data: dict[str, Any], status: str) -> None:
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     data["status"] = status
-    (change_path / "change.yaml").write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    change_file = change_path / "change.yaml"
+    content_bytes = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
+    if change_file.is_file():
+        atomic_replace(change_file, content_bytes)
+    else:
+        atomic_create(change_file, content_bytes)
+
 
 
 def _receipt(entry: dict[str, Any]) -> str:
@@ -438,7 +443,13 @@ def set_artifact_status(
                     f"cannot set status '{status}' from '{current}' for {file.name}"
                 )
             meta["status"] = status
-            file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+            content_bytes = f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8")
+            from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+            if file.is_file():
+                atomic_replace(file, content_bytes)
+            else:
+                atomic_create(file, content_bytes)
+
 
         entry: dict[str, Any] = {
             "kind": "artifact-status",
