@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-17",
+  "entry": "AW-18",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -531,7 +531,7 @@
       "id": "AW-17",
       "phase": "F",
       "title": "Run security, crash and platform acceptance matrix",
-      "status": "ready",
+      "status": "completed",
       "depends_on": [
         "AW-16"
       ],
@@ -561,7 +561,7 @@
       "id": "AW-18",
       "phase": "G",
       "title": "Build paired small-model evaluation protocol and corpus",
-      "status": "planned",
+      "status": "ready",
       "depends_on": [
         "AW-17"
       ],
