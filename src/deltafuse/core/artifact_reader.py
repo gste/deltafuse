@@ -8,6 +8,7 @@ body preservation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 from typing import Any
 import yaml
@@ -22,6 +23,115 @@ class ArtifactReaderError(Exception):
         self.code = code
         self.line = line
         self.column = column
+
+
+def strict_parse_json(
+    content: str | bytes,
+    *,
+    max_bytes: int = 1024 * 1024,
+    max_depth: int = 100,
+) -> dict[str, Any]:
+    """Strictly parse JSON string or bytes into a Python dictionary.
+
+    Enforces strict rules:
+    - Bytes bound checked before reading/decoding
+    - UTF-8 validation (rejects invalid surrogates/encoding)
+    - Rejects duplicate keys at EVERY depth level
+    - Rejects non-finite numbers (NaN, Infinity, -Infinity)
+    - Rejects nesting depths exceeding max_depth
+    - Ensures top-level JSON value is a mapping/dict (JSON object)
+    """
+    if isinstance(content, bytes):
+        if len(content) > max_bytes:
+            raise ArtifactReaderError(
+                f"JSON payload size ({len(content)} bytes) exceeds max bytes limit ({max_bytes})",
+                code="exceeds_max_bytes",
+            )
+        try:
+            text = content.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as ex:
+            raise ArtifactReaderError(
+                f"Invalid UTF-8 encoding in JSON payload: {ex}",
+                code="invalid_encoding",
+            ) from ex
+    else:
+        try:
+            raw_bytes = content.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as ex:
+            raise ArtifactReaderError(
+                f"Invalid Unicode in JSON payload: {ex}",
+                code="invalid_encoding",
+            ) from ex
+        if len(raw_bytes) > max_bytes:
+            raise ArtifactReaderError(
+                f"JSON payload size ({len(raw_bytes)} bytes) exceeds max bytes limit ({max_bytes})",
+                code="exceeds_max_bytes",
+            )
+        text = content
+
+    def _reject_constant(val: str):
+        raise ArtifactReaderError(
+            f"non-finite number '{val}' is not permitted in JSON input",
+            code="non_finite_float",
+        )
+
+    def _strict_pairs_hook(pairs):
+        mapping: dict[str, Any] = {}
+        for key, value in pairs:
+            if not isinstance(key, str):
+                raise ArtifactReaderError(
+                    f"JSON object key must be a string, got {type(key).__name__}",
+                    code="invalid_json_type",
+                )
+            if key in mapping:
+                raise ArtifactReaderError(
+                    f"duplicate key '{key}' in JSON input",
+                    code="duplicate_key",
+                )
+            mapping[key] = value
+        return mapping
+
+    def _check_depth(obj: Any, depth: int):
+        if depth > max_depth:
+            raise ArtifactReaderError(
+                f"JSON nesting depth exceeds limit ({max_depth})",
+                code="exceeds_max_depth",
+            )
+        if isinstance(obj, dict):
+            for v in obj.values():
+                _check_depth(v, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                _check_depth(item, depth + 1)
+
+    try:
+        data = json.loads(
+            text,
+            object_pairs_hook=_strict_pairs_hook,
+            parse_constant=_reject_constant,
+        )
+    except json.JSONDecodeError as ex:
+        raise ArtifactReaderError(
+            f"JSON parse failure: {ex.msg}",
+            code="json_syntax_error",
+            line=ex.lineno,
+            column=ex.colno,
+        ) from ex
+    except RecursionError:
+        raise ArtifactReaderError(
+            f"JSON nesting depth exceeds limit ({max_depth})",
+            code="exceeds_max_depth",
+        )
+
+    if not isinstance(data, dict):
+        raise ArtifactReaderError(
+            "JSON input payload must be an object",
+            code="not_an_object",
+        )
+
+    _check_depth(data, 1)
+    return data
+
 
 
 @dataclass(frozen=True)

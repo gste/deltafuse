@@ -295,3 +295,90 @@ def test_cli_unicode_and_multiline_payload(tmp_path, capsys):
     content = task_file.read_text(encoding="utf-8")
     assert "\u4e16\u754c" in content
     assert "\U0001F600" in content
+
+
+def test_reproduce_finding_3_cli_create_duplicate_key_and_unknown_envelope_field_rejected(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
+    input_file = tmp_path / "finding3.json"
+    raw_json_str = """{
+        "request_id": "req-f3",
+        "operation": "create",
+        "kind": "task",
+        "kind": "task",
+        "unknown_envelope_field": "bogus",
+        "identity": "TASK-099",
+        "semantic_payload": {
+            "title": "Finding 3 Task",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5}
+        }
+    }"""
+    input_file.write_text(raw_json_str, encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "create",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(input_file),
+        "--json",
+    ])
+    assert exit_code == 2
+    assert not (tmp_path / "tasks" / "TASK-099.md").exists()
+
+
+def test_cli_update_explicit_empty_body_replacement(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
+    input_file = tmp_path / "create.json"
+    payload = {
+        "identity": "TASK-040",
+        "semantic_payload": {
+            "title": "Task with Body",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "# TASK-040: Task with Body\n\nInitial Body text.",
+    }
+    input_file.write_text(json.dumps(payload), encoding="utf-8")
+    main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
+    capsys.readouterr()
+
+    target_file = tmp_path / "tasks" / "TASK-040.md"
+    assert "Initial Body text." in target_file.read_text(encoding="utf-8")
+    import hashlib
+    sha256 = hashlib.sha256(target_file.read_bytes()).hexdigest()
+
+    update_file = tmp_path / "update.json"
+    update_payload = {
+        "target": "tasks/TASK-040.md",
+        "expected_sha256": sha256,
+        "patch": {
+            "set": [{"path": "/allowed_paths", "value": ["src/empty.py"]}],
+        },
+        "body_replacement": "",
+    }
+    update_file.write_text(json.dumps(update_payload), encoding="utf-8")
+
+    exit_code = main([
+        "artifact", "update",
+        "--kind", "task",
+        "--change", str(tmp_path),
+        "--input", str(update_file),
+        "--json",
+    ])
+    assert exit_code == 0
+    updated_content = target_file.read_text(encoding="utf-8")
+    assert "Initial Body text." not in updated_content
+
+

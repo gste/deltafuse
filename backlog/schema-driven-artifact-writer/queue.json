@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-23",
+  "entry": "AW-24",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -738,7 +738,7 @@
       "id": "AW-23",
       "phase": "H",
       "title": "Wire strict bounded parsing into public operation envelopes",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-22"
       ],

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
+
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
@@ -960,40 +962,93 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         elif args.artifact_cmd == "create":
-            if args.input == "-":
-                raw_text = sys.stdin.read()
-            else:
-                p = Path(args.input)
-                if not p.is_file():
-                    print(f"Input file not found: {args.input}", file=sys.stderr)
-                    return 2
-                raw_text = p.read_text(encoding="utf-8")
+            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+            from deltafuse.core.artifact_registry import ArtifactRegistry
+
+            MAX_INPUT_BYTES = 1024 * 1024
 
             try:
-                raw_json = json.loads(raw_text)
-            except Exception as ex:
-                print(f"Invalid JSON input: {ex}", file=sys.stderr)
-                return 2
+                if args.input == "-":
+                    if hasattr(sys.stdin, "buffer"):
+                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+                    else:
+                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
+                else:
+                    p = Path(args.input)
+                    if not p.is_file():
+                        msg = f"Input file not found: {args.input}"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    stat_size = p.stat().st_size
+                    if stat_size > MAX_INPUT_BYTES:
+                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    raw_bytes = p.read_bytes()
 
-            if not isinstance(raw_json, dict):
-                print("JSON input payload must be an object", file=sys.stderr)
+                if len(raw_bytes) > MAX_INPUT_BYTES:
+                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                    print(msg, file=sys.stderr)
+                    return 2
+
+                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
+            except ArtifactReaderError as re_err:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
+                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
                 return 2
 
             identity = args.identity or raw_json.get("identity")
             if not identity:
-                print("Missing required 'identity' in JSON input or CLI argument", file=sys.stderr)
+                msg = "Missing required 'identity' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
                 return 2
 
-            request_id = raw_json.get("request_id")
+            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
             body = raw_json.get("body", "")
+
+            env_keys = {"request_id", "operation", "change", "identity", "body", "target", "expected_sha256"}
+            if raw_json.get("kind") == args.kind:
+                env_keys.add("kind")
 
             if "semantic_payload" in raw_json and isinstance(raw_json["semantic_payload"], dict):
                 semantic_payload = raw_json["semantic_payload"]
+                envelope = dict(raw_json)
+                envelope["request_id"] = request_id
+                envelope["operation"] = "create"
+                envelope["kind"] = args.kind
+                envelope["identity"] = identity
             else:
-                env_keys = {"request_id", "operation", "change", "identity", "body", "target", "expected_sha256"}
-                if raw_json.get("kind") == args.kind:
-                    env_keys.add("kind")
                 semantic_payload = {k: v for k, v in raw_json.items() if k not in env_keys}
+                envelope = {
+                    "request_id": request_id,
+                    "operation": "create",
+                    "kind": args.kind,
+                    "identity": identity,
+                    "semantic_payload": semantic_payload,
+                }
+                if "change" in raw_json:
+                    envelope["change"] = raw_json["change"]
+                if "body" in raw_json:
+                    envelope["body"] = raw_json["body"]
+
+
+            reg = ArtifactRegistry()
+            env_val = reg.validate_operation_envelope(envelope)
+            if not env_val.valid:
+                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
+                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
+                return 2
 
             change_dir = Path(args.change).resolve()
             cid = None
@@ -1016,7 +1071,7 @@ def main(argv: list[str] | None = None) -> int:
                 product_root=change_dir,
                 change_id=cid,
             )
-            service = ArtifactService(product_root=change_dir, auth_context=auth)
+            service = ArtifactService(product_root=change_dir, auth_context=auth, registry=reg)
 
             try:
                 receipt = service.create(
@@ -1027,40 +1082,46 @@ def main(argv: list[str] | None = None) -> int:
                     request_id=request_id,
                 )
             except ArtifactPolicyError as pe:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
                 print(f"Policy denied: {pe}", file=sys.stderr)
                 return 3
             except ArtifactPatchError as pe:
-                if pe.code == "core_owned_field":
-                    print(f"Core-owned field error: {pe}", file=sys.stderr)
-                    return 3
+                code = pe.code
+                ret = 3 if code == "core_owned_field" else 2
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
                 print(f"Patch error: {pe}", file=sys.stderr)
-                return 2
+                return ret
             except ArtifactServiceError as se:
-                if se.code in ("core_owned_field", "policy_denied"):
-                    print(f"Artifact service error: {se}", file=sys.stderr)
-                    return 3
-                elif se.code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch"):
-                    print(f"Artifact conflict error: {se}", file=sys.stderr)
-                    return 4
-                elif se.code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope"):
-                    print(f"Artifact validation error: {se}", file=sys.stderr)
-                    return 2
+                code = se.code
+                if code in ("core_owned_field", "policy_denied", "missing_core_context"):
+                    ret = 3
+                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
+                    ret = 4
+                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
+                    ret = 2
                 else:
-                    print(f"Artifact error: {se}", file=sys.stderr)
-                    return 5
+                    ret = 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
+                print(f"Artifact error: {se}", file=sys.stderr)
+                return ret
             except ArtifactLockError as le:
-                if "mismatch" in str(le):
-                    print(f"Lock hash mismatch: {le}", file=sys.stderr)
-                    return 4
+                ret = 4 if "mismatch" in str(le) else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
                 print(f"Lock error: {le}", file=sys.stderr)
-                return 5
+                return ret
             except ArtifactTransactionError as te:
-                if te.code == "idempotency_conflict":
-                    print(f"Transaction conflict: {te}", file=sys.stderr)
-                    return 4
+                ret = 4 if te.code == "idempotency_conflict" else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
                 print(f"Transaction error: {te}", file=sys.stderr)
-                return 5
+                return ret
             except Exception as ex:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
                 print(f"Unexpected error: {ex}", file=sys.stderr)
                 return 5
 
@@ -1071,48 +1132,108 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         elif args.artifact_cmd == "update":
-            if args.input == "-":
-                raw_text = sys.stdin.read()
-            else:
-                p = Path(args.input)
-                if not p.is_file():
-                    print(f"Input file not found: {args.input}", file=sys.stderr)
-                    return 2
-                raw_text = p.read_text(encoding="utf-8")
+            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+            from deltafuse.core.artifact_registry import ArtifactRegistry
+
+            MAX_INPUT_BYTES = 1024 * 1024
 
             try:
-                raw_json = json.loads(raw_text)
-            except Exception as ex:
-                print(f"Invalid JSON input: {ex}", file=sys.stderr)
-                return 2
+                if args.input == "-":
+                    if hasattr(sys.stdin, "buffer"):
+                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+                    else:
+                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
+                else:
+                    p = Path(args.input)
+                    if not p.is_file():
+                        msg = f"Input file not found: {args.input}"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    stat_size = p.stat().st_size
+                    if stat_size > MAX_INPUT_BYTES:
+                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    raw_bytes = p.read_bytes()
 
-            if not isinstance(raw_json, dict):
-                print("JSON input payload must be an object", file=sys.stderr)
+                if len(raw_bytes) > MAX_INPUT_BYTES:
+                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                    print(msg, file=sys.stderr)
+                    return 2
+
+                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
+            except ArtifactReaderError as re_err:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
+                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
                 return 2
 
             target = args.target or raw_json.get("target")
             expected_sha256 = args.expected_sha256 or raw_json.get("expected_sha256")
 
             if not target:
-                print("Missing required 'target' in JSON input or CLI argument", file=sys.stderr)
+                msg = "Missing required 'target' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
                 return 2
             if not expected_sha256:
-                print("Missing required 'expected_sha256' in JSON input or CLI argument", file=sys.stderr)
+                msg = "Missing required 'expected_sha256' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
                 return 2
 
-            request_id = raw_json.get("request_id")
-            body_replacement = raw_json.get("body_replacement") or raw_json.get("body")
+            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
+
+            if "body_replacement" in raw_json:
+                body_replacement = raw_json["body_replacement"]
+            elif "body" in raw_json:
+                body_replacement = raw_json["body"]
+            else:
+                body_replacement = None
 
             if "patch" in raw_json and isinstance(raw_json["patch"], dict):
                 patch = raw_json["patch"]
+                envelope = dict(raw_json)
+                envelope["request_id"] = request_id
+                envelope["operation"] = "update"
+                envelope["kind"] = args.kind
+                envelope["target"] = target
+                envelope["expected_sha256"] = expected_sha256
             else:
                 patch = {
                     "set": raw_json.get("set", []),
                     "remove": raw_json.get("remove", []),
                     "canonicalize_metadata": raw_json.get("canonicalize_metadata", False),
                 }
+                envelope = {
+                    "request_id": request_id,
+                    "operation": "update",
+                    "kind": args.kind,
+                    "target": target,
+                    "expected_sha256": expected_sha256,
+                    "patch": patch,
+                }
+                if body_replacement is not None:
+                    envelope["body_replacement"] = body_replacement
 
             canonicalize_metadata = patch.get("canonicalize_metadata", False) if isinstance(patch, dict) else False
+
+            reg = ArtifactRegistry()
+            env_val = reg.validate_operation_envelope(envelope)
+            if not env_val.valid:
+                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
+                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
+                return 2
 
             change_dir = Path(args.change).resolve()
             auth = create_authorization_context(
@@ -1121,7 +1242,7 @@ def main(argv: list[str] | None = None) -> int:
                 product_root=change_dir,
                 change_id=change_dir.name if change_dir.name.startswith("CHG-") else None,
             )
-            service = ArtifactService(product_root=change_dir, auth_context=auth)
+            service = ArtifactService(product_root=change_dir, auth_context=auth, registry=reg)
 
             try:
                 receipt = service.update(
@@ -1134,40 +1255,46 @@ def main(argv: list[str] | None = None) -> int:
                     canonicalize_metadata=canonicalize_metadata,
                 )
             except ArtifactPolicyError as pe:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
                 print(f"Policy denied: {pe}", file=sys.stderr)
                 return 3
             except ArtifactPatchError as pe:
-                if pe.code == "core_owned_field":
-                    print(f"Core-owned field error: {pe}", file=sys.stderr)
-                    return 3
+                code = pe.code
+                ret = 3 if code == "core_owned_field" else 2
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
                 print(f"Patch error: {pe}", file=sys.stderr)
-                return 2
+                return ret
             except ArtifactServiceError as se:
-                if se.code in ("core_owned_field", "policy_denied"):
-                    print(f"Artifact service error: {se}", file=sys.stderr)
-                    return 3
-                elif se.code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch"):
-                    print(f"Artifact conflict error: {se}", file=sys.stderr)
-                    return 4
-                elif se.code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope"):
-                    print(f"Artifact validation error: {se}", file=sys.stderr)
-                    return 2
+                code = se.code
+                if code in ("core_owned_field", "policy_denied", "missing_core_context"):
+                    ret = 3
+                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
+                    ret = 4
+                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
+                    ret = 2
                 else:
-                    print(f"Artifact error: {se}", file=sys.stderr)
-                    return 5
+                    ret = 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
+                print(f"Artifact error: {se}", file=sys.stderr)
+                return ret
             except ArtifactLockError as le:
-                if "mismatch" in str(le):
-                    print(f"Lock hash mismatch: {le}", file=sys.stderr)
-                    return 4
+                ret = 4 if "mismatch" in str(le) else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
                 print(f"Lock error: {le}", file=sys.stderr)
-                return 5
+                return ret
             except ArtifactTransactionError as te:
-                if te.code == "idempotency_conflict":
-                    print(f"Transaction conflict: {te}", file=sys.stderr)
-                    return 4
+                ret = 4 if te.code == "idempotency_conflict" else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
                 print(f"Transaction error: {te}", file=sys.stderr)
-                return 5
+                return ret
             except Exception as ex:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
                 print(f"Unexpected error: {ex}", file=sys.stderr)
                 return 5
 
@@ -1176,6 +1303,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"artifact update: kind '{args.kind}' target '{target}' updated (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
             return 0
+
 
         elif args.artifact_cmd == "validate":
             change_dir = Path(args.change).resolve()

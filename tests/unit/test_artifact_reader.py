@@ -4,6 +4,7 @@ import pytest
 from deltafuse.core.artifact_reader import (
     strict_read_artifact,
     strict_parse_yaml,
+    strict_parse_json,
     ArtifactReaderError,
     ArtifactParseResult,
 )
@@ -92,3 +93,52 @@ def test_missing_frontmatter_delimiters_raises():
     bad_content = "id: TASK-001\nno delimiters here"
     with pytest.raises(ArtifactReaderError, match="delimiter"):
         strict_read_artifact(bad_content)
+
+
+def test_strict_parse_json_success():
+    json_text = '{"a": 1, "b": "hello", "c": [1, 2, 3]}'
+    res = strict_parse_json(json_text)
+    assert res == {"a": 1, "b": "hello", "c": [1, 2, 3]}
+
+
+def test_strict_parse_json_duplicate_key_rejected():
+    bad_json = '{"key": 1, "key": 2}'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(bad_json)
+    assert exc_info.value.code == "duplicate_key"
+
+
+def test_strict_parse_json_nested_duplicate_key_rejected():
+    bad_json = '{"outer": {"nested": "a", "nested": "b"}}'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(bad_json)
+    assert exc_info.value.code == "duplicate_key"
+
+
+def test_strict_parse_json_non_finite_float_rejected():
+    bad_json = '{"val": NaN}'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(bad_json)
+    assert exc_info.value.code in ("non_finite_float", "json_syntax_error")
+
+
+def test_strict_parse_json_excessive_depth_rejected():
+    deep_json = '{"a": ' + ('{"a": ' * 110) + '1' + ('}' * 110) + '}'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(deep_json, max_depth=100)
+    assert exc_info.value.code == "exceeds_max_depth"
+
+
+def test_strict_parse_json_max_bytes_rejected():
+    large_bytes = b'{"a": "' + (b'x' * 100) + b'"}'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(large_bytes, max_bytes=50)
+    assert exc_info.value.code == "exceeds_max_bytes"
+
+
+def test_strict_parse_json_non_object_rejected():
+    arr_json = '[1, 2, 3]'
+    with pytest.raises(ArtifactReaderError) as exc_info:
+        strict_parse_json(arr_json)
+    assert exc_info.value.code == "not_an_object"
+

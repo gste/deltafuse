@@ -70,3 +70,7 @@ properties:
   body:
     type: string
     description: Optional raw markdown body string.
+  body_replacement:
+    type: string
+    description: Optional raw markdown body replacement string.
+

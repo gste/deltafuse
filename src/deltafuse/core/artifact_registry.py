@@ -113,6 +113,36 @@ class ArtifactRegistry:
         self._manifest = data
         return data
 
+    def get_envelope_schema(self) -> dict[str, Any]:
+        cand1 = Path("docs/contracts/artifact-writer.schema.yaml")
+        if cand1.is_file():
+            return yaml.safe_load(cand1.read_text(encoding="utf-8"))
+        src_root = source_assets_root()
+        if src_root:
+            cand2 = src_root / "contracts" / "artifact-writer.schema.yaml"
+            if cand2.is_file():
+                return yaml.safe_load(cand2.read_text(encoding="utf-8"))
+        b_root = bundle_root()
+        if b_root:
+            cand3 = b_root / "contracts" / "artifact-writer.schema.yaml"
+            if cand3.is_file():
+                return yaml.safe_load(cand3.read_text(encoding="utf-8"))
+        raise ArtifactRegistryError("Could not locate artifact-writer.schema.yaml contract")
+
+    def validate_operation_envelope(self, envelope: dict[str, Any]) -> ValidationResult:
+        schema = self.get_envelope_schema()
+        validator = jsonschema.Draft202012Validator(schema)
+        errors = sorted(validator.iter_errors(envelope), key=lambda e: (list(e.path), e.message))
+        if not errors:
+            return ValidationResult(valid=True, scopes=[{"scope": "envelope", "status": "valid"}])
+        diags: list[ValidationDiagnostic] = []
+        for err in errors:
+            code = _map_validator_code(err.validator)
+            ptr = _json_pointer(err.path)
+            diags.append(ValidationDiagnostic(code=code, stage="input", path=ptr, message=err.message))
+        return ValidationResult(valid=False, diagnostics=diags, scopes=[{"scope": "envelope", "status": "invalid"}])
+
+
     def get_descriptor(self, kind: str) -> dict[str, Any]:
         if kind in self._descriptors_cache:
             return self._descriptors_cache[kind]

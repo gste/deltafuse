@@ -128,11 +128,18 @@ class ArtifactService:
         request_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a new artifact atomically under schema and policy protection."""
+        if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
+            raise ArtifactServiceError(
+                f"Invalid request_id pattern: '{request_id}'",
+                code="invalid_envelope",
+            )
+
         if not isinstance(semantic_payload, dict):
             raise ArtifactServiceError(
                 "semantic_payload must be a dictionary",
                 code="invalid_payload",
             )
+
 
         for core_field in ("status", "schema_version", "framework"):
             if core_field in semantic_payload:
@@ -279,7 +286,19 @@ class ArtifactService:
         canonicalize_metadata: bool = False,
     ) -> dict[str, Any]:
         """Update an existing artifact atomically using typed JSON pointer patches."""
+        if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
+            raise ArtifactServiceError(
+                f"Invalid request_id pattern: '{request_id}'",
+                code="invalid_envelope",
+            )
+        if not expected_sha256 or not re.match(r"^(sha256:[a-fA-F0-9]{64}|[a-fA-F0-9]{64})$", str(expected_sha256)):
+            raise ArtifactServiceError(
+                f"Invalid expected_sha256 format: '{expected_sha256}'",
+                code="invalid_envelope",
+            )
+
         target_path = self._resolve_target_path(kind, target)
+
 
         if not target_path.is_file():
             raise ArtifactServiceError(
