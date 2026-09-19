@@ -1,0 +1,158 @@
+{
+  "evaluation_mode": "harness_baseline",
+  "mode_description": "Deterministic serializer and schema harness check. Evaluates harness invariants and independent oracle.",
+  "total_cases": 8,
+  "first_pass_valid_count": 8,
+  "first_pass_valid_rate": 100.0,
+  "semantic_correct_count": 8,
+  "semantic_correct_rate": 100.0,
+  "forbidden_gate_blocked_count": 1,
+  "strata": {
+    "task_create": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "routing_update": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "spec_delta": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "nested_patch": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "explicit_removal": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "legacy_comments": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "semantic_omission": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    },
+    "unauthorized_status": {
+      "total": 1,
+      "first_pass": 1,
+      "semantic_correct": 1,
+      "gate_blocked": 1
+    }
+  },
+  "results": [
+    {
+      "id": "CASE-01",
+      "stratum": "task_create",
+      "title": "Create task with valid semantic fields",
+      "operation": "create",
+      "passed_op": true,
+      "expected_valid": true,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": null
+    },
+    {
+      "id": "CASE-02",
+      "stratum": "routing_update",
+      "title": "Update routing capability claims with canonicalization",
+      "operation": "update",
+      "passed_op": true,
+      "expected_valid": true,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": null
+    },
+    {
+      "id": "CASE-03",
+      "stratum": "spec_delta",
+      "title": "Spec delta with multiline prose body",
+      "operation": "create",
+      "passed_op": true,
+      "expected_valid": true,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": null
+    },
+    {
+      "id": "CASE-04",
+      "stratum": "nested_patch",
+      "title": "Patch nested context budget path",
+      "operation": "update",
+      "passed_op": true,
+      "expected_valid": true,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": null
+    },
+    {
+      "id": "CASE-05",
+      "stratum": "explicit_removal",
+      "title": "Attempt removal of required forbidden_paths property",
+      "operation": "update",
+      "passed_op": false,
+      "expected_valid": false,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": "[required_property_missing] Post-patch storage schema validation failed: 'forbidden_paths' is a required property"
+    },
+    {
+      "id": "CASE-06",
+      "stratum": "legacy_comments",
+      "title": "Opt-in canonicalization on legacy commented artifact",
+      "operation": "update",
+      "passed_op": true,
+      "expected_valid": true,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": null
+    },
+    {
+      "id": "CASE-07",
+      "stratum": "semantic_omission",
+      "title": "Task creation with invalid kind enum value",
+      "operation": "create",
+      "passed_op": false,
+      "expected_valid": false,
+      "gate_blocked": false,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": "[schema_validation_failed] Storage schema validation failed for create 'task': /: 'depends_on' is a required property; /: 'requirement_delta' is a required property; /: 'spec_refs' is a required property; /: 'allowed_paths' is a required property; /: 'forbidden_paths' is a required property; /: 'context_budget' is a required property; /kind: 'invalid_kind' is not one of ['feature', 'bugfix', 'refactor', 'maintenance', 'documentation']"
+    },
+    {
+      "id": "CASE-08",
+      "stratum": "unauthorized_status",
+      "title": "Attempt illicit status patch on task",
+      "operation": "update",
+      "passed_op": false,
+      "expected_valid": false,
+      "gate_blocked": true,
+      "first_pass": true,
+      "semantic_correct": true,
+      "error": "[core_owned_field] Field 'status' target by pointer '/status' is Core-owned and immutable"
+    }
+  ]
+}

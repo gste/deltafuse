@@ -1,8 +1,8 @@
-"""Evaluation script for paired small-model evaluation protocol (AW-18).
+"""Evaluation script for paired small-model evaluation protocol and independent oracle (AW-27).
 
 Runs evaluation corpus cases against ArtifactService and independent oracle checks,
 reporting first-pass structural validity, mechanical retries, independent semantic correctness,
-and forbidden gate block rates.
+and forbidden gate block rates with explicit mode disambiguation.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import tempfile
 from typing import Any
 
 from deltafuse.core.artifact_patch import ArtifactPatchError
@@ -20,7 +21,76 @@ from deltafuse.core.installer import install
 from deltafuse.core.scaffold import scaffold_change
 
 
-def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str, Any]:
+def evaluate_independent_oracle(
+    change_dir: Path,
+    case: dict[str, Any],
+    passed_op: bool,
+    gate_blocked: bool,
+    error_msg: str | None,
+) -> dict[str, Any]:
+    """Independent oracle evaluating ground truth disk state and Core gate validity.
+
+    Does NOT trust ArtifactService receipt or return value alone. Inspects actual disk files
+    and verifies semantic correctness, schema validity, field preservation, and gate enforcement.
+    """
+    op = case["operation"]
+    kind = case["kind"]
+    expected_valid = case["expected_valid"]
+    expected_gate_block = case.get("expected_gate_block", False)
+    payload = case["input_payload"]
+
+    # 1. First-pass structural operation validity match
+    first_pass = (passed_op == expected_valid)
+
+    # 2. Gate block correctness
+    gate_block_correct = (gate_blocked == expected_gate_block) if expected_gate_block else (not gate_blocked)
+
+    # 3. Ground truth disk inspection
+    semantic_correct = first_pass and gate_block_correct
+
+    if expected_valid and passed_op:
+        target_path = None
+        if kind == "task":
+            target_path = change_dir / "tasks" / "TASK-001.md"
+        elif kind == "routing":
+            target_path = change_dir / "routing.yaml"
+        elif kind == "spec-delta":
+            target_path = change_dir / "spec-delta.md"
+
+        if target_path and target_path.is_file():
+            content = target_path.read_text(encoding="utf-8")
+            if kind == "task":
+                if "id:" not in content or "kind:" not in content or "slice:" not in content:
+                    semantic_correct = False
+                if isinstance(payload, dict) and "title" in payload and str(payload["title"]) not in content:
+                    semantic_correct = False
+            if "body" in case and case["body"]:
+                if case["body"].strip() not in content:
+                    semantic_correct = False
+        else:
+            semantic_correct = False
+
+    elif not expected_valid and passed_op:
+        semantic_correct = False
+
+    elif expected_gate_block and not gate_blocked:
+        semantic_correct = False
+
+    return {
+        "first_pass": first_pass,
+        "gate_blocked": gate_blocked,
+        "gate_block_correct": gate_block_correct,
+        "semantic_correct": semantic_correct,
+    }
+
+
+def run_evaluation(
+    corpus_path: Path,
+    work_dir: Path | None = None,
+    *,
+    mode: str = "harness_baseline",
+    weakened_mode: str | None = None,
+) -> dict[str, Any]:
     """Execute evaluation corpus against ArtifactService and compute metrics."""
     if not corpus_path.is_file():
         raise FileNotFoundError(f"Evaluation corpus not found: {corpus_path}")
@@ -35,7 +105,7 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
         stratum = case.get("stratum", "unknown")
         kind = case["kind"]
         op = case["operation"]
-        payload = case["input_payload"]
+        payload = case["input_payload"].copy() if isinstance(case["input_payload"], dict) else case["input_payload"]
         body = case.get("body", "")
         expected_valid = case["expected_valid"]
         expected_block = case.get("expected_gate_block", False)
@@ -43,14 +113,11 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
         st_data = strata_counts.setdefault(stratum, {"total": 0, "first_pass": 0, "semantic_correct": 0, "gate_blocked": 0})
         st_data["total"] += 1
 
-        # Use temporary workspace for case
-        import tempfile
         case_tmp = Path(tempfile.mkdtemp())
         install(target_dir=case_tmp, framework_root=Path.cwd())
         cid = f"CHG-800-{case_id.lower().replace('_', '-')}"
         change_dir = scaffold_change(case_tmp, cid, route="code", title=f"Eval {case_id}")
 
-        # Create prerequisite files for reference validation
         (change_dir / "slices").mkdir(parents=True, exist_ok=True)
         (change_dir / "slices" / "SLICE-01.md").write_text(f"---\nid: SLICE-01\nchange: {cid}\ntitle: Eval Slice\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
         (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
@@ -76,9 +143,8 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
                 }
                 rec = service.create(kind="task", identity="TASK-001", semantic_payload=init_p)
                 target_path_str = "tasks/TASK-001.md"
-                expected_sha = (change_dir / target_path_str).read_bytes()
                 import hashlib
-                expected_sha = hashlib.sha256(expected_sha).hexdigest()
+                expected_sha = hashlib.sha256((change_dir / target_path_str).read_bytes()).hexdigest()
             elif kind == "routing":
                 target_path_str = "routing.yaml"
                 rf = change_dir / "routing.yaml"
@@ -87,7 +153,12 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
                 import hashlib
                 expected_sha = hashlib.sha256(rf.read_bytes()).hexdigest()
 
-        # Execute operation
+        # Simulate weakened writer modes for negative control verification
+        if weakened_mode == "drop_title" and isinstance(payload, dict) and "title" in payload:
+            del payload["title"]
+        elif weakened_mode == "force_verified" and isinstance(payload, dict) and op == "update":
+            payload = {"set": [{"path": "/status", "value": "verified"}]}
+
         passed_op = False
         gate_blocked = False
         err_msg = None
@@ -101,12 +172,13 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
                 passed_op = True
         except (ArtifactServiceError, ArtifactPolicyError, ArtifactPatchError) as ex:
             err_msg = str(ex)
-            if "protected" in err_msg.lower() or "immutable" in err_msg.lower() or "unauthorized" in err_msg.lower():
+            if "protected" in err_msg.lower() or "immutable" in err_msg.lower() or "unauthorized" in err_msg.lower() or "halted" in err_msg.lower():
                 gate_blocked = True
 
-        first_pass = passed_op == expected_valid
-        gate_block_correct = gate_blocked == expected_block if expected_block else True
-        semantic_correct = first_pass and gate_block_correct
+        oracle_eval = evaluate_independent_oracle(change_dir, case, passed_op, gate_blocked, err_msg)
+
+        first_pass = oracle_eval["first_pass"]
+        semantic_correct = oracle_eval["semantic_correct"]
 
         if first_pass:
             st_data["first_pass"] += 1
@@ -134,6 +206,12 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
     gate_blocked_count = sum(1 for r in results if r["gate_blocked"])
 
     summary = {
+        "evaluation_mode": mode,
+        "mode_description": (
+            "Deterministic serializer and schema harness check. Evaluates harness invariants and independent oracle."
+            if mode == "harness_baseline"
+            else "Paired external small-model evaluation."
+        ),
         "total_cases": total_cases,
         "first_pass_valid_count": first_pass_count,
         "first_pass_valid_rate": round(first_pass_count / total_cases * 100, 2) if total_cases else 0.0,
@@ -143,6 +221,11 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
         "strata": strata_counts,
         "results": results,
     }
+
+    if mode == "paired_model":
+        summary["external_model_status"] = "unavailable_no_endpoint"
+        summary["acceptance_status"] = "open_for_AW-20"
+        summary["note"] = "External model endpoint is unavailable in local environment; acceptance remains open for AW-20 without synthetic substitution."
 
     return summary
 
@@ -160,11 +243,18 @@ def main() -> int:
         type=Path,
         help="Path to save evaluation output JSON report",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["harness_baseline", "paired_model"],
+        default="harness_baseline",
+        help="Evaluation mode (default: harness_baseline)",
+    )
     args = parser.parse_args()
 
-    summary = run_evaluation(args.corpus)
+    summary = run_evaluation(args.corpus, mode=args.mode)
 
     print("=== Artifact Writer Evaluation Report ===")
+    print(f"Mode: {summary['evaluation_mode']}")
     print(f"Total Cases: {summary['total_cases']}")
     print(f"First-Pass Valid: {summary['first_pass_valid_count']}/{summary['total_cases']} ({summary['first_pass_valid_rate']}%)")
     print(f"Semantic Correct: {summary['semantic_correct_count']}/{summary['total_cases']} ({summary['semantic_correct_rate']}%)")

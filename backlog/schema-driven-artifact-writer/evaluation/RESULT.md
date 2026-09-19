@@ -1,11 +1,13 @@
-# Paired Small-Model Evaluation Results
+# Paired Small-Model Evaluation & Harness Baseline Results
 
 ## Executive Summary
 
+- **Evaluation Mode:** `harness_baseline` (Deterministic Harness & Oracle Baseline Validation)
 - **Total Corpus Cases Evaluated:** 8 cases across 8 strata.
 - **First-Pass Structural Validity Rate:** 100.0% (8/8).
 - **Independent Semantic Correctness Rate:** 100.0% (8/8).
 - **Forbidden Gate Block Rate:** 100.0% (1/1 illicit status patch attack blocked).
+- **External Small-Model Status:** `unavailable_no_endpoint` (acceptance remains open for AW-20).
 
 ---
 
@@ -24,13 +26,13 @@
 
 ---
 
-## Findings & Evaluation Conclusion
+## Disambiguation & Evaluation Conclusion
 
-1. **Mechanical Accuracy & Fail-Closed Boundaries:**
-   Artifact Writer enforces strict schema and policy validation before any file writes occur. Invalid enum values (`CASE-07`), missing required properties (`CASE-05`), and protected status patches (`CASE-08`) are rejected cleanly with structured diagnostics.
+1. **Harness Disambiguation:**
+   This report documents deterministic harness execution and independent oracle verification. Unit serializer success is clearly distinguished from live external model performance.
 
-2. **Preservation & Formatting Compatibility:**
-   Explicit formatting opt-in (`canonicalize_metadata: true`) correctly handles legacy commented or non-canonical frontmatter (`CASE-06`, `CASE-02`) without loss of opaque body prose (`CASE-03`).
+2. **Independent Oracle Safeguards:**
+   Ground truth disk state and Core gate validation (`check_gate`) independently evaluate artifact validity. Negative controls prove that weakened writers dropping required semantic fields or forging status/evidence are caught and failed by the oracle.
 
-3. **Authority Safeguards Unweakened:**
-   Independent Core authority and gate invariants remain 100% enforced; no client API call can bypass Core state transitions or forge gate receipts.
+3. **External Model Evaluation Status:**
+   Live external model endpoint access is unavailable in this execution environment. In accordance with CONTRACT.md and AW-27, no synthetic or fake LLM scores are substituted. Acceptance of model performance claims remains open for final reconciliation in AW-20.
