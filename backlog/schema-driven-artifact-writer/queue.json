@@ -1586,7 +1586,7 @@
       "title": "Replace hardcoded model scores with genuine paired evidence",
       "status": "in_progress",
       "environment_blocker": {
-        "requirement": "authorized small-model API endpoint and fresh paired manual/Writer-arm sessions in both arms (external_model_status: unavailable_no_endpoint on this host)"
+        "requirement": "authorized small-model endpoint that follows structured authoring instructions for protocol-scale payloads; little-coder -> inclusionai/ling-3.0-flash-fin:free probed 2026-09-20 (preregistered spec, pilot + 4/4 reproducibility calls) failed to reproduce requested values; traces in evaluation/live-run-2026-09-20/"
       },
       "depends_on": [
         "AW-41"

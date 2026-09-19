@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "run_id": "live-run-2026-09-20-a",
+  "frozen_before_collection": true,
+  "frozen_at": "2026-09-20",
+  "purpose": "AW-40 preregistration: live paired small-model evaluation of the schema-driven Artifact Writer using an actually-invoked model with a fixed identity. No outcome was collected before this spec was written; parameters below are frozen.",
+  "model": {
+    "provider": "little-coder (npm pi)",
+    "model_id": "inclusionai/ling-3.0-flash-fin:free",
+    "invocation_argv_template": [
+      "little-coder", "--model", "inclusionai/ling-3.0-flash-fin:free",
+      "--no-tools", "--no-session", "--mode", "text",
+      "--system-prompt", "<strict authoring system prompt (see amendments)>",
+      "-p", "<prompt>"
+    ],
+    "identity_fixed": true,
+    "session_policy": "fresh ephemeral session per call (--no-session); no session reuse across cases or arms",
+    "tools": "disabled (--no-tools) so the comparison measures single-turn authoring output, not agent tool churn"
+  },
+  "protocol_amendments": [
+    {
+      "date": "2026-09-20",
+      "id": "AMEND-1",
+      "reason": "pilot defect: with the stock little-coder system prompt, the model persisted agentic behavior (tool_call markup, reading-files claims, meta-responses) despite --no-tools and user-level instructions; structured output was unrecoverable",
+      "change": "invoke with an explicit --system-prompt override: 'You are a precise structured-data authoring assistant. You have no tools and must never mention tools. Always follow the user's output-format instruction exactly.' prior to any measured collection",
+      "status": "recorded before the measured run; pilot traces remain separate (live-run-2026-09-20/pilot-raw/)"
+    },
+    {
+      "date": "2026-09-20",
+      "id": "AMEND-2",
+      "reason": "pilot defect: with long user messages the free-tier endpoint effectively dropped the requested values (the model produced unrelated example documents or empty/meta JSON), while short user messages reproduced the requested values exactly",
+      "change": "user prompts are kept short (requested values + output format only); all authoring constraints and the no-extra-fields contract live in the --system-prompt override",
+      "status": "recorded before the measured run; pilot traces remain separate"
+    }
+  ],
+  "corpus": {
+    "path": "tests/fixtures/artifact_writer_eval/eval_corpus.json",
+    "cases": 8,
+    "strata": [
+      "task_create", "routing_update", "spec_delta", "nested_patch",
+      "explicit_removal", "legacy_comments", "semantic_omission", "unauthorized_status"
+    ]
+  },
+  "arms": {
+    "A": "Manual raw YAML: model writes the artifact file content directly; evaluated by strict_read_artifact + authoritative storage schema + the same typed semantic assertions as the frozen oracle. Protected-field attempts (status) and missing-required-field attempts must be rejected (structural/gate denial).",
+    "B": "Typed Artifact Writer: model produces the semantic payload/patch JSON; runner applies it through ArtifactService exactly as the frozen harness does; evaluated by the unchanged evaluate_independent_oracle (independent disk + check_gate evidence, not Writer receipts).",
+    "order": "counterbalanced within case: even-index CASE ids start with Arm A, odd-index start with Arm B"
+  },
+  "budget_and_rules": {
+    "max_attempts_per_case_arm": 3,
+    "stopping_rule": "stop at first structurally accepted output (oracle first_pass True), otherwise until attempt limit; failed/parse/timeout attempts are retained in mechanics and denominators",
+    "retry_feedback": "on mechanical rejection, the model is re-prompted with the exact rejection error and asked to correct; retries count as mechanical attempts",
+    "timeout_per_call_seconds": 240,
+    "intent_specification": "every prompt contains the exact requested semantic values from the frozen corpus case (title, kind, slice, spec_refs, budgets, patch paths/values, or the deliberately invalid/protected values for defense cases)"
+  },
+  "metrics_and_success": {
+    "primary": [
+      "first_pass_structural_valid_rate per arm (first accepted output, no retry, per case denominator)",
+      "mechanical_retries_total per arm (invalid JSON/YAML, schema or service rejections before acceptance/limit)",
+      "independent_semantic_correct_rate per arm (frozen oracle for Arm B; strict-reader + schema + typed assertions analogue for Arm A)",
+      "forbidden_gate_block_rate per arm (expected-denial cases must be blocked)"
+    ],
+    "secondary": ["latency_seconds per call", "attempt_count per case", "model identity"],
+    "uncertainty_method": "per-arm rates with exact binomial 95% confidence intervals (Clopper-Pearson); small corpus n=8 per arm, so the run is labeled EXPLORATORY and no general model-gain claim is made",
+    "success_criterion": "no threshold; report measured rates, per-case raw data and uncertainty; benefit claim requires both the stated mechanical-reduction observation and zero semantic/gate regression in the observed cases"
+  },
+  "evidence_storage": {
+    "raw_traces": "evaluation/live-run-2026-09-20/raw/<case_id>-<arm>-<attempt>.json (prompt, full model output, argv, exit, duration, parse status, verdict fields)",
+    "metrics": "evaluation/live-run-2026-09-20/summary.json computed from traces only",
+    "results": "evaluation/RESULT.json / RESULT.md updated from this run with real model identity"
+  },
+  "run_outcome": {
+    "measured_run_executed": false,
+    "date": "2026-09-20",
+    "reason": "endpoint unsuitable: pilot (CASE-01/CASE-08, both arms) and a 4/4 fresh-call reproducibility probe showed the model never reproduces requested semantic values for corpus-scale payloads (traces in pilot-raw/ and probe-unsuitable/; see README.md). Collecting metrics from such outputs would be meaningless.",
+    "status": "AW-40 remains in_progress; exact prerequisite recorded in queue environment_blocker and results/AW-40.md"
+  },
+  "anti_fabrication": [
+    "all calls executed through the recorded argv; no synthetic or cached outputs substitute for a fresh call",
+    "no output is edited before evaluation; only code-fence stripping is applied for parsing",
+    "failed, timeout and refused attempts are retained, not excluded",
+    "model identity is the frozen string; no hidden substitution"
+  ]
+}
