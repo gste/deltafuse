@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-28",
+  "entry": "AW-27",
 
   "order": "first planned card with verified completed dependencies",
   "cards": [
@@ -971,7 +971,7 @@
       "id": "AW-28",
       "phase": "H",
       "title": "Complete real platform crash and release qualification",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-26"
       ],

@@ -1,0 +1,14 @@
+AGENTS.md:24:- Product tasks live under `docs/changes/<change-id>/tasks/**`; do not recreate `docs/todo/**`.
+AGENTS.md:25:- Bootstrap is a workflow profile represented by `project.baseline`; do not recreate `docs/init/**` or a repository-local process status file.
+CHANGELOG.md:101:- Replaced product `docs/inbox/`, `docs/todo/`, and `docs/init/` with `docs/intake/`, Change-owned `docs/changes/<change-id>/tasks/`, and `.deltafuse/config.yaml` baseline state.
+CHANGELOG.md:133:- Unified `docs/todo/<story>/` into single flat task queue (`NN-<slug>.md`).
+README.md:102:The product does not copy canonical `docs/**` and has no runtime `docs/init/**` or `docs/todo/**`. Tool-specific local skills are installer-created copies or links (`adapters.mode`: `auto` | `link` | `copy`), version/hash-stamped, and are not editable process sources.
+README.ru.md:102:Product не копирует канонический `docs/**` и не содержит runtime-папок `docs/init/**` или `docs/todo/**`. Локальные tool-specific skills — копии или ссылки инсталлера (`adapters.mode`: `auto` | `link` | `copy`) с version/hash, а не редактируемый process source.
+docs/README.md:86:There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Bootstrap is a profile controlled by `project.baseline`; tasks belong to their owning Change.
+docs/README.ru.md:86:В product repository нет локальных `docs/process/`, `docs/init/` и `docs/todo/`. Bootstrap — profile, управляемый `project.baseline`; tasks принадлежат owning Change.
+docs/testing-strategy.md:170:  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.call_width`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
+docs/using.md:43:The installer does not create `docs/process/`, `docs/init/`, or `docs/todo/` in the product repository.
+docs/using.ru.md:43:Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` внутри product repository.
+src/deltafuse/core/layout.py:23:LEGACY_FORBIDDEN_PATHS = ["docs/process", "docs/init", "docs/todo"]
+tests/validate-layout.ps1:99:foreach ($forbidden in @("docs/process", "docs/init", "docs/todo")) {
+tests/validate-layout.sh:83:for forbidden in docs/process docs/init docs/todo; do

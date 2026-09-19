@@ -114,3 +114,59 @@ def test_evidence_contends_on_product_mutation_lock(tmp_path: Path):
             write_stamped_evidence(dest, payload, root, lock_timeout=0.1)
         assert exc_info.value.code == "lock_acquisition_failed"
 
+
+def test_real_subprocess_product_mutation_lock_contention(tmp_path: Path):
+    """Real OS child subprocesses contending on ProductMutationLock."""
+    import subprocess
+    import sys
+    import time
+
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    # Subprocess 1 holds lock
+    script1 = (
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "from deltafuse.core.artifact_lock import ProductMutationLock\n"
+        "root = Path(sys.argv[1])\n"
+        "with ProductMutationLock(root, timeout=5.0):\n"
+        "    (root / 'locked.sentinel').write_text('LOCKED', encoding='utf-8')\n"
+        "    time.sleep(30)\n"
+    )
+
+    proc1 = subprocess.Popen([sys.executable, "-c", script1, str(root)])
+    sentinel = root / "locked.sentinel"
+
+    for _ in range(50):
+        if sentinel.exists():
+            break
+        time.sleep(0.1)
+
+    assert sentinel.exists(), "Subprocess 1 did not acquire lock in time"
+
+    # Subprocess 2 tries to acquire lock with short timeout and fails
+    script2 = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from deltafuse.core.artifact_lock import ProductMutationLock, ArtifactLockError\n"
+        "root = Path(sys.argv[1])\n"
+        "try:\n"
+        "    with ProductMutationLock(root, timeout=0.1):\n"
+        "        sys.exit(0)\n"
+        "except ArtifactLockError as ex:\n"
+        "    if ex.code == 'lock_acquisition_failed':\n"
+        "        sys.exit(42)\n"
+        "    sys.exit(1)\n"
+    )
+
+    proc2 = subprocess.Popen([sys.executable, "-c", script2, str(root)])
+    ret2 = proc2.wait(timeout=5)
+
+    # Clean up Subprocess 1
+    proc1.kill()
+    proc1.wait()
+
+    assert ret2 == 42, f"Subprocess 2 expected exit code 42 (lock_acquisition_failed), got {ret2}"
+
+

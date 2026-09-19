@@ -159,3 +159,37 @@ def test_staging_cleanup_on_success_and_failure(tmp_path: Path):
     removed = cleanup_orphaned_staging(tmp_path, max_age_seconds=0.0)
     assert removed == 1
     assert not orphaned.exists()
+
+
+def test_real_subprocess_concurrent_atomic_create(tmp_path: Path):
+    """Two real OS child subprocesses racing to atomic_create the same absent target file."""
+    import subprocess
+    import sys
+
+    target = tmp_path / "subprocess_race.txt"
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from deltafuse.core.artifact_storage import atomic_create, ArtifactStorageError\n"
+        "target = Path(sys.argv[1])\n"
+        "payload = sys.argv[2].encode('utf-8')\n"
+        "try:\n"
+        "    atomic_create(target, payload)\n"
+        "    sys.exit(0)\n"
+        "except ArtifactStorageError as ex:\n"
+        "    if ex.code == 'already_exists':\n"
+        "        sys.exit(42)\n"
+        "    sys.exit(1)\n"
+    )
+
+    p1 = subprocess.Popen([sys.executable, "-c", script, str(target), "DATA1"])
+    p2 = subprocess.Popen([sys.executable, "-c", script, str(target), "DATA2"])
+
+    ret1 = p1.wait(timeout=5)
+    ret2 = p2.wait(timeout=5)
+
+    returns = sorted([ret1, ret2])
+    assert returns == [0, 42], f"Expected one success (0) and one already_exists (42), got {returns}"
+    assert target.is_file()
+    assert target.read_bytes() in (b"DATA1", b"DATA2")
+

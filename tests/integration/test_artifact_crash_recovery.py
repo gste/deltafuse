@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import subprocess
+import sys
+import time
 import pytest
 
 from deltafuse.core.artifact_policy import AuthorizationContext
@@ -238,4 +241,105 @@ def test_receipt_failure_after_publish_preserves_journal_state_and_raises(tmp_pa
     import json
     rec = json.loads(journal_records[0].read_text(encoding="utf-8"))
     assert rec["state"] == "published"
+
+
+def test_real_subprocess_hard_kill_prepare_boundary_recovery(tmp_path: Path):
+    """Real subprocess hard-kill at prepare state: parent recovers previous target state."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "tasks" / "TASK-HARD-PREPARE.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    orig_bytes = b"ORIGINAL_HARD_PREPARE_BYTES"
+    target.write_bytes(orig_bytes)
+    orig_hash = hashlib.sha256(orig_bytes).hexdigest()
+
+    child_script = (
+        "import sys, time, hashlib\n"
+        "from pathlib import Path\n"
+        "from deltafuse.core.artifact_transactions import TransactionManager\n"
+        "from deltafuse.core.artifact_policy import AuthorizationContext\n"
+        "root = Path(sys.argv[1])\n"
+        "target = root / 'tasks' / 'TASK-HARD-PREPARE.md'\n"
+        "ctx = AuthorizationContext('worker', 'SLICE-01', root, 'CHG-01', 'TASK-01', 'Implement', 'h1', 'l1', 'fp1')\n"
+        "tm = TransactionManager(root)\n"
+        "tm.prepare_transaction('req-hard-prep', b'REQ', 'task', target, "
+        "sys.argv[2], hashlib.sha256(b'NEW_BYTES').hexdigest(), ctx)\n"
+        "(root / 'prepared.sentinel').write_text('OK', encoding='utf-8')\n"
+        "time.sleep(30)\n"
+    )
+
+    proc = subprocess.Popen([sys.executable, "-c", child_script, str(root), orig_hash])
+    sentinel = root / "prepared.sentinel"
+
+    # Poll for sentinel
+    for _ in range(50):
+        if sentinel.exists():
+            break
+        time.sleep(0.1)
+
+    assert sentinel.exists(), "Subprocess did not reach prepared state in time"
+
+    # Hard-kill the child process
+    proc.kill()
+    proc.wait()
+
+    # Perform crash recovery from parent process
+    outcomes = recover_pending_transactions(root)
+    assert len(outcomes) == 1
+    assert outcomes[0]["outcome"] == "restored_previous"
+
+    # Invariant: target file on disk is preserved byte-for-byte
+    assert target.read_bytes() == orig_bytes
+
+
+def test_real_subprocess_hard_kill_publish_boundary_recovery(tmp_path: Path):
+    """Real subprocess hard-kill at published state: parent recovers published state & commits receipt."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "tasks" / "TASK-HARD-PUBLISH.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    new_bytes = b"NEW_HARD_PUBLISHED_BYTES_456"
+    new_hash = hashlib.sha256(new_bytes).hexdigest()
+
+    child_script = (
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "from deltafuse.core.artifact_transactions import TransactionManager\n"
+        "from deltafuse.core.artifact_policy import AuthorizationContext\n"
+        "root = Path(sys.argv[1])\n"
+        "target = root / 'tasks' / 'TASK-HARD-PUBLISH.md'\n"
+        "ctx = AuthorizationContext('worker', 'SLICE-01', root, 'CHG-01', 'TASK-01', 'Implement', 'h1', 'l1', 'fp1')\n"
+        "tm = TransactionManager(root)\n"
+        "tx = tm.prepare_transaction('req-hard-pub', b'REQ2', 'task', target, "
+        "None, sys.argv[2], ctx)\n"
+        "target.write_bytes(sys.argv[3].encode('utf-8'))\n"
+        "tm.mark_published(tx['transaction_id'])\n"
+        "(root / 'published.sentinel').write_text('OK', encoding='utf-8')\n"
+        "time.sleep(30)\n"
+    )
+
+    proc = subprocess.Popen([sys.executable, "-c", child_script, str(root), new_hash, new_bytes.decode("utf-8")])
+    sentinel = root / "published.sentinel"
+
+    for _ in range(50):
+        if sentinel.exists():
+            break
+        time.sleep(0.1)
+
+    assert sentinel.exists(), "Subprocess did not reach published state in time"
+
+    # Hard-kill child process
+    proc.kill()
+    proc.wait()
+
+    # Perform crash recovery from parent process
+    outcomes = recover_pending_transactions(root)
+    assert len(outcomes) == 1
+    assert outcomes[0]["outcome"] == "recovered_published"
+
+    # Invariant: target file has new bytes and durable receipt is written
+    assert target.read_bytes() == new_bytes
+    receipts = list((root / ".deltafuse" / "receipts").glob("*.json"))
+    assert len(receipts) == 1
+
 

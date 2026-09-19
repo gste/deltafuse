@@ -177,3 +177,53 @@ def test_aw21_reproduce_security_failures(tmp_path: Path):
         )
     assert not (change1_dir / "tasks" / "TASK-101.md").exists()
 
+
+def test_security_real_platform_symlink_escape_protection(tmp_path: Path):
+    """Verify that resolve_artifact_path rejects symlink targets escaping product root."""
+    import os
+
+    outside = tmp_path / "outside_dir"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("SECRET", encoding="utf-8")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    symlink_target = repo / "linked_dir"
+
+    try:
+        os.symlink(outside, symlink_target, target_is_directory=True)
+    except OSError as err:
+        # If platform privileges prevent symlink creation (e.g., Windows non-admin without dev mode),
+        # verify the privilege failure is explicit and log/handle it cleanly.
+        pytest.skip(f"Symlink creation unavailable on host platform: {err}")
+
+    # Symlink created successfully on host platform: policy MUST reject path escape
+    with pytest.raises(ArtifactPolicyError) as exc_info:
+        resolve_artifact_path(repo, "linked_dir/secret.txt")
+
+    assert exc_info.value.code in ("symlink_escape_denied", "path_traversal_denied")
+
+
+def test_security_windows_ads_device_unc_protection(tmp_path: Path):
+    """Verify that ADS, reserved device names, and UNC paths are denied by policy."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".deltafuse").mkdir()
+
+    # 1. Alternate Data Stream (ADS) attack
+    with pytest.raises(ArtifactPolicyError) as exc_ads:
+        resolve_artifact_path(repo, "tasks/TASK-001.md:stream.txt")
+    assert exc_ads.value.code == "ads_denied"
+
+    # 2. Reserved Device Name attack
+    for dev in ("CON", "PRN", "AUX", "NUL", "COM1", "LPT1"):
+        with pytest.raises(ArtifactPolicyError) as exc_dev:
+            resolve_artifact_path(repo, f"tasks/{dev}.md")
+        assert exc_dev.value.code == "device_name_denied"
+
+    # 3. UNC Path attack
+    with pytest.raises(ArtifactPolicyError) as exc_unc:
+        resolve_artifact_path(repo, "\\\\server\\share\\task.md")
+    assert exc_unc.value.code == "path_traversal_denied"
+
+
