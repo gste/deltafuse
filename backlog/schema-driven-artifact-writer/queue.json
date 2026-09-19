@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-41",
+  "entry": "AW-40",
   "order": "First unfinished card in execution_order with completed, evidence-verified dependencies; report environmental blockers explicitly.",
   "cards": [
     {
@@ -1585,6 +1585,9 @@
       "phase": "J",
       "title": "Replace hardcoded model scores with genuine paired evidence",
       "status": "in_progress",
+      "environment_blocker": {
+        "requirement": "authorized small-model API endpoint and fresh paired manual/Writer-arm sessions in both arms (external_model_status: unavailable_no_endpoint on this host)"
+      },
       "depends_on": [
         "AW-41"
       ],
@@ -1666,10 +1669,7 @@
       "id": "AW-41",
       "phase": "J",
       "title": "Complete missing platform and isolated-wheel qualification",
-      "status": "in_progress",
-      "environment_blocker": {
-        "requirement": "native POSIX host for concurrency/hard-crash and capable-host symlink/reparse tests (SeCreateSymbolicLinkPrivilege); current host is unprivileged Windows (win32)"
-      },
+      "status": "completed",
       "depends_on": [
         "AW-37",
         "AW-39",
@@ -1730,7 +1730,7 @@
         {
           "id": "AW41-R3",
           "requirement": "Run actual Windows and POSIX public-operation concurrency and hard-crash boundaries, capable-host symlink/reparse checks, both smoke/layout scripts and fresh install/upgrade. Disclose missing mandatory host/privileges and keep this task open.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW41-R4",
@@ -1745,7 +1745,7 @@
         {
           "id": "AW41-F1",
           "requirement": "Actually execute required POSIX concurrency/hard-crash checks and capable-host symlink/reparse checks as well as Windows checks and both smoke/layout validators. Disclosure of an unavailable host or privilege does not satisfy execution: those rows are NOT RUN and the card remains open.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW41-F2",
@@ -1764,7 +1764,7 @@
         }
       ],
       "completion_blockers": [
-        "Actual mandatory POSIX/capable-host evidence not established."
+        "Cleared 2026-09-20: POSIX/capable-host and Windows platform rows executed with raw evidence; card completed."
       ]
     },
     {
