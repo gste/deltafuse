@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-45",
+  "entry": "AW-41",
   "order": "First unfinished card in execution_order with completed, evidence-verified dependencies; report environmental blockers explicitly.",
   "cards": [
     {
@@ -659,12 +659,12 @@
         {
           "id": "AW20-F1",
           "requirement": "Do not publish completed/accepted while any original mandatory check is FAIL or NOT RUN. Independently verify AW-42 against raw evidence and verbatim requirements; output an open-acceptance summary when live model or platform prerequisites are absent.",
-          "status": "passed"
+          "status": "open"
         },
         {
           "id": "AW20-F2",
           "requirement": "Final result, queue, card and evaluation statuses must agree. An evaluator reporting open_for_AW-20 cannot coexist with a completed AW-40/AW-20 closure claim under the current contract. Only explicit user scope revision can change required acceptance; record any such revision rather than silently paraphrasing it.",
-          "status": "passed"
+          "status": "open"
         }
       ]
     },
@@ -1667,6 +1667,9 @@
       "phase": "J",
       "title": "Complete missing platform and isolated-wheel qualification",
       "status": "in_progress",
+      "environment_blocker": {
+        "requirement": "native POSIX host for concurrency/hard-crash and capable-host symlink/reparse tests (SeCreateSymbolicLinkPrivilege); current host is unprivileged Windows (win32)"
+      },
       "depends_on": [
         "AW-37",
         "AW-39",
@@ -1992,7 +1995,7 @@
       "id": "AW-45",
       "phase": "L",
       "title": "Validate dependency-ready queue and consistent continuation handoffs",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-43"
       ],
@@ -2038,27 +2041,27 @@
         {
           "id": "AW45-R1",
           "requirement": "Add a bounded backlog consistency checker that validates unique card/check IDs, existing references, an acyclic dependency graph, queue/card current statuses and dependency-ready entry selection. Treat planned and in_progress as unfinished; completed dependencies also require inspected evidence before execution.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW45-R2",
           "requirement": "Add meaningful negative fixtures for the observed AW-20 entry with unfinished dependencies, stale AW-37 handoff, false no-work-remaining claim, unknown dependency, duplicate IDs and cycles. Add valid ready and all-blocked fixtures. A checker must not claim to verify live evidence merely from status strings.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW45-R3",
           "requirement": "Synchronize README, PLAN, EXECUTOR, queue and current summary/handoff pointers using the same selection rule. Clearly separate dated historical next-task notes from current instructions. No unfinished-work message may imply acceptance or completion.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW45-R4",
           "requirement": "If the first dependency-ready card has an unavailable environmental prerequisite, report it as ready by dependency but blocked by environment with the exact requirement. Independent ready work may proceed; dependent work may not. Never route directly to AW-42 or AW-20 while qualification predecessors remain open.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW45-R5",
           "requirement": "Run the checker against the real backlog and all negative fixtures. At closure recompute the next ready card after the proposed status change, recheck dirty state, and provide one bounded continuation prompt. Keep AW-40/AW-41/AW-42/AW-20 open until their own original criteria pass.",
-          "status": "open"
+          "status": "passed"
         }
       ]
     }

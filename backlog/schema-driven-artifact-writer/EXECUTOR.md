@@ -6,10 +6,10 @@ to external services. User instructions and canonical Process contracts prevail.
 
 ## Start one bounded task
 
-1. Read repository AGENTS.md, REVIEW-5.md, README.md, PLAN.md, this file, the
+1. Read repository AGENTS.md, REVIEW-6.md, README.md, PLAN.md, this file, the
    selected card, relevant CONTRACT.md/VALIDATION.md and actual predecessor evidence.
-2. Select the first planned card whose dependencies have verified relevant
-   completion evidence. Current entry: AW-37. Historical completed labels are
+2. Select the first unfinished card in queue.execution_order whose dependencies have verified relevant
+   completion evidence. Current entry: AW-45. Historical completed labels are
    claims to inspect, not permission to skip current acceptance checks.
 3. Work on ONE card per implementation turn. Do not automatically execute all
    remaining cards. If too large, create dependency-ordered child cards retaining
@@ -19,9 +19,61 @@ to external services. User instructions and canonical Process contracts prevail.
    hashes before edits. Preserve concurrent work and all files outside the write
    set. Do not reset, stash, clean or rewrite user changes to obtain a clean tree.
 
-Current sequence: AW-37 -> AW-41 -> AW-40 -> AW-42 -> AW-20.
+Current sequence: AW-45 -> AW-41 -> AW-40 -> AW-42 -> AW-20.
+AW-43 and AW-44 are completed with inspected evidence; do not skip their records.
 AW-39 remains completed for the verified routing-patch fix; retain its regressions.
 AW-38 remains completed for the proven missing-hash fix; retain its regressions.
+
+## Sixth-review execution gates - no inferred completion
+
+The current queue entry is AW-45, then AW-41 which is dependency-ready but
+environmentally blocked (native POSIX host for concurrency/hard-crash and
+capable-host symlink/reparse tests; current host is unprivileged Windows).
+Run the backlog checker regularly: `python check_backlog.py
+backlog/schema-driven-artifact-writer/queue.json`. AW-37 is not reopened.
+Retain its passing regressions. Do not route directly to AW-40/AW-42/AW-20
+while qualification predecessors remain open. Existing live qualification
+remains mandatory in AW-41/AW-40.
+
+Before ANY edit, write a short execution ledger in the selected result:
+criterion ID and exact text; mandatory subrows; observed pre-edit state; intended
+public probe; required host/model; expected observable failure; allowed files.
+Do not populate PASS from the previous agent's prose. Read the referenced objects.
+
+Apply these gates in order and stop the dependent work at the first unmet gate:
+
+1. Readiness: compute unfinished cards and unmet dependencies from queue.json.
+   Inspect predecessor evidence, not just completed strings. Report dependency
+   readiness and environmental availability separately. An unavailable host does
+   not authorize jumping to final acceptance. Independent ready work is allowed.
+2. Red: preserve the actual pre-edit counterexample. Documentation reconciliation
+   uses a contradictory-claims ledger; qualification uses a missing-evidence or
+   setup reproduction. Neither may be presented as a runtime behavioral failure.
+3. Execution: perform the exact required operation in the specified environment.
+   For wheel tests, build/install a real wheel, strip checkout import paths and
+   verify origin. Fix setup honestly or leave NOT RUN. A passing import/help test
+   does not replace Writer operations or installed-schema damage probes.
+4. Evidence: record argv, input refs, actual exit, stdout/stderr, source and wheel
+   hashes, environment, and before/after effects. Store sanitized evidence through
+   portable retrievable refs with an external hash index. Verify every ref/hash.
+   Never expose credentials, fabricate old logs, use this_file as a digest, or
+   substitute a fresh run for an old one without labeling the new source/run.
+5. Status: NOT RUN means no qualifying execution, FAIL means a violated invariant,
+   and PASS requires inspected qualifying evidence. Queue open maps to result
+   FAIL/NOT RUN; queue passed maps only to complete PASS. Compound parents stay
+   open if ANY mandatory subrow is FAIL/NOT RUN. No PASS (audit) shortcut for a
+   parent that also requires actual execution. Correct reporting can finish a
+   reporting card, never its platform/model/acceptance parent.
+6. Handoff: recompute readiness after the proposed status update. Synchronize
+   current navigation; distinguish historical handoffs explicitly. Run AW-45's
+   checker once it exists, plus independent evidence inspection. A structural
+   checker does not certify raw evidence truth or justify a completion claim.
+
+A result must include a final refusal-to-close ledger: each missing prerequisite,
+its owning card/check, observed reason, required next action and dependent cards
+that remain blocked. If empty, demonstrate why every mandatory row is PASS.
+Do not add implementation work outside the card to chase a green report; record
+new defects as bounded work retaining the original acceptance requirements.
 
 ## Freeze acceptance before coding
 
@@ -192,9 +244,15 @@ based on intended future runs. Stop after the selected bounded card.
 ## Copy-paste continuation prompt
 
 Implement ONE dependency-ready Artifact Writer card in the canonical DeltaFuse
-repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-5.md,
+repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-6.md,
 README.md, EXECUTOR.md, RESULT-TEMPLATE.md, PLAN.md, the selected queue.json card
-and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-37.
+and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-41
+(dependency-ready after AW-45; environmentally blocked on this host: native
+POSIX concurrency/hard-crash and capable-host symlink/reparse tests need a
+POSIX host and SeCreateSymbolicLinkPrivilege). If that prerequisite is still
+unavailable, record the exact blocker, run `python check_backlog.py
+backlog/schema-driven-artifact-writer/queue.json` to confirm readiness, and
+stop — do not claim execution or route to AW-40/AW-42/AW-20.
 Recheck actual dependencies and dirty source; preserve unrelated work. Freeze an
 acceptance matrix with VERBATIM original criteria and reopened acceptance IDs;
 split compound criteria into mandatory evidence subrows without weakening them. Capture

@@ -1,7 +1,7 @@
-# Implementation plan Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ Schema-driven Artifact Writer
+# Implementation plan Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎС™ Schema-driven Artifact Writer
 
 Status: **implementation requires remediation; acceptance open**.
-The original phase plan below is historical. See [REVIEW-5.md](REVIEW-5.md)
+The original phase plan below is historical. See [REVIEW-6.md](REVIEW-6.md)
 for reopened tasks, strengthened execution rules and evidence reconciliation.
 Baseline: canonical repository VERSION 3.1.0,
 17786cb040d1ed3cd5636dd4a6b97453c1b77627 (2026-09-18).
@@ -12,13 +12,13 @@ Read [INTENTION.md](INTENTION.md), [ANALYSIS.md](ANALYSIS.md) and
 
 | Phase | Cards | Result |
 |---|---|---|
-| A contracts/readers | AW-00Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™03 | Explicit supported kinds, authority, strict decoding and pinned schema resolution |
-| B transformation/policy | AW-04Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™06 | Canonical codec, safe patch semantics, actual Core authorization |
-| C persistence | AW-07Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™09 | No-overwrite create, atomic update, CAS/locking and recoverable receipts |
-| D public interface | AW-10Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™11 | Shared Python service, CLI and small tool argument schemas |
-| E Core callers | AW-12Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™14 | Authentic verification evidence, status/Gate persistence, valid scaffold/index handling |
-| F rollout/qualification | AW-15Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™17 | Synchronized skills/assets/docs, manual compatibility and real platform checks |
-| G measured benefit | AW-18Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎС™20 | Controlled smaller-model experiment and acceptance closure |
+| A contracts/readers | AW-00Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў03 | Explicit supported kinds, authority, strict decoding and pinned schema resolution |
+| B transformation/policy | AW-04Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў06 | Canonical codec, safe patch semantics, actual Core authorization |
+| C persistence | AW-07Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў09 | No-overwrite create, atomic update, CAS/locking and recoverable receipts |
+| D public interface | AW-10Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў11 | Shared Python service, CLI and small tool argument schemas |
+| E Core callers | AW-12Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў14 | Authentic verification evidence, status/Gate persistence, valid scaffold/index handling |
+| F rollout/qualification | AW-15Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў17 | Synchronized skills/assets/docs, manual compatibility and real platform checks |
+| G measured benefit | AW-18Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎв„ў20 | Controlled smaller-model experiment and acceptance closure |
 
 Default sequence is deliberately linear for a smaller implementation model.
 Each card has one bounded responsibility and Red/Green criteria. If a card
@@ -56,8 +56,11 @@ behavior; examples are framework artifact operations only.
 | [AW-19](cards/AW-19.md) | Run paired external small-model evaluation | AW-18 |
 | [AW-20](cards/AW-20.md) | Close acceptance and publish migration/handoff | AW-19 |
 
-Machine-readable status: [queue.json](queue.json). Next ready card: AW-37.
-Current order: AW-37 -> AW-41 -> AW-40 -> AW-42 -> AW-20 (AW-38 remains completed; preserve its regressions).
+Machine-readable status: [queue.json](queue.json). Next ready card: AW-45.
+Current order: AW-45 -> AW-41 -> AW-40 -> AW-42 -> AW-20 (AW-43 and AW-44
+completed with evidence; AW-38/AW-39 remain completed; preserve their
+regressions). AW-41 is dependency-ready after AW-45 but environmentally
+blocked (native POSIX host / symlink privileges).
 Prior implementation statuses are historical; new cards must satisfy the
 original acceptance requirements before the feature can be marked complete.
 
@@ -97,3 +100,12 @@ Never combine all runtime and evidence changes into an unreviewable megacommit.
 Final acceptance is in [VALIDATION.md](VALIDATION.md). No weaker-model benefit
 claim until actual paired results exist. Do not declare code complete if
 status/evidence bypass, crash recovery or mandatory platform checks remain open.
+
+## Sixth-review remediation cards
+
+- [AW-43](cards/AW-43.md): literal criteria, compound parent statuses and unsupported claims. **Completed 2026-09-19** (results/AW-43.md).
+- [AW-44](cards/AW-44.md): real isolated wheel qualification and retrievable evidence. **Completed 2026-09-19** (results/AW-44.md, evidence/reconciliation/AW-44/).
+- [AW-45](cards/AW-45.md): queue/handoff consistency checker with negative fixtures. **Completed 2026-09-19** (results/AW-45.md, check_backlog.py).
+
+AW-41 additionally depends on AW-44/AW-45; existing live platform and model
+requirements retain their original owning cards.
