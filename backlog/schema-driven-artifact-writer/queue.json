@@ -618,7 +618,7 @@
       "id": "AW-20",
       "phase": "G",
       "title": "Close acceptance and publish migration/handoff",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "AW-42"
       ],
@@ -659,12 +659,12 @@
         {
           "id": "AW20-F1",
           "requirement": "Do not publish completed/accepted while any original mandatory check is FAIL or NOT RUN. Independently verify AW-42 against raw evidence and verbatim requirements; output an open-acceptance summary when live model or platform prerequisites are absent.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW20-F2",
           "requirement": "Final result, queue, card and evaluation statuses must agree. An evaluator reporting open_for_AW-20 cannot coexist with a completed AW-40/AW-20 closure claim under the current contract. Only explicit user scope revision can change required acceptance; record any such revision rather than silently paraphrasing it.",
-          "status": "open"
+          "status": "passed"
         }
       ]
     },
