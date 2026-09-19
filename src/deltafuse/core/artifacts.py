@@ -254,7 +254,23 @@ class ArtifactService:
         expected_sha256 = hashlib.sha256(content_bytes).hexdigest()
 
         req_id = request_id or f"req-{hashlib.sha256(content_bytes).hexdigest()[:16]}"
-        raw_req_bytes = json.dumps({"kind": kind, "identity": identity, "payload": semantic_payload}, sort_keys=True).encode("utf-8")
+        raw_req_dict = {
+            "operation": "create",
+            "kind": kind,
+            "identity": identity,
+            "target": str(target_path),
+            "semantic_payload": semantic_payload,
+            "body": body,
+            "auth_context": {
+                "actor": getattr(self.auth_context, "actor", None),
+                "work_item": getattr(self.auth_context, "work_item", None),
+                "stage": getattr(self.auth_context, "stage", None),
+                "change_id": getattr(self.auth_context, "change_id", None),
+                "fingerprint": getattr(self.auth_context, "fingerprint", None),
+            } if self.auth_context else None,
+        }
+        raw_req_bytes = json.dumps(raw_req_dict, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        raw_req_hash = hashlib.sha256(raw_req_bytes).hexdigest()
 
         op_hash = self.registry.get_descriptor_hash(kind)
         st_hash = self.registry.get_storage_schema_hash(kind)
@@ -262,9 +278,23 @@ class ArtifactService:
         with ProductMutationLock(self.product_root):
             revalidate_authority(self.auth_context, lambda: self.auth_context)
 
+            existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
+            if existing_tx is not None:
+                if existing_tx.get("raw_request_hash") != raw_req_hash:
+                    raise ArtifactTransactionError(
+                        f"Request ID '{req_id}' re-used with different payload",
+                        code="idempotency_conflict",
+                    )
+                if existing_tx.get("state") == "committed":
+                    receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
+                    if receipt:
+                        return receipt
+                    return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome="committed", changed=True)
+
             tx = self.transaction_mgr.prepare_transaction(
                 request_id=req_id,
                 raw_request_bytes=raw_req_bytes,
+                normalized_payload_hash=expected_sha256,
                 kind=kind,
                 target_path=target_path,
                 previous_sha256=None,
@@ -276,6 +306,9 @@ class ArtifactService:
             )
 
             if tx.get("state") == "committed":
+                receipt = self.transaction_mgr.get_receipt(tx["transaction_id"])
+                if receipt:
+                    return receipt
                 return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
 
             atomic_create(target_path, content_bytes)
@@ -308,7 +341,6 @@ class ArtifactService:
 
         target_path = self._resolve_target_path(kind, target)
 
-
         if not target_path.is_file():
             raise ArtifactServiceError(
                 f"Target artifact '{target_path}' does not exist for update",
@@ -319,6 +351,44 @@ class ArtifactService:
         outcome = validate_artifact_policy(self.auth_context, kind=kind, operation="update", target_path=target_path)
         if not outcome.authorized:
             raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
+
+        canon_optin = canonicalize_metadata or bool(patch.get("canonicalize_metadata", False)) if isinstance(patch, dict) else False
+        raw_req_dict = {
+            "operation": "update",
+            "kind": kind,
+            "target": str(target_path),
+            "expected_sha256": expected_sha256,
+            "patch": patch,
+            "body_replacement": body_replacement,
+            "canonicalize_metadata": canon_optin,
+            "auth_context": {
+                "actor": getattr(self.auth_context, "actor", None),
+                "work_item": getattr(self.auth_context, "work_item", None),
+                "stage": getattr(self.auth_context, "stage", None),
+                "change_id": getattr(self.auth_context, "change_id", None),
+                "fingerprint": getattr(self.auth_context, "fingerprint", None),
+            } if self.auth_context else None,
+        }
+        raw_req_bytes = json.dumps(raw_req_dict, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        raw_req_hash = hashlib.sha256(raw_req_bytes).hexdigest()
+
+        if request_id:
+            with ProductMutationLock(self.product_root):
+                revalidate_authority(self.auth_context, lambda: self.auth_context)
+                existing_tx = self.transaction_mgr.find_transaction_by_request_id(request_id)
+                if existing_tx is not None:
+                    if existing_tx.get("raw_request_hash") != raw_req_hash:
+                        raise ArtifactTransactionError(
+                            f"Request ID '{request_id}' re-used with different payload",
+                            code="idempotency_conflict",
+                        )
+                    if existing_tx.get("state") == "committed":
+                        receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
+                        if receipt:
+                            return receipt
+                        durable_outcome = existing_tx.get("outcome", "committed")
+                        changed_flag = existing_tx.get("changed", True)
+                        return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome=durable_outcome, changed=changed_flag)
 
         existing_bytes = target_path.read_bytes()
         validate_expected_hash(target_path, expected_sha256)
@@ -367,7 +437,6 @@ class ArtifactService:
                 path=str(target_path),
             )
 
-        canon_optin = canonicalize_metadata or bool(patch.get("canonicalize_metadata", False))
         existing_text = existing_bytes.decode("utf-8")
         try:
             candidate_str = serialize_artifact(
@@ -391,33 +460,49 @@ class ArtifactService:
         op_hash = self.registry.get_descriptor_hash(kind)
         st_hash = self.registry.get_storage_schema_hash(kind)
 
-        if check_noop_mutation(existing_bytes, candidate_bytes):
-            req_id = request_id or f"req-noop-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}"
-            raw_req_bytes = json.dumps({"kind": kind, "target": str(target_path), "patch": patch}, sort_keys=True).encode("utf-8")
-            tx = self.transaction_mgr.prepare_transaction(
-                request_id=req_id,
-                raw_request_bytes=raw_req_bytes,
-                kind=kind,
-                target_path=target_path,
-                previous_sha256=expected_sha256,
-                expected_result_sha256=expected_sha256,
-                auth_context=self.auth_context,
-                operation="update",
-                operation_schema_hash=op_hash,
-                storage_schema_hash=st_hash,
-            )
-            return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="unchanged", changed=False)
-
-        req_id = request_id or f"req-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}"
-        raw_req_bytes = json.dumps({"kind": kind, "target": str(target_path), "patch": patch}, sort_keys=True).encode("utf-8")
+        is_noop = check_noop_mutation(existing_bytes, candidate_bytes)
+        req_id = request_id or (f"req-noop-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}" if is_noop else f"req-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}")
 
         with ProductMutationLock(self.product_root):
-            validate_expected_hash(target_path, expected_sha256)
             revalidate_authority(self.auth_context, lambda: self.auth_context)
+
+            existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
+            if existing_tx is not None:
+                if existing_tx.get("raw_request_hash") != raw_req_hash:
+                    raise ArtifactTransactionError(
+                        f"Request ID '{req_id}' re-used with different payload",
+                        code="idempotency_conflict",
+                    )
+                if existing_tx.get("state") == "committed":
+                    receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
+                    if receipt:
+                        return receipt
+                    durable_outcome = existing_tx.get("outcome", "committed")
+                    changed_flag = existing_tx.get("changed", True)
+                    return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome=durable_outcome, changed=changed_flag)
+
+            validate_expected_hash(target_path, expected_sha256)
+
+            if is_noop:
+                tx = self.transaction_mgr.prepare_transaction(
+                    request_id=req_id,
+                    raw_request_bytes=raw_req_bytes,
+                    normalized_payload_hash=candidate_sha256,
+                    kind=kind,
+                    target_path=target_path,
+                    previous_sha256=expected_sha256,
+                    expected_result_sha256=expected_sha256,
+                    auth_context=self.auth_context,
+                    operation="update",
+                    operation_schema_hash=op_hash,
+                    storage_schema_hash=st_hash,
+                )
+                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="unchanged", changed=False)
 
             tx = self.transaction_mgr.prepare_transaction(
                 request_id=req_id,
                 raw_request_bytes=raw_req_bytes,
+                normalized_payload_hash=candidate_sha256,
                 kind=kind,
                 target_path=target_path,
                 previous_sha256=expected_sha256,
@@ -429,11 +514,16 @@ class ArtifactService:
             )
 
             if tx.get("state") == "committed":
+                receipt = self.transaction_mgr.get_receipt(tx["transaction_id"])
+                if receipt:
+                    return receipt
                 return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
 
             atomic_replace(target_path, candidate_bytes, expected_sha256=expected_sha256)
             self.transaction_mgr.mark_published(tx["transaction_id"])
             return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+
+
 
     def validate(self, kind: str, target: str | Path) -> dict[str, Any]:
         """Strictly read-only validation check. Does NOT open transactions or alter files."""

@@ -43,6 +43,28 @@ class TransactionManager:
         self.journal_dir.mkdir(parents=True, exist_ok=True)
         self.receipts_dir.mkdir(parents=True, exist_ok=True)
 
+    def get_receipt(self, transaction_id: str) -> dict[str, Any] | None:
+        receipt_file = self.receipts_dir / f"{transaction_id}.json"
+        if receipt_file.is_file():
+            try:
+                return json.loads(receipt_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return None
+
+    def find_transaction_by_request_id(self, request_id: str) -> dict[str, Any] | None:
+        if not self.journal_dir.is_dir():
+            return None
+        for record_path in self.journal_dir.glob("*.json"):
+            try:
+                rec = json.loads(record_path.read_text(encoding="utf-8"))
+                if rec.get("request_id") == request_id:
+                    return rec
+            except (json.JSONDecodeError, OSError):
+                pass
+        return None
+
+
     def prepare_transaction(
         self,
         request_id: str,

@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-25",
+  "entry": "AW-26",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -825,7 +825,7 @@
       "id": "AW-25",
       "phase": "H",
       "title": "Restore public-operation idempotency and complete request identity",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-24"
       ],
