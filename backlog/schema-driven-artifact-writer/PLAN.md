@@ -1,8 +1,8 @@
-# Implementation plan — Schema-driven Artifact Writer
+# Implementation plan Р Р†Р вЂљРІР‚Сњ Schema-driven Artifact Writer
 
 Status: **implementation requires remediation; acceptance open**.
-The original phase plan below is retained. See [REVIEW.md](REVIEW.md) for the
-2026-09-19 review and AW-21–AW-28 remediation; AW-20 closure is reopened.
+The original phase plan below is historical. See [REVIEW-4.md](REVIEW-4.md)
+for reopened tasks, strengthened execution rules and evidence reconciliation.
 Baseline: canonical repository VERSION 3.1.0,
 17786cb040d1ed3cd5636dd4a6b97453c1b77627 (2026-09-18).
 Read [INTENTION.md](INTENTION.md), [ANALYSIS.md](ANALYSIS.md) and
@@ -12,13 +12,13 @@ Read [INTENTION.md](INTENTION.md), [ANALYSIS.md](ANALYSIS.md) and
 
 | Phase | Cards | Result |
 |---|---|---|
-| A contracts/readers | AW-00–03 | Explicit supported kinds, authority, strict decoding and pinned schema resolution |
-| B transformation/policy | AW-04–06 | Canonical codec, safe patch semantics, actual Core authorization |
-| C persistence | AW-07–09 | No-overwrite create, atomic update, CAS/locking and recoverable receipts |
-| D public interface | AW-10–11 | Shared Python service, CLI and small tool argument schemas |
-| E Core callers | AW-12–14 | Authentic verification evidence, status/Gate persistence, valid scaffold/index handling |
-| F rollout/qualification | AW-15–17 | Synchronized skills/assets/docs, manual compatibility and real platform checks |
-| G measured benefit | AW-18–20 | Controlled smaller-model experiment and acceptance closure |
+| A contracts/readers | AW-00Р Р†Р вЂљРІР‚Сљ03 | Explicit supported kinds, authority, strict decoding and pinned schema resolution |
+| B transformation/policy | AW-04Р Р†Р вЂљРІР‚Сљ06 | Canonical codec, safe patch semantics, actual Core authorization |
+| C persistence | AW-07Р Р†Р вЂљРІР‚Сљ09 | No-overwrite create, atomic update, CAS/locking and recoverable receipts |
+| D public interface | AW-10Р Р†Р вЂљРІР‚Сљ11 | Shared Python service, CLI and small tool argument schemas |
+| E Core callers | AW-12Р Р†Р вЂљРІР‚Сљ14 | Authentic verification evidence, status/Gate persistence, valid scaffold/index handling |
+| F rollout/qualification | AW-15Р Р†Р вЂљРІР‚Сљ17 | Synchronized skills/assets/docs, manual compatibility and real platform checks |
+| G measured benefit | AW-18Р Р†Р вЂљРІР‚Сљ20 | Controlled smaller-model experiment and acceptance closure |
 
 Default sequence is deliberately linear for a smaller implementation model.
 Each card has one bounded responsibility and Red/Green criteria. If a card
@@ -56,8 +56,8 @@ behavior; examples are framework artifact operations only.
 | [AW-19](cards/AW-19.md) | Run paired external small-model evaluation | AW-18 |
 | [AW-20](cards/AW-20.md) | Close acceptance and publish migration/handoff | AW-19 |
 
-Machine-readable status: [queue.json](queue.json). Next ready card: AW-21.
-Current order: AW-21 → AW-22 → AW-23 → AW-24 → AW-25 → AW-26 → AW-28 → AW-27 → AW-20.
+Machine-readable status: [queue.json](queue.json). Next ready card: AW-37.
+Current order: AW-37 -> AW-39 -> AW-41 -> AW-40 -> AW-42 -> AW-20 (AW-38 remains completed; preserve its regressions).
 Prior implementation statuses are historical; new cards must satisfy the
 original acceptance requirements before the feature can be marked complete.
 

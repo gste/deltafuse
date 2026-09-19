@@ -4,8 +4,8 @@ Status: **implementation requires remediation; acceptance open**.
 Source intent: [INTENTION.md](INTENTION.md), preserved from the user's proposal.
 Analysis: [ANALYSIS.md](ANALYSIS.md). Plan: [PLAN.md](PLAN.md).
 Contracts: [CONTRACT.md](CONTRACT.md). Test/evaluation: [VALIDATION.md](VALIDATION.md).
-Next task: [AW-21](cards/AW-21.md). Machine queue: [queue.json](queue.json).
-Review: [REVIEW.md](REVIEW.md), with eight remediation cards AW-21–AW-28.
+Next task: [AW-37](cards/AW-37.md). Machine queue: [queue.json](queue.json).
+Current review: [REVIEW-4.md](REVIEW-4.md). Reopened AW-37/AW-39/AW-40/AW-41; new AW-42 reconciles evidence.
 AW-20 closure is reopened; earlier completion reports are historical claims.
 
 ## Recommendation
@@ -40,6 +40,10 @@ framework feature. Re-read current HEAD and contracts when implementing.
 - [PLAN-REVIEW.md](PLAN-REVIEW.md): structural plan checks, not implementation tests.
 
 The original planning snapshot above predates implementation. The 2026-09-19
-review found mandatory implementation and qualification gaps. Follow REVIEW.md
+review found mandatory implementation and qualification gaps. Follow REVIEW-2.md
 and queue.json for current work; no external-model benefit is established by
 the existing fixed-input evaluation report.
+
+Execution requires [EXECUTOR.md](EXECUTOR.md) and the
+[RESULT-TEMPLATE.md](RESULT-TEMPLATE.md) acceptance matrix. No mandatory
+unavailable evidence may be marked complete.

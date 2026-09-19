@@ -112,3 +112,9 @@ Proposed CLI exit codes:
 - `3`: Authorization or Core-owned field write denied.
 - `4`: Target SHA256 mismatch or concurrency lock failure.
 - `5`: Persistence error or indeterminate transaction state.
+
+An unavailable or corrupt installed Writer contract returns exit `5` with
+`asset_resolution_failed` (stage `schema`, path `/`, message at most 512
+characters). It performs no mutation and never falls back to a contract in the
+caller's working directory. Reinstall a verified bundle, or regenerate the
+bundle with `scripts/sync_assets.py` when developing from source.

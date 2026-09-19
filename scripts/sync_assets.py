@@ -104,6 +104,19 @@ def _generate(target: Path) -> tuple[dict[str, str], list[str]]:
             dest.parent.mkdir(parents=True, exist_ok=True)
             _copy_canonical(path, dest)
             files[f"{root}/{rel.as_posix()}"] = _hash(dest)
+    # The Writer transport contract is canonical under docs/, not process/.
+    # Require it whenever Writer descriptors are present; minimal non-Writer
+    # bundles used by installer/recovery tests need no transport contract.
+    if (REPO / "process" / "artifact-operations").is_dir():
+        rel = "contracts/artifact-writer.schema.yaml"
+        source = REPO / "docs" / rel
+        if not source.is_file():
+            problems.append(f"missing docs/{rel}")
+        else:
+            dest = target / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            _copy_canonical(source, dest)
+            files[rel] = _hash(dest)
     return files, problems
 
 
@@ -332,7 +345,7 @@ def sync(assets: Path | None = None) -> list[str]:
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "generated_by": "scripts/sync_assets.py",
-            "canonical": "process/**",
+            "canonical": "process/**; docs/contracts/artifact-writer.schema.yaml",
             "files": files,
         }
         manifest_text = json.dumps(manifest, sort_keys=True, indent=2) + "\n"
@@ -362,7 +375,7 @@ def check() -> int:
     expected = {
         "schema_version": SCHEMA_VERSION,
         "generated_by": "scripts/sync_assets.py",
-        "canonical": "process/**",
+        "canonical": "process/**; docs/contracts/artifact-writer.schema.yaml",
         "files": files,
     }
     drift = []
@@ -386,6 +399,8 @@ def check() -> int:
         drift.append(f"bundle verification failed: {ex}")
     if committed.get("schema_version") != expected["schema_version"]:
         drift.append("manifest schema_version")
+    if committed.get("canonical") != expected["canonical"]:
+        drift.append("manifest canonical sources")
     if drift:
         print(f"check: bundle is stale ({len(drift)} drift); run sync_assets.py:")
         for key in drift[:20]:

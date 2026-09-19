@@ -110,3 +110,91 @@ def test_valid_legacy_extension_fields_supported():
     }
     res = registry.validate_storage_schema("routing", valid_routing_ext)
     assert res.valid
+
+
+def test_aw31_verify_product_lock_rejects_version_and_content_hash_mismatch(tmp_path):
+    from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
+    from deltafuse.core.assets import get_installed_lock_hash
+
+    reg = ArtifactRegistry()
+    lock_dir = tmp_path / ".deltafuse"
+    lock_dir.mkdir(parents=True)
+    lock_file = lock_dir / "lock.yaml"
+
+    # Valid lock
+    lock_file.write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {get_installed_lock_hash()}\n",
+        encoding="utf-8",
+    )
+    reg.verify_product_lock(tmp_path)
+
+    # Test 1: Mismatched version 99.99.99
+    lock_file.write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 99.99.99\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {get_installed_lock_hash()}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ArtifactRegistryError) as exc1:
+        reg.verify_product_lock(tmp_path)
+    assert "framework version '99.99.99'" in str(exc1.value)
+
+    # Test 2: Mismatched zero content hash
+    lock_file.write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        "  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ArtifactRegistryError) as exc2:
+        reg.verify_product_lock(tmp_path)
+    assert "framework content_hash" in str(exc2.value)
+
+
+def test_aw38_verify_product_lock_rejects_missing_and_malformed_fields(tmp_path, monkeypatch):
+    from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
+    from deltafuse.core.assets import get_installed_lock_hash
+
+    reg = ArtifactRegistry()
+    lock_dir = tmp_path / ".deltafuse"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = lock_dir / "lock.yaml"
+
+    # Missing framework.content_hash while retaining source
+    lock_file.write_text("schema_version: 3\nframework:\n  version: 3.1.0\n  source: deltafuse\n", encoding="utf-8")
+    with pytest.raises(ArtifactRegistryError) as exc:
+        reg.verify_product_lock(tmp_path)
+    assert "framework.content_hash" in str(exc.value)
+
+    # Missing framework.version
+    lock_file.write_text(f"schema_version: 3\nframework:\n  source: deltafuse\n  content_hash: {get_installed_lock_hash()}\n", encoding="utf-8")
+    with pytest.raises(ArtifactRegistryError) as exc:
+        reg.verify_product_lock(tmp_path)
+    assert "framework.version" in str(exc.value)
+
+    # Missing framework.source
+    lock_file.write_text(f"schema_version: 3\nframework:\n  version: 3.1.0\n  content_hash: {get_installed_lock_hash()}\n", encoding="utf-8")
+    with pytest.raises(ArtifactRegistryError) as exc:
+        reg.verify_product_lock(tmp_path)
+    assert "framework.source" in str(exc.value)
+
+    # Malformed content_hash format
+    lock_file.write_text("schema_version: 3\nframework:\n  version: 3.1.0\n  source: deltafuse\n  content_hash: invalid_hash\n", encoding="utf-8")
+    with pytest.raises(ArtifactRegistryError) as exc:
+        reg.verify_product_lock(tmp_path)
+    assert "invalid framework.content_hash format" in str(exc.value)
+
+    # Unavailable executing asset identity
+    lock_file.write_text(f"schema_version: 3\nframework:\n  version: 3.1.0\n  source: deltafuse\n  content_hash: {get_installed_lock_hash()}\n", encoding="utf-8")
+    monkeypatch.setattr("deltafuse.core.assets.get_executing_framework_identity", lambda: ("3.1.0", set()))
+    with pytest.raises(ArtifactRegistryError) as exc:
+        reg.verify_product_lock(tmp_path)
+    assert "unavailable" in str(exc.value)

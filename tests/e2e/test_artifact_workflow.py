@@ -36,6 +36,7 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
     # Gate 4: Decompose via Artifact Writer CLI 'create'
     task_payload = {
         "identity": "TASK-001",
+        "slice": "SLICE-01",
         "title": "Implement feature task",
         "kind": "feature",
         "depends_on": [],

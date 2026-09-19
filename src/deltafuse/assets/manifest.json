@@ -1,5 +1,5 @@
 {
-  "canonical": "process/**",
+  "canonical": "process/**; docs/contracts/artifact-writer.schema.yaml",
   "files": {
     "__init__.py": "4d4b547752479fd066b8b102d682ba4a512f568cb319b869118d63e968dd1a44",
     "artifact-operations/capability.descriptor.yaml": "85201d511c468789da74270c407a9a0ca893dbfa3b44f6185c0d3835a69690fd",
@@ -14,6 +14,7 @@
     "artifact-operations/slice.descriptor.yaml": "d3fd15cca11fbce947f5f4d4c489d5361aebf34c82462efbc63f67310ddb93ef",
     "artifact-operations/spec-delta.descriptor.yaml": "ec45dc81c161acce901daf1202b420fda95010c210376b32ebeea50750257e73",
     "artifact-operations/task.descriptor.yaml": "02a82511c739aaf100ac495280738d9d4ad05a5650559f827f7fda0847f79572",
+    "contracts/artifact-writer.schema.yaml": "37ad597869e11ff2031a9c871a00ee342c7d84df6e2c70ff5117b599d0b74966",
     "schemas/capability.schema.yaml": "c2cb8ccb69e108b9e59f1795e78ac1f7150e594143d0a04e2eb298e5327a68be",
     "schemas/change.schema.yaml": "51805fa8d3fef8211dca6503ebdcd6bf865dbdec32e83570f49e494950069cb7",
     "schemas/coverage.schema.yaml": "c1de7c2ee18f0512a50e1fdb87d5ac15014b4741c6ef915c35a6af31ac53f6c3",

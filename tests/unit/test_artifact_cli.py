@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import pytest
 from deltafuse.cli import main, export_tool_schemas
+from deltafuse.core.assets import get_installed_lock_hash
 
 
 def test_export_tool_schemas():
@@ -41,12 +42,13 @@ def test_cli_describe_export_schema(capsys):
 
 def _setup_cli_test_dir(tmp_path):
     (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    lock_hash = get_installed_lock_hash()
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {lock_hash}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
@@ -59,6 +61,10 @@ def _setup_cli_test_dir(tmp_path):
     )
     (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
     (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+    chg_dir = tmp_path / "docs" / "changes" / "CHG-001"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
+
 
 
 def test_cli_create_subcommand_success(tmp_path, capsys):

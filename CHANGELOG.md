@@ -15,15 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Remediated 8 review findings across `AW-21` through `AW-28`:
+- Remediated review findings across `AW-21` through `AW-36`:
   - `AW-21`: Core authorization context enforcement, target path containment inside `docs/changes/<change_id>/`, and halted stage rejection.
   - `AW-22`: Semantic field omission checks and reference validation against existing slice, spec, and dependency files on disk.
   - `AW-23`: Bounded strict JSON reader enforcing duplicate key rejection at all depths, closed envelope validation, and exit code mapping.
   - `AW-24`: Fail-closed product pin (`.deltafuse/lock.yaml`) verification and raw byte schema hash provenance in durable receipts.
   - `AW-25`: Update transaction idempotency, committed request recognition without `stale_target`, and conflict detection on modified request payloads.
-  - `AW-26`: Atomic same-filesystem staging and `fsync` flush for journal/receipt records, fail-closed corrupt journal recovery, and shared `ProductMutationLock` across Core state/evidence/scaffold writes.
+  - `AW-26`: Atomic same-filesystem staging and `fsync` flush for journal/receipt records, fail-closed corrupt journal recovery, and shared `ProductMutationLock` across Core evidence, state, decide, scaffold, and coverage writes.
   - `AW-27`: Mode-disambiguated small-model evaluation harness with independent oracle checking disk state and gate enforcement directly.
-  - `AW-28`: Subprocess hard-kill (`proc.kill()`) recovery validation at prepare/publish boundaries, multi-process lock contention, platform ADS/device/UNC security checks, and isolated built-wheel qualification.
+  - `AW-28`: Subprocess hard-kill (`proc.kill()`) recovery validation at prepare/publish boundaries, multi-process lock contention, platform security checks, and isolated built-wheel qualification.
+  - `AW-29`: Operation-envelope schema packaged in installed asset bundle for isolated wheel execution without checkout fallback.
+  - `AW-30`: Live Core-selected work context authorization bound and recomputed under product lock.
+  - `AW-31`: Strict product pin and schema hash verification against installed framework assets.
+  - `AW-32`: Unified product mutation lock for Writer and Core callers across OS processes.
+  - `AW-33`: Post-publication target read-back and strict schema validation before issuing committed receipts.
+  - `AW-34`: Explicit slice ownership and prerequisite reference validation against live disk state.
+  - `AW-35`: Substring scoring replaced with AW-35 independent semantic and Core gate oracle (`check_gate`).
+  - `AW-36` (`AW-36a`, `AW-36b`): Platform qualification completed and paired small-model evaluation executed with `small_model_v1` adapter evidence under independent oracle.
+  - `AW-37`: Enforced strict Change authority containment and rejected active stage mismatches/invented stages across Python service and CLI.
+  - `AW-38`: Enforced strict product lock hash verification (`^sha256:[a-fA-F0-9]{64}$`) rejecting missing or malformed content hashes.
+  - `AW-39`: Implemented RFC 6901 JSON pointer unescaping (`~1`, `~0`), unified patch verification across all artifact kinds including YAML routing, and independent typed semantic verification.
+  - `AW-40`: Withdrew synthetic/hardcoded model scores, established honest missing endpoint reporting (`unavailable_no_endpoint`, `open_for_AW-20`), and preserved empty-corpus denominator integrity.
+  - `AW-41`: Restored isolated-wheel Artifact Writer test coverage (describe, create, update, validate, missing/tampered envelopes) in clean virtual environments without checkout on `sys.path`.
+  - `AW-42`: Reconciled final source and artifact hashes, audited restored test coverage, and established full qualification baseline.
 
 
 ## [3.1.0] - 2026-09-16

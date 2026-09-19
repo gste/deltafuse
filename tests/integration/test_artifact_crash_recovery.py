@@ -10,6 +10,7 @@ import time
 import pytest
 
 from deltafuse.core.artifact_policy import AuthorizationContext
+from deltafuse.core.assets import get_installed_lock_hash
 from deltafuse.core.artifact_transactions import (
     ArtifactTransactionError,
     TransactionManager,
@@ -177,8 +178,13 @@ def test_receipt_failure_after_publish_preserves_journal_state_and_raises(tmp_pa
 
     root = tmp_path / "repo"
     root.mkdir()
+    lock_hash = get_installed_lock_hash()
     (root / ".deltafuse" / "lock.yaml").parent.mkdir(parents=True, exist_ok=True)
-    (root / ".deltafuse" / "lock.yaml").write_text("schema_version: 3\nframework:\n  version: '3.1.0'\n  content_hash: 'sha256:" + ("0" * 64) + "'\n", encoding="utf-8")
+    (root / ".deltafuse" / "lock.yaml").write_text(f"schema_version: 3\nframework:\n  version: '3.1.0'\n  source: deltafuse\n  content_hash: '{lock_hash}'\n", encoding="utf-8")
+    chg_dir = root / "docs" / "changes" / "CHG-200"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-200\nstatus: active\n", encoding="utf-8")
+
 
     (root / "slices").mkdir(parents=True, exist_ok=True)
     (root / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-200\nstatus: draft\nprimary_capability: auth\nclaims: [CLAIM-01]\nspec_refs: [docs/spec/auth.md]\n---\n# SLICE-01\n", encoding="utf-8")

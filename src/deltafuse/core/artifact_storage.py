@@ -221,3 +221,23 @@ def cleanup_orphaned_staging(directory: Path, max_age_seconds: float = 3600.0) -
                 pass
 
     return removed_count
+
+
+def verify_published_target_readback(target_path: Path, expected_sha256: str) -> bytes:
+    """Verify published target artifact exists and matches expected sha256 checksum."""
+    target_path = Path(target_path)
+    if not target_path.is_file():
+        raise ArtifactStorageError(
+            f"Target file '{target_path}' missing during readback verification",
+            code="validation_failed",
+            path=str(target_path),
+        )
+    live_bytes = target_path.read_bytes()
+    actual_sha256 = hashlib.sha256(live_bytes).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise ArtifactStorageError(
+            f"Readback checksum mismatch for '{target_path}': expected {expected_sha256}, got {actual_sha256}",
+            code="validation_failed",
+            path=str(target_path),
+        )
+    return live_bytes

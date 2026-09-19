@@ -17,9 +17,9 @@ class MockChangeBuilder:
         route: str = "code",
     ): 
         self.root_dir = root_dir
-        self.change_dir = root_dir / "docs" / "changes" / f"{change_id}-test"
-        self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
+        self.change_dir = root_dir / "docs" / "changes" / self.change_id
+        self.change_dir.mkdir(parents=True, exist_ok=True)
         self.title = title
         self.route = route
         spec_dir = self.root_dir / "docs" / "spec"

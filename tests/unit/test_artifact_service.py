@@ -13,6 +13,8 @@ from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
 
 @pytest.fixture
 def product_root(tmp_path: Path) -> Path:
+    from deltafuse.core.assets import get_installed_lock_hash
+    lock_hash = get_installed_lock_hash()
     root = tmp_path / "repo"
     root.mkdir()
     (root / ".deltafuse").mkdir()
@@ -21,10 +23,14 @@ def product_root(tmp_path: Path) -> Path:
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {lock_hash}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
+    (root / "change.yaml").write_text(
+        "schema_version: 3\nid: CHG-001\ntitle: Test Change\nstatus: implement\n",
         encoding="utf-8",
     )
     (root / "tasks").mkdir()
@@ -356,7 +362,7 @@ def test_create_task_missing_core_context_rejected(product_root: Path):
                 "requirement_delta": "none",
             },
         )
-    assert getattr(exc_info.value, "code", "") in ("missing_core_context", "policy_denied")
+    assert getattr(exc_info.value, "code", "") in ("missing_core_context", "policy_denied", "missing_change_authority")
 
 
 def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Path):
@@ -368,6 +374,7 @@ def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Pat
     (root / ".deltafuse").mkdir()
     (root / "slices").mkdir()
     (root / "tasks").mkdir()
+    (root / "change.yaml").write_text("schema_version: 3\nid: CHG-001\ntitle: Test Change\nstatus: implement\n", encoding="utf-8")
 
     # Part A: Malformed lock.yaml (unsupported schema_version: 99)
     lock_file = root / ".deltafuse" / "lock.yaml"
@@ -411,12 +418,13 @@ def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Pat
         )
 
     # Part B: Repair lock.yaml to valid content
+    from deltafuse.core.assets import get_installed_lock_hash
     lock_file.write_text(
         "schema_version: 3\n"
         "framework:\n"
         "  version: 3.1.0\n"
         "  source: deltafuse\n"
-        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        f"  content_hash: {get_installed_lock_hash()}\n"
         "workflow:\n"
         "  call_width: wide\n"
         "  auto_accept_decisions: false\n",
@@ -652,6 +660,101 @@ def test_noop_update_retry_and_conflict_checks(product_root: Path, auth_context:
     assert exc_info.value.code == "idempotency_conflict"
 
 
+def test_aw34_missing_slice_selection_and_malformed_slice_rejection(tmp_path: Path):
+    """AW-34 Red: Unselected slice must not be inferred from directory order, and malformed/wrong-identity/wrong-change references must reject."""
+    from deltafuse.core.assets import get_installed_lock_hash
+    lock_hash = get_installed_lock_hash()
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / ".deltafuse").mkdir()
+    (root / ".deltafuse" / "config.yaml").write_text("framework_version: 3.1.0\n", encoding="utf-8")
+    (root / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {lock_hash}\n",
+        encoding="utf-8",
+    )
+    (root / "docs" / "spec").mkdir(parents=True)
+    (root / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+    (root / "change.yaml").write_text("schema_version: 3\nid: CHG-001\ntitle: Test Change\nstatus: implement\n", encoding="utf-8")
 
+    slices_dir = root / "slices"
+    slices_dir.mkdir()
 
+    # SLICE-01: Malformed frontmatter
+    (slices_dir / "SLICE-01.md").write_text("---\nid: SLICE-01\nmalformed_field: [unclosed bracket\n---\n# Slice 01\n", encoding="utf-8")
+    # SLICE-02: Valid slice
+    (slices_dir / "SLICE-02.md").write_text("---\nid: SLICE-02\nchange: CHG-001\nstatus: active\n---\n# Slice 02\n", encoding="utf-8")
+    # SLICE-03: Slice belonging to a different change
+    (slices_dir / "SLICE-03.md").write_text("---\nid: SLICE-03\nchange: CHG-999\nstatus: active\n---\n# Slice 03\n", encoding="utf-8")
 
+    auth = AuthorizationContext(
+        actor="worker",
+        work_item="CHG-001",  # Not a SLICE-* identifier!
+        product_root=root,
+        change_id="CHG-001",
+        task_id="TASK-010",
+        stage="Implement",
+        schema_hash="hash",
+        lock_hash="lock",
+        fingerprint="fp",
+    )
+    service = ArtifactService(root, auth)
+
+    # 1. Missing slice selection in payload and auth context must be rejected (no first-file inference)
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service.create(
+            kind="task",
+            identity="TASK-010",
+            semantic_payload={
+                "title": "Task 010",
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert getattr(exc_info.value, "code", "") in ("missing_core_context", "policy_denied", "missing_reference")
+
+    # 2. Explicit selection of malformed slice SLICE-01 must reject
+    with pytest.raises(ArtifactServiceError) as exc_info2:
+        service.create(
+            kind="task",
+            identity="TASK-011",
+            semantic_payload={
+                "title": "Task 011",
+                "slice": "SLICE-01",
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert exc_info2.value.code == "missing_reference"
+
+    # 3. Explicit selection of slice belonging to wrong Change CHG-999 must reject
+    with pytest.raises(ArtifactServiceError) as exc_info3:
+        service.create(
+            kind="task",
+            identity="TASK-012",
+            semantic_payload={
+                "title": "Task 012",
+                "slice": "SLICE-03",
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert exc_info3.value.code == "missing_reference"

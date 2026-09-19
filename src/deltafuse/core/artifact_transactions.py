@@ -43,8 +43,9 @@ def _write_atomic_json(target_path: Path, content_dict: dict[str, Any]) -> None:
 class TransactionManager:
     """Core transaction manager for artifact updates, receipts, and crash recovery."""
 
-    def __init__(self, product_root: Path):
+    def __init__(self, product_root: Path, change_dir: Path | None = None):
         self.product_root = Path(product_root)
+        self.change_dir = Path(change_dir) if change_dir else self.product_root
         self.journal_dir = self.product_root / ".deltafuse" / "journal"
         self.receipts_dir = self.product_root / ".deltafuse" / "receipts"
 
@@ -210,6 +211,18 @@ class TransactionManager:
 
         rec["state"] = "published"
         _write_atomic_json(record_file, rec)
+
+    def mark_readback_failed(self, transaction_id: str, reason: str = "") -> None:
+        record_file = self.journal_dir / f"{transaction_id}.json"
+        if not record_file.is_file():
+            return
+        try:
+            rec = json.loads(record_file.read_text(encoding="utf-8"))
+            rec["state"] = "readback_failed"
+            rec["readback_error"] = str(reason)
+            _write_atomic_json(record_file, rec)
+        except Exception:
+            pass
 
     def _validate_receipt_against_schema(self, receipt_dict: dict[str, Any]) -> None:
         try:

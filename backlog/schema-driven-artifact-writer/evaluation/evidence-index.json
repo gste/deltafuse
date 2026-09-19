@@ -1,4 +1,6 @@
 {
+  "evaluation_mode": "paired_model",
+  "mode_description": "Paired small-model evaluation.",
   "total_cases": 8,
   "first_pass_valid_count": 8,
   "first_pass_valid_rate": 100.0,
@@ -66,6 +68,13 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "decomposed",
+      "gate_errors": [
+        "Status mismatch: change.yaml has status 'normalized' but package already contains decomposed tasks or evidence",
+        "TASK-001.md: Referenced specification file does not exist: 'docs/spec/core.md'",
+        "TASK-001.md: Referenced file does not exist: 'docs/spec/core.md'"
+      ],
       "error": null
     },
     {
@@ -78,6 +87,11 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "analyzed",
+      "gate_errors": [
+        "Gate analyzed: coverage.yaml is missing"
+      ],
       "error": null
     },
     {
@@ -90,6 +104,13 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "specified",
+      "gate_errors": [
+        "Gate specified: change.yaml status must be 'specified' or 'specification-proposed' (got 'normalized')",
+        "Gate specified: Capability 'core' is not present in docs/spec/_capabilities.yaml",
+        "Gate specified: SLICE-01.md has no spec_refs; unchanged specification must cite existing anchors"
+      ],
       "error": null
     },
     {
@@ -102,6 +123,13 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "decomposed",
+      "gate_errors": [
+        "Status mismatch: change.yaml has status 'normalized' but package already contains decomposed tasks or evidence",
+        "TASK-001.md: Referenced specification file does not exist: 'docs/spec/core.md'",
+        "TASK-001.md: Referenced file does not exist: 'docs/spec/core.md'"
+      ],
       "error": null
     },
     {
@@ -114,6 +142,13 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "decomposed",
+      "gate_errors": [
+        "Status mismatch: change.yaml has status 'normalized' but package already contains decomposed tasks or evidence",
+        "TASK-001.md: Referenced specification file does not exist: 'docs/spec/core.md'",
+        "TASK-001.md: Referenced file does not exist: 'docs/spec/core.md'"
+      ],
       "error": "[required_property_missing] Post-patch storage schema validation failed: 'forbidden_paths' is a required property"
     },
     {
@@ -126,6 +161,11 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "analyzed",
+      "gate_errors": [
+        "Gate analyzed: coverage.yaml is missing"
+      ],
       "error": null
     },
     {
@@ -138,7 +178,12 @@
       "gate_blocked": false,
       "first_pass": true,
       "semantic_correct": true,
-      "error": "[schema_validation_failed] Storage schema validation failed for create 'task': /kind: 'invalid_kind' is not one of ['feature', 'bugfix', 'refactor', 'maintenance', 'documentation']"
+      "disk_mutated_on_denial": false,
+      "gate_scope": "decomposed",
+      "gate_errors": [
+        "Gate decomposed: at least one task file in tasks/ is required"
+      ],
+      "error": "[schema_validation_failed] Storage schema validation failed for create 'task': /: 'depends_on' is a required property; /: 'requirement_delta' is a required property; /: 'spec_refs' is a required property; /: 'allowed_paths' is a required property; /: 'forbidden_paths' is a required property; /: 'context_budget' is a required property; /kind: 'invalid_kind' is not one of ['feature', 'bugfix', 'refactor', 'maintenance', 'documentation']"
     },
     {
       "id": "CASE-08",
@@ -150,7 +195,39 @@
       "gate_blocked": true,
       "first_pass": true,
       "semantic_correct": true,
+      "disk_mutated_on_denial": false,
+      "gate_scope": "decomposed",
+      "gate_errors": [
+        "Status mismatch: change.yaml has status 'normalized' but package already contains decomposed tasks or evidence",
+        "TASK-001.md: Referenced specification file does not exist: 'docs/spec/core.md'",
+        "TASK-001.md: Referenced file does not exist: 'docs/spec/core.md'"
+      ],
       "error": "[core_owned_field] Field 'status' target by pointer '/status' is Core-owned and immutable"
     }
-  ]
+  ],
+  "adapter_id": "small_model_v1",
+  "external_model_status": "qualified_with_adapter_evidence",
+  "acceptance_status": "ready_for_AW-20",
+  "note": "Paired small-model evaluation qualified with small_model_v1 adapter evidence under AW-35 independent oracle.",
+  "arm_a_manual_raw": {
+    "total_cases": 8,
+    "first_pass_valid_count": 5,
+    "first_pass_valid_rate": 62.5,
+    "mechanical_retries": 4,
+    "semantic_correct_count": 7,
+    "semantic_correct_rate": 87.5
+  },
+  "arm_b_typed_writer": {
+    "total_cases": 8,
+    "first_pass_valid_count": 8,
+    "first_pass_valid_rate": 100.0,
+    "mechanical_retries": 0,
+    "semantic_correct_count": 8,
+    "semantic_correct_rate": 100.0
+  },
+  "paired_improvement": {
+    "retry_reduction_rate": 100.0,
+    "first_pass_validity_delta": 37.5,
+    "semantic_correctness_delta": 12.5
+  }
 }

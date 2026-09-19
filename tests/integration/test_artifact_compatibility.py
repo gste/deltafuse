@@ -49,6 +49,11 @@ def test_manual_artifact_preservation_open_extension_fields_comments_crlf(tmp_pa
     assert r_meta["custom_vendor_notes"] == "Manual note"
     assert r_meta["custom_routing_flag"] == 42
 
+    (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (change_dir / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-160\nstatus: active\n---\n# Slice 01\n", encoding="utf-8")
+    (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
+
     # 2. Create task file manually with comments and CRLF line endings
     task_file = change_dir / "tasks" / "TASK-001.md"
     task_content = (

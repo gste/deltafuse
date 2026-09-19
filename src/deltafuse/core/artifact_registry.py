@@ -103,8 +103,47 @@ class ArtifactRegistry:
             raise ArtifactRegistryError(f"Malformed .deltafuse/lock.yaml: {ver_errors[0]}")
 
         fw = data.get("framework")
-        if not isinstance(fw, dict) or "version" not in fw or ("content_hash" not in fw and "source" not in fw):
-            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: missing framework version or content_hash")
+        if not isinstance(fw, dict):
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: 'framework' must be a mapping")
+
+        raw_version = fw.get("version")
+        raw_source = fw.get("source")
+        raw_hash = fw.get("content_hash")
+
+        if raw_version is None or not isinstance(raw_version, str) or not raw_version.strip():
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: missing or invalid framework.version")
+
+        if raw_source is None or not isinstance(raw_source, str) or not raw_source.strip():
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: missing or invalid framework.source")
+
+        if raw_hash is None or not isinstance(raw_hash, str) or not raw_hash.strip():
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: missing or invalid framework.content_hash")
+
+        lock_ver = raw_version.strip()
+        lock_hash = raw_hash.strip()
+
+        if not re.match(r"^sha256:[a-fA-F0-9]{64}$", lock_hash):
+            raise ArtifactRegistryError(
+                f"Malformed .deltafuse/lock.yaml: invalid framework.content_hash format '{lock_hash}'"
+            )
+
+        from deltafuse.core.assets import get_executing_framework_identity
+        exec_version, valid_hashes = get_executing_framework_identity()
+
+        if lock_ver != exec_version:
+            raise ArtifactRegistryError(
+                f"Product lock framework version '{lock_ver}' does not match running framework version '{exec_version}'"
+            )
+
+        if not valid_hashes:
+            raise ArtifactRegistryError(
+                "Executing framework asset identity is unavailable; cannot verify product lock content_hash"
+            )
+
+        if lock_hash.lower() not in valid_hashes:
+            raise ArtifactRegistryError(
+                f"Product lock framework content_hash '{lock_hash}' does not match running framework asset identity"
+            )
 
     def _resolve_operations_dir(self) -> Path:
         if self._operations_dir is not None:
@@ -146,21 +185,31 @@ class ArtifactRegistry:
         return data
 
     def get_envelope_schema_bytes(self) -> bytes:
-        src_root = source_assets_root()
-        if src_root:
-            cand = src_root / "contracts" / "artifact-writer.schema.yaml"
-            if cand.is_file():
-                return cand.read_bytes()
+        """Resolve the verified bundle, or the module-anchored source contract.
+
+        An installed but damaged bundle is authoritative failure, never a
+        reason to trust a different checkout or the caller's working directory.
+        """
+        rel = "contracts/artifact-writer.schema.yaml"
         b_root = bundle_root()
-        if b_root:
+        if b_root is not None:
             problems = verify_manifest(b_root)
-            if not problems:
-                cand = b_root / "contracts" / "artifact-writer.schema.yaml"
-                if cand.is_file():
-                    return cand.read_bytes()
-        cand_local = Path("docs/contracts/artifact-writer.schema.yaml")
-        if cand_local.is_file():
-            return cand_local.read_bytes()
+            if problems:
+                raise ArtifactRegistryError("Corrupt asset bundle: " + "; ".join(problems)[:400])
+            manifest = json.loads((b_root / "manifest.json").read_text(encoding="utf-8"))
+            if rel not in manifest.get("files", {}):
+                raise ArtifactRegistryError(f"Unverified bundle contract: {rel}")
+            try:
+                return (b_root / rel).read_bytes()
+            except OSError as ex:
+                raise ArtifactRegistryError(f"Unreadable bundle contract: {rel}") from ex
+        src_root = source_assets_root()
+        if src_root is not None:
+            cand = src_root.parent / "docs" / rel
+            try:
+                return cand.read_bytes()
+            except OSError as ex:
+                raise ArtifactRegistryError(f"Missing or unreadable source contract: {rel}") from ex
         raise ArtifactRegistryError("Could not locate verified artifact-writer.schema.yaml contract")
 
     def get_envelope_schema(self) -> dict[str, Any]:
@@ -405,17 +454,23 @@ class ArtifactRegistry:
                     break
                 curr = curr.parent
 
-        def _find_file(candidates: list[Path]) -> tuple[Path | None, dict[str, Any] | None]:
+        def _find_file(candidates: list[Path]) -> tuple[Path | None, dict[str, Any] | None, str | None]:
             for cand in candidates:
                 if cand and cand.is_file():
+                    if repo_root or root:
+                        check_base = repo_root or root
+                        try:
+                            cand.resolve().relative_to(check_base)
+                        except ValueError:
+                            continue
                     try:
                         from deltafuse.core.artifact_reader import strict_read_artifact
                         has_fm = not cand.name.endswith((".yaml", ".yml"))
                         pres = strict_read_artifact(cand.read_bytes(), has_frontmatter_delimiters=has_fm)
-                        return cand, pres.metadata
-                    except Exception:
-                        return cand, None
-            return None, None
+                        return cand, pres.metadata, None
+                    except Exception as ex:
+                        return cand, None, str(ex)
+            return None, None, None
 
         if kind == "task" and root:
             slice_id = payload.get("slice")
@@ -433,7 +488,7 @@ class ArtifactRegistry:
                         slice_candidates.insert(1, repo_root / "docs" / "changes" / cid / "slices" / f"{slice_id}.md")
                 valid_candidates = [c for c in slice_candidates if c is not None]
 
-                found_path, slice_meta = _find_file(valid_candidates)
+                found_path, slice_meta, parse_err = _find_file(valid_candidates)
                 if not found_path:
                     diagnostics.append(
                         ValidationDiagnostic(
@@ -443,13 +498,32 @@ class ArtifactRegistry:
                             message=f"Referenced slice file '{slice_id}' does not exist",
                         )
                     )
-                elif slice_meta and slice_meta.get("id") and slice_meta.get("id") != slice_id:
+                elif parse_err:
                     diagnostics.append(
                         ValidationDiagnostic(
                             code="missing_reference",
                             stage="reference",
                             path="/slice",
-                            message=f"Referenced slice file '{found_path.name}' has identity '{slice_meta.get('id')}', expected '{slice_id}'",
+                            message=f"Referenced slice file '{found_path.name}' is malformed or invalid: {parse_err}",
+                        )
+                    )
+                elif not slice_meta or not slice_meta.get("id") or slice_meta.get("id") != slice_id:
+                    actual_id = slice_meta.get("id") if slice_meta else None
+                    diagnostics.append(
+                        ValidationDiagnostic(
+                            code="missing_reference",
+                            stage="reference",
+                            path="/slice",
+                            message=f"Referenced slice file '{found_path.name}' has identity '{actual_id}', expected '{slice_id}'",
+                        )
+                    )
+                elif cid and slice_meta.get("change") and slice_meta.get("change") != cid:
+                    diagnostics.append(
+                        ValidationDiagnostic(
+                            code="missing_reference",
+                            stage="reference",
+                            path="/slice",
+                            message=f"Referenced slice file '{found_path.name}' belongs to Change '{slice_meta.get('change')}', expected '{cid}'",
                         )
                     )
 
@@ -483,7 +557,7 @@ class ArtifactRegistry:
                                 dep_candidates.insert(1, repo_root / "docs" / "changes" / cid / "slices" / f"{dep_id}.md")
 
                     valid_dep_cands = [c for c in dep_candidates if c is not None]
-                    found_dep_path, dep_meta = _find_file(valid_dep_cands)
+                    found_dep_path, dep_meta, dep_parse_err = _find_file(valid_dep_cands)
                     if not found_dep_path:
                         diagnostics.append(
                             ValidationDiagnostic(
@@ -493,13 +567,32 @@ class ArtifactRegistry:
                                 message=f"Referenced dependency '{dep_id}' does not exist",
                             )
                         )
-                    elif dep_meta and dep_meta.get("id") and dep_meta.get("id") != dep_id:
+                    elif dep_parse_err:
                         diagnostics.append(
                             ValidationDiagnostic(
                                 code="missing_reference",
                                 stage="reference",
                                 path="/depends_on",
-                                message=f"Referenced dependency file '{found_dep_path.name}' has identity '{dep_meta.get('id')}', expected '{dep_id}'",
+                                message=f"Referenced dependency file '{found_dep_path.name}' is malformed or invalid: {dep_parse_err}",
+                            )
+                        )
+                    elif not dep_meta or not dep_meta.get("id") or dep_meta.get("id") != dep_id:
+                        actual_id = dep_meta.get("id") if dep_meta else None
+                        diagnostics.append(
+                            ValidationDiagnostic(
+                                code="missing_reference",
+                                stage="reference",
+                                path="/depends_on",
+                                message=f"Referenced dependency file '{found_dep_path.name}' has identity '{actual_id}', expected '{dep_id}'",
+                            )
+                        )
+                    elif cid and dep_meta.get("change") and dep_meta.get("change") != cid:
+                        diagnostics.append(
+                            ValidationDiagnostic(
+                                code="missing_reference",
+                                stage="reference",
+                                path="/depends_on",
+                                message=f"Referenced dependency file '{found_dep_path.name}' belongs to Change '{dep_meta.get('change')}', expected '{cid}'",
                             )
                         )
 
@@ -535,7 +628,7 @@ class ArtifactRegistry:
                             if repo_root:
                                 spec_delta_candidates.insert(1, repo_root / "docs" / "changes" / cid / "spec-delta.md")
                         valid_sd_cands = [c for c in spec_delta_candidates if c is not None]
-                        sd_path, sd_meta = _find_file(valid_sd_cands)
+                        sd_path, sd_meta, sd_parse_err = _find_file(valid_sd_cands)
 
                         is_declared = False
                         if sd_path and sd_meta:
@@ -588,4 +681,3 @@ class ArtifactRegistry:
         ]
 
         return ValidationResult(valid=valid, diagnostics=diagnostics, scopes=scopes)
-
