@@ -606,6 +606,15 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
     )
     assert init_res.returncode == 0
 
+    def txn_files() -> set[str]:
+        """AW44-R3: denied writes must leave no journal/receipt records."""
+        files: set[str] = set()
+        for sub in ("journal", "receipts"):
+            d = repo_dir / ".deltafuse" / sub
+            if d.is_dir():
+                files.update(p.name for p in d.glob("*.json"))
+        return files
+
     chg_dir = repo_dir / "docs" / "changes" / "CHG-201"
     chg_dir.mkdir(parents=True, exist_ok=True)
     (chg_dir / "change.yaml").write_text("id: CHG-201\nstatus: active\n", encoding="utf-8")
@@ -634,6 +643,7 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
     }
 
     try:
+        txn_before = txn_files()
         # Probe 1: Physically remove packaged schema
         schema_file.unlink()
         assert not schema_file.exists()
@@ -652,6 +662,7 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
         assert del_out["ok"] is False
         assert del_out["error"]["code"] == "asset_resolution_failed"
         assert not (repo_dir / "tasks" / "TASK-201.md").exists(), "Product artifact must not be created on missing schema"
+        assert txn_files() == txn_before, "denied create must not add journal/receipt records"
 
         # Restore original bytes cleanly
         schema_file.write_bytes(orig_bytes)
@@ -673,6 +684,7 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
         task_bytes_before = task_file.read_bytes()
         task_hash_before = hashlib.sha256(task_bytes_before).hexdigest()
 
+        txn_before = txn_files()
         # Probe 2: Corrupt packaged schema bytes without repairing manifest
         schema_file.write_bytes(b"invalid_yaml: [broken: {content\n")
         assert hashlib.sha256(schema_file.read_bytes()).hexdigest() != orig_hash
@@ -694,6 +706,7 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
         assert tamper_cr_out["ok"] is False
         assert tamper_cr_out["error"]["code"] == "asset_resolution_failed"
         assert not (repo_dir / "tasks" / "TASK-202.md").exists(), "Product artifact must not be created on corrupted schema"
+        assert txn_files() == txn_before, "denied create must not add journal/receipt records"
 
         # Probe 3: Attempt to update TASK-201 under corrupted schema
         update_payload = {
@@ -715,6 +728,7 @@ def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_ve
         assert tamper_up_out["ok"] is False
         assert tamper_up_out["error"]["code"] == "asset_resolution_failed"
         assert task_file.read_bytes() == task_bytes_before, "Product artifact must remain unchanged on rejected update"
+        assert txn_files() == txn_before, "denied update must not add journal/receipt records"
 
     finally:
         # Guarantee exact restoration of original packaged schema bytes

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "bundle": "AW-44 real-wheel qualification evidence (2026-09-19 rerun)",
+  "preserved_location_token": "<preserved-run-location>/aw44-evidence-20260919",
+  "tested_source_identity": {
+    "head_commit": "21cc2df475544e75987ecc40a19a6db5ba594ef9",
+    "version": "3.1.0",
+    "dirty_review_files": [
+      "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+      "backlog/schema-driven-artifact-writer/PLAN.md",
+      "backlog/schema-driven-artifact-writer/README.md",
+      "backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+      "backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+      "backlog/schema-driven-artifact-writer/cards/AW-41.md",
+      "backlog/schema-driven-artifact-writer/cards/AW-42.md",
+      "backlog/schema-driven-artifact-writer/cards/AW-44.md",
+      "backlog/schema-driven-artifact-writer/cards/AW-45.md",
+      "backlog/schema-driven-artifact-writer/REVIEW-6.md"
+    ],
+    "note": "Runtime, contract, schema and asset files were committed bytes at the head commit; the AW-44 strengthened probe edit to tests/integration/test_artifact_cli.py is included in the digest below."
+  },
+  "verification": {
+    "steps_ok": true,
+    "wheel_exists": true,
+    "manifest_files_all_present": true,
+    "import_origin_in_site_packages": true,
+    "import_origin_not_repo": true,
+    "schema_asset_present": true,
+    "schema_asset_digest_matches": true
+  },
+  "commands": [
+    {"step": "sync_assets_check", "exit": 0},
+    {"step": "pip_wheel_build", "exit": 0},
+    {"step": "venv_pip_install", "exit": 0},
+    {"step": "import_origin", "exit": 0},
+    {"step": "venv_pip_freeze", "exit": 0},
+    {"step": "wheel_artifact_describe", "exit": 0}
+  ],
+  "full_argv_and_raw_output": "raw/driver-run.json (see preserved location)",
+  "wheel": {
+    "name": "deltafuse-3.1.0-py3-none-any.whl",
+    "sha256": "8cad283574d44d17787b559557385e053a731b523839920d505fa980c41c434d",
+    "build_command": "python -m pip wheel --no-deps -w <dist> <repo-checkout>",
+    "install_command": "<venv-python> -I -m pip install <wheel>"
+  },
+  "import_origin": "<preserved>/venv/Lib/site-packages/deltafuse (inside isolated venv; checkout root excluded)",
+  "packaged_schema_asset": {
+    "relative_path": "assets/contracts/artifact-writer.schema.yaml",
+    "exists_in_installed_wheel": true,
+    "sha256": "37ad597869e11ff2031a9c871a00ee342c7d84df6e2c70ff5117b599d0b74966",
+    "matches_tested_contract": true
+  },
+  "environment": {
+    "os": "nt",
+    "platform": "win32",
+    "python_build_host": "3.14.3",
+    "isolated_venv_python": "3.14.3",
+    "filesystem": "ntfs",
+    "pytest": "9.1.1"
+  },
+  "installed_dependencies_in_isolated_venv": [
+    "attrs==26.1.0",
+    "deltafuse==3.1.0 (wheel sha256 8cad2835...c434d)",
+    "jsonschema==4.26.0",
+    "jsonschema-specifications==2025.9.1",
+    "PyYAML==6.0.3",
+    "referencing==0.37.0",
+    "rpds-py==2026.6.3"
+  ],
+  "regression_run": {
+    "command": "python -m pytest tests/integration/test_artifact_cli.py tests/integration/test_wheel_smoke.py tests/integration/test_wheel_evidence.py -v -s",
+    "exit": 0,
+    "summary": "16 passed (10 artifact CLI incl. strengthened packaged-schema removal/corruption probes; 2 wheel smoke; 4 wheel evidence)",
+    "raw_log": "raw/final-s.log"
+  },
+  "source_contract_test_digests": {
+    "tests/integration/test_artifact_cli.py": "bfcbe0e41ce9121009668a440be4008c1107b156239d282a8f1127b875cddb1d",
+    "tests/integration/test_wheel_smoke.py": "1e300b61819d1bea4d7de41858cf4de870837bc2847aa0ece17f2109dd655c17",
+    "tests/integration/test_wheel_evidence.py": "3d908546bcc49d0cd61767292a51303e9f7e5c498630a72ada12becfbc61da18",
+    "docs/contracts/artifact-writer.schema.yaml": "37ad597869e11ff2031a9c871a00ee342c7d84df6e2c70ff5117b599d0b74966",
+    "src/deltafuse/core/artifact_registry.py": "6aa0350638d7c6041ee9ee93cc17656f3f45f743aed88c962ca655099d583ea9",
+    "src/deltafuse/core/artifact_transactions.py": "ecde1b25f4006681970b83665e5360e61c3e380ede725531c398e09426b3c202",
+    "src/deltafuse/core/artifacts.py": "63441b63d4b1a448b3788fa5d2f2aebe6a6c753b4cec1d2cdd8343a20ee42c4c",
+    "src/deltafuse/cli.py": "19a871cd1c7cafc142c38465b4f847509d81403f27338577c6285b987c46297e"
+  },
+  "raw_artifacts": [
+    {"name": "raw/driver-run.json", "sha256": "320c04ae0b1350912a6cbd94226f531174585e96e3acd334cfdbf5a909745c89"},
+    {"name": "raw/pytest-wheel-suite.log", "sha256": "5196d143b6dc7883c7af909f8c3df000551a2fabba0b796d3f1781beb769e1e7"},
+    {"name": "raw/probes-raw-s.log", "sha256": "19f83ac3fabdcbb763ab6ce907ed87bd5cb7bcf3db1008bea91ec4588d8cd020"},
+    {"name": "raw/final-s.log", "sha256": "7eb814376f6b44bc58d5e3476fc822ba5bec21db00bb53fc57ed5c020b37e458"}
+  ],
+  "still_open_owned_by_other_cards": [
+    "AW41-R3 POSIX concurrency/hard-crash subrow (native POSIX host required)",
+    "AW41-F1 capable-host symlink/reparse execution (SeCreateSymbolicLinkPrivilege required)",
+    "AW40-R2/AW40-F1 paired small-model sessions (authorized endpoint required)"
+  ]
+}
