@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Schema-driven Artifact Writer: `deltafuse artifact describe|create|update|validate|update-index` CLI subcommands and typed Python `ArtifactService` for schema-valid Change artifact creation and atomic JSON Pointer updates.
 - Bounded artifact reader (`strict_read_artifact`), frontmatter/YAML codec with explicit formatting canonicalization opt-in (`canonicalize_metadata`), product mutation locking, durable transaction receipts, and authority policy enforcement.
-- Small-model paired evaluation protocol (`evaluate_artifact_writer.py`) and evaluation corpus (`tests/fixtures/artifact_writer_eval/eval_corpus.json`).
+- Small-model paired evaluation protocol (`evaluate_artifact_writer.py`), independent semantic oracle, and evaluation corpus (`tests/fixtures/artifact_writer_eval/eval_corpus.json`).
+
+### Fixed
+
+- Remediated 8 review findings across `AW-21` through `AW-28`:
+  - `AW-21`: Core authorization context enforcement, target path containment inside `docs/changes/<change_id>/`, and halted stage rejection.
+  - `AW-22`: Semantic field omission checks and reference validation against existing slice, spec, and dependency files on disk.
+  - `AW-23`: Bounded strict JSON reader enforcing duplicate key rejection at all depths, closed envelope validation, and exit code mapping.
+  - `AW-24`: Fail-closed product pin (`.deltafuse/lock.yaml`) verification and raw byte schema hash provenance in durable receipts.
+  - `AW-25`: Update transaction idempotency, committed request recognition without `stale_target`, and conflict detection on modified request payloads.
+  - `AW-26`: Atomic same-filesystem staging and `fsync` flush for journal/receipt records, fail-closed corrupt journal recovery, and shared `ProductMutationLock` across Core state/evidence/scaffold writes.
+  - `AW-27`: Mode-disambiguated small-model evaluation harness with independent oracle checking disk state and gate enforcement directly.
+  - `AW-28`: Subprocess hard-kill (`proc.kill()`) recovery validation at prepare/publish boundaries, multi-process lock contention, platform ADS/device/UNC security checks, and isolated built-wheel qualification.
+
 
 ## [3.1.0] - 2026-09-16
 

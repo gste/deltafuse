@@ -148,15 +148,37 @@ deltafuse leash <product-root> --file src/foo.py
 
 Ядро предоставляет управляемую схемам службу сериализации и валидации для артефактов пакетов Change ([artifact-writer.ru.md](./contracts/artifact-writer.ru.md)).
 
+### Практические примеры использования
+
 ```text
+# Проверить поддерживаемые свойства и схемы через инспекцию возможностей
 deltafuse artifact describe --kind task --operation create
+
+# Создать новый артефакт Change из JSON-структуры
 deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+
+# Атомарно обновить артефакт через JSON Pointer patch с проверкой SHA256 целого файла
 deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+
+# Выполнить read-only валидацию схемы и ссылок без изменения диска
 deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+
+# Обновить дочерний индекс родительского Change после создания/обновления задачи/среза
 deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
 ```
 
-Операции Artifact Writer строго валидируют семантические поля по схемам хранения. Поля Ядра (например, `/status`) нельзя изменять через `deltafuse artifact update`. Read-only операция `validate` не изменяет файлы на диске.
+### Обнаружение возможностей и совместимость
+Клиенты определяют доступность Artifact Writer с помощью `deltafuse artifact describe --kind <kind> --operation <op>`. Если команда недоступна или возвращает ошибку неверного вида, клиенты используют ручное составление YAML/frontmatter.
+
+### Ручное создание и существующие артефакты
+Ручное редактирование YAML и frontmatter остаётся полностью поддерживаемым. Существующие артефакты никогда автоматически не перезаписываются и не мигрируют массово. Artifact Writer корректно читает файлы, созданные вручную.
+
+### Явное подтверждение каноникализации
+Для переформатирования или нормализации метаданных неканоничных артефактов требуется явный флаг `--canonicalize-metadata` вместе с проверкой хэша файла. Без явного согласия формативные правки метаданных не применяются.
+
+### Процедура восстановления транзакций
+В случае сбоя или прерывания процесса при операциях создания/обновления Ядро проверяет `.deltafuse/journal/` под блокировкой `ProductMutationLock`. Незавершённые транзакции со статусом `prepared` восстанавливают исходный файл, а транзакции со статусом `published` завершают запись чека receipt и публикации.
+
 
 
 ## Внешние доски

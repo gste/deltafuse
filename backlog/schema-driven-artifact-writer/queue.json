@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "in_progress",
+  "status": "completed",
   "planning_only": false,
   "feature": "schema-driven-artifact-writer",
   "framework_snapshot": {
@@ -619,7 +619,7 @@
       "id": "AW-20",
       "phase": "G",
       "title": "Close acceptance and publish migration/handoff",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-27",
         "AW-28"

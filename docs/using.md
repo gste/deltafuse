@@ -148,15 +148,37 @@ deltafuse leash <product-root> --file src/foo.py
 
 Core provides a schema-driven serialization and validation service for Change package artifacts ([artifact-writer.md](./contracts/artifact-writer.md)).
 
+### Practical Usage & Examples
+
 ```text
+# Detect capabilities and schemas supported by the installed writer
 deltafuse artifact describe --kind task --operation create
+
+# Create a new Change artifact via JSON payload
 deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+
+# Update an existing artifact atomically using JSON Pointer patch with target SHA assertion
 deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+
+# Perform a read-only schema and reference validation pass without modifying files
 deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+
+# Update parent Change child index after adding or updating a task/slice
 deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
 ```
 
-Artifact Writer operations validate semantic fields strictly against target storage schemas. Core-owned fields (e.g. `/status`) cannot be modified through `deltafuse artifact update`. Read-only `validate` does not mutate files on disk.
+### Capability Detection & Compatibility
+Clients detect Artifact Writer availability using `deltafuse artifact describe --kind <kind> --operation <op>`. If the subcommand is unavailable or returns unsupported kind errors, clients fall back to manual frontmatter authoring.
+
+### Manual Authoring Fallback & Legacy Artifacts
+Manual YAML/frontmatter authoring remains fully valid and supported. Existing artifacts are never automatically rewritten or bulk-migrated. The Artifact Writer reads legacy and manually authored artifacts seamlessly.
+
+### Canonicalization Opt-in
+To reformat or normalize metadata on existing noncanonical artifacts, an explicit `--canonicalize-metadata` opt-in is required alongside expected target hash verification. Noncanonical metadata will not be reformatted without explicit consent.
+
+### Transaction Recovery Procedure
+In the event of process interruption during creation or update operations, the Core checks `.deltafuse/journal/` under `ProductMutationLock`. Pending transactions marked `prepared` are restored to their previous target state, while transactions marked `published` complete receipt finalization and output publication cleanly.
+
 
 
 ## External boards
