@@ -128,6 +128,8 @@ class ArtifactService:
         request_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a new artifact atomically under schema and policy protection."""
+        self.registry.verify_product_lock(self.product_root)
+
         if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
             raise ArtifactServiceError(
                 f"Invalid request_id pattern: '{request_id}'",
@@ -254,6 +256,9 @@ class ArtifactService:
         req_id = request_id or f"req-{hashlib.sha256(content_bytes).hexdigest()[:16]}"
         raw_req_bytes = json.dumps({"kind": kind, "identity": identity, "payload": semantic_payload}, sort_keys=True).encode("utf-8")
 
+        op_hash = self.registry.get_descriptor_hash(kind)
+        st_hash = self.registry.get_storage_schema_hash(kind)
+
         with ProductMutationLock(self.product_root):
             revalidate_authority(self.auth_context, lambda: self.auth_context)
 
@@ -266,6 +271,8 @@ class ArtifactService:
                 expected_result_sha256=expected_sha256,
                 auth_context=self.auth_context,
                 operation="create",
+                operation_schema_hash=op_hash,
+                storage_schema_hash=st_hash,
             )
 
             if tx.get("state") == "committed":
@@ -286,6 +293,8 @@ class ArtifactService:
         canonicalize_metadata: bool = False,
     ) -> dict[str, Any]:
         """Update an existing artifact atomically using typed JSON pointer patches."""
+        self.registry.verify_product_lock(self.product_root)
+
         if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
             raise ArtifactServiceError(
                 f"Invalid request_id pattern: '{request_id}'",
@@ -379,6 +388,9 @@ class ArtifactService:
         candidate_bytes = candidate_str.encode("utf-8")
         candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
 
+        op_hash = self.registry.get_descriptor_hash(kind)
+        st_hash = self.registry.get_storage_schema_hash(kind)
+
         if check_noop_mutation(existing_bytes, candidate_bytes):
             req_id = request_id or f"req-noop-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}"
             raw_req_bytes = json.dumps({"kind": kind, "target": str(target_path), "patch": patch}, sort_keys=True).encode("utf-8")
@@ -391,6 +403,8 @@ class ArtifactService:
                 expected_result_sha256=expected_sha256,
                 auth_context=self.auth_context,
                 operation="update",
+                operation_schema_hash=op_hash,
+                storage_schema_hash=st_hash,
             )
             return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="unchanged", changed=False)
 
@@ -410,6 +424,8 @@ class ArtifactService:
                 expected_result_sha256=candidate_sha256,
                 auth_context=self.auth_context,
                 operation="update",
+                operation_schema_hash=op_hash,
+                storage_schema_hash=st_hash,
             )
 
             if tx.get("state") == "committed":

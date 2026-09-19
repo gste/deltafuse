@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-24",
+  "entry": "AW-25",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -780,7 +780,7 @@
       "id": "AW-24",
       "phase": "H",
       "title": "Bind installed schema pins and truthful receipt provenance",
-      "status": "planned",
+      "status": "completed",
       "depends_on": [
         "AW-23"
       ],

@@ -16,9 +16,21 @@ def product_root(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     (root / ".deltafuse").mkdir()
+    (root / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
     (root / "tasks").mkdir()
     (root / "slices").mkdir()
     return root
+
 
 
 @pytest.fixture
@@ -345,5 +357,97 @@ def test_create_task_missing_core_context_rejected(product_root: Path):
             },
         )
     assert getattr(exc_info.value, "code", "") in ("missing_core_context", "policy_denied")
+
+
+def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Path):
+    """AW-24 Red: Malformed lock must deny creation; receipts must contain true byte hashes and real timestamp."""
+    from deltafuse.core.artifact_registry import ArtifactRegistryError
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / ".deltafuse").mkdir()
+    (root / "slices").mkdir()
+    (root / "tasks").mkdir()
+
+    # Part A: Malformed lock.yaml (unsupported schema_version: 99)
+    lock_file = root / ".deltafuse" / "lock.yaml"
+    lock_file.write_text("schema_version: 99\nframework:\n  version: 3.1.0\n", encoding="utf-8")
+
+    auth = AuthorizationContext(
+        actor="worker",
+        work_item="SLICE-01",
+        product_root=root,
+        change_id="CHG-001",
+        task_id="TASK-001",
+        stage="Implement",
+        schema_hash="hash1",
+        lock_hash="lock1",
+        fingerprint="fp123",
+    )
+    service = ArtifactService(root, auth)
+
+    slice_file = root / "slices" / "SLICE-01.md"
+    slice_file.write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Auth Slice\nstatus: draft\nprimary_capability: auth\nclaims:\n  - CR-001\n---\nSlice body\n", encoding="utf-8")
+    spec_file = root / "docs" / "spec" / "overview.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text("# Spec Overview\n", encoding="utf-8")
+
+    # Malformed lock must deny create!
+    with pytest.raises((ArtifactServiceError, ArtifactRegistryError, ArtifactPolicyError)):
+        service.create(
+            kind="task",
+            identity="TASK-001",
+            semantic_payload={
+                "title": "Parse tokens cleanly",
+                "kind": "feature",
+                "depends_on": [],
+                "requirement_delta": "none",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": ["src/parser.py"],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 100000, "max_files": 20},
+            },
+            body="Task body prose\n",
+        )
+
+    # Part B: Repair lock.yaml to valid content
+    lock_file.write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
+
+    receipt = service.create(
+        kind="task",
+        identity="TASK-001",
+        semantic_payload={
+            "title": "Parse tokens cleanly",
+            "kind": "feature",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": ["src/parser.py"],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 100000, "max_files": 20},
+        },
+        body="Task body prose\n",
+    )
+
+    # Receipt schema hashes must NOT be zeros ("sha256:" + ("0"*64))
+    op_hash = receipt["operation_schema"]["content_hash"]
+    st_hash = receipt["storage_schema"]["content_hash"]
+    assert op_hash != "sha256:" + ("0" * 64), f"operation_schema content_hash was zeroed: {op_hash}"
+    assert st_hash != "sha256:" + ("0" * 64), f"storage_schema content_hash was zeroed: {st_hash}"
+
+    # Timestamp must NOT be fixed "2026-09-18T08:00:00Z"
+    ts = receipt["timestamp"]
+    assert ts != "2026-09-18T08:00:00Z", f"timestamp was fixed: {ts}"
+
 
 

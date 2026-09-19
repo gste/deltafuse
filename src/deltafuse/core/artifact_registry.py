@@ -68,6 +68,44 @@ class ArtifactRegistry:
         self._manifest: dict[str, Any] | None = None
         self._operations_dir: Path | None = None
 
+    def find_product_lock(self, product_root: Path | str | None = None) -> Path | None:
+        root = Path(product_root).resolve() if product_root else self.product_root
+        if root is None:
+            return None
+        curr = root
+        for _ in range(6):
+            cand = curr / ".deltafuse" / "lock.yaml"
+            if cand.is_file():
+                return cand
+            if curr.parent == curr:
+                break
+            curr = curr.parent
+        return root / ".deltafuse" / "lock.yaml"
+
+    def verify_product_lock(self, product_root: Path | str | None = None) -> None:
+        """Verify that product_root contains a valid .deltafuse/lock.yaml pin. Fail closed if absent/corrupt."""
+        root = Path(product_root).resolve() if product_root else self.product_root
+        if root is None:
+            return
+        lock_file = self.find_product_lock(root)
+        if lock_file is None or not lock_file.is_file():
+            raise ArtifactRegistryError(f"Missing required product lock file '.deltafuse/lock.yaml' in '{root}'")
+        try:
+            data = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
+        except Exception as ex:
+            raise ArtifactRegistryError(f"Malformed .deltafuse/lock.yaml: unparseable YAML ({ex})") from ex
+        if not isinstance(data, dict):
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: top-level content must be a mapping")
+
+        from deltafuse.core.lock import lock_schema_version_errors
+        ver_errors = lock_schema_version_errors(data)
+        if ver_errors:
+            raise ArtifactRegistryError(f"Malformed .deltafuse/lock.yaml: {ver_errors[0]}")
+
+        fw = data.get("framework")
+        if not isinstance(fw, dict) or "version" not in fw or ("content_hash" not in fw and "source" not in fw):
+            raise ArtifactRegistryError("Malformed .deltafuse/lock.yaml: missing framework version or content_hash")
+
     def _resolve_operations_dir(self) -> Path:
         if self._operations_dir is not None:
             return self._operations_dir
@@ -91,13 +129,7 @@ class ArtifactRegistry:
                 self._operations_dir = candidate
                 return candidate
 
-        # Fallback to local process/artifact-operations relative to working dir if exists
-        local_cand = Path("process/artifact-operations")
-        if local_cand.is_dir():
-            self._operations_dir = local_cand
-            return local_cand
-
-        raise ArtifactRegistryError("Could not resolve process/artifact-operations directory from bundle or source")
+        raise ArtifactRegistryError("Could not resolve process/artifact-operations directory from verified installed asset bundle or source checkout")
 
     def get_manifest(self) -> dict[str, Any]:
         if self._manifest is not None:
@@ -113,21 +145,31 @@ class ArtifactRegistry:
         self._manifest = data
         return data
 
-    def get_envelope_schema(self) -> dict[str, Any]:
-        cand1 = Path("docs/contracts/artifact-writer.schema.yaml")
-        if cand1.is_file():
-            return yaml.safe_load(cand1.read_text(encoding="utf-8"))
+    def get_envelope_schema_bytes(self) -> bytes:
         src_root = source_assets_root()
         if src_root:
-            cand2 = src_root / "contracts" / "artifact-writer.schema.yaml"
-            if cand2.is_file():
-                return yaml.safe_load(cand2.read_text(encoding="utf-8"))
+            cand = src_root / "contracts" / "artifact-writer.schema.yaml"
+            if cand.is_file():
+                return cand.read_bytes()
         b_root = bundle_root()
         if b_root:
-            cand3 = b_root / "contracts" / "artifact-writer.schema.yaml"
-            if cand3.is_file():
-                return yaml.safe_load(cand3.read_text(encoding="utf-8"))
-        raise ArtifactRegistryError("Could not locate artifact-writer.schema.yaml contract")
+            problems = verify_manifest(b_root)
+            if not problems:
+                cand = b_root / "contracts" / "artifact-writer.schema.yaml"
+                if cand.is_file():
+                    return cand.read_bytes()
+        cand_local = Path("docs/contracts/artifact-writer.schema.yaml")
+        if cand_local.is_file():
+            return cand_local.read_bytes()
+        raise ArtifactRegistryError("Could not locate verified artifact-writer.schema.yaml contract")
+
+    def get_envelope_schema(self) -> dict[str, Any]:
+        raw = self.get_envelope_schema_bytes()
+        return yaml.safe_load(raw.decode("utf-8"))
+
+    def get_envelope_schema_hash(self) -> str:
+        raw = self.get_envelope_schema_bytes()
+        return "sha256:" + hashlib.sha256(raw).hexdigest()
 
     def validate_operation_envelope(self, envelope: dict[str, Any]) -> ValidationResult:
         schema = self.get_envelope_schema()
@@ -142,24 +184,29 @@ class ArtifactRegistry:
             diags.append(ValidationDiagnostic(code=code, stage="input", path=ptr, message=err.message))
         return ValidationResult(valid=False, diagnostics=diags, scopes=[{"scope": "envelope", "status": "invalid"}])
 
-
-    def get_descriptor(self, kind: str) -> dict[str, Any]:
-        if kind in self._descriptors_cache:
-            return self._descriptors_cache[kind]
-
+    def get_descriptor_bytes(self, kind: str) -> bytes:
         manifest = self.get_manifest()
         descriptors = manifest.get("descriptors", {})
         if kind not in descriptors:
             raise ArtifactRegistryError(f"Unsupported kind '{kind}'; no descriptor entry found in manifest")
-
         entry = descriptors[kind]
         ops_dir = self._resolve_operations_dir()
         desc_path = ops_dir / entry["file"]
         if not desc_path.is_file():
             raise ArtifactRegistryError(f"Descriptor file missing for kind '{kind}': {desc_path}")
+        return desc_path.read_bytes()
 
+    def get_descriptor_hash(self, kind: str) -> str:
+        raw = self.get_descriptor_bytes(kind)
+        return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+    def get_descriptor(self, kind: str) -> dict[str, Any]:
+        if kind in self._descriptors_cache:
+            return self._descriptors_cache[kind]
+
+        raw = self.get_descriptor_bytes(kind)
         try:
-            data = yaml.safe_load(desc_path.read_text(encoding="utf-8"))
+            data = yaml.safe_load(raw.decode("utf-8"))
         except Exception as ex:
             raise ArtifactRegistryError(f"Failed to parse descriptor for kind '{kind}': {ex}") from ex
 
@@ -169,6 +216,25 @@ class ArtifactRegistry:
         self._descriptors_cache[kind] = data
         return data
 
+    def get_storage_schema_bytes(self, kind: str) -> bytes:
+        try:
+            from deltafuse.core.assets import resolve_assets
+            schemas_dir = resolve_assets("schemas")
+        except Exception:
+            src_root = source_assets_root()
+            if src_root:
+                schemas_dir = src_root / "schemas"
+            else:
+                schemas_dir = Path("process/schemas").resolve()
+        schema_file = schemas_dir / f"{kind}.schema.yaml"
+        if not schema_file.is_file():
+            raise ArtifactRegistryError(f"Storage schema file missing for kind '{kind}': {schema_file}")
+        return schema_file.read_bytes()
+
+    def get_storage_schema_hash(self, kind: str) -> str:
+        raw = self.get_storage_schema_bytes(kind)
+        return "sha256:" + hashlib.sha256(raw).hexdigest()
+
     def get_storage_schema(self, kind: str, expected_hash: str | None = None) -> dict[str, Any]:
         try:
             schema = self._schema_registry.get_schema(kind)
@@ -176,10 +242,9 @@ class ArtifactRegistry:
             raise ArtifactRegistryError(f"Unsupported storage schema kind '{kind}'") from ex
 
         if expected_hash:
-            # Check schema bytes hash matches expected_hash
-            raw = json.dumps(schema, sort_keys=True).encode("utf-8")
-            digest = "sha256:" + hashlib.sha256(raw).hexdigest()
-            if expected_hash != digest and not expected_hash.endswith(hashlib.sha256(raw).hexdigest()):
+            # Check schema raw bytes hash matches expected_hash
+            digest = self.get_storage_schema_hash(kind)
+            if expected_hash != digest and not expected_hash.endswith(digest.split(":")[-1]):
                 raise ArtifactRegistryError(
                     f"Schema byte hash mismatch for kind '{kind}'; expected {expected_hash}, got {digest}"
                 )

@@ -116,6 +116,17 @@ def test_aw21_reproduce_security_failures(tmp_path: Path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     (repo_root / ".deltafuse").mkdir()
+    (repo_root / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
     change1_dir = repo_root / "docs" / "changes" / "CHG-001"
     change1_dir.mkdir(parents=True)
     outside_file = tmp_path / "outside_target.md"

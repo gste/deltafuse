@@ -54,12 +54,17 @@ class TransactionManager:
         auth_context: Any,
         operation: str = "update",
         operation_schema_version: str = "1",
-        storage_schema_identity: str = "task.schema",
-        storage_schema_hash: str = "sha256:default",
+        operation_schema_hash: str | None = None,
+        storage_schema_identity: str | None = None,
+        storage_schema_hash: str | None = None,
         serializer_revision: str = "1",
         normalized_payload_hash: str | None = None,
         staged_path: Path | None = None,
+        timestamp: str | None = None,
+        validation_scopes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        import datetime
+
         self._ensure_dirs()
         raw_request_hash = hashlib.sha256(raw_request_bytes).hexdigest()
         norm_hash = normalized_payload_hash or raw_request_hash
@@ -89,6 +94,20 @@ class TransactionManager:
         except ValueError:
             relative_target = str(target_path).replace("\\", "/")
 
+        now_iso = (
+            timestamp
+            or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+        st_id = storage_schema_identity or f"https://deltafuse.dev/schemas/v3/{kind}.schema.yaml"
+        default_scopes = [
+            {"scope": "envelope", "status": "valid", "details": []},
+            {"scope": "input", "status": "valid", "details": []},
+            {"scope": "schema", "status": "valid", "details": []},
+            {"scope": "policy", "status": "valid", "details": []},
+            {"scope": "reference", "status": "valid", "details": []},
+            {"scope": "whole_gate", "status": "not_evaluated", "details": ["Whole-Change convergence is evaluated by Core gates, not single-file write"]},
+        ]
+
         record = {
             "transaction_id": transaction_id,
             "request_id": request_id,
@@ -97,8 +116,9 @@ class TransactionManager:
             "target_abs_path": str(target_path),
             "operation": operation,
             "operation_schema_version": operation_schema_version,
-            "storage_schema_identity": storage_schema_identity,
-            "storage_schema_hash": storage_schema_hash,
+            "operation_schema_hash": operation_schema_hash or ("sha256:" + ("0" * 64)),
+            "storage_schema_identity": st_id,
+            "storage_schema_hash": storage_schema_hash or ("sha256:" + ("0" * 64)),
             "serializer_revision": serializer_revision,
             "raw_request_hash": raw_request_hash,
             "normalized_payload_hash": norm_hash,
@@ -107,13 +127,14 @@ class TransactionManager:
             "staged_path": str(staged_path) if staged_path else None,
             "state": "prepared",
             "created_at": time.time(),
+            "timestamp": now_iso,
             "authorization_context": {
                 "actor": getattr(auth_context, "actor", "worker"),
                 "work_item": getattr(auth_context, "work_item", "unknown"),
                 "stage": getattr(auth_context, "stage", "unknown"),
                 "fingerprint": getattr(auth_context, "fingerprint", "unknown"),
             },
-            "validation_scopes": ["input", "schema", "policy"],
+            "validation_scopes": validation_scopes or default_scopes,
         }
 
         record_file = self.journal_dir / f"{transaction_id}.json"
@@ -132,12 +153,28 @@ class TransactionManager:
         rec["state"] = "published"
         record_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
 
+    def _validate_receipt_against_schema(self, receipt_dict: dict[str, Any]) -> None:
+        try:
+            import yaml
+            import jsonschema
+            from deltafuse.core.artifact_registry import ArtifactRegistry
+            reg = ArtifactRegistry(self.product_root)
+            ops_dir = reg._resolve_operations_dir()
+            receipt_schema_file = ops_dir / "receipt.schema.yaml"
+            if receipt_schema_file.is_file():
+                schema = yaml.safe_load(receipt_schema_file.read_text(encoding="utf-8"))
+                jsonschema.Draft202012Validator(schema).validate(receipt_dict)
+        except Exception as ex:
+            raise ArtifactTransactionError(f"Generated receipt failed schema validation: {ex}", code="invalid_receipt") from ex
+
     def finalize_receipt(
         self,
         transaction_id: str,
         durable_outcome: str = "committed",
         changed: bool = True,
     ) -> dict[str, Any]:
+        import datetime
+
         record_file = self.journal_dir / f"{transaction_id}.json"
         if not record_file.is_file():
             raise ArtifactTransactionError(
@@ -171,13 +208,13 @@ class TransactionManager:
             "target": rec["target"],
             "operation_schema": {
                 "version": str(rec.get("operation_schema_version", "1")),
-                "content_hash": "sha256:" + ("0" * 64),
+                "content_hash": rec.get("operation_schema_hash") or ("sha256:" + ("0" * 64)),
             },
             "storage_schema": {
                 "kind": rec["kind"],
                 "version": 3,
-                "id": f"https://deltafuse.dev/schemas/v3/{rec['kind']}.schema.yaml",
-                "content_hash": "sha256:" + ("0" * 64),
+                "id": rec.get("storage_schema_identity") or f"https://deltafuse.dev/schemas/v3/{rec['kind']}.schema.yaml",
+                "content_hash": rec.get("storage_schema_hash") or ("sha256:" + ("0" * 64)),
             },
             "serializer_revision": 1,
             "request_sha256": req_sha256,
@@ -186,21 +223,27 @@ class TransactionManager:
             "result_sha256": res_sha256,
             "changed": changed,
             "outcome": durable_outcome,
-            "timestamp": "2026-09-18T08:00:00Z",
+            "timestamp": rec.get("timestamp") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "authority": {
                 "actor": rec["authorization_context"]["actor"],
                 "work_item": rec["authorization_context"]["work_item"],
                 "product_root": str(self.product_root).replace("\\", "/"),
             },
-            "validation_scopes": [
+            "validation_scopes": rec.get("validation_scopes") or [
+                {"scope": "envelope", "status": "valid", "details": []},
+                {"scope": "input", "status": "valid", "details": []},
                 {"scope": "schema", "status": "valid", "details": []},
                 {"scope": "policy", "status": "valid", "details": []},
+                {"scope": "reference", "status": "valid", "details": []},
+                {"scope": "whole_gate", "status": "not_evaluated", "details": ["Whole-Change convergence is evaluated by Core gates, not single-file write"]},
             ],
         }
 
         digest = compute_receipt_digest(receipt_dict)
         receipt_dict["receipt_sha256"] = digest
         receipt_dict["digest"] = digest
+
+        self._validate_receipt_against_schema(receipt_dict)
 
         receipt_file = self.receipts_dir / f"{transaction_id}.json"
         receipt_file.write_text(json.dumps(receipt_dict, indent=2), encoding="utf-8")

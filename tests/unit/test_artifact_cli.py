@@ -40,6 +40,18 @@ def test_cli_describe_export_schema(capsys):
 
 
 def _setup_cli_test_dir(tmp_path):
+    (tmp_path / ".deltafuse").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        "  version: 3.1.0\n"
+        "  source: deltafuse\n"
+        "  content_hash: sha256:17786cb040d1ed3cd5636dd4a6b97453c1b77627\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
     (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
     (tmp_path / "slices" / "SLICE-01.md").write_text(
         "---\nid: SLICE-01\nchange: CHG-001\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
