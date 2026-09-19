@@ -49,7 +49,14 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
         install(target_dir=case_tmp, framework_root=Path.cwd())
         cid = f"CHG-800-{case_id.lower().replace('_', '-')}"
         change_dir = scaffold_change(case_tmp, cid, route="code", title=f"Eval {case_id}")
-        auth = create_authorization_context(actor="worker", work_item="CLI", product_root=change_dir, change_id=cid)
+
+        # Create prerequisite files for reference validation
+        (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+        (change_dir / "slices" / "SLICE-01.md").write_text(f"---\nid: SLICE-01\nchange: {cid}\ntitle: Eval Slice\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+        (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+        (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
+
+        auth = create_authorization_context(actor="worker", work_item="SLICE-01", product_root=change_dir, change_id=cid)
         service = ArtifactService(product_root=change_dir, auth_context=auth)
 
         # Pre-create target artifact if update operation
@@ -57,7 +64,16 @@ def run_evaluation(corpus_path: Path, work_dir: Path | None = None) -> dict[str,
         target_path_str = None
         if op == "update":
             if kind == "task":
-                init_p = {"title": "Init task", "kind": "feature", "spec_refs": ["docs/spec/core.md#REQ-01"]}
+                init_p = {
+                    "title": "Init task",
+                    "kind": "feature",
+                    "depends_on": [],
+                    "requirement_delta": "none",
+                    "spec_refs": ["docs/spec/core.md#REQ-01"],
+                    "allowed_paths": [],
+                    "forbidden_paths": [],
+                    "context_budget": {"max_tokens": 1000, "max_files": 5},
+                }
                 rec = service.create(kind="task", identity="TASK-001", semantic_payload=init_p)
                 target_path_str = "tasks/TASK-001.md"
                 expected_sha = (change_dir / target_path_str).read_bytes()

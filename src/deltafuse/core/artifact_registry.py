@@ -290,24 +290,193 @@ class ArtifactRegistry:
         self,
         kind: str,
         payload: dict[str, Any],
+        product_root: Path | str | None = None,
         change_dir: Path | str | None = None,
+        change_id: str | None = None,
     ) -> ValidationResult:
         diagnostics: list[ValidationDiagnostic] = []
+        root = Path(product_root).resolve() if product_root else (Path(change_dir).resolve() if change_dir else None)
         cdir = Path(change_dir).resolve() if change_dir else None
+        cid = change_id or (payload.get("change") if isinstance(payload, dict) else None)
 
-        if kind == "task" and cdir:
+        repo_root = root
+        if repo_root:
+            curr = repo_root
+            for _ in range(6):
+                if (curr / "docs" / "spec").is_dir() or (curr / ".deltafuse").is_dir():
+                    repo_root = curr
+                    break
+                if curr.parent == curr:
+                    break
+                curr = curr.parent
+
+        def _find_file(candidates: list[Path]) -> tuple[Path | None, dict[str, Any] | None]:
+            for cand in candidates:
+                if cand and cand.is_file():
+                    try:
+                        from deltafuse.core.artifact_reader import strict_read_artifact
+                        has_fm = not cand.name.endswith((".yaml", ".yml"))
+                        pres = strict_read_artifact(cand.read_bytes(), has_frontmatter_delimiters=has_fm)
+                        return cand, pres.metadata
+                    except Exception:
+                        return cand, None
+            return None, None
+
+        if kind == "task" and root:
             slice_id = payload.get("slice")
             if slice_id:
-                slice_file = cdir / "slices" / f"{slice_id}.md"
-                if not slice_file.is_file():
+                slice_candidates = [
+                    root / "slices" / f"{slice_id}.md",
+                    cdir / "slices" / f"{slice_id}.md" if cdir else None,
+                    cdir / f"{slice_id}.md" if cdir else None,
+                ]
+                if repo_root:
+                    slice_candidates.append(repo_root / "slices" / f"{slice_id}.md")
+                if cid:
+                    slice_candidates.insert(1, root / "docs" / "changes" / cid / "slices" / f"{slice_id}.md")
+                    if repo_root:
+                        slice_candidates.insert(1, repo_root / "docs" / "changes" / cid / "slices" / f"{slice_id}.md")
+                valid_candidates = [c for c in slice_candidates if c is not None]
+
+                found_path, slice_meta = _find_file(valid_candidates)
+                if not found_path:
                     diagnostics.append(
                         ValidationDiagnostic(
                             code="missing_reference",
                             stage="reference",
                             path="/slice",
-                            message=f"Referenced slice file '{slice_file.name}' does not exist in {cdir / 'slices'}",
+                            message=f"Referenced slice file '{slice_id}' does not exist",
                         )
                     )
+                elif slice_meta and slice_meta.get("id") and slice_meta.get("id") != slice_id:
+                    diagnostics.append(
+                        ValidationDiagnostic(
+                            code="missing_reference",
+                            stage="reference",
+                            path="/slice",
+                            message=f"Referenced slice file '{found_path.name}' has identity '{slice_meta.get('id')}', expected '{slice_id}'",
+                        )
+                    )
+
+        if kind in ("task", "slice") and root:
+            deps = payload.get("depends_on") or []
+            if isinstance(deps, list):
+                for dep_id in deps:
+                    if not isinstance(dep_id, str):
+                        continue
+                    if kind == "task":
+                        dep_candidates = [
+                            root / "tasks" / f"{dep_id}.md",
+                            cdir / "tasks" / f"{dep_id}.md" if cdir else None,
+                        ]
+                        if repo_root:
+                            dep_candidates.append(repo_root / "tasks" / f"{dep_id}.md")
+                        if cid:
+                            dep_candidates.insert(1, root / "docs" / "changes" / cid / "tasks" / f"{dep_id}.md")
+                            if repo_root:
+                                dep_candidates.insert(1, repo_root / "docs" / "changes" / cid / "tasks" / f"{dep_id}.md")
+                    else:
+                        dep_candidates = [
+                            root / "slices" / f"{dep_id}.md",
+                            cdir / "slices" / f"{dep_id}.md" if cdir else None,
+                        ]
+                        if repo_root:
+                            dep_candidates.append(repo_root / "slices" / f"{dep_id}.md")
+                        if cid:
+                            dep_candidates.insert(1, root / "docs" / "changes" / cid / "slices" / f"{dep_id}.md")
+                            if repo_root:
+                                dep_candidates.insert(1, repo_root / "docs" / "changes" / cid / "slices" / f"{dep_id}.md")
+
+                    valid_dep_cands = [c for c in dep_candidates if c is not None]
+                    found_dep_path, dep_meta = _find_file(valid_dep_cands)
+                    if not found_dep_path:
+                        diagnostics.append(
+                            ValidationDiagnostic(
+                                code="missing_reference",
+                                stage="reference",
+                                path="/depends_on",
+                                message=f"Referenced dependency '{dep_id}' does not exist",
+                            )
+                        )
+                    elif dep_meta and dep_meta.get("id") and dep_meta.get("id") != dep_id:
+                        diagnostics.append(
+                            ValidationDiagnostic(
+                                code="missing_reference",
+                                stage="reference",
+                                path="/depends_on",
+                                message=f"Referenced dependency file '{found_dep_path.name}' has identity '{dep_meta.get('id')}', expected '{dep_id}'",
+                            )
+                        )
+
+            spec_refs = payload.get("spec_refs") or []
+            if isinstance(spec_refs, list):
+                for ref in spec_refs:
+                    if not isinstance(ref, str):
+                        continue
+                    ref_path_str = ref.split("#")[0].strip()
+                    if not ref_path_str:
+                        continue
+                    ref_path = Path(ref_path_str)
+
+                    ref_candidates = [
+                        root / ref_path,
+                        cdir / ref_path if cdir else None,
+                    ]
+                    if repo_root:
+                        ref_candidates.append(repo_root / ref_path)
+                    valid_ref_cands = [c for c in ref_candidates if c is not None]
+                    exists = any(c.is_file() for c in valid_ref_cands)
+
+                    if not exists:
+                        # Check if it's a declared future spec change in spec-delta.md
+                        spec_delta_candidates = [
+                            root / "spec-delta.md",
+                            cdir / "spec-delta.md" if cdir else None,
+                        ]
+                        if repo_root:
+                            spec_delta_candidates.append(repo_root / "spec-delta.md")
+                        if cid:
+                            spec_delta_candidates.insert(1, root / "docs" / "changes" / cid / "spec-delta.md")
+                            if repo_root:
+                                spec_delta_candidates.insert(1, repo_root / "docs" / "changes" / cid / "spec-delta.md")
+                        valid_sd_cands = [c for c in spec_delta_candidates if c is not None]
+                        sd_path, sd_meta = _find_file(valid_sd_cands)
+
+                        is_declared = False
+                        if sd_path and sd_meta:
+                            added = sd_meta.get("added") or []
+                            modified = sd_meta.get("modified") or []
+                            declared_paths = set(added + modified)
+                            if ref_path_str in declared_paths or ref_path_str == "spec-delta.md" or ref_path_str.endswith("spec-delta.md"):
+                                is_declared = True
+
+                        if not is_declared:
+                            diagnostics.append(
+                                ValidationDiagnostic(
+                                    code="missing_reference",
+                                    stage="reference",
+                                    path="/spec_refs",
+                                    message=f"Referenced spec path '{ref_path_str}' does not exist and is not declared in spec-delta",
+                                )
+                            )
+
+            design_ref = payload.get("design_ref")
+            if design_ref and isinstance(design_ref, str):
+                d_path_str = design_ref.split("#")[0].strip()
+                if d_path_str:
+                    d_path = Path(d_path_str)
+                    d_cands = [root / d_path, cdir / d_path if cdir else None]
+                    if repo_root:
+                        d_cands.append(repo_root / d_path)
+                    if not any(c.is_file() for c in d_cands if c is not None):
+                        diagnostics.append(
+                            ValidationDiagnostic(
+                                code="missing_reference",
+                                stage="reference",
+                                path="/design_ref",
+                                message=f"Referenced design file '{d_path_str}' does not exist",
+                            )
+                        )
 
         valid = len(diagnostics) == 0
         scopes = [
@@ -324,3 +493,4 @@ class ArtifactRegistry:
         ]
 
         return ValidationResult(valid=valid, diagnostics=diagnostics, scopes=scopes)
+

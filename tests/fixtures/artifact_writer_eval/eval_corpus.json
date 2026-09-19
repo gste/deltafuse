@@ -8,6 +8,8 @@
     "input_payload": {
       "title": "Implement auth middleware",
       "kind": "feature",
+      "depends_on": [],
+      "requirement_delta": "none",
       "spec_refs": ["docs/spec/core.md#REQ-01"],
       "allowed_paths": ["src/auth.py"],
       "forbidden_paths": [],

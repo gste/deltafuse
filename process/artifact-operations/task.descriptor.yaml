@@ -9,6 +9,7 @@ allowed_operations:
 creatable_semantic_fields:
   - title
   - kind
+  - slice
   - depends_on
   - requirement_delta
   - spec_refs

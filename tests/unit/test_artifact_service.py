@@ -58,6 +58,14 @@ def test_create_task_initializes_core_status_and_rejects_status_override(product
 def test_validate_is_strictly_read_only(product_root: Path, auth_context: AuthorizationContext):
     """validate() is strictly read-only and writes zero files to journal, receipts or target."""
     service = ArtifactService(product_root, auth_context)
+
+    # Set up referenced files
+    slice_file = product_root / "slices" / "SLICE-01.md"
+    slice_file.write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Auth Slice\nstatus: draft\nprimary_capability: auth\nclaims:\n  - CR-001\n---\nSlice body\n", encoding="utf-8")
+    spec_file = product_root / "docs" / "spec" / "context.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text("# Spec Context\n", encoding="utf-8")
+
     task_file = product_root / "tasks" / "TASK-002.md"
     task_content = (
         "---\n"
@@ -96,12 +104,25 @@ def test_create_task_success(product_root: Path, auth_context: AuthorizationCont
     """Supported artifact created without raw YAML; receipt returned; initial pending status set."""
     service = ArtifactService(product_root, auth_context)
 
+    # Set up prerequisite slice and spec files
+    slice_file = product_root / "slices" / "SLICE-01.md"
+    slice_file.write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Auth Slice\nstatus: draft\nprimary_capability: auth\nclaims:\n  - CR-001\n---\nSlice body\n", encoding="utf-8")
+    spec_file = product_root / "docs" / "spec" / "overview.md"
+    spec_file.parent.mkdir(parents=True, exist_ok=True)
+    spec_file.write_text("# Spec Overview\n", encoding="utf-8")
+
     receipt = service.create(
         kind="task",
         identity="TASK-010",
         semantic_payload={
+            "title": "Parse tokens cleanly",
             "kind": "feature",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
             "allowed_paths": ["src/parser.py"],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 100000, "max_files": 20},
         },
         body="## Requirements\n- Must parse tokens cleanly.\n",
     )
@@ -216,3 +237,113 @@ def test_describe_operation(product_root: Path, auth_context: AuthorizationConte
     assert desc["kind"] == "task"
     assert desc["operation"] == "create"
     assert "allowed_semantic_fields" in desc
+
+
+def test_reproduce_finding_2_empty_payload_rejected(product_root: Path, auth_context: AuthorizationContext):
+    """AW-22 Red: Empty payload in task create must be rejected rather than committing invented semantics."""
+    service = ArtifactService(product_root, auth_context)
+
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service.create(
+            kind="task",
+            identity="TASK-001",
+            semantic_payload={},
+            body="Task body prose",
+        )
+
+    err = exc_info.value
+    assert getattr(err, "code", "") in ("schema_validation_failed", "required_property_missing", "missing_core_context")
+
+
+def test_create_task_omitted_required_fields_rejected(product_root: Path, auth_context: AuthorizationContext):
+    """AW-22 Red: Omitting title, kind, or spec_refs individually must be rejected."""
+    service = ArtifactService(product_root, auth_context)
+
+    # Omit kind
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service.create(
+            kind="task",
+            identity="TASK-002",
+            semantic_payload={
+                "title": "Task 002",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert getattr(exc_info.value, "code", "") in ("schema_validation_failed", "required_property_missing")
+
+    # Omit title (and body has no title header)
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service.create(
+            kind="task",
+            identity="TASK-003",
+            semantic_payload={
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+            body="No title header here",
+        )
+    assert getattr(exc_info.value, "code", "") in ("schema_validation_failed", "required_property_missing")
+
+
+def test_create_task_missing_core_context_rejected(product_root: Path):
+    """AW-22 Red: Creating a task without Core authorization context or missing change_id/work_item must fail."""
+    # Service without auth_context
+    service_no_auth = ArtifactService(product_root, None)
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service_no_auth.create(
+            kind="task",
+            identity="TASK-005",
+            semantic_payload={
+                "title": "Task 005",
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert getattr(exc_info.value, "code", "") in ("policy_denied", "missing_core_context", "null_authorization_context")
+
+    # Service with invalid auth_context (missing change_id)
+    invalid_auth = AuthorizationContext(
+        actor="worker",
+        work_item="SLICE-01",
+        product_root=product_root,
+        change_id="",  # Missing change_id!
+        task_id="TASK-005",
+        stage="Implement",
+        schema_hash="hash1",
+        lock_hash="lock1",
+        fingerprint="fp123",
+    )
+    service_bad_auth = ArtifactService(product_root, invalid_auth)
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)) as exc_info:
+        service_bad_auth.create(
+            kind="task",
+            identity="TASK-005",
+            semantic_payload={
+                "title": "Task 005",
+                "kind": "feature",
+                "spec_refs": ["docs/spec/overview.md"],
+                "allowed_paths": [],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 2},
+                "depends_on": [],
+                "requirement_delta": "none",
+            },
+        )
+    assert getattr(exc_info.value, "code", "") in ("missing_core_context", "policy_denied")
+
+

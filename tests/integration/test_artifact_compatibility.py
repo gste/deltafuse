@@ -17,6 +17,11 @@ def test_manual_artifact_preservation_open_extension_fields_comments_crlf(tmp_pa
     install(target_dir=tmp_path, framework_root=repo_root)
     change_dir = scaffold_change(tmp_path, "CHG-160", route="code", title="Compatibility Test")
 
+    (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (change_dir / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-160\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
+
     # 1. Test open extension fields on routing.yaml (which permits unconstrained extension keys)
     routing_file = change_dir / "routing.yaml"
     routing_content = (
@@ -91,6 +96,11 @@ def test_manual_artifact_preservation_open_extension_fields_comments_crlf(tmp_pa
 def test_canonicalize_metadata_formatting_opt_in_hash_binding(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     change_dir = scaffold_change(tmp_path, "CHG-161", route="code", title="Format Opt-In Test")
+
+    (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (change_dir / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-161\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
 
     # Non-canonical formatting (unordered keys, extra spacing)
     task_file = change_dir / "tasks" / "TASK-002.md"

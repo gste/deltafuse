@@ -13,7 +13,7 @@
     "artifact-operations/routing.descriptor.yaml": "bf117eb29178125ab4212859bfe2c0d8f25f61e88ac9a93e17110809d94bf130",
     "artifact-operations/slice.descriptor.yaml": "d3fd15cca11fbce947f5f4d4c489d5361aebf34c82462efbc63f67310ddb93ef",
     "artifact-operations/spec-delta.descriptor.yaml": "ec45dc81c161acce901daf1202b420fda95010c210376b32ebeea50750257e73",
-    "artifact-operations/task.descriptor.yaml": "3867b981df7163a2639fbf137432ec10a931817ba579b099cba7a09dc18bb2fe",
+    "artifact-operations/task.descriptor.yaml": "02a82511c739aaf100ac495280738d9d4ad05a5650559f827f7fda0847f79572",
     "schemas/capability.schema.yaml": "c2cb8ccb69e108b9e59f1795e78ac1f7150e594143d0a04e2eb298e5327a68be",
     "schemas/change.schema.yaml": "51805fa8d3fef8211dca6503ebdcd6bf865dbdec32e83570f49e494950069cb7",
     "schemas/coverage.schema.yaml": "c1de7c2ee18f0512a50e1fdb87d5ac15014b4741c6ef915c35a6af31ac53f6c3",

@@ -21,6 +21,11 @@ def test_subprocess_artifact_describe():
 
 
 def test_subprocess_artifact_create_via_stdin(tmp_path):
+    (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
     cmd = [
         sys.executable, "-m", "deltafuse.cli",
         "artifact", "create",
@@ -34,6 +39,13 @@ def test_subprocess_artifact_create_via_stdin(tmp_path):
         "semantic_payload": {
             "title": "Subprocess Created Task",
             "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
         },
         "body": "# TASK-100: Subprocess Created Task\n\nSubprocess test body.",
     }

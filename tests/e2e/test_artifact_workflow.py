@@ -38,6 +38,8 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
         "identity": "TASK-001",
         "title": "Implement feature task",
         "kind": "feature",
+        "depends_on": [],
+        "requirement_delta": "none",
         "spec_refs": ["docs/spec/core.md#REQ-01"],
         "allowed_paths": ["src/app.py"],
         "forbidden_paths": [],

@@ -39,14 +39,31 @@ def test_cli_describe_export_schema(capsys):
     assert "properties" in data
 
 
+def _setup_cli_test_dir(tmp_path):
+    (tmp_path / "slices").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "slices" / "SLICE-01.md").write_text(
+        "---\nid: SLICE-01\nchange: CHG-001\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+
 def test_cli_create_subcommand_success(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     input_file = tmp_path / "input.json"
     payload = {
         "identity": "TASK-001",
         "semantic_payload": {
             "title": "Build CLI integration",
             "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
             "allowed_paths": ["src/deltafuse/cli.py"],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
         },
         "body": "# TASK-001: Build CLI integration\n\nImplementation details.",
     }
@@ -67,6 +84,7 @@ def test_cli_create_subcommand_success(tmp_path, capsys):
 
 
 def test_cli_create_core_owned_field_denied(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     input_file = tmp_path / "input.json"
     payload = {
         "identity": "TASK-002",
@@ -90,6 +108,7 @@ def test_cli_create_core_owned_field_denied(tmp_path, capsys):
 
 
 def test_cli_create_invalid_json_input(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     input_file = tmp_path / "bad.json"
     input_file.write_text("{invalid json", encoding="utf-8")
 
@@ -105,6 +124,7 @@ def test_cli_create_invalid_json_input(tmp_path, capsys):
 
 
 def test_cli_update_subcommand_success(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     # First create artifact
     input_file = tmp_path / "create.json"
     payload = {
@@ -112,6 +132,13 @@ def test_cli_update_subcommand_success(tmp_path, capsys):
         "semantic_payload": {
             "title": "Initial Task",
             "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
         },
     }
     input_file.write_text(json.dumps(payload), encoding="utf-8")
@@ -148,11 +175,22 @@ def test_cli_update_subcommand_success(tmp_path, capsys):
 
 
 def test_cli_update_stale_expected_sha256(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     # Create artifact
     input_file = tmp_path / "create.json"
     payload = {
         "identity": "TASK-011",
-        "semantic_payload": {"title": "Task Eleven"},
+        "semantic_payload": {
+            "title": "Task Eleven",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
     }
     input_file.write_text(json.dumps(payload), encoding="utf-8")
     main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
@@ -177,11 +215,22 @@ def test_cli_update_stale_expected_sha256(tmp_path, capsys):
 
 
 def test_cli_validate_subcommand(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     # Create valid task
     input_file = tmp_path / "create.json"
     payload = {
         "identity": "TASK-020",
-        "semantic_payload": {"title": "Task Twenty"},
+        "semantic_payload": {
+            "title": "Task Twenty",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
     }
     input_file.write_text(json.dumps(payload), encoding="utf-8")
     main(["artifact", "create", "--kind", "task", "--change", str(tmp_path), "--input", str(input_file), "--json"])
@@ -212,6 +261,7 @@ def test_cli_validate_subcommand(tmp_path, capsys):
 
 
 def test_cli_unicode_and_multiline_payload(tmp_path, capsys):
+    _setup_cli_test_dir(tmp_path)
     input_file = tmp_path / "unicode.json"
     unicode_title = "Title with \u4e16\u754c Unicode & \"Quotes\" \n Next Line"
     unicode_body = "# TASK-030: \u4e16\u754c\n\nMultiline body with emoji \U0001F600\nSpecial chars: \\n \\t \" ' < > &"
@@ -220,6 +270,14 @@ def test_cli_unicode_and_multiline_payload(tmp_path, capsys):
         "identity": "TASK-030",
         "semantic_payload": {
             "title": unicode_title,
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
         },
         "body": unicode_body,
     }

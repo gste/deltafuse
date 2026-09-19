@@ -157,40 +157,65 @@ class ArtifactService:
                     code="unexposed_field",
                 )
 
-        initial_status = "pending" if kind == "task" else "draft" if kind == "slice" else "proposed" if kind == "spec-delta" else "active"
-        raw_change = getattr(self.auth_context, "change_id", None) or "CHG-001"
-        change_id = raw_change if re.match(r"^CHG-[0-9]{3,}", raw_change) else "CHG-001"
+        if not self.auth_context:
+            raise ArtifactPolicyError("No authorization context provided", code="policy_denied")
+
+        raw_change = getattr(self.auth_context, "change_id", None)
+        if not raw_change or not re.match(r"^CHG-[0-9]{3,}", str(raw_change)):
+            raise ArtifactPolicyError(
+                f"Missing or invalid change authorization context: '{raw_change}'",
+                code="missing_core_context",
+            )
+        change_id = str(raw_change)
+
+        payload_copy = dict(semantic_payload)
 
         if kind == "task":
-            raw_slice = getattr(self.auth_context, "work_item", None) or "SLICE-01"
-            slice_id = raw_slice if re.match(r"^SLICE-[0-9]{2,}", raw_slice) else "SLICE-01"
-            defaults = {
-                "slice": slice_id,
-                "kind": semantic_payload.get("kind", "feature"),
-                "depends_on": [],
-                "requirement_delta": "none",
-                "spec_refs": ["docs/spec/overview.md"],
-                "allowed_paths": [],
-                "forbidden_paths": [],
-                "context_budget": {"max_tokens": 100000, "max_files": 20},
-            }
+            raw_slice = payload_copy.pop("slice", None) or getattr(self.auth_context, "work_item", None)
+            if not raw_slice or not re.match(r"^SLICE-[0-9]{2,}", str(raw_slice)):
+                slices_dir = self.product_root / "slices"
+                if not slices_dir.is_dir() and self.auth_context and self.auth_context.change_id:
+                    slices_dir = self.product_root / "docs" / "changes" / self.auth_context.change_id / "slices"
+                if slices_dir.is_dir():
+                    existing_slices = sorted(list(slices_dir.glob("SLICE-*.md")))
+                    if existing_slices:
+                        raw_slice = existing_slices[0].stem
+
+            if not raw_slice or not re.match(r"^SLICE-[0-9]{2,}", str(raw_slice)):
+                raise ArtifactPolicyError(
+                    f"Missing or invalid slice in payload or authorization context: '{raw_slice}'",
+                    code="missing_core_context",
+                )
+            slice_id = str(raw_slice)
         else:
-            defaults = {}
+            slice_id = None
+
+        initial_status = "pending" if kind == "task" else "draft" if kind == "slice" else "proposed" if kind == "spec-delta" else "active"
+        if kind == "task":
+            title_text = payload_copy.pop("title", None)
+            if title_text:
+                if not body.strip().startswith("#"):
+                    body = f"# {identity}: {title_text}\n\n{body}"
+            else:
+                first_line = body.strip().split("\n")[0] if body.strip() else ""
+                if not first_line.startswith("#"):
+                    raise ArtifactServiceError(
+                        "Task creation requires a title either in semantic_payload or as a markdown header in body",
+                        code="required_property_missing",
+                        path="/title",
+                    )
 
         metadata = {
             "id": identity,
             "change": change_id,
             "status": initial_status,
-            **defaults,
-            **semantic_payload,
+            **payload_copy,
         }
+        if kind == "task":
+            metadata["slice"] = slice_id
+
         if kind not in ("task", "slice"):
             metadata.pop("id", None)
-
-        if kind == "task" and "title" in metadata:
-            title_text = metadata.pop("title")
-            if not body.strip().startswith("#"):
-                body = f"# {identity}: {title_text}\n\n{body}"
 
         val_res = self.registry.validate_storage_schema(kind, metadata)
         if not val_res.valid:
@@ -198,6 +223,20 @@ class ArtifactService:
             raise ArtifactServiceError(
                 f"Storage schema validation failed for create '{kind}': {'; '.join(diag_msgs)}",
                 code="schema_validation_failed",
+                path=str(target_path),
+            )
+
+        ref_res = self.registry.validate_references(
+            kind,
+            metadata,
+            product_root=self.product_root,
+            change_id=change_id,
+        )
+        if not ref_res.valid:
+            diag_msgs = [f"{d.path}: {d.message}" for d in ref_res.diagnostics]
+            raise ArtifactServiceError(
+                f"Reference validation failed for create '{kind}': {'; '.join(diag_msgs)}",
+                code="missing_reference",
                 path=str(target_path),
             )
 
@@ -283,6 +322,20 @@ class ArtifactService:
             raise ArtifactServiceError(
                 f"Storage schema validation failed for update '{kind}': {'; '.join(diag_msgs)}",
                 code="schema_validation_failed",
+                path=str(target_path),
+            )
+
+        ref_res = self.registry.validate_references(
+            kind,
+            updated_meta,
+            product_root=self.product_root,
+            change_id=updated_meta.get("change") or getattr(self.auth_context, "change_id", None),
+        )
+        if not ref_res.valid:
+            diag_msgs = [f"{d.path}: {d.message}" for d in ref_res.diagnostics]
+            raise ArtifactServiceError(
+                f"Reference validation failed for update '{kind}': {'; '.join(diag_msgs)}",
+                code="missing_reference",
                 path=str(target_path),
             )
 
@@ -386,6 +439,13 @@ class ArtifactService:
             }
 
         val_res = self.registry.validate_storage_schema(kind, parse_res.metadata)
+        ref_res = self.registry.validate_references(
+            kind,
+            parse_res.metadata,
+            product_root=self.product_root,
+            change_id=parse_res.metadata.get("change"),
+        )
+
         diags = [
             {
                 "code": d.code,
@@ -393,13 +453,14 @@ class ArtifactService:
                 "stage": d.stage,
                 "message": d.message,
             }
-            for d in val_res.diagnostics
+            for d in val_res.diagnostics + ref_res.diagnostics
         ]
+        is_valid = val_res.valid and ref_res.valid
 
         return {
-            "valid": val_res.valid,
+            "valid": is_valid,
             "target": str(target_path),
-            "scopes": ["input", "schema", "policy"],
+            "scopes": ["input", "schema", "policy", "reference"],
             "diagnostics": diags,
         }
 

@@ -22,13 +22,21 @@ def test_security_unauthorized_status_patch_attack(tmp_path: Path, repo_root: Pa
     install(target_dir=tmp_path, framework_root=repo_root)
     change_dir = scaffold_change(tmp_path, "CHG-170", route="code", title="Security Test")
 
-    auth = create_authorization_context(actor="worker", work_item="CLI", product_root=change_dir, change_id="CHG-170")
+    (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (change_dir / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-170\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
+
+    auth = create_authorization_context(actor="worker", work_item="SLICE-01", product_root=change_dir, change_id="CHG-170")
     service = ArtifactService(product_root=change_dir, auth_context=auth)
 
     # 1. Create task
     task_payload = {
         "title": "Security task",
         "kind": "feature",
+        "slice": "SLICE-01",
+        "depends_on": [],
+        "requirement_delta": "none",
         "spec_refs": ["docs/spec/core.md#REQ-01"],
         "allowed_paths": ["src/app.py"],
         "forbidden_paths": [],

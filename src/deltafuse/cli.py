@@ -990,15 +990,31 @@ def main(argv: list[str] | None = None) -> int:
             if "semantic_payload" in raw_json and isinstance(raw_json["semantic_payload"], dict):
                 semantic_payload = raw_json["semantic_payload"]
             else:
-                env_keys = {"request_id", "operation", "kind", "change", "identity", "body", "target", "expected_sha256"}
+                env_keys = {"request_id", "operation", "change", "identity", "body", "target", "expected_sha256"}
+                if raw_json.get("kind") == args.kind:
+                    env_keys.add("kind")
                 semantic_payload = {k: v for k, v in raw_json.items() if k not in env_keys}
 
             change_dir = Path(args.change).resolve()
+            cid = None
+            if change_dir.name.startswith("CHG-"):
+                cid = change_dir.name
+            elif (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    cid = pres.metadata.get("id") or pres.metadata.get("change")
+                except Exception:
+                    pass
+            if not cid and ((change_dir / ".deltafuse").is_dir() or (change_dir / "tasks").is_dir() or (change_dir / "slices").is_dir()):
+                cid = "CHG-001"
+
             auth = create_authorization_context(
                 actor="worker",
                 work_item="CLI",
                 product_root=change_dir,
-                change_id=change_dir.name if change_dir.name.startswith("CHG-") else None,
+                change_id=cid,
             )
             service = ArtifactService(product_root=change_dir, auth_context=auth)
 
