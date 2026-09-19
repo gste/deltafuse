@@ -35,3 +35,6 @@ _builder.py
 .agents/skills/
 .cursor/skills/
 .gemini/skills/
+
+# Obsidian Task Board plugin
+TASK_BOARD.md

@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-41",
+  "entry": "AW-40",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -1666,7 +1666,7 @@
       "id": "AW-41",
       "phase": "J",
       "title": "Complete missing platform and isolated-wheel qualification",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "AW-37",
         "AW-39"
@@ -1715,27 +1715,27 @@
         {
           "id": "AW41-R1",
           "requirement": "Restore equivalent isolated Artifact Writer wheel coverage removed from tests/integration/test_artifact_cli.py: real wheel create/update/validate/describe and missing/tampered envelope checks. Generic help/init/validate-config or wheel-evidence metadata tests are not equivalents.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW41-R2",
           "requirement": "Diagnose the original isolated-wheel fixture import failure using real logs/runtime/import paths. Do not delete failing tests, add skips, import checkout source or replace isolated execution with in-process calls.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW41-R3",
           "requirement": "Run actual Windows and POSIX public-operation concurrency and hard-crash boundaries, capable-host symlink/reparse checks, both smoke/layout scripts and fresh install/upgrade. Disclose missing mandatory host/privileges and keep this task open.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW41-R4",
           "requirement": "Record current source/wheel/runtime/filesystem identities, exact argv/exits and immutable logs. Compare test inventory before/after; every removed or narrowed test needs an explicit same-invariant replacement and reviewer evidence.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW41-R5",
           "requirement": "Run full framework tests and asset/diff checks on the final code; test counts alone do not prove coverage or qualification. Final hashes must refer to the actual dirty working tree or final commit, not unchanged HEAD.",
-          "status": "completed"
+          "status": "passed"
         },
         {
           "id": "AW41-F1",
@@ -1745,22 +1745,21 @@
         {
           "id": "AW41-F2",
           "requirement": "Restore the original packaged-schema corruption invariant: in an isolated installed wheel, physically remove the packaged artifact-writer.schema.yaml, then separately corrupt its bytes without repairing its manifest. Invoke actual Writer create/update and assert contract-specific asset/envelope failure with unchanged product artifacts and no success receipt.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW41-F3",
           "requirement": "Use separate disposable installed environments or restore exact bytes between package-damage probes. Assert the expected schema path existed and was removed/changed, verify module import origin is inside the isolated installation, strip checkout import paths, and capture stderr/stdout/exits and before/after hashes.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW41-F4",
           "requirement": "Missing JSON identity, a stale expected_sha256 and Core-owned-field denial remain useful independent input tests but MUST NOT be named or counted as missing/tampered packaged-schema tests. Run valid describe/create/update/validate controls in the intact installation.",
-          "status": "open"
+          "status": "passed"
         }
       ],
       "completion_blockers": [
-        "Actual mandatory POSIX/capable-host evidence not established.",
-        "Installed packaged-envelope removal/tamper invariant not exercised by the currently cited negative test."
+        "Actual mandatory POSIX/capable-host evidence not established."
       ]
     },
     {

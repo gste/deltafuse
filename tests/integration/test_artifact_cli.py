@@ -460,7 +460,7 @@ def test_isolated_wheel_artifact_create_update_validate(isolated_wheel_venv, tmp
     assert val_data2["valid"] is True
 
 
-def test_isolated_wheel_artifact_missing_and_tampered_envelope(isolated_wheel_venv, tmp_path):
+def test_isolated_wheel_artifact_input_validation_controls(isolated_wheel_venv, tmp_path):
     clean_workdir = tmp_path / "clean_tamper"
     clean_workdir.mkdir()
     clean_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
@@ -570,3 +570,176 @@ def test_isolated_wheel_artifact_missing_and_tampered_envelope(isolated_wheel_ve
         cwd=str(clean_workdir), env=clean_env,
     )
     assert proc_core_field.returncode == 3
+
+
+def test_isolated_wheel_packaged_schema_removal_and_corruption(isolated_wheel_venv, tmp_path):
+    """AW41-F2..F4: In an isolated installed wheel, physically remove the packaged schema,
+
+    then separately corrupt its bytes without repairing manifest. Invoke actual Writer create/update
+    and assert asset_resolution_failed (exit code 5) with unchanged product artifacts and no receipt.
+    """
+    import hashlib
+
+    clean_workdir = tmp_path / "pkg_corruption_test"
+    clean_workdir.mkdir()
+    clean_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    # 1. Verify module import origin is strictly within the isolated venv site-packages
+    loc_proc = subprocess.run(
+        [isolated_wheel_venv, "-c", "import deltafuse, pathlib; print(pathlib.Path(deltafuse.__file__).resolve().parent)"],
+        capture_output=True, text=True, env=clean_env, cwd=str(clean_workdir),
+    )
+    assert loc_proc.returncode == 0
+    pkg_dir = Path(loc_proc.stdout.strip())
+    assert "site-packages" in str(pkg_dir) or "dist-packages" in str(pkg_dir)
+    assert REPO_ROOT not in pkg_dir.parents
+
+    schema_file = pkg_dir / "assets" / "contracts" / "artifact-writer.schema.yaml"
+    assert schema_file.is_file(), f"Packaged schema missing at {schema_file}"
+    orig_bytes = schema_file.read_bytes()
+    orig_hash = hashlib.sha256(orig_bytes).hexdigest()
+
+    repo_dir = clean_workdir / "repo"
+    init_res = subprocess.run(
+        [isolated_wheel_venv, "-m", "deltafuse", "init", str(repo_dir)],
+        capture_output=True, text=True, cwd=str(clean_workdir), env=clean_env,
+    )
+    assert init_res.returncode == 0
+
+    chg_dir = repo_dir / "docs" / "changes" / "CHG-201"
+    chg_dir.mkdir(parents=True, exist_ok=True)
+    (chg_dir / "change.yaml").write_text("id: CHG-201\nstatus: active\n", encoding="utf-8")
+    (repo_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "slices" / "SLICE-01.md").write_text(
+        "---\nid: SLICE-01\nchange: CHG-201\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (repo_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (repo_dir / "docs" / "spec" / "overview.md").write_text("# Spec\n", encoding="utf-8")
+
+    task_payload = {
+        "identity": "TASK-201",
+        "semantic_payload": {
+            "title": "Wheel Task 201",
+            "kind": "feature",
+            "slice": "SLICE-01",
+            "depends_on": [],
+            "requirement_delta": "none",
+            "spec_refs": ["docs/spec/overview.md"],
+            "allowed_paths": [],
+            "forbidden_paths": [],
+            "context_budget": {"max_tokens": 1000, "max_files": 5},
+        },
+        "body": "# TASK-201: Wheel Task 201\n\nBody content.",
+    }
+
+    try:
+        # Probe 1: Physically remove packaged schema
+        schema_file.unlink()
+        assert not schema_file.exists()
+
+        proc_del = subprocess.run(
+            [
+                isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+                "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+            ],
+            input=json.dumps(task_payload),
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=str(clean_workdir), env=clean_env,
+        )
+        assert proc_del.returncode == 5, f"Expected exit code 5 on deleted schema, got {proc_del.returncode}: {proc_del.stderr}"
+        del_out = json.loads(proc_del.stdout)
+        assert del_out["ok"] is False
+        assert del_out["error"]["code"] == "asset_resolution_failed"
+        assert not (repo_dir / "tasks" / "TASK-201.md").exists(), "Product artifact must not be created on missing schema"
+
+        # Restore original bytes cleanly
+        schema_file.write_bytes(orig_bytes)
+        assert hashlib.sha256(schema_file.read_bytes()).hexdigest() == orig_hash
+
+        # Create TASK-201 with intact schema to have existing artifact for update test
+        proc_create_ok = subprocess.run(
+            [
+                isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+                "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+            ],
+            input=json.dumps(task_payload),
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=str(clean_workdir), env=clean_env,
+        )
+        assert proc_create_ok.returncode == 0
+        task_file = repo_dir / "tasks" / "TASK-201.md"
+        assert task_file.is_file()
+        task_bytes_before = task_file.read_bytes()
+        task_hash_before = hashlib.sha256(task_bytes_before).hexdigest()
+
+        # Probe 2: Corrupt packaged schema bytes without repairing manifest
+        schema_file.write_bytes(b"invalid_yaml: [broken: {content\n")
+        assert hashlib.sha256(schema_file.read_bytes()).hexdigest() != orig_hash
+
+        # Attempt to create TASK-202 under corrupted schema
+        task_payload_2 = dict(task_payload)
+        task_payload_2["identity"] = "TASK-202"
+        proc_tamper_create = subprocess.run(
+            [
+                isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "create",
+                "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+            ],
+            input=json.dumps(task_payload_2),
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=str(clean_workdir), env=clean_env,
+        )
+        assert proc_tamper_create.returncode == 5, f"Expected exit code 5 on tampered schema, got {proc_tamper_create.returncode}: {proc_tamper_create.stderr}"
+        tamper_cr_out = json.loads(proc_tamper_create.stdout)
+        assert tamper_cr_out["ok"] is False
+        assert tamper_cr_out["error"]["code"] == "asset_resolution_failed"
+        assert not (repo_dir / "tasks" / "TASK-202.md").exists(), "Product artifact must not be created on corrupted schema"
+
+        # Probe 3: Attempt to update TASK-201 under corrupted schema
+        update_payload = {
+            "target": "tasks/TASK-201.md",
+            "expected_sha256": task_hash_before,
+            "patch": {"set": [{"path": "/kind", "value": "refactor"}]},
+        }
+        proc_tamper_update = subprocess.run(
+            [
+                isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "update",
+                "--kind", "task", "--change", str(repo_dir), "--input", "-", "--json",
+            ],
+            input=json.dumps(update_payload),
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=str(clean_workdir), env=clean_env,
+        )
+        assert proc_tamper_update.returncode == 5, f"Expected exit code 5 on update with tampered schema, got {proc_tamper_update.returncode}: {proc_tamper_update.stderr}"
+        tamper_up_out = json.loads(proc_tamper_update.stdout)
+        assert tamper_up_out["ok"] is False
+        assert tamper_up_out["error"]["code"] == "asset_resolution_failed"
+        assert task_file.read_bytes() == task_bytes_before, "Product artifact must remain unchanged on rejected update"
+
+    finally:
+        # Guarantee exact restoration of original packaged schema bytes
+        if schema_file.parent.exists():
+            schema_file.write_bytes(orig_bytes)
+            assert hashlib.sha256(schema_file.read_bytes()).hexdigest() == orig_hash
+
+    # Final control: Verify describe and validate work cleanly after restoration
+    desc_proc = subprocess.run(
+        [isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "describe", "--kind", "task", "--json"],
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert desc_proc.returncode == 0
+    desc_data = json.loads(desc_proc.stdout)
+    assert desc_data["kind"] == "task"
+
+    val_proc = subprocess.run(
+        [
+            isolated_wheel_venv, "-m", "deltafuse.cli", "artifact", "validate",
+            "--kind", "task", "--change", str(repo_dir), "--target", "tasks/TASK-201.md", "--json",
+        ],
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=str(clean_workdir), env=clean_env,
+    )
+    assert val_proc.returncode == 0
+    val_data = json.loads(val_proc.stdout)
+    assert val_data["valid"] is True
