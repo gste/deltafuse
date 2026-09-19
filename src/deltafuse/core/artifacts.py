@@ -148,6 +148,8 @@ class ArtifactService:
             **defaults,
             **semantic_payload,
         }
+        if kind not in ("task", "slice"):
+            metadata.pop("id", None)
 
         if kind == "task" and "title" in metadata:
             title_text = metadata.pop("title")

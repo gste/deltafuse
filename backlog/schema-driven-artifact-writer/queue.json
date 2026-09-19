@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-18",
+  "entry": "AW-19",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -561,7 +561,7 @@
       "id": "AW-18",
       "phase": "G",
       "title": "Build paired small-model evaluation protocol and corpus",
-      "status": "ready",
+      "status": "completed",
       "depends_on": [
         "AW-17"
       ],
@@ -591,7 +591,7 @@
       "id": "AW-19",
       "phase": "G",
       "title": "Run paired external small-model evaluation",
-      "status": "planned",
+      "status": "ready",
       "depends_on": [
         "AW-18"
       ],
