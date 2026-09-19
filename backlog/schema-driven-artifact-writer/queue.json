@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "status": "completed",
+  "status": "in_progress",
   "planning_only": false,
   "feature": "schema-driven-artifact-writer",
   "framework_snapshot": {
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "none",
+  "entry": "AW-21",
   "order": "first planned card with verified completed dependencies",
   "cards": [
     {
@@ -618,15 +618,17 @@
       "id": "AW-20",
       "phase": "G",
       "title": "Close acceptance and publish migration/handoff",
-      "status": "completed",
+      "status": "planned",
       "depends_on": [
-        "AW-19"
+        "AW-27",
+        "AW-28"
       ],
       "reads": [
         "backlog/schema-driven-artifact-writer/VALIDATION.md",
         "backlog/schema-driven-artifact-writer/evaluation/RESULT.md",
         "docs/contracts/artifact-writer.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "backlog/schema-driven-artifact-writer/REVIEW.md"
       ],
       "writes": [
         "docs/using.md",
@@ -636,6 +638,7 @@
         "backlog/schema-driven-artifact-writer/queue.json"
       ],
       "work": [
+        "Reopened after review: reconcile all AW-21 through AW-28 evidence and original acceptance before replacing the historical completion report. Missing/inconclusive required evidence keeps closure open.",
         "Reconcile every source acceptance criterion with actual evidence; keep any inconclusive performance result or unsupported platform open.",
         "Publish practical examples, old/new capability detection, manual-authoring fallback, canonicalization opt-in and recovery procedure.",
         "Record tested implementation/contract/wheel identities and next backlog step without pushing or default-branch merge."
@@ -645,6 +648,374 @@
       "test": "Final evidence hash/link/schema audit; git diff --check; scoped source status; no unrequested commit/push.",
       "card_path": "cards/AW-20.md",
       "result_path": "results/AW-20.md"
+    },
+    {
+      "id": "AW-21",
+      "phase": "H",
+      "title": "Enforce live Core authorization and target containment",
+      "status": "planned",
+      "depends_on": [],
+      "remediates": [
+        "AW-06",
+        "AW-10",
+        "AW-11"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifact_policy.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_lock.py",
+        "src/deltafuse/cli.py",
+        "docs/core-and-worker.md",
+        "docs/contracts/leash.schema.yaml"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_policy.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_lock.py",
+        "src/deltafuse/cli.py",
+        "tests/unit/test_artifact_policy.py",
+        "tests/unit/test_artifact_service.py",
+        "tests/integration/test_artifact_security.py",
+        "backlog/schema-driven-artifact-writer/results/AW-21.md"
+      ],
+      "work": [
+        "Resolve the actual product root, owning Change and current Core-selected work envelope; reject missing/halted, wrong-stage, wrong-task and wrong-owner authority before any mutation.",
+        "Route every public target through configured-root containment and kind/identity checks, including symlink/reparse, case, ADS and protected-path handling; do not trust caller absolute paths.",
+        "Recompute live authorization/source/lock identity under the commit lock. Preserve legitimate internal Core commands without exposing an actor privilege in the public API.",
+        "Exercise the public service and CLI, not only standalone policy helpers; describe/validate must remain side-effect free and report only checks actually performed."
+      ],
+      "red": "Reproduce an outside-Change write, missing-context write and stale-envelope write through public entry points; assert all must fail without changing targets, journals or receipts.",
+      "green": "Public mutation requires live Core authority and kind-correct contained targets; revoked authority fails before publication; read-only operations create no internal directories.",
+      "test": "Run policy/service/CLI/security tests and Core authorization regressions, including real filesystem path cases where supported.",
+      "card_path": "cards/AW-21.md",
+      "result_path": "results/AW-21.md"
+    },
+    {
+      "id": "AW-22",
+      "phase": "H",
+      "title": "Reject missing task semantics and unresolved references",
+      "status": "planned",
+      "depends_on": [
+        "AW-21"
+      ],
+      "remediates": [
+        "AW-01",
+        "AW-03",
+        "AW-10"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_registry.py",
+        "process/artifact-operations/task.descriptor.yaml",
+        "process/schemas/task.schema.yaml"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_registry.py",
+        "process/artifact-operations/**",
+        "tests/unit/test_artifact_service.py",
+        "tests/unit/test_artifact_registry.py",
+        "tests/fixtures/artifact_writer_eval/eval_corpus.json",
+        "backlog/schema-driven-artifact-writer/results/AW-22.md"
+      ],
+      "work": [
+        "Define required semantic inputs per supported operation from the canonical contract and descriptors; remove invented title/kind/refs/budget/Change/slice fallbacks.",
+        "Obtain only authorized identity bindings and initial lifecycle status from Core; missing Core context is an error.",
+        "Wire operation and reference validation into create/update before publication. Validate existing prerequisites and identities; distinguish declared future spec changes from references that must already exist.",
+        "Replace tests that reward guessed semantics with explicit complete fixtures; keep a missing-field and missing-reference negative matrix. Synchronize generated assets when descriptors change."
+      ],
+      "red": "Empty payload and independently omitted title/kind/spec refs must reject; dangling or wrong-identity slice/spec/dependency references must not commit.",
+      "green": "No unsupported semantic default is supplied, all required omissions have field-specific diagnostics, and valid explicit semantic requests preserve existing lifecycle behavior.",
+      "test": "Run descriptor/schema/service/reference tests and affected workflow fixtures; verify generated assets.",
+      "card_path": "cards/AW-22.md",
+      "result_path": "results/AW-22.md"
+    },
+    {
+      "id": "AW-23",
+      "phase": "H",
+      "title": "Wire strict bounded parsing into public operation envelopes",
+      "status": "planned",
+      "depends_on": [
+        "AW-22"
+      ],
+      "remediates": [
+        "AW-02",
+        "AW-11"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/cli.py",
+        "src/deltafuse/core/artifact_reader.py",
+        "src/deltafuse/core/artifacts.py",
+        "docs/contracts/artifact-writer.schema.yaml"
+      ],
+      "writes": [
+        "src/deltafuse/cli.py",
+        "src/deltafuse/core/artifact_reader.py",
+        "src/deltafuse/core/artifacts.py",
+        "docs/contracts/artifact-writer.schema.yaml",
+        "tests/unit/test_artifact_cli.py",
+        "tests/integration/test_artifact_cli.py",
+        "tests/unit/test_artifact_reader.py",
+        "backlog/schema-driven-artifact-writer/results/AW-23.md"
+      ],
+      "work": [
+        "Use the strict reader and closed operation envelope at actual file/stdin entry points; bound bytes before unbounded reads and enforce depth/Unicode/finite-number constraints.",
+        "Reject duplicate keys at every depth, unknown fields/operations and invalid nested types before constructing mutation state; apply equivalent typed validation to the Python service.",
+        "Preserve documented optional-field semantics, including an explicit empty body replacement. Return bounded structured JSON diagnostics and contract exit codes for --json errors.",
+        "Test real CLI stdin/file paths and service entry points with malformed requests and before/after filesystem assertions."
+      ],
+      "red": "Duplicate-key/unknown-field request must fail instead of committing; oversized/deep/nonfinite/malformed input must produce bounded diagnostics with no mutation.",
+      "green": "No public path bypasses bounded parsing or closed-envelope validation; valid multiline/Unicode requests remain usable and empty replacement is distinct from omission.",
+      "test": "Run reader, CLI and service negative/positive tests, including stdin and file input, JSON diagnostic shapes and exits.",
+      "card_path": "cards/AW-23.md",
+      "result_path": "results/AW-23.md"
+    },
+    {
+      "id": "AW-24",
+      "phase": "H",
+      "title": "Bind installed schema pins and truthful receipt provenance",
+      "status": "planned",
+      "depends_on": [
+        "AW-23"
+      ],
+      "remediates": [
+        "AW-03",
+        "AW-09",
+        "AW-10"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifact_registry.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "src/deltafuse/core/assets.py",
+        "src/deltafuse/core/lock.py",
+        "process/artifact-operations/receipt.schema.yaml"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_registry.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "process/artifact-operations/receipt.schema.yaml",
+        "tests/unit/test_artifact_registry.py",
+        "tests/unit/test_artifact_recovery.py",
+        "tests/unit/test_artifact_service.py",
+        "backlog/schema-driven-artifact-writer/results/AW-24.md"
+      ],
+      "work": [
+        "Resolve schemas/descriptors from verified installed assets and product pin, including parent schema version; fail closed on absent/corrupt/mismatched pins with no working-directory fallback.",
+        "Hash the actual authoritative schema/descriptor bytes and record operation/storage/version/serializer/source/lock/authority identities; never substitute parsed-object hashes for byte hashes.",
+        "Capture transaction time once at preparation and reuse on retry; record actual generated-field provenance and performed/not-evaluated validation scopes.",
+        "Validate receipts against their schema and recompute every identity in tests; keep describe/validate read-only. Synchronize changed packaged assets."
+      ],
+      "red": "Corrupt/missing/mismatched product pin must deny writes; receipt assertions must reject zero hashes, fixed timestamps and invented validation scopes.",
+      "green": "Every successful receipt identifies verified assets, input/output and live authority with recomputable hashes and captured preparation time, in source and installed-wheel modes.",
+      "test": "Run pinned-registry/service/receipt tests and a wheel-without-checkout probe; check asset synchronization.",
+      "card_path": "cards/AW-24.md",
+      "result_path": "results/AW-24.md"
+    },
+    {
+      "id": "AW-25",
+      "phase": "H",
+      "title": "Restore public-operation idempotency and complete request identity",
+      "status": "planned",
+      "depends_on": [
+        "AW-24"
+      ],
+      "remediates": [
+        "AW-09",
+        "AW-10",
+        "AW-11"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "tests/unit/test_artifact_recovery.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "src/deltafuse/cli.py",
+        "tests/unit/test_artifact_recovery.py",
+        "tests/unit/test_artifact_service.py",
+        "tests/integration/test_artifact_cli.py",
+        "backlog/schema-driven-artifact-writer/results/AW-25.md"
+      ],
+      "work": [
+        "Bind request identity to every behavior-affecting field: operation/kind/owner/target, semantics or patch, expected hash, body or explicit replacement and canonicalization consent; retain raw and normalized hashes distinctly.",
+        "Under mutation coordination, recognize a committed identical request before treating its original expected hash as a new stale write; return its durable prior receipt without rewriting.",
+        "Reject reuse with changed request content; distinguish committed, prepared, published, unchanged and ambiguous outcomes using recovery, never replaying evidence execution or Gate acceptance.",
+        "Cover service and CLI retries, body-only differences, expected-hash differences, no-op requests and unrelated later target edits; returning a historical receipt must not claim the live file is unchanged."
+      ],
+      "red": "Exact update retry must return its original receipt; same request ID with changed body must conflict rather than succeed.",
+      "green": "Identical retries reuse one durable result and prepared metadata; changed requests conflict; recovery does not overwrite newer edits or rerun external work.",
+      "test": "Run service/CLI/recovery tests for create/update/no-op and request collisions, with receipt count and byte-preservation assertions.",
+      "card_path": "cards/AW-25.md",
+      "result_path": "results/AW-25.md"
+    },
+    {
+      "id": "AW-26",
+      "phase": "H",
+      "title": "Complete durable persistence and shared Core mutation locking",
+      "status": "planned",
+      "depends_on": [
+        "AW-25"
+      ],
+      "remediates": [
+        "AW-07",
+        "AW-08",
+        "AW-09",
+        "AW-12",
+        "AW-13",
+        "AW-14"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "src/deltafuse/core/artifact_storage.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "src/deltafuse/core/artifact_lock.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/core/evidence.py",
+        "src/deltafuse/core/transitions.py",
+        "src/deltafuse/core/decide.py",
+        "src/deltafuse/core/scaffold.py",
+        "src/deltafuse/core/analyze.py"
+      ],
+      "writes": [
+        "src/deltafuse/core/artifact_storage.py",
+        "src/deltafuse/core/artifact_transactions.py",
+        "src/deltafuse/core/artifact_lock.py",
+        "src/deltafuse/core/artifacts.py",
+        "src/deltafuse/cli.py",
+        "src/deltafuse/core/evidence.py",
+        "src/deltafuse/core/transitions.py",
+        "src/deltafuse/core/decide.py",
+        "src/deltafuse/core/scaffold.py",
+        "src/deltafuse/core/analyze.py",
+        "tests/integration/test_artifact_atomic_io.py",
+        "tests/integration/test_artifact_crash_recovery.py",
+        "tests/integration/test_artifact_locking.py",
+        "tests/integration/test_artifact_evidence.py",
+        "tests/integration/test_artifact_transitions.py",
+        "docs/contracts/artifact-writer.md",
+        "backlog/schema-driven-artifact-writer/results/AW-26.md"
+      ],
+      "work": [
+        "Use one canonical product-level lock for all cooperating mutation/recovery/no-op paths. Validate source and target under that lock; preserve Core authorization and transition-journal compatibility.",
+        "Implement atomic durable journal/receipt publication and explicit prepared/published/committed/uncertain outcomes with platform-specific fsync guarantees. Corrupt records must stop ambiguous recovery instead of disappearing.",
+        "Stage, parse and validate candidates before publication; verify live output bytes/schema afterward. Receipt failure after publication must return recoverable uncertainty, never false success or unchanged.",
+        "Integrate evidence/state/advance/decide/scaffold/coverage persistence through the common primitives after their existing authority checks; never rerun execution or auto-accept a Gate on recovery.",
+        "Audit no-replace fallback, lock liveness/release and staging cleanup against the contract; never expose an empty placeholder as an atomic create or remove an active file solely by age.",
+        "This finding spans several callers: before implementation, split into dependency-ordered child cards if needed, retaining every acceptance requirement and keeping this parent open until all children pass."
+      ],
+      "red": "Cross-process Writer/Core mutations must contend on the same lock; injected journal truncation, post-publish corruption and receipt failure must not report success or lose recovery identity.",
+      "green": "All cooperating mutations share product coordination and durable recoverable publication; actual output is verified, corrupt/ambiguous state fails closed, old Core receipt replay still works.",
+      "test": "Run atomic IO, concurrency, transaction recovery and Core evidence/transition/decision regressions; subprocess hard-kill boundaries must be exercised, with full platform qualification in AW-28.",
+      "card_path": "cards/AW-26.md",
+      "result_path": "results/AW-26.md"
+    },
+    {
+      "id": "AW-27",
+      "phase": "H",
+      "title": "Run a genuine paired external-model evaluation with independent oracle",
+      "status": "planned",
+      "depends_on": [
+        "AW-28"
+      ],
+      "remediates": [
+        "AW-18",
+        "AW-19"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "scripts/evaluate_artifact_writer.py",
+        "backlog/schema-driven-artifact-writer/evaluation/protocol.md",
+        "backlog/schema-driven-artifact-writer/evaluation/RESULT.md",
+        "tests/fixtures/artifact_writer_eval/eval_corpus.json",
+        "tests/unit/test_artifact_writer_eval.py"
+      ],
+      "writes": [
+        "scripts/evaluate_artifact_writer.py",
+        "tests/fixtures/artifact_writer_eval/**",
+        "tests/unit/test_artifact_writer_eval.py",
+        "backlog/schema-driven-artifact-writer/evaluation/**",
+        "backlog/schema-driven-artifact-writer/results/AW-27.md"
+      ],
+      "work": [
+        "Preserve and clearly label the existing eight-case report as deterministic harness evidence, not model performance; keep original evidence distinguishable from new runs.",
+        "Freeze actual model/provider identity, budgets, randomized paired arms, held-out corpus, attempts/sample/stopping rules and uncertainty/non-regression criteria before measurement.",
+        "Implement an independent artifact-meaning/provenance/Core-gate oracle shared by raw-authoring and writer arms. Negative weakened-writer controls must detect dropped semantics, defaults, duplicate acceptance and forged evidence.",
+        "Use an authorized available endpoint, fresh sessions and identical intent. Preserve immutable prompts, tool attempts, artifacts, receipts, tokens/time, failures and actual model identity for both arms.",
+        "Report paired mechanical retries, first-pass structural rates and independent semantic outcomes with uncertainty. Missing endpoint, missing runs or inconclusive required benefit leave acceptance open; no simulated replacement."
+      ],
+      "red": "The old fixed-payload harness must be unable to satisfy the paired-run contract; intentionally weakened writers must fail the independent oracle.",
+      "green": "Real paired external-model evidence is independently reproducible and honestly demonstrates or falsifies benefit; no performance claim rests on serializer unit tests. Any unmet source performance criterion remains open for AW-20.",
+      "test": "Validate harness negative controls, then execute the preregistered external protocol and verify immutable evidence hashes, actual model identities and paired statistics.",
+      "card_path": "cards/AW-27.md",
+      "result_path": "results/AW-27.md"
+    },
+    {
+      "id": "AW-28",
+      "phase": "H",
+      "title": "Complete real platform crash and release qualification",
+      "status": "planned",
+      "depends_on": [
+        "AW-26"
+      ],
+      "remediates": [
+        "AW-16",
+        "AW-17"
+      ],
+      "reads": [
+        "backlog/schema-driven-artifact-writer/REVIEW.md",
+        "backlog/schema-driven-artifact-writer/CONTRACT.md",
+        "backlog/schema-driven-artifact-writer/VALIDATION.md",
+        "tests/integration/test_artifact_atomic_io.py",
+        "tests/integration/test_artifact_crash_recovery.py",
+        "tests/integration/test_artifact_locking.py",
+        "tests/smoke-test.ps1",
+        "tests/smoke-test.sh",
+        "tests/validate-layout.ps1",
+        "tests/validate-layout.sh"
+      ],
+      "writes": [
+        "tests/integration/test_artifact_atomic_io.py",
+        "tests/integration/test_artifact_crash_recovery.py",
+        "tests/integration/test_artifact_locking.py",
+        "tests/integration/test_artifact_security.py",
+        "backlog/schema-driven-artifact-writer/evidence/platform/**",
+        "backlog/schema-driven-artifact-writer/results/AW-28.md"
+      ],
+      "work": [
+        "Run real subprocess concurrent Writer/Core creates/updates and hard-kill recovery at prepare/publish/readback/receipt boundaries on Windows and actual POSIX filesystems.",
+        "Exercise Windows sharing/reparse/case/ADS and POSIX symlink/rename/link behavior on capable hosts; Git Bash alone is not POSIX filesystem evidence.",
+        "Run full pytest, both smoke/layout validators on fresh installs, asset drift, legacy path/command classification and installed-wheel-without-checkout describe/create/update/validate.",
+        "Record exact host/runtime/filesystem/source/contract/wheel identities, commands/exits and immutable log hashes. Keep missing mandatory platforms/privileges/checks open; do not replace them with mocks.",
+        "Separate real lifecycle execution from MockChangeBuilder fixture coverage and verify Core evidence/decision/archival behavior for supported routes."
+      ],
+      "red": "A missing required platform, hard-kill boundary, isolated-wheel check or successful unauthorized mutation must prevent acceptance.",
+      "green": "All mandatory deterministic, real Windows/POSIX and installed-wheel checks pass on the qualified implementation with auditable evidence; no mandatory skip is relabeled complete.",
+      "test": "Execute the complete VALIDATION.md release matrix and record per-platform commands, exit codes and evidence hashes. Fixes discovered here require explicit implementation cards and requalification.",
+      "card_path": "cards/AW-28.md",
+      "result_path": "results/AW-28.md"
     }
-  ]
+  ],
+  "review_snapshot": {
+    "date": "2026-09-19",
+    "commit": "bbec79387e8fb0f26dbdd0e18cad5273ce26eeb2",
+    "report": "REVIEW.md",
+    "acceptance": "open",
+    "note": "AW-00 through AW-19 retain historical implementation statuses; these are not current acceptance evidence. AW-21 through AW-28 supersede the disputed completion claims."
+  }
 }

@@ -3,7 +3,9 @@
 Work in the canonical DeltaFuse repository selected for this feature.
 Read its AGENTS.md, then README.md, PLAN.md and CONTRACT.md in this folder.
 Use queue.json to select the first planned card whose dependencies have actual
-completion evidence. Initially that is AW-00.
+completion evidence. The current remediation entry is AW-21; read REVIEW.md.
+AW-00 through AW-19 are historical implementation records, not substitutes for
+the remediation acceptance checks. Reopened AW-20 follows AW-27 and AW-28.
 
 Read only the selected card's input paths and relevant sections. Wildcards are
 search boundaries: use rg to locate a small set of relevant files/functions,
@@ -41,7 +43,7 @@ Successful writer output alone proves neither convergence nor qualification.
 Implement the Schema-driven Artifact Writer plan in the canonical DeltaFuse
 repository. Read backlog/schema-driven-artifact-writer/README.md, EXECUTOR.md,
 PLAN.md and the relevant CONTRACT.md sections. Select one dependency-ready
-card from queue.json, starting with AW-00 when none are complete. Recheck
+card from queue.json (current entry AW-21; read REVIEW.md first). Recheck
 current contracts and repository status. Preserve unrelated changes. Execute
 the card with meaningful Red/Green tests, record exact evidence and update
 its result/status. Do not broaden status/evidence authority, invent semantic

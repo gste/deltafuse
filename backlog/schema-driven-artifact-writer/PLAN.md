@@ -1,6 +1,8 @@
 # Implementation plan — Schema-driven Artifact Writer
 
-Status: ready for bounded implementation; **no runtime implementation yet**.
+Status: **implementation requires remediation; acceptance open**.
+The original phase plan below is retained. See [REVIEW.md](REVIEW.md) for the
+2026-09-19 review and AW-21–AW-28 remediation; AW-20 closure is reopened.
 Baseline: canonical repository VERSION 3.1.0,
 17786cb040d1ed3cd5636dd4a6b97453c1b77627 (2026-09-18).
 Read [INTENTION.md](INTENTION.md), [ANALYSIS.md](ANALYSIS.md) and
@@ -54,8 +56,10 @@ behavior; examples are framework artifact operations only.
 | [AW-19](cards/AW-19.md) | Run paired external small-model evaluation | AW-18 |
 | [AW-20](cards/AW-20.md) | Close acceptance and publish migration/handoff | AW-19 |
 
-Machine-readable status: [queue.json](queue.json). All cards currently planned.
-Do not mark any complete because this planning file exists.
+Machine-readable status: [queue.json](queue.json). Next ready card: AW-21.
+Current order: AW-21 → AW-22 → AW-23 → AW-24 → AW-25 → AW-26 → AW-28 → AW-27 → AW-20.
+Prior implementation statuses are historical; new cards must satisfy the
+original acceptance requirements before the feature can be marked complete.
 
 ## Design decisions to carry into implementation
 

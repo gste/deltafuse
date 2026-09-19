@@ -1,10 +1,12 @@
 # Schema-driven Artifact Writer
 
-Status: **planned — analysis and implementation handoff only**.
+Status: **implementation requires remediation; acceptance open**.
 Source intent: [INTENTION.md](INTENTION.md), preserved from the user's proposal.
 Analysis: [ANALYSIS.md](ANALYSIS.md). Plan: [PLAN.md](PLAN.md).
 Contracts: [CONTRACT.md](CONTRACT.md). Test/evaluation: [VALIDATION.md](VALIDATION.md).
-Next task: [AW-00](cards/AW-00.md). Machine queue: [queue.json](queue.json).
+Next task: [AW-21](cards/AW-21.md). Machine queue: [queue.json](queue.json).
+Review: [REVIEW.md](REVIEW.md), with eight remediation cards AW-21–AW-28.
+AW-20 closure is reopened; earlier completion reports are historical claims.
 
 ## Recommendation
 
@@ -37,5 +39,7 @@ framework feature. Re-read current HEAD and contracts when implementing.
   [evidence/probe-result.json](evidence/probe-result.json): read-only characterization.
 - [PLAN-REVIEW.md](PLAN-REVIEW.md): structural plan checks, not implementation tests.
 
-Only planning files were added. No runtime, schema, skill, test or asset bundle
-was changed. No model evaluation was executed.
+The original planning snapshot above predates implementation. The 2026-09-19
+review found mandatory implementation and qualification gaps. Follow REVIEW.md
+and queue.json for current work; no external-model benefit is established by
+the existing fixed-input evaluation report.

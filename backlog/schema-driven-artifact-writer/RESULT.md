@@ -1,5 +1,10 @@
 # Schema-driven Artifact Writer — Backlog Result & Acceptance Reconciliation
 
+> **Acceptance reopened, 2026-09-19.** The completion claims below are retained
+> as the historical implementation report and are not the current verdict.
+> [REVIEW.md](REVIEW.md) maps eight unresolved findings to AW-21–AW-28.
+> AW-20 must reconcile their verified results before publishing final closure.
+
 ## Overview
 
 The **Schema-driven Artifact Writer** feature has been fully implemented, verified, and integrated into the DeltaFuse framework across 21 bounded cards (`AW-00` through `AW-20`).
