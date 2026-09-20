@@ -22,8 +22,8 @@ FALSIFIERS, UNKNOWNS]
 
 DeltaFuse: deterministic Python Core (no LLM calls, deps `jsonschema` + `pyyaml`)
 driving an LLM Worker through Intake → Analyze → Specify → Decompose → Declare →
-Implement → Verify. Target Worker: dense 35–70B, 32k context, 16k/24-file budget
-per call.
+Implement → Verify. Target Worker: dense <=40B (`qwen/qwen3.8-27b`), 128k context,
+64k/24-file budget per call.
 
 Relevant modules: `core/analyze.py` (three passes: routing | slice | coverage),
 `core/leash.py` (git-diff write guard, `git_dirty_paths`), `core/context.py`
@@ -45,7 +45,7 @@ Every card has:
 - `id` — `Q4-NN`
 - `title` — imperative, one line
 - `depends_on` — list of card ids, possibly empty
-- `reads` — file globs the executor may read, bounded; assume a 16k budget
+- `reads` — file globs the executor may read, bounded; assume a 64k budget
 - `writes` — file globs the executor may write, bounded and non-overlapping with
   concurrent cards
 - `work` — what to do, in enough detail that no design decision is left to the
@@ -82,7 +82,7 @@ Produce exactly these sections, no preamble.
    groups marked.
 2. **CARDS** — one YAML block per card with the fields above, in `ORDER` order.
 3. **BUDGET CHECK** — for each card, the estimated `reads` volume against the
-   16,000-token budget. Any card over budget must be split before you emit it;
+   64,000-token budget. Any card over budget must be split before you emit it;
    if you emit one anyway, mark it `OVER-BUDGET` and say why it cannot be split.
 4. **CONCERNS** — anything about the tier-1 decision you would have argued with,
    recorded and not acted on. Empty is a valid answer.

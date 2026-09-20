@@ -3,18 +3,33 @@
 [**English**](small-llm-contract.md) | [Русский](small-llm-contract.ru.md)
 
 Normative for the framework (V3-FIX-020). The program-level history lives in
-`backlog/product/v3/`; this document is the canonical specification.
+`backlog/roadmap/`; this document is the canonical specification.
 
 ## Reference frame
 
-- The reference lower-bound Worker class is a local 35B-class A3B LLM. The
-  first qualification model is `ornith-1.5-35b-a3b` served by LM Studio. No
-  cloud or larger model is required for a correct Process run.
-- A full Worker call must fit a **32k token** context window (qualification
+- The reference lower-bound Worker class is a **dense model of up to 40B
+  parameters**. Sparse/A3B models are not the reference: success on them is an
+  acceptable side effect, not a qualification target.
+- The first qualification model is **`qwen/qwen3.8-27b`** via OpenRouter — dense
+  27B, 1M context, 32,768 max output, $0.10/$1.80 per MTok. It is chosen because
+  it mirrors the production case the framework is built for: a corporate BYOK
+  dense ~27B.
+- The floor-edge secondary is **`qwen/qwen3-32b`** — dense 32B, 131,072 context,
+  16,384 max output, $0.08/$0.28 per MTok. It sits at the 40B boundary and has
+  the cheapest output in the class.
+- A full Worker call must fit a **128k token** context window (qualification
   window).
-- Framework-controlled input is bounded by default to **16,000 tokens and 24
+- Framework-controlled input is bounded by default to **64,000 tokens and 24
   unique files** per call. The rest of the window is a mandatory reserve for
   host/system instructions, tool exchange, and the model's answer.
+- **The 64,000 figure is provisional.** It preserves the ~50% window ratio the
+  previous 32k/16,000 pair used, and must be confirmed by the first
+  qualification run: effective context is typically well below nominal, and
+  cross-file reasoning degrades fastest as context grows.
+- **The 24-file cap does not scale with the window.** It bounds cross-file
+  reasoning, which is a cognitive limit rather than a token limit, and is the
+  first thing to degrade when context grows. Raising it requires its own
+  measurement.
 
 ## Contract
 
@@ -33,6 +48,6 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
   retries, context tokens, unique files, hallucinated paths, and envelope
   violations.
 - Absolute numerical release thresholds for v3 (T1-T8, per run and for
-  medians) are fixed in `backlog/product/v3/thresholds.md`; qualification
-  runs are executed by `scripts/qualify.py`. Weakening any threshold requires
-  a separate maintainer Decision recorded with the backlog program.
+  medians) are fixed in `backlog/roadmap/q0-qualification-baseline/thresholds.md`;
+  qualification runs are executed by `scripts/qualify.py`. Weakening any
+  threshold requires a separate maintainer Decision recorded with the roadmap.

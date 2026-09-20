@@ -53,7 +53,7 @@ Every card has:
 - `id` — `Q6-NN`
 - `title` — imperative, one line
 - `depends_on` — list of card ids, possibly empty
-- `reads` — bounded file globs; assume a 16k-token budget per executor call
+- `reads` — bounded file globs; assume a 64k-token budget per executor call
 - `writes` — bounded, non-overlapping with concurrent cards
 - `work` — what to do, leaving no design decision to the executor
 - `red` — the test that must fail before the change, by file and test function
@@ -67,7 +67,7 @@ Every card has:
    wrong — split differently.
 2. **The test runner comes before test generation.** If the target repository has
    no wired runner, the card that wires it precedes every characterization card.
-3. **Characterization cards are volume work.** Size them for a 35–70B executor
+3. **Characterization cards are volume work.** Size them for a dense <=40B executor
    per tier 1's MODEL TIERS. Any card tier 1 marked frontier-only must say so in
    `work`.
 4. **Defect handling is not left to the executor.** Tier 1 decided how suspected
@@ -85,7 +85,7 @@ Produce exactly these sections, no preamble.
 
 1. **ORDER** — card ids in execution order, parallel groups marked.
 2. **CARDS** — one YAML block per card, in `ORDER` order.
-3. **BUDGET CHECK** — estimated `reads` volume per card against 16,000 tokens.
+3. **BUDGET CHECK** — estimated `reads` volume per card against 64,000 tokens.
    Split anything over; if you emit an over-budget card anyway, mark it
    `OVER-BUDGET` and say why it cannot be split.
 4. **FIRST RUNNABLE** — which card id first produces something you can point at a

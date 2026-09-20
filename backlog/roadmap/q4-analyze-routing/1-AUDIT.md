@@ -17,9 +17,10 @@ Specify → Decompose → Declare → Implement → Verify — against a product
 where `docs/spec/**` is the sole implementation law. A deterministic Core (Python,
 no LLM calls, two dependencies: `jsonschema` and `pyyaml`) sequences the steps,
 bounds what the Worker may read and write, and checks gates. The Worker is bound
-by one `SKILL.md` per step. Target Worker class is a **dense 35–70B local model**
-with a 32k context window; framework-controlled input is capped at **16,000
-tokens and 24 unique files per call**.
+by one `SKILL.md` per step. Target Worker class is a **dense model of up to 40B**
+(reference: `qwen/qwen3.8-27b` via OpenRouter) with a 128k context window;
+framework-controlled input is capped at **64,000 tokens and 24 unique files per
+call**.
 
 ## The gap
 
@@ -40,7 +41,7 @@ This is the only lifecycle stage without an independent deterministic falsifier.
 Every other gate checks its result independently; routing checks itself.
 
 Consistent with `analyze` being the heaviest skill (737 words, ~1031 tokens
-against a 16k budget) on the stage the maintainer names as weakest.
+against a 64k budget) on the stage the maintainer names as weakest.
 
 ## What is already decided — do not re-open
 
@@ -83,8 +84,8 @@ Choose one and defend it:
 - **D.** Something you argue for that is not A, B or C.
 
 Note on C: the maintainer's suspicion is that under-routing will be the
-**dominant failure mode** at 35–70B. If that is right, C leaves the dominant
-failure unaddressed. If it is wrong, A and B add Core surface for a rare defect.
+**dominant failure mode** on a dense <=40B model. If that is right, C leaves
+the dominant failure unaddressed. If it is wrong, A and B add Core surface for a rare defect.
 You do not have this number yet — say what it would have to be for each option to
 win.
 
@@ -101,7 +102,7 @@ win.
 - Every added gate is a place a weak model can fail. More gates → more retries →
   worse `gate_retries` score. Justify any new gate against that cost.
 - `analyze` is already the heaviest skill. If your proposal adds instruction load
-  to the Worker, say how much and against the 16k budget.
+  to the Worker, say how much and against the 64k budget.
 
 ## What would end this question
 

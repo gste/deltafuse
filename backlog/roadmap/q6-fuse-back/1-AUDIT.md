@@ -18,8 +18,9 @@ DeltaFuse drives an LLM Worker through Intake → Analyze → Specify → Decomp
 Declare → Implement → Verify against a product repository where `docs/spec/**` is
 the **sole implementation law**. A deterministic Core (Python, no LLM calls,
 dependencies `jsonschema` and `pyyaml`) sequences steps, bounds reads and writes,
-and checks gates. Target Worker class: dense 35–70B local model, 32k context,
-16,000 tokens / 24 unique files per call.
+and checks gates. Target Worker class: dense model up to 40B
+(reference `qwen/qwen3.8-27b`), 128k context, 64,000 tokens / 24 unique files
+per call.
 
 Product repository shape DeltaFuse expects:
 
@@ -136,7 +137,7 @@ Produce exactly these sections, in this order. No preamble.
 5. **BOUNDARY** — everything DeltaFuse must know about Fuse-Back. Ideally this is
    "the output artifacts and nothing else"; if it is more, defend it.
 6. **MODEL TIERS** — which parts of the sequence need a frontier model and which
-   run on 35–70B. Give rough volumes.
+   run on a dense <=40B model. Give rough volumes.
 7. **FALSIFIERS** — the numbered list from above.
 8. **UNKNOWNS** — what you could not determine, and what you assumed. "More
    research needed" is not an entry.

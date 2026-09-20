@@ -92,7 +92,7 @@ product/
 | [core-and-worker.ru.md](./core-and-worker.ru.md) ([en](./core-and-worker.md)) | Ядро и воркер; Процесс — lifecycle, не роль |
 | [workflow.md](./workflow.md) | Lifecycle, gates, bugs, Bootstrap и convergence |
 | [state-machine.md](./state-machine.md) | Состояния Change, slice, task и Decision |
-| [small-llm-contract.md](./small-llm-contract.md) ([ru](./small-llm-contract.ru.md)) | Small-LLM Quality Contract: референсный Worker 35B A3B, окно 32k, бюджет 16k/24 (V3-FIX-020) |
+| [small-llm-contract.md](./small-llm-contract.md) ([ru](./small-llm-contract.ru.md)) | Small-LLM Quality Contract: референсный Worker dense <=40B (qwen3.8-27b), окно 128k, бюджет 64k/24 (V3-FIX-020) |
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
 | [roles.md](./roles.md) | Границы полномочий ИИ и человека |
 | [using.ru.md](./using.ru.md) | Установка и product integration |
