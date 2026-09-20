@@ -1,0 +1,3 @@
+symlink created: /tmp/tmpqyahbz3u/link -> /tmp/tmpqyahbz3u/target
+st_mode is link: True
+SYMLINK_CAPABLE=yes

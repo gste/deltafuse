@@ -1,0 +1,8 @@
+== host identity ==
+user=gste
+kernel=6.6.87.2-microsoft-standard-WSL2
+machine=x86_64
+release=Ubuntu 24.04.3 LTS
+home_fs=ext4 /
+workspace_fs=
+python=Python 3.12.3

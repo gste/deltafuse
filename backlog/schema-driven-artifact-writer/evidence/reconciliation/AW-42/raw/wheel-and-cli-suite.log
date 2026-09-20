@@ -1,0 +1,35 @@
+============================= test session starts =============================
+collected 16 items
+
+tests\integration\test_artifact_cli.py ..........                        [ 62%]
+tests\integration\test_wheel_smoke.py ..                                 [ 75%]
+tests\integration\test_wheel_evidence.py ....                            [100%]
+
+=================================== PASSES ====================================
+_________________ test_evidence_written_only_on_explicit_call _________________
+---------------------------- Captured stdout call -----------------------------
+evidence written: <tmp>\pytest-of-<user>\pytest-1464\test_evidence_written_only_on_0\deltafuse-3.1.0-py3-none-any-build-manifest.json
+______________________ test_evidence_refuses_dirty_tree _______________________
+---------------------------- Captured stderr call -----------------------------
+refusing: working tree is not clean:  M src/x.py
+______________________ test_evidence_no_silent_overwrite ______________________
+---------------------------- Captured stderr call -----------------------------
+refusing: <tmp>\pytest-of-<user>\pytest-1464\test_evidence_no_silent_overwr0\deltafuse-3.1.0-py3-none-any-build-manifest.json exists; pass --force to overwrite deliberately
+=========================== short test summary info ===========================
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_describe
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_create_via_stdin
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_core_owned_field_denied
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_update_retry_and_idempotency
+PASSED tests/integration/test_artifact_cli.py::test_aw37_cli_create_missing_change_authority_rejected
+PASSED tests/integration/test_artifact_cli.py::test_aw38_cli_create_missing_content_hash_rejected
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_describe
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_create_update_validate
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_input_validation_controls
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_packaged_schema_removal_and_corruption
+PASSED tests/integration/test_wheel_smoke.py::test_wheel_build_install_and_cli_smoke
+PASSED tests/integration/test_wheel_smoke.py::test_wheel_smoke_leaves_working_tree_clean
+PASSED tests/integration/test_wheel_evidence.py::test_release_tools_read_canonical_version_file
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_written_only_on_explicit_call
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_refuses_dirty_tree
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_no_silent_overwrite
+======================= 16 passed in 128.09s (0:02:08) ========================
