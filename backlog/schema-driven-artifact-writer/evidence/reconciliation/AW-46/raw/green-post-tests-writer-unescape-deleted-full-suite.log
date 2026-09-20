@@ -1,0 +1,175 @@
+AW-46 run label=green-post-tests-writer-unescape-deleted-full-suite variant=writer-delete
+date_utc=2026-09-20T12:26:59Z
+cwd=<repo>
+argv=python -m pytest tests/unit tests/integration tests/e2e
+sha256 src/deltafuse/core/artifact_patch.py=7481dd783a84bccc2b377095d2dce5c41e3eeb15053a454a15abd41194a70cb2
+sha256 scripts/evaluate_artifact_writer.py=8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3
+sha256 tests/unit/test_artifact_writer_eval.py=85ed3dae7ed83a86ba1d65121be3be809e016580b95f2d20462b421c1eea7914
+......................................................s................. [ 13%]
+...........................................FFFF......................... [ 27%]
+........................................................................ [ 40%]
+........................................................................ [ 54%]
+.....................................................................s.. [ 67%]
+........................................................................ [ 81%]
+..........................s............................................. [ 94%]
+.............................                                            [100%]
+================================== FAILURES ===================================
+__________ test_aw46_escaped_pointer_set_writes_decoded_nested_keys ___________
+
+    def test_aw46_escaped_pointer_set_writes_decoded_nested_keys():
+        """AW39-R3: ~1 and ~0 must be decoded before the patch addresses a key."""
+        outcome = apply_artifact_patch(
+            _routing_doc({SLASH_KEY: {TILDE_KEY: "before", "summary": "keep"}}),
+            {"set": [{"path": "/extension-notes/a~1b/m~0n", "value": "after"}]},
+            kind="routing",
+        )
+        notes = outcome.updated_metadata["extension-notes"]
+>       assert list(notes) == [SLASH_KEY], f"escaped pointer created a literal key instead of '{SLASH_KEY}': {notes}"
+E       AssertionError: escaped pointer created a literal key instead of 'a/b': {'a/b': {'m~n': 'before', 'summary': 'keep'}, 'a~1b': {'m~0n': 'after'}}
+E       assert ['a/b', 'a~1b'] == ['a/b']
+E         
+E         Left contains one more item: 'a~1b'
+E         Use -v to get more diff
+
+tests\unit\test_artifact_writer_eval.py:186: AssertionError
+_________ test_aw46_escaped_pointer_unescaping_follows_rfc6901_order __________
+
+    def test_aw46_escaped_pointer_unescaping_follows_rfc6901_order():
+        """AW39-R3: ~01 means a literal '~1' key; a swapped replace order resolves it to 'a/b'."""
+        outcome = apply_artifact_patch(
+            _routing_doc({"a~1b": {"summary": "target"}}),
+            {"set": [{"path": "/extension-notes/a~01b/summary", "value": "updated"}]},
+            kind="routing",
+        )
+        notes = outcome.updated_metadata["extension-notes"]
+>       assert notes["a~1b"]["summary"] == "updated", f"'~01' did not decode to '~1': {notes}"
+E       AssertionError: '~01' did not decode to '~1': {'a~1b': {'summary': 'target'}, 'a~01b': {'summary': 'updated'}}
+E       assert 'target' == 'updated'
+E         
+E         - updated
+E         + target
+
+tests\unit\test_artifact_writer_eval.py:200: AssertionError
+________ test_aw46_escaped_pointer_remove_targets_only_the_nested_key _________
+
+    def test_aw46_escaped_pointer_remove_targets_only_the_nested_key():
+        """AW39-R3: a nested removal may not be satisfied by a top-level or same-named key."""
+        document = _routing_doc({SLASH_KEY: {TILDE_KEY: "drop", "summary": "keep"}, "other": {TILDE_KEY: "untouched"}})
+>       outcome = apply_artifact_patch(
+            document, {"remove": ["/extension-notes/a~1b/m~0n"]}, kind="routing"
+        )
+
+tests\unit\test_artifact_writer_eval.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+metadata = {'change': 'CHG-001', 'claims': {'CR-001': {'primary_capability': 'core'}}, 'extension-notes': {'a/b': {'m~n': 'drop', 'summary': 'keep'}, 'other': {'m~n': 'untouched'}}}
+patch = {'remove': ['/extension-notes/a~1b/m~0n']}, kind = 'routing', body = ''
+body_replacement = None
+registry = <deltafuse.core.artifact_registry.ArtifactRegistry object at 0x000001F277B53E70>
+
+    def apply_artifact_patch(
+        metadata: dict[str, Any],
+        patch: dict[str, Any],
+        *,
+        kind: str = "task",
+        body: str = "",
+        body_replacement: str | None = None,
+        registry: ArtifactRegistry | None = None,
+    ) -> PatchOutcome:
+        """Apply a typed set/remove patch to artifact metadata and return the resulting PatchOutcome."""
+        if registry is None:
+            registry = ArtifactRegistry()
+    
+        try:
+            desc = registry.get_descriptor(kind)
+        except ArtifactRegistryError as ex:
+            raise ArtifactPatchError(f"Unsupported artifact kind '{kind}': {ex}", code="unsupported_kind") from ex
+    
+        core_owned = set(desc.get("core_owned_fields", []))
+    
+        set_ops = patch.get("set") or []
+        remove_ops = patch.get("remove") or []
+    
+        all_pointers: list[str] = []
+        for item in set_ops:
+            if isinstance(item, dict) and "path" in item:
+                all_pointers.append(item["path"])
+        for p in remove_ops:
+            if isinstance(p, str):
+                all_pointers.append(p)
+    
+        _check_pointer_overlaps(all_pointers)
+    
+        # Core-owned field protection check
+        for ptr in all_pointers:
+            tokens = _parse_pointer(ptr)
+            root_field = tokens[0] if tokens else ""
+            if root_field in core_owned:
+                raise ArtifactPatchError(
+                    f"Field '{root_field}' target by pointer '{ptr}' is Core-owned and immutable",
+                    code="core_owned_field",
+                    path=ptr,
+                )
+    
+        updated_meta = copy.deepcopy(metadata)
+        applied_count = 0
+    
+        # Apply set operations
+        for item in set_ops:
+            if not isinstance(item, dict) or "path" not in item or "value" not in item:
+                raise ArtifactPatchError("Set patch operation must contain 'path' and 'value'", code="invalid_set_operation")
+            ptr = item["path"]
+            val = item["value"]
+            tokens = _parse_pointer(ptr)
+    
+            curr = updated_meta
+            for token in tokens[:-1]:
+                if token not in curr or not isinstance(curr[token], dict):
+                    curr[token] = {}
+                curr = curr[token]
+    
+            target_key = tokens[-1]
+            curr[target_key] = copy.deepcopy(val)
+            applied_count += 1
+    
+        # Apply remove operations
+        for ptr in remove_ops:
+            tokens = _parse_pointer(ptr)
+            curr = updated_meta
+            found = True
+            for token in tokens[:-1]:
+                if isinstance(curr, dict) and token in curr:
+                    curr = curr[token]
+                else:
+                    found = False
+                    break
+    
+            target_key = tokens[-1]
+            if found and isinstance(curr, dict) and target_key in curr:
+                del curr[target_key]
+                applied_count += 1
+            else:
+>               raise ArtifactPatchError(f"Target key '{target_key}' in pointer '{ptr}' does not exist", code="remove_target_missing", path=ptr)
+E               deltafuse.core.artifact_patch.ArtifactPatchError: [remove_target_missing] Target key 'm~0n' in pointer '/extension-notes/a~1b/m~0n' does not exist
+
+src\deltafuse\core\artifact_patch.py:153: ArtifactPatchError
+________ test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key _________
+
+    def test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key():
+        """AW39-R3: '~1' addresses key 'a/b', never the literal text 'a~1b' on disk."""
+        document = _routing_doc({"a~1b": {"summary": "keep"}})
+>       with pytest.raises(ArtifactPatchError) as excinfo:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ArtifactPatchError
+
+tests\unit\test_artifact_writer_eval.py:220: Failed
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_artifact_policy.py:60: Symlink creation not supported on this platform/privilege
+SKIPPED [1] tests\unit\test_spec_style.py:30: no local PBT runner
+SKIPPED [1] tests\integration\test_artifact_security.py:203: Symlink creation unavailable on host platform: [WinError 1314] ������ �� �������� ���������� �������: '<tmp>\\pytest-of-<user>\\pytest-1473\\test_security_real_platform_sy0\\outside_dir' -> '<tmp>\\pytest-of-<user>\\pytest-1473\\test_security_real_platform_sy0\\repo\\linked_dir'
+FAILED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_set_writes_decoded_nested_keys
+FAILED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_unescaping_follows_rfc6901_order
+FAILED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_remove_targets_only_the_nested_key
+FAILED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key
+4 failed, 526 passed, 3 skipped in 290.01s (0:04:50)
+--- pytest rc=1

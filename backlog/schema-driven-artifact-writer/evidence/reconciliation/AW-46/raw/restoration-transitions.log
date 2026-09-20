@@ -1,0 +1,24 @@
+verify red-pre-tests-writer-unescape-deleted 2026-09-20T12:21:27Z
+  all three files byte-identical to their expected state
+verify red-pre-tests-oracle-unescape-deleted 2026-09-20T12:26:58Z
+  all three files byte-identical to their expected state
+verify green-post-tests-writer-unescape-deleted-full-suite 2026-09-20T12:31:50Z
+  all three files byte-identical to their expected state
+verify green-post-tests-writer-unescape-deleted-focused 2026-09-20T12:32:34Z
+  all three files byte-identical to their expected state
+verify green-post-tests-oracle-unescape-deleted-focused 2026-09-20T12:33:16Z
+  all three files byte-identical to their expected state
+verify green-post-tests-writer-swapped-order-focused 2026-09-20T12:34:03Z
+  all three files byte-identical to their expected state
+verify final-pristine-control-full-suite 2026-09-20T12:38:59Z
+  all three files byte-identical to their expected state
+verify final 2026-09-20T12:39:03Z
+  all three files byte-identical to their expected state
+verify trap-exit 2026-09-20T12:39:03Z
+  all three files byte-identical to their expected state
+verify red2-pre-tests-silent-failed-lookup-full-suite 2026-09-20T12:47:15Z
+  all three files byte-identical to their expected state
+verify green2-post-tests-silent-failed-lookup-focused 2026-09-20T12:48:01Z
+  all three files byte-identical to their expected state
+verify trap-exit-phase2 2026-09-20T12:48:01Z
+  all three files byte-identical to their expected state

@@ -1,0 +1,1006 @@
+AW-46 run label=final-pristine-control-full-suite variant=none
+date_utc=2026-09-20T12:34:04Z
+cwd=<repo>
+argv=python -m pytest -rA tests/unit tests/integration tests/e2e
+sha256 src/deltafuse/core/artifact_patch.py=c0659eaab612f3512b39cd6a1c70d032aca92e5d7fc51776bbe5c452c293d950
+sha256 scripts/evaluate_artifact_writer.py=8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3
+sha256 tests/unit/test_artifact_writer_eval.py=85ed3dae7ed83a86ba1d65121be3be809e016580b95f2d20462b421c1eea7914
+......................................................s................. [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 40%]
+........................................................................ [ 54%]
+.....................................................................s.. [ 67%]
+........................................................................ [ 81%]
+..........................s............................................. [ 94%]
+.............................                                            [100%]
+=================================== PASSES ====================================
+_____________________ test_cli_create_invalid_json_input ______________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": false,
+  "error": {
+    "code": "json_syntax_error",
+    "message": "JSON parse failure: Expecting property name enclosed in double quotes"
+  }
+}
+---------------------------- Captured stderr call -----------------------------
+Invalid JSON input: JSON parse failure: Expecting property name enclosed in double quotes
+____________________ test_cli_update_stale_expected_sha256 ____________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": false,
+  "error": {
+    "code": "lock_error",
+    "message": "[stale_target] Target file hash mismatch for '<tmp>\\pytest-of-<user>\\pytest-1477\\test_cli_update_stale_expected0\\tasks\\TASK-011.md': expected 0000000000000000000000000000000000000000000000000000000000000000, got 89cc5170b37f83de5305d6e2983296852ff42cfd4cf87e3bd2e56162dcf7a7f8"
+  }
+}
+---------------------------- Captured stderr call -----------------------------
+Lock error: [stale_target] Target file hash mismatch for '<tmp>\pytest-of-<user>\pytest-1477\test_cli_update_stale_expected0\tasks\TASK-011.md': expected 0000000000000000000000000000000000000000000000000000000000000000, got 89cc5170b37f83de5305d6e2983296852ff42cfd4cf87e3bd2e56162dcf7a7f8
+________________________ test_cli_validate_subcommand _________________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "valid": false,
+  "target": "<tmp>\\pytest-of-<user>\\pytest-1477\\test_cli_validate_subcommand0\\tasks\\NONEXISTENT.md",
+  "scopes": [
+    "input",
+    "schema"
+  ],
+  "diagnostics": [
+    {
+      "code": "file_not_found",
+      "json_pointer": "",
+      "stage": "input",
+      "message": "Target file '<tmp>\\pytest-of-<user>\\pytest-1477\\test_cli_validate_subcommand0\\tasks\\NONEXISTENT.md' does not exist"
+    }
+  ]
+}
+___________________ test_cli_unicode_and_multiline_payload ____________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "request_id": "req-cli-0b1d30b7d5fb",
+  "transaction_id": "tx-672f7679c34243cdb9d7853767c8b5b2",
+  "operation": "create",
+  "kind": "task",
+  "target": "tasks/TASK-030.md",
+  "operation_schema": {
+    "version": "1",
+    "content_hash": "sha256:02a82511c739aaf100ac495280738d9d4ad05a5650559f827f7fda0847f79572"
+  },
+  "storage_schema": {
+    "kind": "task",
+    "version": 3,
+    "id": "https://deltafuse.dev/schemas/v3/task.schema.yaml",
+    "content_hash": "sha256:aee0146d0914bfc4b198c1aab80ecad6f1f4d3cdd2f74b6efcd42ff987e47f21"
+  },
+  "serializer_revision": 1,
+  "request_sha256": "sha256:e0c6032e97d3958172b742a79ddb6831ac304582acbca93a4bcd66fc62419383",
+  "payload_sha256": "sha256:c1f9c5e7c93462a512aeb0a5febf3c5a7903127a2f798da5d2014c09a56489b1",
+  "previous_sha256": null,
+  "result_sha256": "sha256:c1f9c5e7c93462a512aeb0a5febf3c5a7903127a2f798da5d2014c09a56489b1",
+  "changed": true,
+  "outcome": "committed",
+  "timestamp": "2026-09-20T12:34:13Z",
+  "authority": {
+    "actor": "worker",
+    "work_item": "CLI",
+    "product_root": "<tmp>/pytest-of-<user>/pytest-1477/test_cli_unicode_and_multiline0"
+  },
+  "validation_scopes": [
+    {
+      "scope": "envelope",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "input",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "schema",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "policy",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "reference",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "whole_gate",
+      "status": "not_evaluated",
+      "details": [
+        "Whole-Change convergence is evaluated by Core gates, not single-file write"
+      ]
+    }
+  ],
+  "receipt_sha256": "sha256:4384a869962e610f87013d60f95ff11cd76c3050cfe670505e438ba4582be1fb",
+  "digest": "sha256:4384a869962e610f87013d60f95ff11cd76c3050cfe670505e438ba4582be1fb"
+}
+_ test_reproduce_finding_3_cli_create_duplicate_key_and_unknown_envelope_field_rejected _
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": false,
+  "error": {
+    "code": "duplicate_key",
+    "message": "duplicate key 'kind' in JSON input"
+  }
+}
+---------------------------- Captured stderr call -----------------------------
+Invalid JSON input: duplicate key 'kind' in JSON input
+_______________ test_cli_update_explicit_empty_body_replacement _______________
+---------------------------- Captured stdout call -----------------------------
+{
+  "request_id": "req-cli-40311d912847",
+  "transaction_id": "tx-371939fea467407da3d9c35086dd7172",
+  "operation": "update",
+  "kind": "task",
+  "target": "tasks/TASK-040.md",
+  "operation_schema": {
+    "version": "1",
+    "content_hash": "sha256:02a82511c739aaf100ac495280738d9d4ad05a5650559f827f7fda0847f79572"
+  },
+  "storage_schema": {
+    "kind": "task",
+    "version": 3,
+    "id": "https://deltafuse.dev/schemas/v3/task.schema.yaml",
+    "content_hash": "sha256:aee0146d0914bfc4b198c1aab80ecad6f1f4d3cdd2f74b6efcd42ff987e47f21"
+  },
+  "serializer_revision": 1,
+  "request_sha256": "sha256:017decc537dd8ad361281787d2c4b2f0ef8bdf8a8bd62810a5abbf864406de79",
+  "payload_sha256": "sha256:b0cb045f28eb47130f4a590e94f6589afcc63c61f4ae28b87dc3db7141fc5405",
+  "previous_sha256": "sha256:7ffa3453ea866677d087d6f7041d1ef1649ac88012aaa8e5e58629c22634714a",
+  "result_sha256": "sha256:b0cb045f28eb47130f4a590e94f6589afcc63c61f4ae28b87dc3db7141fc5405",
+  "changed": true,
+  "outcome": "committed",
+  "timestamp": "2026-09-20T12:34:14Z",
+  "authority": {
+    "actor": "worker",
+    "work_item": "CLI",
+    "product_root": "<tmp>/pytest-of-<user>/pytest-1477/test_cli_update_explicit_empty0"
+  },
+  "validation_scopes": [
+    {
+      "scope": "envelope",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "input",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "schema",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "policy",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "reference",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "whole_gate",
+      "status": "not_evaluated",
+      "details": [
+        "Whole-Change convergence is evaluated by Core gates, not single-file write"
+      ]
+    }
+  ],
+  "receipt_sha256": "sha256:0d9772456d3aa941d9073c9444e039be1d5c96295fae97b72b50597ad5befa53",
+  "digest": "sha256:0d9772456d3aa941d9073c9444e039be1d5c96295fae97b72b50597ad5befa53"
+}
+_____________________ test_decide_does_not_run_from_next ______________________
+---------------------------- Captured stderr call -----------------------------
+No ready work.
+Ready:
+  (none)
+Blocked:
+  CHG-072  docs/changes/CHG-072  Decision 'DEC-0001-test.md' for Change 'CHG-072' is in 'proposed' status
+To start a new Change: /intake
+_____________ test_hand_written_accepted_does_not_close_analyzed ______________
+---------------------------- Captured stdout call -----------------------------
+decide: decision accepted
+decision: DEC-0001
+wrote: docs/decisions/DEC-0001-test.md
+---------------------------- Captured stderr call -----------------------------
+Decide failed: DEC-0001-test.md status is 'accepted', expected proposed
+__________________ test_bootstrap_decision_with_null_change ___________________
+---------------------------- Captured stdout call -----------------------------
+decide: decision accepted
+decision: DEC-0001
+wrote: docs/decisions/DEC-0001-test.md
+__________ test_hand_written_spec_accepted_does_not_close_specified ___________
+---------------------------- Captured stdout call -----------------------------
+decide: spec accepted
+change_status: specified
+wrote: docs/changes/CHG-075/spec-delta.md
+wrote: docs/changes/CHG-075/change.yaml
+---------------------------- Captured stderr call -----------------------------
+gate: status 'specified' does not match the Core transition chain, which ends at 'analyzed'; re-run: deltafuse advance
+__________ test_clean_checkout_with_out_of_envelope_commit_fails_ci ___________
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": false,
+  "skipped": false,
+  "mode": "off",
+  "envelope": null,
+  "paths": [
+    "src/rogue.py"
+  ],
+  "violations": [
+    "leash: 'src/rogue.py' is not covered by any Change"
+  ]
+}
+______________ test_next_blocked_on_decision_exits_without_ready ______________
+---------------------------- Captured stderr call -----------------------------
+No ready work.
+Ready:
+  (none)
+Blocked:
+  CHG-033  docs/changes/CHG-033  Decision 'DEC-0001-test.md' for Change 'CHG-033' is in 'proposed' status
+To start a new Change: /intake
+________________ test_failed_generation_keeps_previous_bundle _________________
+---------------------------- Captured stdout setup ----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_failed_generation_keeps_p0\repo\src\deltafuse\assets
+____________________ test_swap_rollback_on_rename_failure _____________________
+---------------------------- Captured stdout setup ----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_swap_rollback_on_rename_f0\repo\src\deltafuse\assets
+________________________ test_stale_temp_dirs_cleaned _________________________
+---------------------------- Captured stdout setup ----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_stale_temp_dirs_cleaned0\repo\src\deltafuse\assets
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_stale_temp_dirs_cleaned0\repo\src\deltafuse\assets
+____________________ test_successful_sync_replaces_bundle _____________________
+---------------------------- Captured stdout setup ----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_successful_sync_replaces_0\repo\src\deltafuse\assets
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_successful_sync_replaces_0\repo\src\deltafuse\assets
+check: bundle is up to date (4 assets)
+________________ test_check_detects_drift_without_modification ________________
+---------------------------- Captured stdout setup ----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_check_detects_drift_witho0\repo\src\deltafuse\assets
+---------------------------- Captured stdout call -----------------------------
+check: bundle is stale (2 drift); run sync_assets.py:
+  tampered packaged asset: skills/sample-skills.txt
+  bundle verification failed: generated bundle hash mismatch: skills/sample-skills.txt
+check: bundle is up to date (4 assets)
+__________________ test_tampered_init_py_invalidates_bundle ___________________
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_tampered_init_py_invalida0\assets
+_________________ test_removed_marker_and_extra_file_detected _________________
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_removed_marker_and_extra_0\assets
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_removed_marker_and_extra_0\assets
+____________________ test_junction_inside_bundle_rejected _____________________
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_junction_inside_bundle_re0\assets
+___________________ test_broken_link_inside_bundle_rejected ___________________
+---------------------------- Captured stdout call -----------------------------
+bundle: 4 assets -> <tmp>\pytest-of-<user>\pytest-1477\test_broken_link_inside_bundle0\assets
+_________ test_f04_passing_analyzed_gate_advances_status_out_of_draft _________
+---------------------------- Captured stdout call -----------------------------
+advance: gate 'analyzed' applied: analyzing -> analyzed (receipt 1e3ba57b76bf)
+_________________ test_aw37_cli_and_service_authority_probes __________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Change ID mismatch: directory 'CHG-905' contains change.yaml with id 'CHG-999'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "unauthorized_stage",
+    "message": "[unauthorized_stage] Worker mutation denied for invalid or unauthorized stage 'invalid_change_stage'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "[missing_change_authority] Worker mutation denied: missing, unreadable, or malformed change.yaml for Change 'CHG-905'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Invalid or missing Change ID in change.yaml: 'None'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Invalid or missing Change ID in change.yaml: 'None'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Invalid or missing Change ID in change.yaml: ''"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Invalid or missing Change ID in change.yaml: '123'"
+  }
+}
+{
+  "ok": false,
+  "error": {
+    "code": "missing_change_authority",
+    "message": "Invalid or missing Change ID in change.yaml: 'None'"
+  }
+}
+---------------------------- Captured stderr call -----------------------------
+Policy denied: Change ID mismatch: directory 'CHG-905' contains change.yaml with id 'CHG-999'
+Policy denied: [unauthorized_stage] Worker mutation denied for invalid or unauthorized stage 'invalid_change_stage'
+Policy denied: [missing_change_authority] Worker mutation denied: missing, unreadable, or malformed change.yaml for Change 'CHG-905'
+Policy denied: Invalid or missing Change ID in change.yaml: 'None'
+Policy denied: Invalid or missing Change ID in change.yaml: 'None'
+Policy denied: Invalid or missing Change ID in change.yaml: ''
+Policy denied: Invalid or missing Change ID in change.yaml: '123'
+Policy denied: Invalid or missing Change ID in change.yaml: 'None'
+__________ test_full_analyze_cycle_advances_and_hands_off_to_specify __________
+---------------------------- Captured stdout call -----------------------------
+advance: gate 'analyzed' applied: analyzing -> analyzed (receipt 3caa079dcf1f)
+Gate analyzed passed for <tmp>\pytest-of-<user>\pytest-1477\test_full_analyze_cycle_advanc0\docs\changes\CHG-414.
+______________ test_state_command_writes_core_owned_task_status _______________
+---------------------------- Captured stdout call -----------------------------
+state: task status pending -> declared (receipt 6922f7ad7fe2)
+state: slice status draft -> specified (receipt 663f1ede1578)
+state: change status analyzed -> specification-proposed (receipt 1d1930d16078)
+---------------------------- Captured stderr call -----------------------------
+state failed: cannot set status 'verified' from 'declared' for TASK-001.md
+state failed: Change status 'implemented' is Core-gated; use deltafuse advance
+________________________ test_new_cli_reports_success _________________________
+---------------------------- Captured stderr call -----------------------------
+new failed: Change directory already exists: <tmp>\pytest-of-<user>\pytest-1477\test_new_cli_reports_success0\docs\changes\CHG-505
+______________________ test_cli_validate_and_check_gate _______________________
+---------------------------- Captured stdout call -----------------------------
+Gate intake passed for <tmp>\pytest-of-<user>\pytest-1477\test_cli_validate_and_check_ga0\docs\changes\CHG-001-test.
+_________________ test_evidence_written_only_on_explicit_call _________________
+---------------------------- Captured stdout call -----------------------------
+evidence written: <tmp>\pytest-of-<user>\pytest-1477\test_evidence_written_only_on_0\deltafuse-3.1.0-py3-none-any-build-manifest.json
+______________________ test_evidence_refuses_dirty_tree _______________________
+---------------------------- Captured stderr call -----------------------------
+refusing: working tree is not clean:  M src/x.py
+______________________ test_evidence_no_silent_overwrite ______________________
+---------------------------- Captured stderr call -----------------------------
+refusing: <tmp>\pytest-of-<user>\pytest-1477\test_evidence_no_silent_overwr0\deltafuse-3.1.0-py3-none-any-build-manifest.json exists; pass --force to overwrite deliberately
+__________________ test_e2e_artifact_writer_workflow_feature __________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "request_id": "req-cli-8f36ff15429d",
+  "transaction_id": "tx-439a945840da4725948e2e1f685a4b34",
+  "operation": "create",
+  "kind": "task",
+  "target": "docs/changes/CHG-165/tasks/TASK-001.md",
+  "operation_schema": {
+    "version": "1",
+    "content_hash": "sha256:02a82511c739aaf100ac495280738d9d4ad05a5650559f827f7fda0847f79572"
+  },
+  "storage_schema": {
+    "kind": "task",
+    "version": 3,
+    "id": "https://deltafuse.dev/schemas/v3/task.schema.yaml",
+    "content_hash": "sha256:aee0146d0914bfc4b198c1aab80ecad6f1f4d3cdd2f74b6efcd42ff987e47f21"
+  },
+  "serializer_revision": 1,
+  "request_sha256": "sha256:5431ab7351248740801a9a00a1825ec13159a7fe7a81991d14cfc1e814b295e3",
+  "payload_sha256": "sha256:afa53caf464f4bc200e1d0da1976de2eb503067cd2d06e0efcd266684e2f7913",
+  "previous_sha256": null,
+  "result_sha256": "sha256:afa53caf464f4bc200e1d0da1976de2eb503067cd2d06e0efcd266684e2f7913",
+  "changed": true,
+  "outcome": "committed",
+  "timestamp": "2026-09-20T12:38:51Z",
+  "authority": {
+    "actor": "worker",
+    "work_item": "CLI",
+    "product_root": "<tmp>/pytest-of-<user>/pytest-1477/test_e2e_artifact_writer_workf0"
+  },
+  "validation_scopes": [
+    {
+      "scope": "envelope",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "input",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "schema",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "policy",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "reference",
+      "status": "valid",
+      "details": []
+    },
+    {
+      "scope": "whole_gate",
+      "status": "not_evaluated",
+      "details": [
+        "Whole-Change convergence is evaluated by Core gates, not single-file write"
+      ]
+    }
+  ],
+  "receipt_sha256": "sha256:ea0776d662d6e5b1b3624371aa5347383bf828cd865a8e6f03dd9ec17e8d20a3",
+  "digest": "sha256:ea0776d662d6e5b1b3624371aa5347383bf828cd865a8e6f03dd9ec17e8d20a3"
+}
+{
+  "ok": true,
+  "change": "CHG-165",
+  "child_kind": "task",
+  "child_id": "TASK-001"
+}
+________________ test_e2e_artifact_writer_workflow_docs_route _________________
+---------------------------- Captured stdout call -----------------------------
+{
+  "ok": true,
+  "change": "CHG-166",
+  "path": "<tmp>\\pytest-of-<user>\\pytest-1477\\test_e2e_artifact_writer_workf1\\docs\\changes\\CHG-166",
+  "route": "docs"
+}
+=========================== short test summary info ===========================
+PASSED tests/unit/test_analyze.py::test_next_analyze_pass_is_routing_after_intake
+PASSED tests/unit/test_analyze.py::test_next_analyze_pass_one_slice_per_capability
+PASSED tests/unit/test_analyze.py::test_catalog_spec_refs_from_system_core
+PASSED tests/unit/test_analyze.py::test_uncovered_capabilities_ignore_extra_slice
+PASSED tests/unit/test_analyze.py::test_analyzed_fails_when_routing_capability_has_no_slice
+PASSED tests/unit/test_analyze.py::test_write_coverage_maps_claims_and_preserves_tasks
+PASSED tests/unit/test_analyze.py::test_write_coverage_fails_without_slice
+PASSED tests/unit/test_analyze.py::test_coverage_cli_writes_and_does_not_touch_spec
+PASSED tests/unit/test_artifact_assets.py::test_artifact_writer_contract_docs_exist
+PASSED tests/unit/test_artifact_assets.py::test_asset_bundle_sync_check
+PASSED tests/unit/test_artifact_catalog_freeze.py::test_catalog_covers_all_ten_schemas
+PASSED tests/unit/test_artifact_catalog_freeze.py::test_status_patch_rejected_by_ownership_design
+PASSED tests/unit/test_artifact_catalog_freeze.py::test_nonexistent_requirement_delta_kind_rejected
+PASSED tests/unit/test_artifact_catalog_freeze.py::test_injected_schema_version_rejected_by_closed_nested_schemas
+PASSED tests/unit/test_artifact_cli.py::test_export_tool_schemas
+PASSED tests/unit/test_artifact_cli.py::test_cli_describe_subcommand
+PASSED tests/unit/test_artifact_cli.py::test_cli_describe_export_schema
+PASSED tests/unit/test_artifact_cli.py::test_cli_create_subcommand_success
+PASSED tests/unit/test_artifact_cli.py::test_cli_create_core_owned_field_denied
+PASSED tests/unit/test_artifact_cli.py::test_cli_create_invalid_json_input
+PASSED tests/unit/test_artifact_cli.py::test_cli_update_subcommand_success
+PASSED tests/unit/test_artifact_cli.py::test_cli_update_stale_expected_sha256
+PASSED tests/unit/test_artifact_cli.py::test_cli_validate_subcommand
+PASSED tests/unit/test_artifact_cli.py::test_cli_unicode_and_multiline_payload
+PASSED tests/unit/test_artifact_cli.py::test_reproduce_finding_3_cli_create_duplicate_key_and_unknown_envelope_field_rejected
+PASSED tests/unit/test_artifact_cli.py::test_cli_update_explicit_empty_body_replacement
+PASSED tests/unit/test_artifact_codec.py::test_quoted_scalar_strings_preserved_in_roundtrip
+PASSED tests/unit/test_artifact_codec.py::test_canonical_key_ordering
+PASSED tests/unit/test_artifact_codec.py::test_multiline_string_formatting
+PASSED tests/unit/test_artifact_codec.py::test_list_order_preservation
+PASSED tests/unit/test_artifact_codec.py::test_body_bytes_and_newlines_preserved
+PASSED tests/unit/test_artifact_codec.py::test_noncanonical_metadata_requires_opt_in
+PASSED tests/unit/test_artifact_codec.py::test_canonicalize_metadata_opt_in_succeeds
+PASSED tests/unit/test_artifact_concurrency.py::test_validate_expected_hash_success
+PASSED tests/unit/test_artifact_concurrency.py::test_validate_expected_hash_mismatch_fails
+PASSED tests/unit/test_artifact_concurrency.py::test_validate_expected_hash_missing_file
+PASSED tests/unit/test_artifact_concurrency.py::test_revalidate_authority_revoked_fails
+PASSED tests/unit/test_artifact_concurrency.py::test_check_noop_mutation
+PASSED tests/unit/test_artifact_contracts.py::test_envelope_schema_exists_and_is_valid
+PASSED tests/unit/test_artifact_contracts.py::test_receipt_schema_exists_and_is_valid
+PASSED tests/unit/test_artifact_contracts.py::test_envelope_validation_valid_and_invalid
+PASSED tests/unit/test_artifact_contracts.py::test_patch_structure_validation
+PASSED tests/unit/test_artifact_contracts.py::test_receipt_validation
+PASSED tests/unit/test_artifact_contracts.py::test_descriptors_exist_for_all_ten_kinds
+PASSED tests/unit/test_artifact_patch.py::test_patch_set_and_remove_basic
+PASSED tests/unit/test_artifact_patch.py::test_immutable_core_owned_field_rejected
+PASSED tests/unit/test_artifact_patch.py::test_array_index_edit_rejected
+PASSED tests/unit/test_artifact_patch.py::test_ancestor_descendant_overlap_rejected
+PASSED tests/unit/test_artifact_patch.py::test_unrelated_extension_fields_preserved
+PASSED tests/unit/test_artifact_patch.py::test_body_preserved_unless_replaced
+PASSED tests/unit/test_artifact_policy.py::test_null_authorization_context_denied
+PASSED tests/unit/test_artifact_policy.py::test_path_traversal_denied
+PASSED tests/unit/test_artifact_policy.py::test_protected_deltafuse_path_denied
+PASSED tests/unit/test_artifact_policy.py::test_windows_device_names_and_ads_denied
+PASSED tests/unit/test_artifact_policy.py::test_worker_cannot_write_core_kinds
+PASSED tests/unit/test_artifact_policy.py::test_internal_core_actor_authorization
+PASSED tests/unit/test_artifact_policy.py::test_forged_actor_core_rejected
+PASSED tests/unit/test_artifact_policy.py::test_revalidate_authorization_context
+PASSED tests/unit/test_artifact_policy.py::test_aw37_mismatched_change_id_rejected
+PASSED tests/unit/test_artifact_policy.py::test_aw37_invalid_or_invented_stage_rejected
+PASSED tests/unit/test_artifact_policy.py::test_aw37_f1_missing_null_empty_wrong_type_id_rejected
+PASSED tests/unit/test_artifact_reader.py::test_duplicate_yaml_key_rejected
+PASSED tests/unit/test_artifact_reader.py::test_body_trailing_blank_lines_preserved
+PASSED tests/unit/test_artifact_reader.py::test_crlf_and_bom_preserved
+PASSED tests/unit/test_artifact_reader.py::test_non_finite_float_rejected
+PASSED tests/unit/test_artifact_reader.py::test_custom_yaml_tag_rejected
+PASSED tests/unit/test_artifact_reader.py::test_excessive_size_rejected
+PASSED tests/unit/test_artifact_reader.py::test_no_frontmatter_standalone_yaml
+PASSED tests/unit/test_artifact_reader.py::test_non_ascii_unicode_preserved
+PASSED tests/unit/test_artifact_reader.py::test_scalar_types_and_dates_parsing
+PASSED tests/unit/test_artifact_reader.py::test_missing_frontmatter_delimiters_raises
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_success
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_duplicate_key_rejected
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_nested_duplicate_key_rejected
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_non_finite_float_rejected
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_excessive_depth_rejected
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_max_bytes_rejected
+PASSED tests/unit/test_artifact_reader.py::test_strict_parse_json_non_object_rejected
+PASSED tests/unit/test_artifact_recovery.py::test_idempotency_same_payload_returns_existing
+PASSED tests/unit/test_artifact_recovery.py::test_idempotency_conflict_different_payload_fails
+PASSED tests/unit/test_artifact_recovery.py::test_compute_receipt_digest
+PASSED tests/unit/test_artifact_registry.py::test_registry_initialization_and_descriptors
+PASSED tests/unit/test_artifact_registry.py::test_core_owned_field_in_create_payload_rejected
+PASSED tests/unit/test_artifact_registry.py::test_update_patch_core_owned_field_rejected
+PASSED tests/unit/test_artifact_registry.py::test_unsupported_kind_rejected
+PASSED tests/unit/test_artifact_registry.py::test_schema_hash_mismatch_or_corrupt_bundle_rejected
+PASSED tests/unit/test_artifact_registry.py::test_structured_diagnostics_format
+PASSED tests/unit/test_artifact_registry.py::test_reference_validation_scope
+PASSED tests/unit/test_artifact_registry.py::test_valid_legacy_extension_fields_supported
+PASSED tests/unit/test_artifact_registry.py::test_aw31_verify_product_lock_rejects_version_and_content_hash_mismatch
+PASSED tests/unit/test_artifact_registry.py::test_aw38_verify_product_lock_rejects_missing_and_malformed_fields
+PASSED tests/unit/test_artifact_service.py::test_create_task_initializes_core_status_and_rejects_status_override
+PASSED tests/unit/test_artifact_service.py::test_validate_is_strictly_read_only
+PASSED tests/unit/test_artifact_service.py::test_create_task_success
+PASSED tests/unit/test_artifact_service.py::test_update_slice_success
+PASSED tests/unit/test_artifact_service.py::test_update_status_patch_denied
+PASSED tests/unit/test_artifact_service.py::test_failed_validation_leaves_filesystem_and_journal_untouched
+PASSED tests/unit/test_artifact_service.py::test_describe_operation
+PASSED tests/unit/test_artifact_service.py::test_reproduce_finding_2_empty_payload_rejected
+PASSED tests/unit/test_artifact_service.py::test_create_task_omitted_required_fields_rejected
+PASSED tests/unit/test_artifact_service.py::test_create_task_missing_core_context_rejected
+PASSED tests/unit/test_artifact_service.py::test_reproduce_finding_4_malformed_lock_and_receipt_provenance
+PASSED tests/unit/test_artifact_service.py::test_reproduce_finding_5_update_idempotency_and_create_body_conflict
+PASSED tests/unit/test_artifact_service.py::test_update_retry_with_unrelated_later_target_edit
+PASSED tests/unit/test_artifact_service.py::test_noop_update_retry_and_conflict_checks
+PASSED tests/unit/test_artifact_service.py::test_aw34_missing_slice_selection_and_malformed_slice_rejection
+PASSED tests/unit/test_artifact_writer_eval.py::test_eval_corpus_fixture_validity
+PASSED tests/unit/test_artifact_writer_eval.py::test_evaluate_artifact_writer_harness_baseline
+PASSED tests/unit/test_artifact_writer_eval.py::test_independent_oracle_detects_weakened_writer_dropped_semantics
+PASSED tests/unit/test_artifact_writer_eval.py::test_independent_oracle_detects_weakened_writer_unauthorized_status
+PASSED tests/unit/test_artifact_writer_eval.py::test_paired_model_mode_reports_unavailable_endpoint_without_fake_claims
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw40_reproduce_synthetic_score_substitution_on_empty_or_adapter_corpus
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw39_routing_update_semantic_rejection_and_acceptance
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw39_json_pointer_escaping_and_nested_removal
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_set_writes_decoded_nested_keys
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_unescaping_follows_rfc6901_order
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_remove_targets_only_the_nested_key
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_missing_nested_path_fails_loudly_instead_of_being_skipped
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_oracle_rejects_literal_tilde_and_missing_nested_set_targets
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_oracle_checks_nested_removal_location_not_top_level_presence
+PASSED tests/unit/test_board.py::test_board_layout_covers_happy_path_once
+PASSED tests/unit/test_board.py::test_board_empty_product_still_has_layout
+PASSED tests/unit/test_board.py::test_board_two_changes_and_no_side_effects
+PASSED tests/unit/test_board.py::test_board_archive_flag_only
+PASSED tests/unit/test_board.py::test_board_uses_config_paths
+PASSED tests/unit/test_board.py::test_board_skips_unreadable_package
+PASSED tests/unit/test_board.py::test_board_missing_lock_is_hard_error
+PASSED tests/unit/test_board.py::test_cli_board_json
+PASSED tests/unit/test_board.py::test_cli_board_missing_lock
+PASSED tests/unit/test_board.py::test_board_schema_rejects_missing_layout
+PASSED tests/unit/test_board.py::test_board_module_does_not_run_gates
+PASSED tests/unit/test_config.py::test_fresh_install_config_is_valid
+PASSED tests/unit/test_config.py::test_unknown_and_out_of_range_values_fail
+PASSED tests/unit/test_config.py::test_legacy_schema_version_fails_closed
+PASSED tests/unit/test_context.py::test_estimate_tokens_heuristic
+PASSED tests/unit/test_context.py::test_estimate_tokens_a03_01_upper_bounds
+PASSED tests/unit/test_context.py::test_validate_context_budget
+PASSED tests/unit/test_context.py::test_validate_context_budget_missing_file_is_error
+PASSED tests/unit/test_context.py::test_validate_context_budget_rejects_path_traversal
+PASSED tests/unit/test_context.py::test_validate_context_budget_deduplicates_for_limits
+PASSED tests/unit/test_context.py::test_estimate_files_tokens_deduplicates
+PASSED tests/unit/test_context.py::test_phase_contracts_completeness
+PASSED tests/unit/test_context.py::test_matches_contract_globs_src_and_tests
+PASSED tests/unit/test_context.py::test_load_change_route_defaults_to_code
+PASSED tests/unit/test_context.py::test_validate_task_context_budget_allows_missing_allowed_path
+PASSED tests/unit/test_context.py::test_validate_task_context_budget_counts_declared_files
+PASSED tests/unit/test_context.py::test_try_endpoint_token_count_skips_without_url
+PASSED tests/unit/test_context.py::test_try_endpoint_token_count_posts_tokenize_not_chat
+PASSED tests/unit/test_contract_v3.py::test_new_changes_are_created_with_schema_version_3
+PASSED tests/unit/test_contract_v3.py::test_unknown_or_partial_version_stops_with_exact_diagnostic
+PASSED tests/unit/test_contract_v3.py::test_legacy_vocabulary_is_rejected_without_auto_conversion
+PASSED tests/unit/test_contract_v3.py::test_check_gate_reports_version_errors_before_gate_logic
+PASSED tests/unit/test_decide.py::test_decide_accepts_decision_and_unblocks
+PASSED tests/unit/test_decide.py::test_decide_does_not_run_from_next
+PASSED tests/unit/test_decide.py::test_decide_rejects_without_flags
+PASSED tests/unit/test_decide.py::test_hand_written_accepted_does_not_close_analyzed
+PASSED tests/unit/test_decide.py::test_bootstrap_decision_with_null_change
+PASSED tests/unit/test_decide.py::test_hand_written_spec_accepted_does_not_close_specified
+PASSED tests/unit/test_evidence.py::test_classify_failure_markers
+PASSED tests/unit/test_evidence.py::test_run_evidence_red_behavioral
+PASSED tests/unit/test_evidence.py::test_run_evidence_red_syntax_not_authentic
+PASSED tests/unit/test_evidence.py::test_run_evidence_red_import_not_authentic
+PASSED tests/unit/test_evidence.py::test_run_evidence_red_private_not_authentic
+PASSED tests/unit/test_evidence.py::test_run_evidence_already_green
+PASSED tests/unit/test_evidence.py::test_run_evidence_green_records_base_revision
+PASSED tests/unit/test_evidence.py::test_handwritten_red_yaml_fails_targeting
+PASSED tests/unit/test_evidence.py::test_tampered_evidence_stamp_fails_targeting
+PASSED tests/unit/test_evidence.py::test_verification_phase_requires_task_none
+PASSED tests/unit/test_evidence.py::test_verification_phase_writes_run_yaml
+PASSED tests/unit/test_first_write.py::test_template_intake_passes_check_gate
+PASSED tests/unit/test_first_write.py::test_template_analyze_passes_check_gate
+PASSED tests/unit/test_first_write.py::test_template_decompose_passes_check_gate
+PASSED tests/unit/test_first_write.py::test_intake_provenance_synonym_names_source
+PASSED tests/unit/test_first_write.py::test_routing_capability_synonym_names_primary
+PASSED tests/unit/test_first_write.py::test_short_claim_id_names_cr001
+PASSED tests/unit/test_first_write.py::test_slice_short_claim_names_cr001
+PASSED tests/unit/test_first_write.py::test_task_slug_id_and_add_synonyms
+PASSED tests/unit/test_frontmatter.py::test_parse_valid_frontmatter
+PASSED tests/unit/test_frontmatter.py::test_parse_missing_delimiters
+PASSED tests/unit/test_frontmatter.py::test_parse_invalid_yaml_frontmatter
+PASSED tests/unit/test_frontmatter.py::test_parse_non_dict_frontmatter
+PASSED tests/unit/test_fsm.py::test_validate_empty_directory
+PASSED tests/unit/test_fsm.py::test_check_gate_lifecycle
+PASSED tests/unit/test_fsm.py::test_fsm_canonical_statuses_and_transitions
+PASSED tests/unit/test_fsm.py::test_decision_blocking_gate
+PASSED tests/unit/test_fsm.py::test_is_change_id_archived
+PASSED tests/unit/test_fsm.py::test_task_design_ref_validation
+PASSED tests/unit/test_fsm.py::test_specified_rejects_missing_live_spec_and_invalid_catalog
+PASSED tests/unit/test_fsm.py::test_specified_accepts_live_spec_and_catalog_without_code
+PASSED tests/unit/test_fsm.py::test_specified_rejects_spec_delta_outside_slice_refs
+PASSED tests/unit/test_fsm.py::test_specified_none_requires_existing_anchors
+PASSED tests/unit/test_fsm.py::test_specified_rejects_normalized_status
+PASSED tests/unit/test_fsm.py::test_specified_rejects_missing_usage_stats_file
+PASSED tests/unit/test_fsm.py::test_targeting_from_analyzed_skips_specify
+PASSED tests/unit/test_fsm.py::test_targeting_accepts_already_green
+PASSED tests/unit/test_fsm.py::test_targeting_rejects_import_error_red
+PASSED tests/unit/test_fsm.py::test_targeting_rejects_private_red_test
+PASSED tests/unit/test_fsm.py::test_implemented_rejects_stale_green_after_spec_change
+PASSED tests/unit/test_fsm.py::test_converged_rejects_wiped_added_spec_after_specify
+PASSED tests/unit/test_fsm.py::test_converged_rejects_removed_spec_still_on_disk
+PASSED tests/unit/test_fsm.py::test_converged_without_spec_delta_skips_disk_check
+PASSED tests/unit/test_fsm.py::test_decomposed_rejects_task_without_budget
+PASSED tests/unit/test_fsm.py::test_decomposed_rejects_fifty_allowed_paths
+PASSED tests/unit/test_fsm.py::test_targeting_rejects_src_in_red_changed_paths
+PASSED tests/unit/test_fsm.py::test_analyzed_still_requires_routing_slices_coverage
+PASSED tests/unit/test_fsm.py::test_narrow_analyze_gate_after_full_set
+PASSED tests/unit/test_fsm.py::test_wide_analyze_one_step_closes_analyzed
+PASSED tests/unit/test_fsm.py::test_feature_analyzed_does_not_skip_specify
+PASSED tests/unit/test_fsm.py::test_auto_accept_decisions_does_not_bypass_human_gate
+PASSED tests/unit/test_fsm.py::test_analyzed_accepts_o1_e1_claims
+PASSED tests/unit/test_fsm.py::test_converged_accepts_cancelled_and_superseded_tasks
+PASSED tests/unit/test_fsm.py::test_docs_route_targets_spec_without_src
+PASSED tests/unit/test_fsm.py::test_docs_route_rejects_src_allowed_paths
+PASSED tests/unit/test_fsm.py::test_docs_route_implemented_without_product_regression
+PASSED tests/unit/test_fsm.py::test_code_route_still_requires_regression
+PASSED tests/unit/test_fsm.py::test_ops_route_writes_ops_files_not_src
+PASSED tests/unit/test_fsm.py::test_missing_route_defaults_to_code
+PASSED tests/unit/test_fsm.py::test_route_mismatch_is_error
+PASSED tests/unit/test_fsm.py::test_analyzed_ignores_routing_top_level_unknown_keys
+PASSED tests/unit/test_fsm.py::test_analyzed_ignores_coverage_top_level_unknown_keys
+PASSED tests/unit/test_fsm.py::test_analyzed_accepts_two_slice_files
+PASSED tests/unit/test_fsm.py::test_two_slices_do_not_satisfy_specified_without_live_spec
+PASSED tests/unit/test_fsm.py::test_analyze_skill_does_not_freeze_single_slice
+PASSED tests/unit/test_fsm.py::test_analyzed_does_not_require_analysis_md
+PASSED tests/unit/test_fsm.py::test_analyze_skill_marks_analysis_md_optional
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t1_green_evidence_in_red_folder_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t2_red_evidence_with_passed_result_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t3_converged_gate_fails_with_pending_tasks
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t3_converged_accepts_cancelled_task
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t4_evidence_for_nonexistent_task_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t5_status_mismatch_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t7_broken_spec_anchor_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_f004_path_traversal_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t8_rearchive_collision_fails
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_n10_missing_spec_root_fails
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_t4_evidence_with_empty_tasks_directory_rejected
+PASSED tests/unit/test_fsm_mutations.py::test_mutation_lock_hash_mismatch_rejected
+PASSED tests/unit/test_graph.py::test_empty_graph
+PASSED tests/unit/test_graph.py::test_linear_dependency
+PASSED tests/unit/test_graph.py::test_branching_and_merging_dag
+PASSED tests/unit/test_graph.py::test_direct_cycle
+PASSED tests/unit/test_graph.py::test_indirect_cycle
+PASSED tests/unit/test_halt_contract.py::test_halt_schema_is_draft_2020
+PASSED tests/unit/test_halt_contract.py::test_next_json_done_halt_matches_contract
+PASSED tests/unit/test_halt_contract.py::test_next_json_decision_halt_matches_contract
+PASSED tests/unit/test_halt_contract.py::test_next_json_spec_halt_matches_contract
+PASSED tests/unit/test_halt_contract.py::test_next_json_blocked_halt_matches_contract
+PASSED tests/unit/test_halt_contract.py::test_halt_schema_rejects_push_and_inspect_command
+PASSED tests/unit/test_halt_contract.py::test_ready_step_has_null_halt
+PASSED tests/unit/test_halt_contract.py::test_installer_adapters_do_not_vendor_oracle
+PASSED tests/unit/test_hasher.py::test_hasher_skips_transient_caches
+PASSED tests/unit/test_hasher.py::test_installer_scripts_declare_cache_skip
+PASSED tests/unit/test_hasher.py::test_hasher_deterministic
+PASSED tests/unit/test_hasher.py::test_hasher_sensitivity_on_single_char_change
+PASSED tests/unit/test_hasher.py::test_gitattributes_pins_lf_for_shell_scripts
+PASSED tests/unit/test_hasher.py::test_product_baseline_revision_ignores_timestamp_and_tracks_spec_src
+PASSED tests/unit/test_installer_skills_dir.py::test_installer_passes_bundle_skills_dir
+PASSED tests/unit/test_integrity.py::test_extract_claims_from_request
+PASSED tests/unit/test_integrity.py::test_extract_claims_from_request_s02_labels
+PASSED tests/unit/test_integrity.py::test_find_spec_anchors
+PASSED tests/unit/test_integrity.py::test_validate_coverage_completeness_valid
+PASSED tests/unit/test_integrity.py::test_validate_coverage_completeness_missing_and_orphan
+PASSED tests/unit/test_integrity.py::test_source_uses_private_symbols_detects_attr_and_import
+PASSED tests/unit/test_integrity.py::test_validate_spec_ref_success
+PASSED tests/unit/test_integrity.py::test_validate_spec_ref_rejects_path_traversal
+PASSED tests/unit/test_integrity.py::test_validate_decision_ref_rejects_path_traversal
+PASSED tests/unit/test_leash.py::test_envelope_schema_is_draft_2020
+PASSED tests/unit/test_leash.py::test_next_json_intake_envelope_excludes_src
+PASSED tests/unit/test_leash.py::test_next_json_analyze_has_envelope_halt_null
+PASSED tests/unit/test_leash.py::test_next_json_declare_envelope_keeps_tests_and_task_paths
+PASSED tests/unit/test_leash.py::test_next_json_implement_envelope_uses_task_allowed_paths
+PASSED tests/unit/test_leash.py::test_leash_contract_requires_host_must
+PASSED tests/unit/test_leash.py::test_next_json_done_halt_has_null_envelope
+PASSED tests/unit/test_leash.py::test_leash_intake_rejects_src_file
+PASSED tests/unit/test_leash.py::test_leash_intake_allows_change_request
+PASSED tests/unit/test_leash.py::test_leash_advisory_same_violations_exit_zero
+PASSED tests/unit/test_leash.py::test_leash_exempt_path_when_no_ready_step
+PASSED tests/unit/test_leash.py::test_leash_orphan_src_without_change
+PASSED tests/unit/test_leash.py::test_leash_draft_src_is_orphan
+PASSED tests/unit/test_leash.py::test_leash_draft_spec_is_not_orphan
+PASSED tests/unit/test_leash.py::test_leash_accepted_spec_is_orphan
+PASSED tests/unit/test_leash.py::test_leash_implement_covers_allowed_src
+PASSED tests/unit/test_leash.py::test_leash_docs_route_allows_spec_rejects_src
+PASSED tests/unit/test_leash.py::test_leash_git_diff_rejects_src_on_intake
+PASSED tests/unit/test_llm_adapter.py::test_canonical_skills_bind_worker_to_llm
+PASSED tests/unit/test_llm_adapter.py::test_intake_skill_forbids_provenance_yaml
+PASSED tests/unit/test_llm_adapter.py::test_intake_skill_does_not_teach_src_writes
+PASSED tests/unit/test_llm_adapter.py::test_analyze_skill_follows_next_pass
+PASSED tests/unit/test_llm_adapter.py::test_specify_skill_follows_next_pass
+PASSED tests/unit/test_llm_adapter.py::test_declare_and_implement_call_evidence_runner
+PASSED tests/unit/test_llm_adapter.py::test_verify_archives_via_kernel
+PASSED tests/unit/test_llm_adapter.py::test_run_skill_is_through_mode
+PASSED tests/unit/test_llm_adapter.py::test_worker_skills_do_not_instruct_writing_accepted_status
+PASSED tests/unit/test_llm_adapter.py::test_product_agents_template_defers_to_core
+PASSED tests/unit/test_llm_adapter.py::test_core_and_worker_glossary
+PASSED tests/unit/test_lock.py::test_workflow_defaults_when_absent
+PASSED tests/unit/test_lock.py::test_workflow_rejects_invalid_call_width
+PASSED tests/unit/test_lock.py::test_workflow_rejects_invalid_leash
+PASSED tests/unit/test_lock.py::test_workflow_accepts_yaml11_off_boolean
+PASSED tests/unit/test_lock.py::test_format_lock_yaml_pins_profile
+PASSED tests/unit/test_lock.py::test_layout_mismatch_call_width
+PASSED tests/unit/test_lock.py::test_layout_accepts_aligned_narrow
+PASSED tests/unit/test_lock.py::test_lock_schema_version_errors_fail_closed
+PASSED tests/unit/test_lock.py::test_lock_pin_validates_against_lock_contract_v3
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_manifest_tracks_core_tampering[tamper-SEC-02: editing Core code must change the pinned content hash]
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_manifest_tracks_core_tampering[delete-SEC-02: deleting a Core file must change the pinned content hash]
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_manifest_tracks_core_tampering[rename-SEC-02: renaming a Core file must change the pinned content hash]
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_manifest_tracks_core_tampering[entrypoint-SEC-02: changing declared entrypoints must change the hash]
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_manifest_digest_is_deterministic_for_same_tree
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_clean_checkout_with_out_of_envelope_commit_fails_ci
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_untracked_files_stay_checked_alongside_commit_range
+PASSED tests/unit/test_manifest_and_ci_leash.py::test_leash_rejects_head_without_base
+PASSED tests/unit/test_queue.py::test_step_contracts_match_phase_contracts
+PASSED tests/unit/test_queue.py::test_next_picks_lowest_change_id
+PASSED tests/unit/test_queue.py::test_next_declare_binds_first_pending_task
+PASSED tests/unit/test_queue.py::test_next_empty_product_is_intake
+PASSED tests/unit/test_queue.py::test_next_json_empty_product_has_done_halt
+PASSED tests/unit/test_queue.py::test_next_blocked_on_decision_exits_without_ready
+PASSED tests/unit/test_queue.py::test_next_json_and_no_writes
+PASSED tests/unit/test_queue.py::test_next_step_filter_and_change_scope
+PASSED tests/unit/test_queue.py::test_next_implement_after_target_confirmed
+PASSED tests/unit/test_queue.py::test_next_human_declare_checklist
+PASSED tests/unit/test_queue.py::test_next_human_blocked_is_human_gate
+PASSED tests/unit/test_queue.py::test_next_analyze_json_names_routing_pass
+PASSED tests/unit/test_queue.py::test_next_analyze_wide_still_one_slice
+PASSED tests/unit/test_queue.py::test_next_human_analyze_routing_skips_analyzed_gate
+PASSED tests/unit/test_queue.py::test_next_human_analyze_coverage_uses_kernel
+PASSED tests/unit/test_queue.py::test_next_json_blocked_decision_has_halt_choices
+PASSED tests/unit/test_receipts.py::test_local_profile_records_chain_and_declares_weak_guarantee
+PASSED tests/unit/test_receipts.py::test_broker_signed_receipt_verifies_against_trust_roots
+PASSED tests/unit/test_receipts.py::test_broker_signed_requires_host_key_outside_worker_surface
+PASSED tests/unit/test_receipts.py::test_edited_entry_is_detected
+PASSED tests/unit/test_receipts.py::test_truncated_journal_is_detected
+PASSED tests/unit/test_receipts.py::test_replaced_history_is_detected
+PASSED tests/unit/test_receipts.py::test_stale_receipt_does_not_count_after_artifact_changed
+PASSED tests/unit/test_receipts.py::test_core_never_offers_a_merge_command
+PASSED tests/unit/test_schemas.py::test_all_expected_schemas_loaded
+PASSED tests/unit/test_schemas.py::test_change_schema_valid_and_invalid
+PASSED tests/unit/test_schemas.py::test_task_schema_validation
+PASSED tests/unit/test_schemas.py::test_slice_schema_validation
+PASSED tests/unit/test_schemas.py::test_coverage_schema_validation
+PASSED tests/unit/test_schemas.py::test_evidence_schema_validation
+PASSED tests/unit/test_schemas.py::test_decision_schema_validation
+PASSED tests/unit/test_schemas.py::test_capability_schema_validation
+PASSED tests/unit/test_schemas.py::test_routing_schema_validation
+PASSED tests/unit/test_schemas.py::test_change_source_rejects_invented_keys
+PASSED tests/unit/test_schemas.py::test_spec_delta_schema_validation
+PASSED tests/unit/test_schemas.py::test_bootstrap_decision_schema_validation
+PASSED tests/unit/test_schemas.py::test_schema_id_version_matches_declared_schema_version
+PASSED tests/unit/test_skills_core_state.py::test_skills_do_not_instruct_hand_status_writes
+PASSED tests/unit/test_skills_core_state.py::test_single_step_skills_advance_after_check_gate
+PASSED tests/unit/test_skills_core_state.py::test_skill_core_command_contract
+PASSED tests/unit/test_skills_core_state.py::test_run_skill_defers_advance_to_single_gate_cycle
+PASSED tests/unit/test_spec_style.py::test_specify_skill_ears_does_not_replace_live_spec
+PASSED tests/unit/test_spec_style.py::test_declare_skill_pbt_is_optional_not_hidden_replacement
+PASSED tests/unit/test_spec_style.py::test_bench_docs_ru_en_section_parity
+PASSED tests/unit/test_spec_style.py::test_docs_forbid_removed_lifecycle_tokens
+PASSED tests/unit/test_specify.py::test_next_specify_pass_names_first_slice
+PASSED tests/unit/test_specify.py::test_next_specify_pass_second_slice_then_close
+PASSED tests/unit/test_specify.py::test_next_after_analyze_selects_specify_slice
+PASSED tests/unit/test_specify.py::test_next_specify_json_omits_spec_tree
+PASSED tests/unit/test_specify.py::test_next_specify_close_when_slices_specified
+PASSED tests/unit/test_specify.py::test_next_human_specify_slice_skips_specified_gate
+PASSED tests/unit/test_sync_assets.py::test_failed_generation_keeps_previous_bundle
+PASSED tests/unit/test_sync_assets.py::test_swap_rollback_on_rename_failure
+PASSED tests/unit/test_sync_assets.py::test_stale_temp_dirs_cleaned
+PASSED tests/unit/test_sync_assets.py::test_successful_sync_replaces_bundle
+PASSED tests/unit/test_sync_assets.py::test_check_detects_drift_without_modification
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_init_py_is_hashed_in_manifest
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_tampered_init_py_detected_by_check
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_tampered_init_py_invalidates_bundle
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_removed_marker_and_extra_file_detected
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_junction_inside_bundle_rejected
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_broken_link_inside_bundle_rejected
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_check_rejects_reparse_in_committed_bundle
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_recovery_commits_verified_next_when_prev_tampered
+PASSED tests/unit/test_sync_assets_hash_coverage.py::test_ambiguous_state_deletes_nothing
+PASSED tests/unit/test_sync_assets_recovery.py::test_clean_sync_and_check
+PASSED tests/unit/test_sync_assets_recovery.py::test_kill_between_renames_restores_previous_bundle
+PASSED tests/unit/test_sync_assets_recovery.py::test_kill_after_full_swap_cleans_stale_only
+PASSED tests/unit/test_sync_assets_recovery.py::test_recovered_then_resync_reaches_new_bundle
+PASSED tests/unit/test_sync_assets_recovery.py::test_corrupted_journal_stops_without_deletion
+PASSED tests/unit/test_sync_assets_recovery.py::test_invalid_target_falls_back_to_valid_bundle
+PASSED tests/unit/test_sync_assets_recovery.py::test_extra_packaged_file_makes_bundle_invalid
+PASSED tests/unit/test_templates.py::test_change_template_valid
+PASSED tests/unit/test_templates.py::test_coverage_template_valid
+PASSED tests/unit/test_templates.py::test_routing_template_valid
+PASSED tests/unit/test_templates.py::test_slice_template_valid
+PASSED tests/unit/test_templates.py::test_task_template_valid
+PASSED tests/unit/test_templates.py::test_spec_delta_template_valid
+PASSED tests/unit/test_templates.py::test_decision_template_valid
+PASSED tests/unit/test_templates.py::test_spec_readme_ears_alongside_rfc2119
+PASSED tests/unit/test_templates.py::test_capabilities_template_valid
+PASSED tests/unit/test_templates.py::test_evidence_templates_valid
+PASSED tests/unit/test_v3_red_acceptance.py::test_f01_archive_cannot_skip_gate_by_hand_set_converged
+PASSED tests/unit/test_v3_red_acceptance.py::test_f02_converged_gate_does_not_demand_regression_for_docs_route
+PASSED tests/unit/test_v3_red_acceptance.py::test_f03_spec_rejection_returns_change_to_analyzed
+PASSED tests/unit/test_v3_red_acceptance.py::test_f04_passing_analyzed_gate_advances_status_out_of_draft
+PASSED tests/unit/test_v3_red_acceptance.py::test_b01_installed_wheel_ships_schemas_and_templates
+PASSED tests/unit/test_v3_red_acceptance.py::test_b04_synthetic_green_command_is_not_authentic_evidence
+PASSED tests/unit/test_v3_red_acceptance.py::test_sec02_framework_hash_covers_core_source
+PASSED tests/unit/test_v3_red_acceptance.py::test_sec03_gate_journal_is_inside_the_worker_write_boundary
+PASSED tests/unit/test_v3_red_acceptance.py::test_sec04_task_envelope_cannot_escape_slice
+PASSED tests/unit/test_v3_red_acceptance.py::test_c01_gate_spam_does_not_inflate_process_score
+PASSED tests/unit/test_version_consistency.py::test_version_file_is_release_version
+PASSED tests/unit/test_version_consistency.py::test_pyproject_and_dunder_version_match
+PASSED tests/unit/test_version_consistency.py::test_templates_use_schema_valid_version_marker
+PASSED tests/unit/test_version_consistency.py::test_release_version_is_not_duplicated_in_current_sources
+PASSED tests/integration/test_artifact_atomic_io.py::test_concurrent_create_race
+PASSED tests/integration/test_artifact_atomic_io.py::test_update_failure_preserves_original_file
+PASSED tests/integration/test_artifact_atomic_io.py::test_readback_checksum_validation_failure_aborts
+PASSED tests/integration/test_artifact_atomic_io.py::test_atomic_create_and_replace_lifecycle
+PASSED tests/integration/test_artifact_atomic_io.py::test_atomic_create_fails_if_already_exists
+PASSED tests/integration/test_artifact_atomic_io.py::test_atomic_replace_fails_if_not_found
+PASSED tests/integration/test_artifact_atomic_io.py::test_replace_error_preserves_original_file
+PASSED tests/integration/test_artifact_atomic_io.py::test_staging_cleanup_on_success_and_failure
+PASSED tests/integration/test_artifact_atomic_io.py::test_real_subprocess_concurrent_atomic_create
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_describe
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_create_via_stdin
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_core_owned_field_denied
+PASSED tests/integration/test_artifact_cli.py::test_subprocess_artifact_update_retry_and_idempotency
+PASSED tests/integration/test_artifact_cli.py::test_aw37_cli_create_missing_change_authority_rejected
+PASSED tests/integration/test_artifact_cli.py::test_aw38_cli_create_missing_content_hash_rejected
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_describe
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_create_update_validate
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_artifact_input_validation_controls
+PASSED tests/integration/test_artifact_cli.py::test_isolated_wheel_packaged_schema_removal_and_corruption
+PASSED tests/integration/test_artifact_compatibility.py::test_manual_artifact_preservation_open_extension_fields_comments_crlf
+PASSED tests/integration/test_artifact_compatibility.py::test_canonicalize_metadata_formatting_opt_in_hash_binding
+PASSED tests/integration/test_artifact_compatibility.py::test_all_route_types_scaffold_and_update
+PASSED tests/integration/test_artifact_crash_recovery.py::test_crash_before_publish_restores_previous_state
+PASSED tests/integration/test_artifact_crash_recovery.py::test_crash_after_publish_finalizes_committed_receipt
+PASSED tests/integration/test_artifact_crash_recovery.py::test_ambiguous_external_edit_stops_recovery_without_overwrite
+PASSED tests/integration/test_artifact_crash_recovery.py::test_corrupt_journal_record_stops_recovery_failing_closed
+PASSED tests/integration/test_artifact_crash_recovery.py::test_receipt_failure_after_publish_preserves_journal_state_and_raises
+PASSED tests/integration/test_artifact_crash_recovery.py::test_real_subprocess_hard_kill_prepare_boundary_recovery
+PASSED tests/integration/test_artifact_crash_recovery.py::test_real_subprocess_hard_kill_publish_boundary_recovery
+PASSED tests/integration/test_artifact_evidence.py::test_verification_phase_with_task_param_rejected
+PASSED tests/integration/test_artifact_evidence.py::test_verification_phase_writes_run_yaml
+PASSED tests/integration/test_artifact_evidence.py::test_cli_evidence_verification_subprocess
+PASSED tests/integration/test_artifact_indexes.py::test_scaffold_change_schema_valid_without_bogus_fields
+PASSED tests/integration/test_artifact_indexes.py::test_update_change_child_index_requires_real_child_on_disk
+PASSED tests/integration/test_artifact_indexes.py::test_update_change_child_index_success
+PASSED tests/integration/test_artifact_indexes.py::test_coverage_derived_serialization_validation
+PASSED tests/integration/test_artifact_locking.py::test_product_mutation_lock_mutual_exclusion
+PASSED tests/integration/test_artifact_locking.py::test_product_mutation_lock_reentry_or_sequential
+PASSED tests/integration/test_artifact_locking.py::test_stale_lock_recovery_dead_pid
+PASSED tests/integration/test_artifact_locking.py::test_active_pid_lock_refused
+PASSED tests/integration/test_artifact_locking.py::test_evidence_contends_on_product_mutation_lock
+PASSED tests/integration/test_artifact_locking.py::test_real_subprocess_product_mutation_lock_contention
+PASSED tests/integration/test_artifact_security.py::test_security_unauthorized_status_patch_attack
+PASSED tests/integration/test_artifact_security.py::test_security_path_traversal_and_protected_file_attack
+PASSED tests/integration/test_artifact_security.py::test_security_malformed_input_rejection_no_side_effects
+PASSED tests/integration/test_artifact_security.py::test_security_unauthorized_context_denied
+PASSED tests/integration/test_artifact_security.py::test_aw21_reproduce_security_failures
+PASSED tests/integration/test_artifact_security.py::test_security_windows_ads_device_unc_protection
+PASSED tests/integration/test_artifact_security.py::test_aw37_cli_and_service_authority_probes
+PASSED tests/integration/test_artifact_transitions.py::test_generic_patch_status_override_rejected
+PASSED tests/integration/test_artifact_transitions.py::test_nested_status_smuggling_rejected
+PASSED tests/integration/test_artifact_transitions.py::test_crash_recovery_between_journal_and_status_write
+PASSED tests/integration/test_artifact_transitions.py::test_duplicated_human_gate_action_fails
+PASSED tests/integration/test_core_transitions.py::test_status_jump_normalized_to_converged_is_rejected
+PASSED tests/integration/test_core_transitions.py::test_advance_records_receipt_that_matches_change_status
+PASSED tests/integration/test_core_transitions.py::test_hand_edited_status_without_receipt_halts_the_queue
+PASSED tests/integration/test_core_transitions.py::test_crash_between_receipt_and_status_write_is_resumable
+PASSED tests/integration/test_core_transitions.py::test_full_analyze_cycle_advances_and_hands_off_to_specify
+PASSED tests/integration/test_core_transitions.py::test_hand_set_advanced_status_is_rejected_in_every_state
+PASSED tests/integration/test_core_transitions.py::test_partial_receipt_chain_does_not_satisfy_advanced_status
+PASSED tests/integration/test_core_transitions.py::test_state_command_writes_core_owned_task_status
+PASSED tests/integration/test_distribution_and_upgrade.py::test_scaffold_creates_minimal_package_without_closing_intake
+PASSED tests/integration/test_distribution_and_upgrade.py::test_scaffold_is_deterministic_and_refuses_collisions
+PASSED tests/integration/test_distribution_and_upgrade.py::test_scaffold_rejects_bad_ids_and_routes
+PASSED tests/integration/test_distribution_and_upgrade.py::test_new_cli_reports_success
+PASSED tests/integration/test_distribution_and_upgrade.py::test_wheel_mode_install_uses_bundle_without_source_checkout
+PASSED tests/integration/test_distribution_and_upgrade.py::test_fail_closed_upgrade_blocks_on_active_changes
+PASSED tests/integration/test_distribution_and_upgrade.py::test_source_and_bundle_schemas_are_semantically_identical
+PASSED tests/integration/test_installer.py::test_framework_content_hash_consistency
+PASSED tests/integration/test_installer.py::test_fresh_installation
+PASSED tests/integration/test_installer.py::test_idempotent_upgrade_preserves_custom_files
+PASSED tests/integration/test_installer.py::test_agents_md_bridge_preserves_host_and_is_idempotent
+PASSED tests/integration/test_installer.py::test_agents_md_preserve_and_override_effective_target
+PASSED tests/integration/test_installer.py::test_agents_md_rejects_damaged_markers_without_write
+PASSED tests/integration/test_installer.py::test_agents_md_replace_requires_existing_effective_file
+PASSED tests/integration/test_installer.py::test_force_upgrade_with_modified_lock
+PASSED tests/integration/test_installer.py::test_install_pins_narrow_call_width_from_config
+PASSED tests/integration/test_installer.py::test_install_rejects_invalid_call_width
+PASSED tests/integration/test_installer.py::test_nested_checkout_links_adapter_skills
+PASSED tests/integration/test_installer.py::test_nested_checkout_copy_mode_stamps_skills
+PASSED tests/integration/test_installer.py::test_explicit_link_without_nested_checkout_fails
+PASSED tests/integration/test_installer.py::test_install_rejects_invalid_leash
+PASSED tests/integration/test_installer.py::test_enforce_hook_blocks_orphan_src_commit
+PASSED tests/integration/test_installer.py::test_advisory_hook_allows_orphan_commit
+PASSED tests/integration/test_installer.py::test_enforce_does_not_overwrite_foreign_pre_commit
+PASSED tests/integration/test_layout.py::test_valid_installed_product_layout
+PASSED tests/integration/test_layout.py::test_missing_lock_detected
+PASSED tests/integration/test_layout.py::test_legacy_forbidden_path_detected
+PASSED tests/integration/test_layout.py::test_missing_generated_skill_detected
+PASSED tests/integration/test_layout.py::test_linked_skill_not_a_symlink_detected
+PASSED tests/integration/test_layout.py::test_invalid_call_width_detected
+PASSED tests/integration/test_layout.py::test_call_width_mismatch_detected
+PASSED tests/integration/test_route_convergence.py::test_route_reaches_archive_with_passing_converged_gate[code]
+PASSED tests/integration/test_route_convergence.py::test_route_reaches_archive_with_passing_converged_gate[docs]
+PASSED tests/integration/test_route_convergence.py::test_route_reaches_archive_with_passing_converged_gate[ops]
+PASSED tests/integration/test_route_convergence.py::test_hand_set_terminal_rejected_archives_without_converged_gate
+PASSED tests/integration/test_route_convergence.py::test_force_cannot_skip_converged_gate_on_hand_set_converged
+PASSED tests/integration/test_validator_cli.py::test_cli_validate_and_check_gate
+PASSED tests/integration/test_validator_cli.py::test_cli_validate_layout
+PASSED tests/integration/test_validator_cli.py::test_cli_lint_context
+PASSED tests/integration/test_validator_cli.py::test_cli_lint_context_missing_spec_ref_is_error
+PASSED tests/integration/test_validator_cli.py::test_cli_lint_context_rejects_path_traversal
+PASSED tests/integration/test_validator_cli.py::test_cli_evidence_red_already_green
+PASSED tests/integration/test_validator_cli.py::test_cli_evidence_requires_command
+PASSED tests/integration/test_wheel_evidence.py::test_release_tools_read_canonical_version_file
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_written_only_on_explicit_call
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_refuses_dirty_tree
+PASSED tests/integration/test_wheel_evidence.py::test_evidence_no_silent_overwrite
+PASSED tests/integration/test_wheel_smoke.py::test_wheel_build_install_and_cli_smoke
+PASSED tests/integration/test_wheel_smoke.py::test_wheel_smoke_leaves_working_tree_clean
+PASSED tests/e2e/test_artifact_workflow.py::test_e2e_artifact_writer_workflow_feature
+PASSED tests/e2e/test_artifact_workflow.py::test_e2e_artifact_writer_workflow_docs_route
+PASSED tests/e2e/test_failure_modes.py::test_cyclic_tasks_fail_validation
+PASSED tests/e2e/test_failure_modes.py::test_orphan_claim_in_coverage_fails_gate
+PASSED tests/e2e/test_failure_modes.py::test_request_md_missing_fails_validation
+PASSED tests/e2e/test_failure_modes.py::test_request_md_claim_tampering_breaks_traceability
+PASSED tests/e2e/test_golden_workflow.py::test_golden_lifecycle_flow
+PASSED tests/e2e/test_noop_workflow.py::test_noop_not_reproduced_lifecycle
+PASSED tests/e2e/test_noop_workflow.py::test_not_reproduced_transitions_from_analyzing_and_verifying
+PASSED tests/e2e/test_terminal_workflows.py::test_rejected_change_lifecycle_and_archival
+PASSED tests/e2e/test_terminal_workflows.py::test_duplicate_change_lifecycle_and_archival
+SKIPPED [1] tests\unit\test_artifact_policy.py:60: Symlink creation not supported on this platform/privilege
+SKIPPED [1] tests\unit\test_spec_style.py:30: no local PBT runner
+SKIPPED [1] tests\integration\test_artifact_security.py:203: Symlink creation unavailable on host platform: [WinError 1314] ������ �� �������� ���������� �������: '<tmp>\\pytest-of-<user>\\pytest-1477\\test_security_real_platform_sy0\\outside_dir' -> '<tmp>\\pytest-of-<user>\\pytest-1477\\test_security_real_platform_sy0\\repo\\linked_dir'
+530 passed, 3 skipped in 293.48s (0:04:53)
+--- pytest rc=0

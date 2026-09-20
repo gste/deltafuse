@@ -1,0 +1,40 @@
+AW-46 check label=backlog-checker-tests
+argv=python -m pytest backlog/schema-driven-artifact-writer/tests/test_check_backlog.py -v -rA
+date_utc=2026-09-20T12:38:59Z
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo>
+configfile: pyproject.toml
+collected 12 items
+
+backlog\schema-driven-artifact-writer\tests\test_check_backlog.py ...... [ 50%]
+......                                                                   [100%]
+
+=================================== PASSES ====================================
+____________________________ test_main_exit_codes _____________________________
+---------------------------- Captured stdout call -----------------------------
+note: status-string checks only; PASS labels and completed dependencies still require inspected source-bound evidence before execution (EXECUTOR gate 6).
+cards: 2; unfinished: 1
+declared entry: 'AW-02'; computed entry: 'AW-02'
+no violations
+note: status-string checks only; PASS labels and completed dependencies still require inspected source-bound evidence before execution (EXECUTOR gate 6).
+cards: 2; unfinished: 1
+declared entry: 'AW-02'; computed entry: None
+violations (2):
+  - AW-02: unknown dependency 'AW-99'
+  - no dependency-ready card found although unfinished cards exist (AW-02)
+=========================== short test summary info ===========================
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_valid_ready_selection
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_valid_blocked_by_environment_reports_requirement
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_unknown_dependency_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_duplicate_card_ids_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_duplicate_check_ids_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_dependency_cycle_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_stale_handoff_entry_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_false_no_work_remaining_claim_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_aw20_unfinished_dependency_with_passed_labels_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_main_exit_codes
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_file_checks_card_status_mismatch_detected
+PASSED backlog/schema-driven-artifact-writer/tests/test_check_backlog.py::test_file_checks_missing_card_file_detected
+============================= 12 passed in 0.09s ==============================
+--- rc=0

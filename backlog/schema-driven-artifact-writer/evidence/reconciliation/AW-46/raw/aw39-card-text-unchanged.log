@@ -1,0 +1,4 @@
+AW-46 check label=aw39-card-text-unchanged
+argv=git diff --exit-code -- backlog/schema-driven-artifact-writer/cards/AW-39.md backlog/schema-driven-artifact-writer/results/AW-39.md src scripts process docs
+date_utc=2026-09-20T12:39:02Z
+--- rc=0

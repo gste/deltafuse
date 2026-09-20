@@ -1,0 +1,7 @@
+AW-46 check label=git-diff-check
+argv=git diff --check
+date_utc=2026-09-20T12:39:01Z
+warning: in the working copy of 'backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'backlog/schema-driven-artifact-writer/cards/AW-42.md', CRLF will be replaced by LF the next time Git touches it
+--- rc=0

@@ -1,0 +1,8 @@
+AW-46 check label=untouched-file-hashes
+argv=python -c import hashlib,sys;[print(hashlib.sha256(open(p,'rb').read()).hexdigest(),p) for p in ['src/deltafuse/core/artifact_patch.py','scripts/evaluate_artifact_writer.py','tests/unit/test_artifact_patch.py','backlog/schema-driven-artifact-writer/cards/AW-39.md']]
+date_utc=2026-09-20T12:39:02Z
+c0659eaab612f3512b39cd6a1c70d032aca92e5d7fc51776bbe5c452c293d950 src/deltafuse/core/artifact_patch.py
+8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3 scripts/evaluate_artifact_writer.py
+5bb512800b8a13b7b2b77e778e2141c050ce2aa825397ea2c32c543bd27d0415 tests/unit/test_artifact_patch.py
+06f1fecf8cdbe5138d1bd64c8960167a87e64836b5415aa2a71c093bb7a02ef2 backlog/schema-driven-artifact-writer/cards/AW-39.md
+--- rc=0

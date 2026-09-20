@@ -1,0 +1,60 @@
+AW-46 run label=green-post-tests-writer-swapped-order-focused variant=writer-swapped
+date_utc=2026-09-20T12:33:16Z
+cwd=<repo>
+argv=python -m pytest -v -rA tests/unit/test_artifact_writer_eval.py tests/unit/test_artifact_patch.py
+sha256 src/deltafuse/core/artifact_patch.py=1e31e56318de20726dcc6254ace39de27dfb9d90db93771e4e0bd5ec491f0e94
+sha256 scripts/evaluate_artifact_writer.py=8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3
+sha256 tests/unit/test_artifact_writer_eval.py=85ed3dae7ed83a86ba1d65121be3be809e016580b95f2d20462b421c1eea7914
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo>
+configfile: pyproject.toml
+collected 21 items
+
+tests\unit\test_artifact_writer_eval.py .........F.....                  [ 71%]
+tests\unit\test_artifact_patch.py ......                                 [100%]
+
+================================== FAILURES ===================================
+_________ test_aw46_escaped_pointer_unescaping_follows_rfc6901_order __________
+
+    def test_aw46_escaped_pointer_unescaping_follows_rfc6901_order():
+        """AW39-R3: ~01 means a literal '~1' key; a swapped replace order resolves it to 'a/b'."""
+        outcome = apply_artifact_patch(
+            _routing_doc({"a~1b": {"summary": "target"}}),
+            {"set": [{"path": "/extension-notes/a~01b/summary", "value": "updated"}]},
+            kind="routing",
+        )
+        notes = outcome.updated_metadata["extension-notes"]
+>       assert notes["a~1b"]["summary"] == "updated", f"'~01' did not decode to '~1': {notes}"
+E       AssertionError: '~01' did not decode to '~1': {'a~1b': {'summary': 'target'}, 'a/b': {'summary': 'updated'}}
+E       assert 'target' == 'updated'
+E         
+E         - updated
+E         + target
+
+tests\unit\test_artifact_writer_eval.py:200: AssertionError
+=================================== PASSES ====================================
+=========================== short test summary info ===========================
+PASSED tests/unit/test_artifact_writer_eval.py::test_eval_corpus_fixture_validity
+PASSED tests/unit/test_artifact_writer_eval.py::test_evaluate_artifact_writer_harness_baseline
+PASSED tests/unit/test_artifact_writer_eval.py::test_independent_oracle_detects_weakened_writer_dropped_semantics
+PASSED tests/unit/test_artifact_writer_eval.py::test_independent_oracle_detects_weakened_writer_unauthorized_status
+PASSED tests/unit/test_artifact_writer_eval.py::test_paired_model_mode_reports_unavailable_endpoint_without_fake_claims
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw40_reproduce_synthetic_score_substitution_on_empty_or_adapter_corpus
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw39_routing_update_semantic_rejection_and_acceptance
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw39_json_pointer_escaping_and_nested_removal
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_set_writes_decoded_nested_keys
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_remove_targets_only_the_nested_key
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_missing_nested_path_fails_loudly_instead_of_being_skipped
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_oracle_rejects_literal_tilde_and_missing_nested_set_targets
+PASSED tests/unit/test_artifact_writer_eval.py::test_aw46_oracle_checks_nested_removal_location_not_top_level_presence
+PASSED tests/unit/test_artifact_patch.py::test_patch_set_and_remove_basic
+PASSED tests/unit/test_artifact_patch.py::test_immutable_core_owned_field_rejected
+PASSED tests/unit/test_artifact_patch.py::test_array_index_edit_rejected
+PASSED tests/unit/test_artifact_patch.py::test_ancestor_descendant_overlap_rejected
+PASSED tests/unit/test_artifact_patch.py::test_unrelated_extension_fields_preserved
+PASSED tests/unit/test_artifact_patch.py::test_body_preserved_unless_replaced
+FAILED tests/unit/test_artifact_writer_eval.py::test_aw46_escaped_pointer_unescaping_follows_rfc6901_order
+======================== 1 failed, 20 passed in 45.54s ========================
+--- pytest rc=1
