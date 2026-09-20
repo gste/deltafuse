@@ -246,13 +246,15 @@ based on intended future runs. Stop after the selected bounded card.
 Implement ONE dependency-ready Artifact Writer card in the canonical DeltaFuse
 repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-6.md,
 README.md, EXECUTOR.md, RESULT-TEMPLATE.md, PLAN.md, the selected queue.json card
-and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-41
-(dependency-ready after AW-45; environmentally blocked on this host: native
-POSIX concurrency/hard-crash and capable-host symlink/reparse tests need a
-POSIX host and SeCreateSymbolicLinkPrivilege). If that prerequisite is still
-unavailable, record the exact blocker, run `python check_backlog.py
+and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-42
+(reconciliation of final source/evidence; AW-43/AW-44/AW-45/AW-41/AW-40 are
+completed — AW-40's live paired run was executed 2026-09-20 under the
+delivery-verified AMEND-3 transport with 28 raw traces and replayable metrics in
+evaluation/live-run-2026-09-20/). Run `python
+backlog/schema-driven-artifact-writer/check_backlog.py
 backlog/schema-driven-artifact-writer/queue.json` to confirm readiness, and
-stop — do not claim execution or route to AW-40/AW-42/AW-20.
+stop — do not claim execution or route to AW-20 before AW-42 reconciles raw
+evidence against verbatim criteria.
 Recheck actual dependencies and dirty source; preserve unrelated work. Freeze an
 acceptance matrix with VERBATIM original criteria and reopened acceptance IDs;
 split compound criteria into mandatory evidence subrows without weakening them. Capture

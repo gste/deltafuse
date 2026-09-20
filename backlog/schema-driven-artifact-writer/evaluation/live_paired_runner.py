@@ -59,6 +59,15 @@ RAW_DIR = RUN_DIR / "raw"
 SPEC = json.loads((RUN_DIR / "spec.json").read_text(encoding="utf-8"))
 MODEL = SPEC["model"]["model_id"]
 LITTLE_CODER = shutil.which("little-coder") or "little-coder"
+# AMEND-3 transport: call node directly on the CLI entry to bypass the npm
+# .CMD shim (cmd.exe truncates multiline -p args at the first line break).
+NODE = shutil.which("node")
+LC_ENTRY = (Path(shutil.which("little-coder") or "").parent
+            / "node_modules" / "little-coder" / "bin" / "little-coder.mjs")
+OBSERVABILITY_EXT = (
+    r"C:\Users\ghost\workspace\gste\little-coder-extensions"
+    r"\observability-extension\index.ts"
+)
 CORPUS = json.loads(
     (REPO / "tests" / "fixtures" / "artifact_writer_eval" / "eval_corpus.json")
     .read_text(encoding="utf-8")
@@ -67,6 +76,23 @@ REQUIRED_TASK_FIELDS = [
     "title", "kind", "depends_on", "requirement_delta", "spec_refs",
     "allowed_paths", "forbidden_paths", "context_budget",
 ]
+
+
+def captured_user_prompt(trace_path: Path) -> str | None:
+    """First outgoing user message text captured by the observability trace."""
+    if not trace_path.is_file():
+        return None
+    for line in trace_path.read_text(encoding="utf-8").splitlines():
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (e.get("type") == "message.final" and e.get("direction") == "outgoing"
+                and e.get("message", {}).get("role") == "user"):
+            texts = [c.get("text", "")
+                     for c in e["message"].get("content", []) if c.get("type") == "text"]
+            return "\n".join(texts)
+    return None
 
 
 def call_model(prompt: str, timeout_s: int = 240) -> dict:
@@ -78,11 +104,15 @@ def call_model(prompt: str, timeout_s: int = 240) -> dict:
         "fields (no status, changeId, author, created, name, type, "
         "lifecycleStage, metadata or other invented keys)."
     )
-    argv = [LITTLE_CODER, "--model", MODEL, "--no-tools", "--no-session",
-            "--mode", "text", "--system-prompt", sys_prompt, "-p", prompt]
+    argv = [NODE, str(LC_ENTRY), "--model", MODEL, "--no-tools", "--no-session",
+            "--mode", "text", "--no-extensions", "--extension", OBSERVABILITY_EXT,
+            "--system-prompt", sys_prompt, "-p", prompt]
+    # Neutral temp cwd: the CLI injects AGENTS.md project context from cwd as an
+    # extra user message; an empty dir keeps requests free of that context.
+    child_dir = tempfile.mkdtemp(prefix="aw40-call-")
     started = time.time()
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True,
+        proc = subprocess.run(argv, capture_output=True, text=True, cwd=child_dir,
                               encoding="utf-8", errors="replace",
                               timeout=timeout_s)
         ok = proc.returncode == 0
@@ -95,8 +125,13 @@ def call_model(prompt: str, timeout_s: int = 240) -> dict:
         ok = False
         out = ""
         err = f"timeout after {timeout_s}s"
+    captured = captured_user_prompt(Path(child_dir) / ".pi" / "observability" / "trace.ndjson")
+    delivery_verified = captured is not None and captured == prompt
     return {
         "argv": [str(a) for a in argv],
+        "child_cwd": child_dir,
+        "captured_prompt": captured,
+        "delivery_verified": delivery_verified,
         "exit": getattr(proc, "returncode", None),
         "output": out,
         "stderr_tail": err,
@@ -397,19 +432,39 @@ def run_case_arm(case: dict, arm: str, attempt_limit: int, dry_run: bool,
                  trace_dir: Path | None = None) -> dict:
     case_id = case["id"]
     trace_dir = trace_dir or RAW_DIR
+    trace_dir.mkdir(parents=True, exist_ok=True)
     attempts = []
     accepted = False
     final = None
-    for attempt in range(1, attempt_limit + 1):
+    attempt = 0
+    infra_retries = 0
+    while attempt < attempt_limit:
         prompt = arm_a_prompt(case) if arm == "A" else arm_b_prompt(case)
-        if attempt > 1 and attempts:
+        if attempt > 0 and attempts:
             prev = attempts[-1]
             reject = (prev.get("verdict") or {}).get("error") or "rejected"
             prompt += (f"\n\nYOUR PREVIOUS OUTPUT WAS REJECTED: {reject}\n"
                        "Produce a corrected output only.")
         call = call_model(prompt) if not dry_run else {
-            "argv": [], "exit": None, "output": "", "stderr_tail": "dry-run",
+            "argv": [], "child_cwd": None, "captured_prompt": prompt,
+            "delivery_verified": True,
+            "exit": None, "output": "", "stderr_tail": "dry-run",
             "duration_s": 0.0, "ok": True}
+        # AMEND-3: prompt-delivery mismatch is an infrastructure failure, not a
+        # model attempt; record it and retry outside the model attempt budget.
+        if not call["delivery_verified"] and not dry_run:
+            if infra_retries < 3:
+                infra_retries += 1
+                trace = {"case": case_id, "arm": arm, "attempt": attempt + 1,
+                         "prompt": prompt, "call": call,
+                         "verdict": {"first_pass": False, "gate_blocked": False,
+                                     "semantic_correct": False, "infra_invalid": True,
+                                     "error": "delivery_mismatch: captured prompt != intended"}}
+                attempts.append(trace)
+                (trace_dir / f"{case_id}-{arm}{attempt + 1}-infra{infra_retries}.json").write_text(
+                    json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
+                continue
+        attempt += 1
         trace = {"case": case_id, "arm": arm, "attempt": attempt,
                  "prompt": prompt, "call": call}
         verdict = {"first_pass": False, "gate_blocked": False,
@@ -442,7 +497,6 @@ def run_case_arm(case: dict, arm: str, attempt_limit: int, dry_run: bool,
 
         trace["verdict"] = verdict
         attempts.append(trace)
-        trace_dir.mkdir(parents=True, exist_ok=True)
         (trace_dir / f"{case_id}-{arm}{attempt}.json").write_text(
             json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
         if verdict["first_pass"]:

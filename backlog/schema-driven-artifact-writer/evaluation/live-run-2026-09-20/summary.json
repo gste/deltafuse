@@ -1,0 +1,39 @@
+{
+  "run_id": "live-run-2026-09-20-a",
+  "model": "inclusionai/ling-3.0-flash-fin:free",
+  "arms": {
+    "A": {
+      "cases_run": [
+        "CASE-01",
+        "CASE-02",
+        "CASE-03",
+        "CASE-04",
+        "CASE-05",
+        "CASE-06",
+        "CASE-07",
+        "CASE-08"
+      ],
+      "n": 8,
+      "first_pass_valid_rate": 25.0,
+      "semantic_correct_rate": 25.0,
+      "mechanical_retries_total": 12
+    },
+    "B": {
+      "cases_run": [
+        "CASE-01",
+        "CASE-02",
+        "CASE-03",
+        "CASE-04",
+        "CASE-05",
+        "CASE-06",
+        "CASE-07",
+        "CASE-08"
+      ],
+      "n": 8,
+      "first_pass_valid_rate": 100.0,
+      "semantic_correct_rate": 100.0,
+      "mechanical_retries_total": 0
+    }
+  },
+  "exploratory_note": "n=8 per arm; exploratory, see uncertainty_method in spec"
+}

@@ -205,7 +205,63 @@
       "error": "[core_owned_field] Field 'status' target by pointer '/status' is Core-owned and immutable"
     }
   ],
-  "external_model_status": "unavailable_no_endpoint",
+  "external_model_status": "live_run_executed_2026-09-20_delivery_verified",
   "acceptance_status": "open_for_AW-20",
-  "note": "External model endpoint is unavailable in local environment; acceptance remains open for AW-20 without synthetic substitution."
+  "note": "Deterministic harness invariants above; the live paired small-model run was executed 2026-09-20 under the AMEND-3 delivery-verified transport (see live_paired_run and evaluation/live-run-2026-09-20/). Acceptance remains open_for_AW-20 until AW-42/AW-20 close.",
+  "live_paired_run": {
+    "source": "evaluation/live-run-2026-09-20/summary.json (computed from raw/ traces only)",
+    "model_identity": "inclusionai/ling-3.0-flash-fin:free",
+    "delivery_verification": "per-call observability-extension capture byte-identical to intended prompt (28/28 traces; see evaluation/delivery-probe-2026-09-20/ and spec AMEND-3)",
+    "arms": {
+      "A": {
+        "cases_run": [
+          "CASE-01",
+          "CASE-02",
+          "CASE-03",
+          "CASE-04",
+          "CASE-05",
+          "CASE-06",
+          "CASE-07",
+          "CASE-08"
+        ],
+        "n": 8,
+        "first_pass_valid_rate": 25.0,
+        "semantic_correct_rate": 25.0,
+        "mechanical_retries_total": 12
+      },
+      "B": {
+        "cases_run": [
+          "CASE-01",
+          "CASE-02",
+          "CASE-03",
+          "CASE-04",
+          "CASE-05",
+          "CASE-06",
+          "CASE-07",
+          "CASE-08"
+        ],
+        "n": 8,
+        "first_pass_valid_rate": 100.0,
+        "semantic_correct_rate": 100.0,
+        "mechanical_retries_total": 0
+      }
+    },
+    "uncertainty": {
+      "method": "Clopper-Pearson exact binomial 95% CI per arm",
+      "A_first_pass": [
+        3.19,
+        65.09
+      ],
+      "B_first_pass": [
+        63.06,
+        100.0
+      ],
+      "note": "exploratory n=8 per arm; no general model-gain claim"
+    },
+    "forbidden_gate_block": {
+      "A": "0/1 (manual arm never demonstrated Core gate; schema-level rejection only)",
+      "B": "1/1 ([core_owned_field] immutable /status, no disk mutation on denial)"
+    },
+    "retracted_prior_claim": "endpoint unsuitable (2026-09-20 morning) - superseded by AMEND-3 delivery proof"
+  }
 }

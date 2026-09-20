@@ -7,7 +7,7 @@
     "version": "3.1.0",
     "commit": "17786cb040d1ed3cd5636dd4a6b97453c1b77627"
   },
-  "entry": "AW-40",
+  "entry": "AW-42",
   "order": "First unfinished card in execution_order with completed, evidence-verified dependencies; report environmental blockers explicitly.",
   "cards": [
     {
@@ -1584,10 +1584,7 @@
       "id": "AW-40",
       "phase": "J",
       "title": "Replace hardcoded model scores with genuine paired evidence",
-      "status": "in_progress",
-      "environment_blocker": {
-        "requirement": "authorized small-model endpoint that follows structured authoring instructions for protocol-scale payloads; little-coder -> inclusionai/ling-3.0-flash-fin:free probed 2026-09-20 (preregistered spec, pilot + 4/4 reproducibility calls) failed to reproduce requested values; traces in evaluation/live-run-2026-09-20/"
-      },
+      "status": "completed",
       "depends_on": [
         "AW-41"
       ],
@@ -1622,7 +1619,8 @@
         "Preregister both actual manual-authoring and typed-writer arms, equivalent intent/context, budgets, randomization, sample/attempt/stopping rules and uncertainty criteria before collecting outcomes.",
         "Execute real authorized endpoint calls in fresh sessions for both arms using the AW-39 oracle on the final qualified runtime. Record immutable prompts/tool attempts/responses/artifacts/receipts, tokens/time, failures and real model identity.",
         "Derive every count, retry delta and uncertainty result from replayable raw data. No external endpoint means open acceptance, not a local adapter label or synthetic substitute.",
-        "Test rejection of forged aggregate-only evidence, empty corpus, missing arms, mismatched model identities and incomplete runs; a green test must not simply assert the hardcoded score."
+        "Test rejection of forged aggregate-only evidence, empty corpus, missing arms, mismatched model identities and incomplete runs; a green test must not simply assert the hardcoded score.",
+        "Executed 2026-09-20 after delivery verification: AMEND-3 retracted the premature endpoint-unsuitable verdict (cmd.exe truncated multiline prompts at the .CMD shim boundary); measured 8x2 paired run with 28 delivery-verified raw traces; Arm A 25%/12 retries vs Arm B 100%/0 retries, gate 1/1."
       ],
       "red": "run_evaluation on [] with paired_model/small_model must not report qualified, ready_for_AW-20, fixed successes or a 100% improvement.",
       "green": "Both arms have real independently auditable model evidence and computed metrics; no synthetic score reaches qualification. Unavailable/inconclusive required evidence keeps the card and AW-20 open.",
@@ -1638,7 +1636,7 @@
         {
           "id": "AW40-R2",
           "requirement": "Preregister real provider/model identity, corpus, budget, sample/stopping rules, randomization and uncertainty criteria, then execute actual fresh sessions for manual and Writer arms with the AW-39 oracle.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW40-R3",
@@ -1653,17 +1651,15 @@
         {
           "id": "AW40-F1",
           "requirement": "The original requirement is actual fresh manual-arm and Writer-arm model sessions, not honest reporting of an unavailable endpoint. Required evidence: real provider/model identity, preregistered protocol, raw prompts/tool attempts/responses for both arms, independent oracle results and replayed metrics/uncertainty.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW40-F2",
           "requirement": "If no live endpoint or paired traces exist, mark live-execution rows NOT RUN and this card planned/in_progress with a blocker. unavailable_no_endpoint or open_for_AW-20 can PASS the honest-reporting subcheck only; they cannot PASS model execution, qualify the card or unblock AW-42/AW-20.",
-          "status": "open"
+          "status": "passed"
         }
       ],
-      "completion_blockers": [
-        "No genuine paired-model sessions or endpoint evidence established; removing synthetic scores is partial progress only."
-      ]
+      "completion_blockers": []
     },
     {
       "id": "AW-41",

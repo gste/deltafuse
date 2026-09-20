@@ -38,3 +38,6 @@ _builder.py
 
 # Obsidian Task Board plugin
 TASK_BOARD.md
+
+# little-coder local observability session traces (prompt content, local-only)
+.pi/
