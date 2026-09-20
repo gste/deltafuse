@@ -602,7 +602,7 @@ def run_defense_checks(product: Path, case: dict[str, Any], journal: dict[str, A
     Every declared check produces its own result; any failure is a hard
     failure of the whole run regardless of the score.
     """
-    from deltafuse.core.receipts import journal_errors as receipt_journal_errors
+    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
     from deltafuse.core.leash import task_envelope_errors
 
     declared = case.get("defense_checks") or {}

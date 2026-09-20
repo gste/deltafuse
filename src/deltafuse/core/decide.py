@@ -12,8 +12,8 @@ from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 
 from deltafuse.core.fsm import check_gate, find_repo_root
-from deltafuse.core.gate_journal import TERMINAL_STATUSES
-from deltafuse.core import receipts
+from deltafuse.core import gate_receipts
+from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 
@@ -161,7 +161,7 @@ def apply_decision(
 
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
-            receipts.record_receipt(
+            gate_receipts.record_receipt(
                 product_root,
                 kind="spec",
                 status=status,
@@ -215,7 +215,7 @@ def apply_decision(
 
         written = [_rel(product_root, dec_path)]
         dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
-        receipts.record_receipt(
+        gate_receipts.record_receipt(
             product_root,
             kind="decision",
             status=status,

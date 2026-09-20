@@ -18,7 +18,10 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
   16,384 max output, $0.08/$0.28 per MTok. It sits at the 40B boundary and has
   the cheapest output in the class.
 - A full Worker call must fit a **128k token** context window (qualification
-  window).
+  window). This ceiling comes from the production constraint, not from the
+  model: the corporate BYOK deployment the framework targets caps context at
+  128k, and raising it requires a formal request. The reference model's own
+  window is larger (1M) — do not widen the qualification window to match it.
 - Framework-controlled input is bounded by default to **64,000 tokens and 24
   unique files** per call. The rest of the window is a mandatory reserve for
   host/system instructions, tool exchange, and the model's answer.

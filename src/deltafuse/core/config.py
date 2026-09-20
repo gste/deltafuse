@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.receipts import PROFILES
+from deltafuse.core.gate_receipts import PROFILES
 
 KNOWN_TOP_KEYS = {"schema_version", "framework", "paths", "context", "workflow", "project", "adapters"}
 KNOWN_WORKFLOW_KEYS = {

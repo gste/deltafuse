@@ -73,7 +73,7 @@ retry, а `gate_retries` входит в оценку бенчмарка. Это
 | модуль | прямых записей | импортирует Writer/storage |
 |---|---|---|
 | `transitions.py` | 4 (2 с `safe_dump`/`write_text`) | да |
-| `receipts.py` | 3 | **нет** |
+| `gate_receipts.py` | 3 | **нет** |
 | `decide.py` | 2 | да |
 | `evidence.py` | 1 | да |
 | `archiver.py` | 1 | **нет** |
@@ -85,34 +85,47 @@ retry, а `gate_retries` входит в оценку бенчмарка. Это
 `frontmatter` (сам примитив), `installer`, `adapters`, `leash` (этап установки,
 до существования Change).
 
-### `receipts.py` vs `artifact_transactions.py` — проверено, подозрение снято
+### Дубликат источника правды — найден и закрыт
 
-Гипотеза была: дубликат подсистемы, схлопнуть в один источник правды.
-История и связность говорят обратное:
+Первая гипотеза (`receipts.py` дублирует `artifact_transactions.py`) не
+подтвердилась: пересечений импортёров ноль, предметы разные — receipts
+человеческого гейта против receipts записи артефакта.
 
-| | `receipts.py` | `artifact_transactions.py` |
-|---|---|---|
-| строк | 323 | 406 |
-| коммитов | 1 | 6 |
-| последний | 2026-09-12, DF3-007 | 2026-09-19, AW-20 |
-| предмет | versioned **Human Gate** receipts, local/broker-signed integrity profiles | **artifact write** transactions, idempotency, crash recovery |
-| импортёры | `bench/score.py`, `core/config.py`, `core/fsm.py` | `cli.py`, `core/artifacts.py` + 3 теста |
+Но при проверке нашёлся **настоящий** дубликат, в другой паре.
+`gate_journal.py` и `receipts.py` объявляли:
 
-**Пересечения импортёров нет ни одного.** Это две разные подсистемы: receipts
-человеческого гейта и receipts записи артефакта. Общее у них только слово.
+- один и тот же `JOURNAL_REL = ".deltafuse/gate-journal.jsonl"`
+- одинаковый `journal_path()`
+- байт-в-байт одинаковые читатели (`load_clicks` / `load_receipts`)
+- одинаковые enum'ы `kind` и `status`
 
-Решение «источник правды один и наиболее актуальный» к ним поэтому не
-применяется — применять его значит слить две несвязанные вещи. Что действительно
-стоит сделать:
+`receipts.py` (DF3-007, 2026-09-12) — строгое надмножество: те же пять полей
+плюс hash-chain, nonce, профиль подписи и проверка свежести артефакта. Его
+`journal_errors` даже помечает формат соседа как `# legacy line: no receipt
+semantics claimed` — то есть знал о нём.
 
-1. Переименовать так, чтобы различие было видно (`gate_receipts` vs
-   `write_receipts` или эквивалент). Коллизия имён и породила гипотезу.
-2. Проверить три прямые записи в `receipts.py` на предмет перевода на Writer —
-   это часть основной работы пункта, а не отдельная.
+Писатель `gate_journal.append_click` **не вызывался нигде**. Живой оставалась
+только константа `TERMINAL_STATUSES` и предикат `has_click`.
 
-Если после чтения кода окажется, что предметы всё же пересекаются — решение о
-едином источнике возвращается в силу, и актуальный из двух —
-`artifact_transactions.py`.
+**Сделано:**
+
+- `core/receipts.py` → `core/gate_receipts.py`, `tests/unit/test_receipts.py` →
+  `test_gate_receipts.py`
+- `TERMINAL_STATUSES` и `has_click` перенесены в `gate_receipts.py`;
+  `has_click` теперь читает через `load_receipts`, дубликат читателя устранён
+- `core/gate_journal.py` удалён вместе с мёртвым `append_click` и вторым
+  объявлением пути
+- импорты обновлены в `decide.py`, `fsm.py`, `integrity.py`, `config.py`,
+  `bench/score.py`
+
+`has_click` **намеренно оставлен отдельным предикатом**, а не заменён на
+`has_valid_receipt`: второй дополнительно требует, чтобы байты артефакта не
+изменились с момента клика. Это разная семантика, `fsm.py` осознанно использует
+оба. Схождение их в один — отдельное решение с поведенческим эффектом, не
+переименование.
+
+Остаётся в рамках основной работы пункта: три прямые записи в
+`gate_receipts.py` проверить на перевод на Writer.
 
 ### Рекомендация по выполнению
 

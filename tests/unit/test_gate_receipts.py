@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.core import receipts
+from deltafuse.core import gate_receipts as receipts
 from deltafuse.core.installer import install
 
 import hashlib

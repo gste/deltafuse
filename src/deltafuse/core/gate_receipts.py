@@ -1,16 +1,12 @@
-"""Human Gate receipts and integrity profiles (DF3-007 / DR-3.0-3).
+"""Human Gate receipt chain: the single writer and reader of `.deltafuse/gate-journal.jsonl`.
 
-Two profiles:
+Not to be confused with `artifact_transactions.py`, which owns receipts for artifact
+writes (idempotency, crash recovery). This module owns receipts for human gate
+verdicts (decision / spec accept-reject), hash-chained and optionally broker-signed.
 
-- ``local``: hash-chained receipts — tamper-evident against accidental
-  corruption, and honest about not protecting against a forged journal.
-- ``broker-signed``: every receipt is HMAC-signed by the host broker with a
-  key that never lives in the Worker surface (env ``DELTAFUSE_BROKER_KEY``);
-  Core verifies against public trust roots in ``.deltafuse/trusted-keys.yaml``.
-
-The journal is append-only and chained; a head digest in
-``.deltafuse/journal-head`` makes truncation and replacement detectable.
-Editing or rebuilding the journal never produces a valid Human Gate.
+Absorbed the legacy `gate_journal.py` (DF3-007 supersedes it): that module declared
+the same JOURNAL_REL and journal_path, duplicated the reader verbatim, and its
+writer `append_click` was dead code.
 """
 
 from __future__ import annotations
@@ -31,6 +27,7 @@ JOURNAL_REL = ".deltafuse/gate-journal.jsonl"
 HEAD_REL = ".deltafuse/journal-head"
 TRUST_ROOTS_REL = ".deltafuse/trusted-keys.yaml"
 PROFILES = ("local", "broker-signed")
+TERMINAL_STATUSES = frozenset({"accepted", "rejected"})
 BROKER_KEY_ENV = "DELTAFUSE_BROKER_KEY"
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "
@@ -320,4 +317,29 @@ def has_valid_receipt(
         ):
             continue  # stale: artifact changed after the click
         return True
+    return False
+
+
+def has_click(
+    product_root: Path,
+    *,
+    kind: str,
+    status: str,
+    artifact_id: str | None = None,
+    rel_path: str | None = None,
+) -> bool:
+    """True when the journal records this terminal status for the artifact.
+
+    Weaker than `has_valid_receipt`: it does not re-check the artifact bytes or
+    the chain, so a stale click still counts. Kept as its own predicate because
+    `fsm.py` deliberately uses both.
+    """
+    want_path = rel_path.replace("\\", "/") if rel_path else None
+    for event in reversed(load_receipts(product_root)):
+        if event.get("kind") != kind or event.get("status") != status:
+            continue
+        if artifact_id and event.get("id") == artifact_id:
+            return True
+        if want_path and event.get("path") == want_path:
+            return True
     return False
