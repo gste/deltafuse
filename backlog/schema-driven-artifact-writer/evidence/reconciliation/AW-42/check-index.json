@@ -1,0 +1,129 @@
+{
+  "card": "AW-42",
+  "checks": [
+    {
+      "argv": [
+        "<home>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "-m",
+        "pytest",
+        "tests/integration/test_artifact_cli.py",
+        "tests/integration/test_wheel_smoke.py",
+        "tests/integration/test_wheel_evidence.py",
+        "-v",
+        "--no-header",
+        "-rA"
+      ],
+      "exit": 0,
+      "name": "wheel-and-cli-suite",
+      "raw_log": "raw/wheel-and-cli-suite.log",
+      "raw_log_sha256": "64adc251d5b2cddafbaca1ff4c0fa43d60608988058056b7ab584882337d69da"
+    },
+    {
+      "argv": [
+        "<home>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "-m",
+        "pytest",
+        "tests/unit/test_artifact_writer_eval.py",
+        "tests/unit/test_artifact_policy.py",
+        "tests/unit/test_artifact_registry.py",
+        "tests/integration/test_artifact_security.py",
+        "-v",
+        "--no-header",
+        "-rA"
+      ],
+      "exit": 0,
+      "name": "policy-security-eval-suite",
+      "raw_log": "raw/policy-security-eval-suite.log",
+      "raw_log_sha256": "b506b82c331293d7cd2ce1f5f7df213b2a721d333a57bbdb0424d8abc10bc00a"
+    },
+    {
+      "argv": [
+        "<home>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "backlog/schema-driven-artifact-writer/check_backlog.py",
+        "backlog/schema-driven-artifact-writer/queue.json"
+      ],
+      "exit": 0,
+      "name": "backlog-checker",
+      "raw_log": "raw/backlog-checker.log",
+      "raw_log_sha256": "19a24ac696b415628ebfe17ce2e4acaaab26a52452e365f90b43405594861b12"
+    },
+    {
+      "argv": [
+        "<home>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "-m",
+        "pytest",
+        "backlog/schema-driven-artifact-writer/tests/test_check_backlog.py",
+        "-v",
+        "--no-header"
+      ],
+      "exit": 0,
+      "name": "backlog-checker-tests",
+      "raw_log": "raw/backlog-checker-tests.log",
+      "raw_log_sha256": "9a55fccecee21902bb465eac5cb5a431c33c491ab98aae01dcb0109f15cd23a6"
+    },
+    {
+      "argv": [
+        "<home>\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "scripts/sync_assets.py",
+        "--check"
+      ],
+      "exit": 0,
+      "name": "asset-sync-check",
+      "raw_log": "raw/asset-sync-check.log",
+      "raw_log_sha256": "701bd582596b52ba7f31daf8908b64af0d98bc50d22bdbaf99eb53f77cf95943"
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "name": "diff-hygiene",
+      "raw_log": "raw/diff-hygiene.log",
+      "raw_log_sha256": "de54dc7152b4df533d392708764f5a7e7699f42ece794d46f0240c9eef49b45a"
+    },
+    {
+      "argv": [
+        "git",
+        "status",
+        "--porcelain=v1"
+      ],
+      "exit": 0,
+      "name": "status-hygiene",
+      "raw_log": "raw/status-hygiene.log",
+      "raw_log_sha256": "a381a474ea7d3adf4aa09b974ef3a67e5a7bb4dfc070b93d2a9f581614cb1390"
+    },
+    {
+      "argv": [
+        "pwsh",
+        "-NoProfile",
+        "-File",
+        "tests/smoke-test.ps1"
+      ],
+      "exit": 0,
+      "name": "smoke-ps1",
+      "raw_log": "raw/smoke-ps1.log",
+      "raw_log_sha256": "4b1ea14d240e41102bbfb8451742400af1a94c5059926e44e52a8c2f62a1f258"
+    },
+    {
+      "argv": [
+        "bash",
+        "tests/smoke-test.sh"
+      ],
+      "exit": 0,
+      "name": "smoke-sh",
+      "raw_log": "raw/smoke-sh.log",
+      "raw_log_sha256": "f15f32bfa6bb19f0070882f99ca77cbedcfe8210a3c052f8b121d0c5d7d94b48"
+    }
+  ],
+  "environment": {
+    "filesystem_note": "Windows NTFS worktree; POSIX checks are not run here",
+    "machine": "AMD64",
+    "node": "v24.15.0",
+    "python": "3.14.3",
+    "release": "11",
+    "system": "Windows"
+  },
+  "run_at": "2026-09-20T10:14:46+00:00"
+}

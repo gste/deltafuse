@@ -38,3 +38,13 @@ model experiment completed, and no Windows-only matrix is labeled full platform
 qualification. State remaining gaps explicitly. Do not publish accepted until
 all original required actions have actually passed or the user has explicitly
 revised scope and that revision is recorded with its changed acceptance criteria.
+
+## Sixth-review mandatory cross-checks
+
+- Queue passed and result PASS agree for the complete literal requirement.
+- Every compound parent is open unless every mandatory subrow passes.
+- Raw evidence references resolve and hashes match; summary prose is not a log.
+- Wheel setup failures are distinguished from Writer behavioral failures.
+- Current entry is unfinished and dependency-ready; environment blockers are explicit.
+- README/PLAN/EXECUTOR/current summary agree; historical handoffs are labeled.
+- AW-43/AW-44/AW-45 completion never waives AW-40/AW-41/AW-42/AW-20.

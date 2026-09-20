@@ -1,0 +1,283 @@
+{
+  "amendment": {
+    "authorization": "user-authorized path redaction while committing AW-42's reconciliation record",
+    "date": "2026-09-20",
+    "eol_normalization_2026-09-20": "CRLF line endings were normalized to LF across the bundle so that recorded sha256 values survive the repository's eol=lf checkout policy; see eol-normalization.json. Line-ending change only: no byte of any command, exit, count or message was altered. The audit records eol-normalization.json and raw/sanitization.json document this card's own amendments and, like the three reports the index already omits, are not entries in it.",
+    "recomputed_file_digests": 9,
+    "redaction_map_ref": "raw/sanitization.json",
+    "what_changed": "machine-specific absolute paths tokenized to <repo>/<home>/<tmp>/<posix-home> in 9 evidence files; check-index.json raw_log_sha256 values and the file digests here recomputed against the redacted bytes",
+    "what_did_not_change": "tested_source_identity, environments, recorded_exits, every argv, exit code, test count and conclusion; source-inventory.json and hash-reconciliation.json were NOT regenerated and are recorded as stale"
+  },
+  "bundle": "AW-42 final source/evidence reconciliation raw log bundle",
+  "card": "AW-42",
+  "environments": {
+    "posix": {
+      "arch": "x86_64",
+      "distro": "Ubuntu 24.04.3 LTS",
+      "filesystem": "ext4 (native Linux root fs; run dir under $HOME, import origin verified outside /mnt/c)",
+      "kernel": "6.6.87.2-microsoft-standard-WSL2",
+      "pytest": "9.1.1",
+      "python": "3.12.3",
+      "symlink_capability": "available - see raw/posix-symlink-capability.log"
+    },
+    "windows": {
+      "filesystem": "ntfs",
+      "os": "nt",
+      "platform": "win32",
+      "python": "3.14.3"
+    }
+  },
+  "files": [
+    {
+      "bytes": 9350,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/baseline-AW-42-result.md",
+      "sha256": "0b628ca57bf21f3e825759e6e09dfa61ac74c697bab3b3c968267a3e572fa500"
+    },
+    {
+      "bytes": 3766,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/check-index.json",
+      "sha256": "031358621cc719f0303ccbfa0e4caca5b10387de6f6e59c609c2e7f19d93af2e"
+    },
+    {
+      "bytes": 8750,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/inventory_source.py",
+      "sha256": "22557b6d10f8f8834168522356aed77b21157abcaeacdaead7396c8309d3e178"
+    },
+    {
+      "bytes": 3820,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/posix_rerun.sh",
+      "sha256": "e925514af3fbca71a427c80114d447eecffe6cf7c7e7362fce3d15f9d1bd5fb3"
+    },
+    {
+      "bytes": 3372,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/probe_pointer_escaping.py",
+      "sha256": "1147f3a8c417c734b85ed3a2dd7582314be2677dd9f7d0279b027cb18521d20e"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/asset-sync-check.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 40,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/asset-sync-check.log",
+      "sha256": "701bd582596b52ba7f31daf8908b64af0d98bc50d22bdbaf99eb53f77cf95943"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/backlog-checker-tests.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 341,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/backlog-checker-tests.log",
+      "sha256": "9a55fccecee21902bb465eac5cb5a431c33c491ab98aae01dcb0109f15cd23a6"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/backlog-checker.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 242,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/backlog-checker.log",
+      "sha256": "19a24ac696b415628ebfe17ce2e4acaaab26a52452e365f90b43405594861b12"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/diff-hygiene.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 468,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/diff-hygiene.log",
+      "sha256": "de54dc7152b4df533d392708764f5a7e7699f42ece794d46f0240c9eef49b45a"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/full-framework-win3-rerun.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 6307,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/full-framework-win3-rerun.log",
+      "sha256": "9390da9957c5175eb49259bd987888380b4a96c2546f553c2ab9fbcd354586d3"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/pointer-escaping-probe.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 451,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/pointer-escaping-probe.log",
+      "sha256": "87675870e00a04b8e9aa161c87a4a69bf9128ff15422f3210a4b0f175d63bec1"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/policy-security-eval-suite.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 6756,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/policy-security-eval-suite.log",
+      "sha256": "b506b82c331293d7cd2ce1f5f7df213b2a721d333a57bbdb0424d8abc10bc00a"
+    },
+    {
+      "bytes": 2,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-concurrency-crash-security.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 656,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-concurrency-crash-security.log",
+      "sha256": "9fe9a3ca59c6e971d95701e825e71484bf07061fa272d1b8372af4d307d5a010"
+    },
+    {
+      "bytes": 406,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-environment.log",
+      "sha256": "9a661e52d359485920736d0f76d855eff661f99b655c2d0611b3e59b078ca3fe"
+    },
+    {
+      "bytes": 162,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-host-identity.log",
+      "sha256": "2fdf7f781207bbc69c4094ca83b021734c0f57be079a51a1f30dfc0ae1810816"
+    },
+    {
+      "bytes": 2,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-smoke-sh.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1237,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-smoke-sh.log",
+      "sha256": "e52701ec4e9c50d2882903c83149aadb10d18a668a83f97d6d644354f4e70e5d"
+    },
+    {
+      "bytes": 108,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-symlink-capability.log",
+      "sha256": "fd38eae742083e47ace6b4f56a15bb53e625ccae15dcb085f2377fd8b07c8871"
+    },
+    {
+      "bytes": 2,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-unit-suites.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 627,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/posix-unit-suites.log",
+      "sha256": "d7dee0da4157bfa1dc47881164f3162cde0767f17b2ccaf1df1e1e013fbc0fec"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/smoke-ps1.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 1386,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/smoke-ps1.log",
+      "sha256": "4b1ea14d240e41102bbfb8451742400af1a94c5059926e44e52a8c2f62a1f258"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/smoke-sh.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 1237,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/smoke-sh.log",
+      "sha256": "f15f32bfa6bb19f0070882f99ca77cbedcfe8210a3c052f8b121d0c5d7d94b48"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/status-hygiene.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 310,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/status-hygiene.log",
+      "sha256": "a381a474ea7d3adf4aa09b974ef3a67e5a7bb4dfc070b93d2a9f581614cb1390"
+    },
+    {
+      "bytes": 1,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/wheel-and-cli-suite.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "bytes": 2904,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/wheel-and-cli-suite.log",
+      "sha256": "64adc251d5b2cddafbaca1ff4c0fa43d60608988058056b7ab584882337d69da"
+    },
+    {
+      "bytes": 842,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/wheel-build.log",
+      "sha256": "71a531f023a473a76666fbdb3e6761470b85e6c97f0187b63730e72e6878ac95"
+    },
+    {
+      "bytes": 105,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/raw/wheel-identity.txt",
+      "sha256": "93120a534f18b2fdec658246c962a0e2defb2a91fecf4c442712f96a693c8c55"
+    },
+    {
+      "bytes": 3867,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/README.md",
+      "sha256": "4baf80f5628622c01fda9319990413db6871865e2b11b2598bbe45ac74258975"
+    },
+    {
+      "bytes": 11246,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/reconcile_hashes.py",
+      "sha256": "b610daac7d28c7b3881b040aae3cb9775f0c91b3a326842dabd7fbbdf642ad49"
+    },
+    {
+      "bytes": 4864,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/run_checks.py",
+      "sha256": "c5ccbbf458933de54858761d4a3dd0c4b90309f667965b86c93ecfc0a953d541"
+    },
+    {
+      "bytes": 4563,
+      "path": "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/write_bundle_index.py",
+      "sha256": "872b7e459d40076a5c085788130c732f3e18b70e93e50b973da5907fba87d53e"
+    }
+  ],
+  "generated": "2026-09-20",
+  "observational_logs_without_exit": [
+    "posix-environment",
+    "posix-host-identity",
+    "posix-symlink-capability",
+    "wheel-build"
+  ],
+  "orphan_exit_files": [],
+  "recorded_exits": {
+    "asset-sync-check": "0",
+    "backlog-checker": "0",
+    "backlog-checker-tests": "0",
+    "diff-hygiene": "0",
+    "full-framework-win3-rerun": "0",
+    "pointer-escaping-probe": "0",
+    "policy-security-eval-suite": "0",
+    "posix-concurrency-crash-security": "0",
+    "posix-smoke-sh": "0",
+    "posix-unit-suites": "0",
+    "smoke-ps1": "0",
+    "smoke-sh": "0",
+    "status-hygiene": "0",
+    "wheel-and-cli-suite": "0"
+  },
+  "retention": "every referenced artifact is stored in this repository bundle; no <preserved-run-location> indirection is used",
+  "schema_version": 1,
+  "tested_source_identity": {
+    "branch": "feature/2026-09-18-add-artifact-writer",
+    "head_commit": "290c13a387b5fe15ccdd9f31fe4ebdca0be6fbc1",
+    "note": "dirty entries are the AW-42 write set plus the sixth-review planning files; no runtime, contract, schema, asset or test byte changed for this reconciliation",
+    "porcelain_status": [
+      "M backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+      " M backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+      " M backlog/schema-driven-artifact-writer/cards/AW-42.md",
+      " M backlog/schema-driven-artifact-writer/queue.json",
+      " M backlog/schema-driven-artifact-writer/results/AW-42.md",
+      "?? backlog/schema-driven-artifact-writer/REVIEW-6.md",
+      "?? backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/"
+    ],
+    "version": "3.1.0"
+  }
+}

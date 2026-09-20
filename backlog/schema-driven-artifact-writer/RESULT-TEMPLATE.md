@@ -77,3 +77,12 @@ claim unperformed work or fabricate raw evidence. No self-referential report has
 
 If any mandatory evidence is absent, report partial implementation and the exact
 external prerequisite. Do not mark completed merely because code tests pass.
+
+## Unmet-prerequisite ledger
+
+| Original criterion | Missing evidence / observed failure | Owning card | Required next action | Blocked dependents |
+|---|---|---|---|---|
+
+Record dependency readiness separately from host/model availability. If no gaps
+remain, justify every mandatory PASS with retrievable evidence. Recompute the
+next card after the proposed status change; do not copy a historical handoff.
