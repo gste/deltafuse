@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "in_progress",
+  "status": "closed",
   "planning_only": false,
   "feature": "schema-driven-artifact-writer",
   "framework_snapshot": {
@@ -618,7 +618,7 @@
       "id": "AW-20",
       "phase": "G",
       "title": "Close acceptance and publish migration/handoff",
-      "status": "in_progress",
+      "status": "superseded",
       "depends_on": [
         "AW-42"
       ],
@@ -666,7 +666,8 @@
           "requirement": "Final result, queue, card and evaluation statuses must agree. An evaluator reporting open_for_AW-20 cannot coexist with a completed AW-40/AW-20 closure claim under the current contract. Only explicit user scope revision can change required acceptance; record any such revision rather than silently paraphrasing it.",
           "status": "open"
         }
-      ]
+      ],
+      "superseded_by": "backlog/roadmap/q0-qualification-baseline/README.md"
     },
     {
       "id": "AW-21",
@@ -1767,7 +1768,7 @@
       "id": "AW-42",
       "phase": "K",
       "title": "Reconcile final source identity, test coverage and acceptance evidence",
-      "status": "in_progress",
+      "status": "superseded",
       "depends_on": [
         "AW-40",
         "AW-41"
@@ -1839,7 +1840,8 @@
         "AW42-R3 subrow e NOT RUN: AW-44's wheel digest 8cad2835... is not re-derivable; two builds of one identical tree produced 4c923577... and 75543785..., and an untracked same-named wheel in dist/ carries 9899dfb1.... Owning card: AW-44. Wheel digests must not be used as final-tree identity.",
         "AW42-R4 FAIL: AW39-R3 'Verify JSON Pointer escaping and missing nested paths' has zero committed assertions - the only test claiming it (tests/unit/test_artifact_writer_eval.py::test_aw39_json_pointer_escaping_and_nested_removal) uses plain pointers, while queue records AW39-R3 as passed. Owning card: AW-39."
       ],
-      "reconciliation_result": "Executed 2026-09-20 at HEAD 290c13a387b5fe15ccdd9f31fe4ebdca0be6fbc1: 135 final-scope digest claims reconciled (99 match / 23 drift / 7 unresolved / 6 external); AW-40 evidence index re-verified 60/60 and paired metrics independently recomputed from 28 delivery-verified traces; 13 win32 and POSIX checks re-run with retained raw logs in evidence/reconciliation/AW-42/bundle-index.json."
+      "reconciliation_result": "Executed 2026-09-20 at HEAD 290c13a387b5fe15ccdd9f31fe4ebdca0be6fbc1: 135 final-scope digest claims reconciled (99 match / 23 drift / 7 unresolved / 6 external); AW-40 evidence index re-verified 60/60 and paired metrics independently recomputed from 28 delivery-verified traces; 13 win32 and POSIX checks re-run with retained raw logs in evidence/reconciliation/AW-42/bundle-index.json.",
+      "superseded_by": "backlog/roadmap/q0-qualification-baseline/README.md"
     },
     {
       "id": "AW-43",
@@ -2199,5 +2201,10 @@
     "report": "REVIEW-6.md",
     "acceptance": "open",
     "note": "15 AW-42 concrete hashes matched; focused rerun 32 passed, 2 skipped, 4 wheel setup errors. Historical result PASS claims disputed by this review are not current acceptance evidence."
+  },
+  "closure": {
+    "reason": "superseded by backlog/roadmap",
+    "decided": "2026-09-20",
+    "revision": "backlog/roadmap/REVISION-aw.md"
   }
 }

@@ -88,3 +88,47 @@ In strict compliance with [EXECUTOR.md](EXECUTOR.md), missing mandatory platform
 - **Backlog Status:** `in_progress` (All implementations, schemas, tests, and reconciliations complete; open blockers recorded honestly)
 - **Git Branch:** `feature/2026-09-18-add-artifact-writer`
 - **Date:** 2026-09-19
+
+---
+
+## Final Status — Epic Closed (superseded by roadmap)
+
+Closed by maintainer decision, not by a further review cycle.
+
+**Delivered:** 47 of 49 cards `completed`. Implementation, schemas, tests and
+reconciliations complete. Full pytest suite green. Asset bundle in sync
+(`scripts/sync_assets.py --check`). Wheel qualified in an isolated venv with no
+source checkout on `sys.path`.
+
+**Not delivered — two real blockers, carried forward:**
+
+| Blocker | Source card | Carried to |
+|---|---|---|
+| POSIX runner never executed; wheel qualification passed on Windows only | AW-41 | `backlog/roadmap/` — deferred, Windows is the working platform |
+| No live small-model run; protocol implemented, never executed | AW-40 / AW-20 | `backlog/roadmap/q0-qualification-baseline/` § 0.4 |
+
+**Why AW-20 and AW-42 are not being finished as written:** both are closure and
+reconciliation cards, not feature work. AW-20 records four successive reopenings
+("Reopened after review", "…second review", "…third review", "Fifth-review
+reopening"); the directory holds `REVIEW.md` through `REVIEW-6.md`,
+`PLAN-REVIEW.md` and `RECONCILIATION-CHECKLIST.md`, and `queue.json` holds four
+`*_review_snapshot` entries. Each reopening required reconciling the previous
+reconciliations. This is a non-terminating loop, not outstanding work. A sixth
+review would not close it.
+
+Both cards are marked `superseded`. The two facts underneath them are recorded
+above and carried into the roadmap.
+
+**Evaluation evidence** under `evaluation/` (65 files) documents that the AW-40
+protocol is executable. It is bound to framework 3.1.0 and to an A3B reference
+model. The reference class has since changed to dense ≤40B and thresholds T1–T8
+are being written from scratch, so this data does not transfer to the new
+measurement and is not carried forward.
+
+**Removal:** this directory is removed in the following commit, per the backlog
+policy in `backlog/README.md` — only live work lives here, completed work lives
+in Git history. Revision: `backlog/roadmap/REVISION-aw.md`.
+
+- Framework version at closure: `3.1.0`
+- Branch: `feature/2026-09-18-add-artifact-writer`
+- Date: 2026-09-20
