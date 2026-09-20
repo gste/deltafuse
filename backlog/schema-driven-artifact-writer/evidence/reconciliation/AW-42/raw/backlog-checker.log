@@ -1,4 +1,0 @@
-note: status-string checks only; PASS labels and completed dependencies still require inspected source-bound evidence before execution (EXECUTOR gate 6).
-cards: 48; unfinished: 2
-declared entry: 'AW-42'; computed entry: 'AW-42'
-no violations

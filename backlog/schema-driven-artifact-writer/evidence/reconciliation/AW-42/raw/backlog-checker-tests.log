@@ -1,7 +1,0 @@
-============================= test session starts =============================
-collected 12 items
-
-backlog\schema-driven-artifact-writer\tests\test_check_backlog.py ...... [ 50%]
-......                                                                   [100%]
-
-============================= 12 passed in 13.57s =============================

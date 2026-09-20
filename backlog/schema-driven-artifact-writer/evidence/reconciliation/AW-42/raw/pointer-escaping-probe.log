@@ -1,6 +1,0 @@
-_parse_pointer('/claims/CR-001/a~1b/m~0n/value') -> ['claims', 'CR-001', 'a/b', 'm~n', 'value']
-oracle _resolve_json_pointer('/claims/CR-001/a~1b/m~0n/value') -> found=True value='hit'
-oracle missing nested lookup -> found=False (must be False)
-committed test assertions using an escaped pointer literal: 0
-COVERAGE GAP ONLY: behaviour is correct, but no committed regression asserts ~0/~1 unescaping, so deleting that code would fail no test.
-EXIT=0

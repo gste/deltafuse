@@ -1,8 +1,0 @@
-AW-46 check label=backlog-checker
-argv=python backlog/schema-driven-artifact-writer/check_backlog.py backlog/schema-driven-artifact-writer/queue.json
-date_utc=2026-09-20T12:38:59Z
-note: status-string checks only; PASS labels and completed dependencies still require inspected source-bound evidence before execution (EXECUTOR gate 6).
-cards: 49; unfinished: 3
-declared entry: 'AW-46'; computed entry: 'AW-46'
-no violations
---- rc=0

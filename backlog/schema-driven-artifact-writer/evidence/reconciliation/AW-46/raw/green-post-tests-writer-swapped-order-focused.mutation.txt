@@ -1,2 +1,0 @@
-mutated writer-swapped src/deltafuse/core/artifact_patch.py sha256=1e31e56318de20726dcc6254ace39de27dfb9d90db93771e4e0bd5ec491f0e94
-mutated writer-swapped scripts/evaluate_artifact_writer.py sha256=8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3

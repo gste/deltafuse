@@ -1,5 +1,0 @@
-AW-46 check label=asset-sync-check
-argv=python scripts/sync_assets.py --check
-date_utc=2026-09-20T12:39:00Z
-check: bundle is up to date (58 assets)
---- rc=0
