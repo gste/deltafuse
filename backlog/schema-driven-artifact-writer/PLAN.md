@@ -56,11 +56,13 @@ behavior; examples are framework artifact operations only.
 | [AW-19](cards/AW-19.md) | Run paired external small-model evaluation | AW-18 |
 | [AW-20](cards/AW-20.md) | Close acceptance and publish migration/handoff | AW-19 |
 
-Machine-readable status: [queue.json](queue.json). Next ready card: AW-45.
-Current order: AW-45 -> AW-41 -> AW-40 -> AW-42 -> AW-20 (AW-43 and AW-44
-completed with evidence; AW-38/AW-39 remain completed; preserve their
-regressions). AW-41 is dependency-ready after AW-45 but environmentally
-blocked (native POSIX host / symlink privileges).
+Machine-readable status: [queue.json](queue.json). Next ready card: AW-42 (2026-09-20,
+after AW-46). Current order: AW-42 -> AW-20. AW-40, AW-41, AW-43, AW-44, AW-45 and
+AW-46 are completed with inspected evidence; AW-38/AW-39 remain completed; preserve
+their regressions. AW-42 still holds two NOT RUN subrows whose evidence is owned by
+AW-41/AW-44 (unretrievable raw logs, non-re-derivable wheel digest) and must re-run
+its own probe and reconciler at the post-AW-46 tree before `AW42-R4` can change.
+The earlier "AW-45 -> AW-41 -> AW-40" sequence is a dated historical handoff.
 Prior implementation statuses are historical; new cards must satisfy the
 original acceptance requirements before the feature can be marked complete.
 

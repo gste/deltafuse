@@ -1,0 +1,181 @@
+{
+  "date": "2026-09-20",
+  "entries": [
+    {
+      "bytes_after": 157,
+      "bytes_before": 158,
+      "path": "raw/asset-sync-check.log",
+      "sha256_after_lf": "3a25aa1837dd12dd0e194c32e22787dbc519d36d3d17f6a5d15f77c704f7a600",
+      "sha256_before_crlf": "230890f310ca255c67110f79dbf636466f152af120bc61886068ec539ca157b8"
+    },
+    {
+      "bytes_after": 2882,
+      "bytes_before": 2918,
+      "path": "raw/backlog-checker-tests.log",
+      "sha256_after_lf": "d60fb5ec9d7a78415b6bc3132c73f54d75ef0d08186e84740405a8497e263bb7",
+      "sha256_before_crlf": "a25a4d25aeb2ab8882fb4cdc888923dcaca58b2f6f485667bf72d5e2e849cb42"
+    },
+    {
+      "bytes_after": 431,
+      "bytes_before": 435,
+      "path": "raw/backlog-checker.log",
+      "sha256_after_lf": "75b32fce024f053b63db517128abfddcfd0c8b701e4f90f3d28056421aa356db",
+      "sha256_before_crlf": "f3ae1df54daa0f4c5e8f0e17441f007eef66724b21d6f9ef494dcbb480b7e568"
+    },
+    {
+      "bytes_after": 66487,
+      "bytes_before": 67485,
+      "path": "raw/final-pristine-control-full-suite.log",
+      "sha256_after_lf": "420e165788593b0e1b981128f2db482253e162257432c887c4c3c7747452a3db",
+      "sha256_before_crlf": "dfd7cb0051159a9587549106a58694774309a559040df90043bef2d382089280"
+    },
+    {
+      "bytes_after": 243,
+      "bytes_before": 245,
+      "path": "raw/final-pristine-control-full-suite.mutation.txt",
+      "sha256_after_lf": "48979f149a767ae7cd44418208355a41ac808e2e39ae17132e797e8e32ffd3df",
+      "sha256_before_crlf": "1cec6a00b5b64361f8f202a4f51818db61d4970d3182f906a6dbd32840a6791a"
+    },
+    {
+      "bytes_after": 5761,
+      "bytes_before": 5844,
+      "path": "raw/green-post-tests-oracle-unescape-deleted-focused.log",
+      "sha256_after_lf": "f7ee81053bbc3771bc2cfb4353263e235e8c1c710db63bc9c2499e59f68aa82a",
+      "sha256_before_crlf": "57d3e3df52496cc8e51d39a35df7c878bc049b5e4b6b9e806e314485707d501a"
+    },
+    {
+      "bytes_after": 261,
+      "bytes_before": 263,
+      "path": "raw/green-post-tests-oracle-unescape-deleted-focused.mutation.txt",
+      "sha256_after_lf": "c78b043abbf111a4939626958a20c52f3512ff43061acdec7042705279ecea27",
+      "sha256_before_crlf": "bce8be6a511807d1da597274bc7cd192dc078e2863c539fba001a9b73f7bd258"
+    },
+    {
+      "bytes_after": 4268,
+      "bytes_before": 4320,
+      "path": "raw/green-post-tests-writer-swapped-order-focused.log",
+      "sha256_after_lf": "52a0fb9a89f28ba3139bcc3e39af9dfbbcaccba6fd5cf0fab3192bb4b41e2607",
+      "sha256_before_crlf": "ba5b7be4341d7ac65d0871997963aa878048f12bb77aa136646a6dceeacf374c"
+    },
+    {
+      "bytes_after": 263,
+      "bytes_before": 265,
+      "path": "raw/green-post-tests-writer-swapped-order-focused.mutation.txt",
+      "sha256_after_lf": "2bda0cd39b7fdedbeb610438ccb9901c9542ae794d3d973503a98251ed6457ef",
+      "sha256_before_crlf": "492625103cb86b9df2d4a946545e33f4ac5783e0c8201b09502c75c1e27a9c9a"
+    },
+    {
+      "bytes_after": 10173,
+      "bytes_before": 10356,
+      "path": "raw/green-post-tests-writer-unescape-deleted-focused.log",
+      "sha256_after_lf": "0b87d6706329c2a348768e1aaf1f12c8a20864a2b7202bd8d17a8ac48c982f24",
+      "sha256_before_crlf": "36d95875c3ea24350758c11fe651117891abdfae130d27b1a147d37209fed407"
+    },
+    {
+      "bytes_after": 261,
+      "bytes_before": 263,
+      "path": "raw/green-post-tests-writer-unescape-deleted-focused.mutation.txt",
+      "sha256_after_lf": "a25b7c861a5d7d08eea271f85ca12c3ac14c0b6770c466d216acd476b1170138",
+      "sha256_before_crlf": "9e561e3aa406e4b06f41d32582169c77a85901cf1605803c908d862810dbfbdd"
+    },
+    {
+      "bytes_after": 9199,
+      "bytes_before": 9366,
+      "path": "raw/green-post-tests-writer-unescape-deleted-full-suite.log",
+      "sha256_after_lf": "d5905b85ff0a05d335b7e7cec62fe5ac30b55296d302857b40eb0dd3934b595a",
+      "sha256_before_crlf": "38b187879b3c28172bdbe6225dec2ce74c9acc29fd327462e6f75ee92fb45bea"
+    },
+    {
+      "bytes_after": 261,
+      "bytes_before": 263,
+      "path": "raw/green-post-tests-writer-unescape-deleted-full-suite.mutation.txt",
+      "sha256_after_lf": "a25b7c861a5d7d08eea271f85ca12c3ac14c0b6770c466d216acd476b1170138",
+      "sha256_before_crlf": "9e561e3aa406e4b06f41d32582169c77a85901cf1605803c908d862810dbfbdd"
+    },
+    {
+      "bytes_after": 4412,
+      "bytes_before": 4466,
+      "path": "raw/green2-post-tests-silent-failed-lookup-focused.log",
+      "sha256_after_lf": "697c06b814b70559f65160732b43a7236861e4da57d5dce1989f74b80a813058",
+      "sha256_before_crlf": "8134e2701c811ebb7bfd71564a5c5d9039861d8da6192bc3222c8aafbd23ac08"
+    },
+    {
+      "bytes_after": 275,
+      "bytes_before": 277,
+      "path": "raw/green2-post-tests-silent-failed-lookup-focused.mutation.txt",
+      "sha256_after_lf": "56ed9a84fa925a4fa2e473229e9b61bfd6e4e4c9693a17f6e95a12cbacb386e2",
+      "sha256_before_crlf": "ffca8fcfe15e11d6ccb96bef922d1c3588030a85faaa67082147e2f631f08e0b"
+    },
+    {
+      "bytes_after": 1652,
+      "bytes_before": 1666,
+      "path": "raw/pointer-escaping-probe.log",
+      "sha256_after_lf": "ea00158e6ab0411d4bef4fb5102fa2c6a9fb7b702872c0f68d181a0978aadc5e",
+      "sha256_before_crlf": "849bb681855edb644f55402770a06953422e1abc67ed204f91c53b1a33d33dd3"
+    },
+    {
+      "bytes_after": 448,
+      "bytes_before": 452,
+      "path": "raw/post-closure-readiness-recompute.log",
+      "sha256_after_lf": "1f812dde49096b81141697bdfac3ec360980603f785732892c8c839cdde9c5cb",
+      "sha256_before_crlf": "b48eb14bd77f16c6726827f81c8670c3cb9da491ab4077380dc1fa4bc9bae0b1"
+    },
+    {
+      "bytes_after": 3240,
+      "bytes_before": 3273,
+      "path": "raw/pristine-focused-suites.log",
+      "sha256_after_lf": "08bed76795440cb616d8f97bff2fc24a4e857847028ea07ac06d20b6ee265caa",
+      "sha256_before_crlf": "a2f89cdc55f6ef3754d3ee8d6f8787b749e8366a308ffffe3dd7f47ac6d047b4"
+    },
+    {
+      "bytes_after": 1868,
+      "bytes_before": 1881,
+      "path": "raw/red-pre-tests-oracle-unescape-deleted.log",
+      "sha256_after_lf": "7669633e7f4a1276b25d7270e47691263e7964d2a64d81680049d5bc5f99dd71",
+      "sha256_before_crlf": "65b30839a870de2d75efb73c63daf278f80f810f9ae56b25fa58b68d01a81eb3"
+    },
+    {
+      "bytes_after": 261,
+      "bytes_before": 263,
+      "path": "raw/red-pre-tests-oracle-unescape-deleted.mutation.txt",
+      "sha256_after_lf": "c78b043abbf111a4939626958a20c52f3512ff43061acdec7042705279ecea27",
+      "sha256_before_crlf": "bce8be6a511807d1da597274bc7cd192dc078e2863c539fba001a9b73f7bd258"
+    },
+    {
+      "bytes_after": 1868,
+      "bytes_before": 1881,
+      "path": "raw/red-pre-tests-writer-unescape-deleted.log",
+      "sha256_after_lf": "8c094c29ccf05a9afc2ff0d353624974a87c4e681b40053bc31dcf7af4978ef7",
+      "sha256_before_crlf": "26142a9be76a3cf2fac230ae042db60df21780e6828e3a9083f36fee15e53804"
+    },
+    {
+      "bytes_after": 261,
+      "bytes_before": 263,
+      "path": "raw/red-pre-tests-writer-unescape-deleted.mutation.txt",
+      "sha256_after_lf": "a25b7c861a5d7d08eea271f85ca12c3ac14c0b6770c466d216acd476b1170138",
+      "sha256_before_crlf": "9e561e3aa406e4b06f41d32582169c77a85901cf1605803c908d862810dbfbdd"
+    },
+    {
+      "bytes_after": 1884,
+      "bytes_before": 1897,
+      "path": "raw/red2-pre-tests-silent-failed-lookup-full-suite.log",
+      "sha256_after_lf": "3961348ae211acf979fd0a016768dabf97df9e9d00711c16e78da1f0ceb347e8",
+      "sha256_before_crlf": "78d5b8ea523034d9d0d1b355f1067930cffca3894581c78eb0b9f88fbe3ec83e"
+    },
+    {
+      "bytes_after": 275,
+      "bytes_before": 277,
+      "path": "raw/red2-pre-tests-silent-failed-lookup-full-suite.mutation.txt",
+      "sha256_after_lf": "56ed9a84fa925a4fa2e473229e9b61bfd6e4e4c9693a17f6e95a12cbacb386e2",
+      "sha256_before_crlf": "ffca8fcfe15e11d6ccb96bef922d1c3588030a85faaa67082147e2f631f08e0b"
+    },
+    {
+      "bytes_after": 771,
+      "bytes_before": 775,
+      "path": "raw/untouched-file-hashes.log",
+      "sha256_after_lf": "a64c2fee29adbc1d53cc9d49d4be43af945e6a54b3e693b154c59a7f18c02fb2",
+      "sha256_before_crlf": "176cd5f72fe56c39f01c25c865159bea130940aa5d4d80c19521f02d0e3741cf"
+    }
+  ],
+  "purpose": "CRLF -> LF normalization so recorded sha256 values survive the repository's eol=lf checkout policy"
+}

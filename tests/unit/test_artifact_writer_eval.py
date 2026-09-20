@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 import pytest
+import yaml
 
+from deltafuse.core.artifact_patch import ArtifactPatchError, apply_artifact_patch
 from scripts.evaluate_artifact_writer import run_evaluation, evaluate_independent_oracle
 
 
@@ -145,4 +147,132 @@ def test_aw39_json_pointer_escaping_and_nested_removal(tmp_path: Path):
     )
     res_removed = evaluate_independent_oracle(tmp_path, case_remove, passed_op=True, gate_blocked=False, error_msg=None)
     assert res_removed["semantic_correct"] is True
+
+
+# AW-46 supplies the executable invariant behind AW39-R3: "Verify JSON Pointer escaping
+# and missing nested paths; do not skip a failed lookup or substitute top-level deletion
+# checks for nested removals." Routing claims are schema-closed, so the escaped tokens
+# are exercised in a nested extension container that the routing schema permits.
+
+SLASH_KEY = "a/b"
+TILDE_KEY = "m~n"
+
+
+def _routing_doc(notes):
+    return {
+        "change": "CHG-001",
+        "claims": {"CR-001": {"primary_capability": "core"}},
+        "extension-notes": notes,
+    }
+
+
+def _routing_verdict(change_dir, case, disk_doc):
+    (change_dir / "routing.yaml").write_text(
+        yaml.safe_dump(disk_doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+    return evaluate_independent_oracle(
+        change_dir, case, passed_op=True, gate_blocked=False, error_msg=None
+    )
+
+
+def test_aw46_escaped_pointer_set_writes_decoded_nested_keys():
+    """AW39-R3: ~1 and ~0 must be decoded before the patch addresses a key."""
+    outcome = apply_artifact_patch(
+        _routing_doc({SLASH_KEY: {TILDE_KEY: "before", "summary": "keep"}}),
+        {"set": [{"path": "/extension-notes/a~1b/m~0n", "value": "after"}]},
+        kind="routing",
+    )
+    notes = outcome.updated_metadata["extension-notes"]
+    assert list(notes) == [SLASH_KEY], f"escaped pointer created a literal key instead of '{SLASH_KEY}': {notes}"
+    assert notes[SLASH_KEY][TILDE_KEY] == "after"
+    assert notes[SLASH_KEY]["summary"] == "keep", "sibling of the escaped target must survive the set"
+    assert outcome.changed is True and outcome.applied_ops_count == 1
+
+
+def test_aw46_escaped_pointer_unescaping_follows_rfc6901_order():
+    """AW39-R3: ~01 means a literal '~1' key; a swapped replace order resolves it to 'a/b'."""
+    outcome = apply_artifact_patch(
+        _routing_doc({"a~1b": {"summary": "target"}}),
+        {"set": [{"path": "/extension-notes/a~01b/summary", "value": "updated"}]},
+        kind="routing",
+    )
+    notes = outcome.updated_metadata["extension-notes"]
+    assert notes["a~1b"]["summary"] == "updated", f"'~01' did not decode to '~1': {notes}"
+    assert "a/b" not in notes, f"'~01' was decoded as '~1' then '/', which reorders RFC 6901 unescaping: {notes}"
+
+
+def test_aw46_escaped_pointer_remove_targets_only_the_nested_key():
+    """AW39-R3: a nested removal may not be satisfied by a top-level or same-named key."""
+    document = _routing_doc({SLASH_KEY: {TILDE_KEY: "drop", "summary": "keep"}, "other": {TILDE_KEY: "untouched"}})
+    outcome = apply_artifact_patch(
+        document, {"remove": ["/extension-notes/a~1b/m~0n"]}, kind="routing"
+    )
+    notes = outcome.updated_metadata["extension-notes"]
+    assert SLASH_KEY in notes, "the parent container of a nested removal must remain"
+    assert notes[SLASH_KEY] == {"summary": "keep"}, f"nested removal over- or under-matched: {notes}"
+    assert notes["other"] == {TILDE_KEY: "untouched"}, "an equally named key elsewhere must not be deleted"
+    assert outcome.applied_ops_count == 1
+
+
+def test_aw46_escaped_pointer_does_not_match_a_literal_tilde_key():
+    """AW39-R3: '~1' addresses key 'a/b', never the literal text 'a~1b' on disk."""
+    document = _routing_doc({"a~1b": {"summary": "keep"}})
+    with pytest.raises(ArtifactPatchError) as excinfo:
+        apply_artifact_patch(document, {"remove": ["/extension-notes/a~1b"]}, kind="routing")
+    assert excinfo.value.code == "remove_target_missing"
+    assert excinfo.value.path == "/extension-notes/a~1b"
+    assert document["extension-notes"] == {"a~1b": {"summary": "keep"}}, "denial must not mutate the document"
+
+
+def test_aw46_missing_nested_path_fails_loudly_instead_of_being_skipped():
+    """AW39-R3: a missing nested path is a failed lookup, not a silent no-op."""
+    document = _routing_doc({SLASH_KEY: {"summary": "keep"}})
+    with pytest.raises(ArtifactPatchError) as excinfo:
+        apply_artifact_patch(document, {"remove": ["/extension-notes/a~1b/m~0n"]}, kind="routing")
+    assert excinfo.value.code == "remove_target_missing"
+    assert document["extension-notes"][SLASH_KEY] == {"summary": "keep"}
+
+
+def test_aw46_oracle_rejects_literal_tilde_and_missing_nested_set_targets(tmp_path: Path):
+    """AW39-R3: the oracle accepts only the decoded nested state for an escaped set."""
+    case = {
+        "id": "CASE-AW46-SET",
+        "operation": "update",
+        "kind": "routing",
+        "expected_valid": True,
+        "input_payload": {"set": [{"path": "/extension-notes/a~1b/m~0n", "value": "after"}]},
+    }
+    decoded = _routing_doc({SLASH_KEY: {TILDE_KEY: "after", "summary": "keep"}})
+    writer_kept_raw_keys = _routing_doc({"a~1b": {"m~0n": "after"}})
+    writer_dropped_nested_set = _routing_doc({SLASH_KEY: {"summary": "keep"}})
+
+    dirs = {}
+    for name in ("decoded", "raw-keys", "missing"):
+        directory = tmp_path / name
+        directory.mkdir()
+        dirs[name] = directory
+
+    assert _routing_verdict(dirs["decoded"], case, decoded)["semantic_correct"] is True
+    stale = _routing_verdict(dirs["raw-keys"], case, writer_kept_raw_keys)
+    assert stale["semantic_correct"] is False, "oracle accepted raw ~1/~0 key names for an escaped set"
+    dropped = _routing_verdict(dirs["missing"], case, writer_dropped_nested_set)
+    assert dropped["semantic_correct"] is False, "oracle skipped the failed nested lookup"
+
+
+def test_aw46_oracle_checks_nested_removal_location_not_top_level_presence(tmp_path: Path):
+    """AW39-R3: both disk states share the same top-level keys, so only a nested check can tell them apart."""
+    case = {
+        "id": "CASE-AW46-REMOVE",
+        "operation": "update",
+        "kind": "routing",
+        "expected_valid": True,
+        "input_payload": {"remove": ["/extension-notes/a~1b/m~0n"]},
+    }
+    still_present = _routing_doc({SLASH_KEY: {TILDE_KEY: "drop", "summary": "keep"}})
+    removed = _routing_doc({SLASH_KEY: {"summary": "keep"}})
+    assert set(still_present) == set(removed) == {"change", "claims", "extension-notes"}
+    assert set(still_present["extension-notes"]) == set(removed["extension-notes"])
+
+    assert _routing_verdict(tmp_path, case, still_present)["semantic_correct"] is False
+    assert _routing_verdict(tmp_path, case, removed)["semantic_correct"] is True
 

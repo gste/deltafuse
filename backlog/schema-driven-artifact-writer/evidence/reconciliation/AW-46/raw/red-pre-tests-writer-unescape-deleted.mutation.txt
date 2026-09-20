@@ -1,0 +1,2 @@
+mutated writer-delete src/deltafuse/core/artifact_patch.py sha256=7481dd783a84bccc2b377095d2dce5c41e3eeb15053a454a15abd41194a70cb2
+mutated writer-delete scripts/evaluate_artifact_writer.py sha256=8f811198600c8b1cebad56ba6fa50beaa8e850ada99deb1d8109b0f6c76132a3

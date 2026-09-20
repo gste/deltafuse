@@ -9,7 +9,7 @@ to external services. User instructions and canonical Process contracts prevail.
 1. Read repository AGENTS.md, REVIEW-6.md, README.md, PLAN.md, this file, the
    selected card, relevant CONTRACT.md/VALIDATION.md and actual predecessor evidence.
 2. Select the first unfinished card in queue.execution_order whose dependencies have verified relevant
-   completion evidence. Current entry: AW-45. Historical completed labels are
+   completion evidence. Current entry: AW-42. Historical completed labels are
    claims to inspect, not permission to skip current acceptance checks.
 3. Work on ONE card per implementation turn. Do not automatically execute all
    remaining cards. If too large, create dependency-ordered child cards retaining
@@ -19,20 +19,26 @@ to external services. User instructions and canonical Process contracts prevail.
    hashes before edits. Preserve concurrent work and all files outside the write
    set. Do not reset, stash, clean or rewrite user changes to obtain a clean tree.
 
-Current sequence: AW-45 -> AW-41 -> AW-40 -> AW-42 -> AW-20.
-AW-43 and AW-44 are completed with inspected evidence; do not skip their records.
+Current sequence: AW-42 -> AW-20.
+AW-43, AW-44, AW-45 and AW-46 are completed with inspected evidence; do not skip
+their records. AW-40 and AW-41 are completed for the runs they actually executed;
+their AW-42 reconciliation rows remain open.
 AW-39 remains completed for the verified routing-patch fix; retain its regressions.
+AW-46 added the escaped-pointer and nested-lookup regressions AW39-R3 was missing and
+changed no AW-39 row, no oracle byte and no runtime byte.
 AW-38 remains completed for the proven missing-hash fix; retain its regressions.
 
 ## Sixth-review execution gates - no inferred completion
 
-The current queue entry is AW-45, then AW-41 which is dependency-ready but
-environmentally blocked (native POSIX host for concurrency/hard-crash and
-capable-host symlink/reparse tests; current host is unprivileged Windows).
+The current queue entry is AW-42 (2026-09-20, after AW-46). It is dependency-ready but
+cannot close from its own write set: `AW42-R3` subrows b and e stay NOT RUN on evidence
+owned by AW-41 and AW-44 (13 unretrievable raw logs behind
+`<preserved-run-location>`; a non-re-derivable wheel digest), and `AW42-R4` requires
+re-running AW-42's own probe and reconciler at the post-AW-46 tree.
 Run the backlog checker regularly: `python check_backlog.py
 backlog/schema-driven-artifact-writer/queue.json`. AW-37 is not reopened.
-Retain its passing regressions. Do not route directly to AW-40/AW-42/AW-20
-while qualification predecessors remain open. Existing live qualification
+Retain its passing regressions. Do not route directly to AW-20 while AW-42's
+acceptance rows remain open. Existing live qualification
 remains mandatory in AW-41/AW-40.
 
 Before ANY edit, write a short execution ledger in the selected result:
@@ -247,10 +253,11 @@ Implement ONE dependency-ready Artifact Writer card in the canonical DeltaFuse
 repository. Read AGENTS.md, backlog/schema-driven-artifact-writer/REVIEW-6.md,
 README.md, EXECUTOR.md, RESULT-TEMPLATE.md, PLAN.md, the selected queue.json card
 and relevant CONTRACT.md/VALIDATION.md sections. Current entry is AW-42
-(reconciliation of final source/evidence; AW-43/AW-44/AW-45/AW-41/AW-40 are
+(reconciliation of final source/evidence; AW-43/AW-44/AW-45/AW-46/AW-41/AW-40 are
 completed — AW-40's live paired run was executed 2026-09-20 under the
 delivery-verified AMEND-3 transport with 28 raw traces and replayable metrics in
-evaluation/live-run-2026-09-20/). Run `python
+evaluation/live-run-2026-09-20/, and AW-46 supplied the AW39-R3 escaped-pointer
+regression on 2026-09-20). Run `python
 backlog/schema-driven-artifact-writer/check_backlog.py
 backlog/schema-driven-artifact-writer/queue.json` to confirm readiness, and
 stop — do not claim execution or route to AW-20 before AW-42 reconciles raw

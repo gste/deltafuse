@@ -1826,14 +1826,20 @@
         {
           "id": "AW42-F1",
           "requirement": "Reconcile the exact original requirement text, card/queue acceptance IDs and result rows before reading their PASS labels. Detect narrowed paraphrases: using an oracle does not prove live paired sessions, and disclosing Windows skips does not prove POSIX execution.",
-          "status": "open"
+          "status": "passed"
         },
         {
           "id": "AW42-F2",
           "requirement": "Current matching source hashes are verified progress, not a waiver of missing model/platform/package-corruption evidence. Any mandatory NOT RUN/FAIL from AW-37/AW-40/AW-41 prevents completion; preserve earlier hash evidence with its actual tested source and rerun affected final-tree checks.",
           "status": "passed"
         }
-      ]
+      ],
+      "completion_blockers": [
+        "AW42-R3 subrow b NOT RUN: the 13 raw logs named by evidence/platform/AW-41/MANIFEST.json and evidence/reconciliation/AW-44/MANIFEST.json resolve only to '<preserved-run-location>' placeholders and are not retrievable, so their recorded digests cannot be independently re-verified. Owning cards: AW-41 and AW-44. The underlying checks were re-executed on the final tree with in-repo raw logs (AW-42 bundle), which repairs the qualification but not the record.",
+        "AW42-R3 subrow e NOT RUN: AW-44's wheel digest 8cad2835... is not re-derivable; two builds of one identical tree produced 4c923577... and 75543785..., and an untracked same-named wheel in dist/ carries 9899dfb1.... Owning card: AW-44. Wheel digests must not be used as final-tree identity.",
+        "AW42-R4 FAIL: AW39-R3 'Verify JSON Pointer escaping and missing nested paths' has zero committed assertions - the only test claiming it (tests/unit/test_artifact_writer_eval.py::test_aw39_json_pointer_escaping_and_nested_removal) uses plain pointers, while queue records AW39-R3 as passed. Owning card: AW-39."
+      ],
+      "reconciliation_result": "Executed 2026-09-20 at HEAD 290c13a387b5fe15ccdd9f31fe4ebdca0be6fbc1: 135 final-scope digest claims reconciled (99 match / 23 drift / 7 unresolved / 6 external); AW-40 evidence index re-verified 60/60 and paired metrics independently recomputed from 28 delivery-verified traces; 13 win32 and POSIX checks re-run with retained raw logs in evidence/reconciliation/AW-42/bundle-index.json."
     },
     {
       "id": "AW-43",
@@ -2060,6 +2066,86 @@
           "status": "passed"
         }
       ]
+    },
+    {
+      "id": "AW-46",
+      "phase": "M",
+      "title": "Restore the executable JSON Pointer escaping regression for AW39-R3",
+      "status": "completed",
+      "depends_on": [
+        "AW-39"
+      ],
+      "remediates": [
+        "AW-39",
+        "AW-42"
+      ],
+      "review_finding": 6,
+      "reads": [
+        "backlog/schema-driven-artifact-writer/AGENTS.md",
+        "backlog/schema-driven-artifact-writer/REVIEW-6.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md",
+        "backlog/schema-driven-artifact-writer/RECONCILIATION-CHECKLIST.md",
+        "backlog/schema-driven-artifact-writer/RESULT-TEMPLATE.md",
+        "backlog/schema-driven-artifact-writer/cards/AW-39.md",
+        "backlog/schema-driven-artifact-writer/results/AW-39.md",
+        "backlog/schema-driven-artifact-writer/results/AW-42.md",
+        "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-42/**",
+        "src/deltafuse/core/artifact_patch.py",
+        "scripts/evaluate_artifact_writer.py",
+        "tests/unit/test_artifact_writer_eval.py",
+        "tests/unit/test_artifact_patch.py",
+        "process/schemas/routing.schema.yaml"
+      ],
+      "writes": [
+        "tests/unit/test_artifact_writer_eval.py",
+        "backlog/schema-driven-artifact-writer/cards/AW-46.md",
+        "backlog/schema-driven-artifact-writer/results/AW-46.md",
+        "backlog/schema-driven-artifact-writer/evidence/reconciliation/AW-46/**",
+        "backlog/schema-driven-artifact-writer/queue.json",
+        "backlog/schema-driven-artifact-writer/README.md",
+        "backlog/schema-driven-artifact-writer/PLAN.md",
+        "backlog/schema-driven-artifact-writer/EXECUTOR.md"
+      ],
+      "work": [
+        "AW-42 recorded AW42-R4 FAIL because AW39-R3's clause \"Verify JSON Pointer escaping and missing nested paths; do not skip a failed lookup or substitute top-level deletion checks for nested removals. Correct title/body update semantics must also pass.\" has zero committed assertions. AW-39 keeps AW39-R1..AW39-R4 verbatim and stays completed for its verified routing-patch fix; this bounded child supplies the missing executable invariant and changes no runtime, contract, schema, asset, fixture or oracle byte.",
+        "A committed test in tests/unit/test_artifact_writer_eval.py fails, with a named assertion and nonzero exit, when the ~1 to / and ~0 to ~ unescaping in src/deltafuse/core/artifact_patch.py::_parse_pointer is removed for the duration of a run and restored byte-for-byte afterwards with pristine hashes re-verified, and passes at pristine bytes; the RFC 6901 ~01 ordering control distinguishes correct-order unescaping from a swapped replacement sequence.",
+        "A committed test asserts that a remove addressed by an escaped pointer deletes exactly the targeted nested key, preserves its sibling keys and parent container, and raises remove_target_missing when the only on-disk key is the literal unescaped ~1 text, so neither a top-level nor a literal-key deletion can substitute for the nested removal.",
+        "evaluate_independent_oracle returns semantic_correct=false for a nested set whose on-disk keys are the raw ~1/~0 text, for a nested target path that is missing after a claimed set, and for a nested key still present after a claimed removal, and semantic_correct=true only for the exactly matching decoded nested state; scripts/evaluate_artifact_writer.py and every src/** byte stay identical to the digests AW-42 reconciled.",
+        "Every pre-existing test in tests/unit/test_artifact_writer_eval.py and tests/unit/test_artifact_patch.py is unmodified and green at the final tree, cards/AW-39.md and the queue.json AW39-R1..AW39-R4 requirement strings are byte-identical to their pre-edit form, and AW-42's probe_pointer_escaping.py reports a nonzero count of committed escaped-pointer assertions.",
+        "No acceptance row inherited from AW-39, AW-42 or AW-20 is relabeled by this card; AW-42's AW42-R4 may be re-evaluated only by re-running AW-42's own probe and reconciler at the new tree, and every AW-42 bundle digest covering the edited test file is reported as historical rather than silently refreshed."
+      ],
+      "red": "Pre-edit tree, pre-edit tests: the full tests/unit tests/integration tests/e2e suite stays green with the _parse_pointer unescaping deleted, and stays green again with the _resolve_json_pointer unescaping deleted; record exact argv, exit and the unchanged test counts, because a green suite under mutation is the counterexample and not a runtime behavioral failure.",
+      "green": "With the new tests present, each mutation produces named test failures with nonzero exit, and with pristine bytes the new tests plus every pre-existing AW-39 and AW-05 test pass, so AW39-R3 escaping and missing-nested-path clauses each carry a named assertion while AW-42 and AW-20 keep their own open rows.",
+      "test": "Run the isolated-copy mutation matrix (control, writer mutation, oracle mutation) before and after the test edit; run the full unit/integration/e2e suite, backlog checker, checker tests, sync_assets --check, git diff --check and AW-42's read-only probe at the real tree; re-hash src/**, scripts/** and process/** against AW-42's inventory.",
+      "card_path": "cards/AW-46.md",
+      "result_path": "results/AW-46.md",
+      "acceptance_checks": [
+        {
+          "id": "AW46-R1",
+          "requirement": "A committed test in tests/unit/test_artifact_writer_eval.py fails, with a named assertion and nonzero exit, when the ~1 to / and ~0 to ~ unescaping in src/deltafuse/core/artifact_patch.py::_parse_pointer is removed for the duration of a run and restored byte-for-byte afterwards with pristine hashes re-verified, and passes at pristine bytes; the RFC 6901 ~01 ordering control distinguishes correct-order unescaping from a swapped replacement sequence.",
+          "status": "passed"
+        },
+        {
+          "id": "AW46-R2",
+          "requirement": "A committed test asserts that a remove addressed by an escaped pointer deletes exactly the targeted nested key, preserves its sibling keys and parent container, and raises remove_target_missing when the only on-disk key is the literal unescaped ~1 text, so neither a top-level nor a literal-key deletion can substitute for the nested removal.",
+          "status": "passed"
+        },
+        {
+          "id": "AW46-R3",
+          "requirement": "evaluate_independent_oracle returns semantic_correct=false for a nested set whose on-disk keys are the raw ~1/~0 text, for a nested target path that is missing after a claimed set, and for a nested key still present after a claimed removal, and semantic_correct=true only for the exactly matching decoded nested state; scripts/evaluate_artifact_writer.py and every src/** byte stay identical to the digests AW-42 reconciled.",
+          "status": "passed"
+        },
+        {
+          "id": "AW46-R4",
+          "requirement": "Every pre-existing test in tests/unit/test_artifact_writer_eval.py and tests/unit/test_artifact_patch.py is unmodified and green at the final tree, cards/AW-39.md and the queue.json AW39-R1..AW39-R4 requirement strings are byte-identical to their pre-edit form, and AW-42's probe_pointer_escaping.py reports a nonzero count of committed escaped-pointer assertions.",
+          "status": "passed"
+        },
+        {
+          "id": "AW46-F1",
+          "requirement": "No acceptance row inherited from AW-39, AW-42 or AW-20 is relabeled by this card; AW-42's AW42-R4 may be re-evaluated only by re-running AW-42's own probe and reconciler at the new tree, and every AW-42 bundle digest covering the edited test file is reported as historical rather than silently refreshed.",
+          "status": "passed"
+        }
+      ]
     }
   ],
   "review_snapshot": {
@@ -2103,6 +2189,7 @@
     "AW-45",
     "AW-41",
     "AW-40",
+    "AW-46",
     "AW-42",
     "AW-20"
   ],
