@@ -55,6 +55,14 @@ EXEMPT_GLOBS = (
     ".deltafuse/**",
     "docs/intake/**",
     "docs/archive/**",
+    # Interpreter caches: running the Red/Green tests writes them, and the
+    # Worker cannot avoid it (q0 run 20260921T111852Z: declare refused over
+    # src/ratelimit/__pycache__/*.pyc). fnmatch `*` crosses `/`.
+    "*.pyc",
+    "__pycache__/*",
+    "*/__pycache__/*",
+    ".pytest_cache/*",
+    "*/.pytest_cache/*",
 )
 EXEMPT_NAMES = frozenset({"README.md", "README.ru.md"})
 CHANGE_ARTIFACT_GLOB = "docs/changes/**"
@@ -486,7 +494,15 @@ def core_status_writes(
         change_dir = dirs.get(str(entry.get("change")))
         if folder is None or change_dir is None or not isinstance(entry.get("artifact_id"), str):
             continue
+        home = (change_dir / folder).relative_to(root).as_posix()
         rel = (change_dir / folder / f"{entry['artifact_id']}.md").relative_to(root).as_posix()
+        recorded = entry.get("path")
+        if isinstance(recorded, str):
+            # A task file may be TASK-NNN-<slug>.md; the Core records which one
+            # it rewrote. Only a file of this Change's folder is ever accepted.
+            recorded = posix_relpath(recorded)
+            if recorded.startswith(home + "/") and "/" not in recorded[len(home) + 1:]:
+                rel = recorded
         moves.setdefault(rel, []).append(entry)
 
     out: dict[str, list[str]] = {}

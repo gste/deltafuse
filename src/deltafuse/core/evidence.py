@@ -198,9 +198,6 @@ def write_stamped_evidence(
 
 
 
-_GENERATED_DIRS = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
-
-
 def _core_computed_changed_paths(repo_root: Path) -> list[str]:
     """Core-derived dirty paths the Worker is accountable for.
 
@@ -220,9 +217,7 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
         rel = posix_relpath(raw)
         parts = rel.split("/")
         if is_exempt_path(rel):
-            continue  # .deltafuse/** and the other leash exemptions
-        if _GENERATED_DIRS.intersection(parts) or rel.endswith(".pyc"):
-            continue
+            continue  # .deltafuse/**, interpreter caches, the other leash exemptions
         if len(parts) > 3 and parts[:2] == ["docs", "changes"] and parts[3] == "evidence":
             continue  # written by `deltafuse evidence` itself
         out.append(raw)

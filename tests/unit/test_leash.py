@@ -482,3 +482,51 @@ def test_leash_rejects_a_hand_set_slice_status(tmp_path: Path, repo_root: Path, 
     ret, data = _leash_diff(tmp_path, capsys)
     assert ret == 1
     assert any("SLICE-01.md" in row for row in data["violations"])
+
+
+def test_leash_accepts_a_state_rewrite_of_a_slug_named_task(tmp_path: Path, repo_root: Path, capsys):
+    """The Core rewrote TASK-001-<slug>.md through `state` and the leash looked
+    for TASK-001.md, so the rewrite read as a hand edit. The receipt now names
+    the file."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-507", title="Slug")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.rename(task.with_name("TASK-001-penalty-config.md"))
+    _git_init_commit(tmp_path)
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    capsys.readouterr()
+    ret, data = _leash_diff(tmp_path, capsys)
+    assert data["violations"] == [], data["violations"]
+    assert ret == 0
+
+
+def test_leash_ignores_interpreter_caches(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run 20260921T111852Z: running the Red test wrote
+    src/ratelimit/__pycache__/*.pyc, and the leash refused declare over it."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_baseline(tmp_path)
+    (
+        MockChangeBuilder(tmp_path, change_id="CHG-508", title="Caches")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    ret, data = _leash_json(
+        tmp_path,
+        capsys,
+        files=[
+            "src/ratelimit/__pycache__/limiter.cpython-314.pyc",
+            "tests/__pycache__/test_penalty.cpython-314-pytest-9.0.pyc",
+            ".pytest_cache/v/cache/lastfailed",
+        ],
+    )
+    assert ret == 0, data
+    assert data["ok"] is True

@@ -100,6 +100,8 @@ Change может быть переведён в терминальное сос
 | `analyzing` | `superseded` | Change заменён более широким или реструктурированным запросом. | Ссылка на замещающий Change зафиксирована в `change.yaml`. |
 | `converged` | `archived` | Пакет Change целиком перемещён в `docs/archive/changes/<date>-<change-id>/`. | Change удалён из активных списков, история неизменна. |
 
+Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может.
+
 ---
 
 ## Slice State Machine

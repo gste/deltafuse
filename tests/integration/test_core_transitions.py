@@ -273,3 +273,66 @@ def test_check_gate_reports_a_gate_out_of_turn(tmp_path: Path, repo_root: Path, 
     assert main(["check-gate", str(builder.change_dir), "--gate", "implemented"]) != 0
     out, err = capsys.readouterr()
     assert "not this Change's turn" in out + err
+
+
+def test_declaring_gate_closes_from_decomposed(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T111852Z: every task declared and `check-gate declaring`
+    passing, `advance --gate declaring` still failed on 'decomposed' ->
+    'declared'. No command writes 'declaring' to a Change; a fixture that did
+    hid the dead end."""
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-964")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    builder.step_declare()
+    assert _read_status(builder.change_dir) == "decomposed"
+
+    result = advance_change(builder.change_dir, "declaring")
+    assert (result["from"], result["to"]) == ("decomposed", "declared")
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
+
+
+def test_every_gate_start_reaches_its_target():
+    """GATE_ALLOWED_FROM said a gate may close from a status the transition
+    table could not leave for the gate's target. The known exceptions are
+    listed with their reason; a new one fails here instead of in a run."""
+    from deltafuse.core.transitions import GATE_ALLOWED_FROM, GATE_TARGETS, _gate_reachable
+
+    known_open = {
+        ("analyzed", "normalized"): "the intake gate always runs first",
+        ("decomposed", "analyzed"): "bugfix path, open in the roadmap (item 4)",
+    }
+    unreachable = {
+        (gate, start)
+        for gate, starts in GATE_ALLOWED_FROM.items()
+        for start in starts
+        if start != GATE_TARGETS[gate] and not _gate_reachable(start, GATE_TARGETS[gate])
+    }
+    assert unreachable == set(known_open)
+    for gate, start in (("declaring", "decomposed"), ("implemented", "declared"), ("converged", "implemented")):
+        assert _gate_reachable(start, GATE_TARGETS[gate]), (gate, start)
+
+
+def test_state_finds_a_task_by_its_frontmatter_id(tmp_path: Path, repo_root: Path, capsys):
+    """The decompose skill allows TASK-NNN-<slug>.md with id TASK-NNN, and
+    `next` names the task by that id; `state` looked only for TASK-NNN.md
+    (q0 run 20260921T111852Z)."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-965")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    slug = task.with_name("TASK-001-penalty-config.md")
+    task.rename(slug)
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    assert "status: declared" in slug.read_text(encoding="utf-8")
+    receipt = last_receipt(tmp_path, "CHG-965")
+    assert receipt["artifact_id"] == "TASK-001"
+    assert receipt["path"].endswith("/tasks/TASK-001-penalty-config.md")
+    capsys.readouterr()
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-009", "--status", "declared"]) == 1
+    _, err = capsys.readouterr()
+    assert "known task ids: TASK-001" in err

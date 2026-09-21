@@ -91,6 +91,58 @@ class TransitionError(Exception):
     """Rejected or inconsistent lifecycle transition."""
 
 
+def _gate_reachable(current: str | None, target: str) -> bool:
+    """A gate closes from a resting status over the in-flight one between.
+
+    No command writes 'declaring', 'implementing' or 'verifying' to a Change,
+    so the gate from 'decomposed' to 'declared' has to step over 'declaring'
+    (GATE_ALLOWED_FROM already lists 'decomposed'). q0 run 20260921T111852Z:
+    `advance --gate declaring` failed on 'decomposed' -> 'declared' with every
+    task declared and the gate passing - no Worker could get past it.
+    """
+    if can_transition(current, target):
+        return True
+    return any(
+        can_transition(current, mid) and can_transition(mid, target)
+        for mid in _INFLIGHT_STATUSES
+    )
+
+
+def _artifact_file(folder: Path, artifact_id: str, kind: str) -> tuple[Path, str]:
+    """The task or slice file for `artifact_id`, and its canonical id.
+
+    The decompose skill allows `TASK-NNN-<slug>.md` with frontmatter id
+    `TASK-NNN`, and `deltafuse next` names tasks by that id. q0 run
+    20260921T111852Z: `state --task TASK-002` was refused for
+    `TASK-002-penalty-window.md` because only `<id>.md` was looked up.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    known: dict[str, list[Path]] = {}
+    for candidate in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+        try:
+            meta, _ = parse_frontmatter(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        meta_id = meta.get("id") if isinstance(meta, dict) else None
+        if isinstance(meta_id, str):
+            known.setdefault(meta_id, []).append(candidate)
+    exact = folder / f"{artifact_id}.md"
+    if exact.is_file():
+        canonical = next((i for i, files in known.items() if exact in files), artifact_id)
+        return exact, canonical
+    matches = known.get(artifact_id, [])
+    if len(matches) == 1:
+        return matches[0], artifact_id
+    if len(matches) > 1:
+        names = ", ".join(p.name for p in matches)
+        raise TransitionError(f"{kind} id {artifact_id} is declared by several files: {names}")
+    raise TransitionError(
+        f"{kind} file not found for id {artifact_id} in {folder}; "
+        f"known {kind} ids: {', '.join(sorted(known)) or 'none'}"
+    )
+
+
 def transitions_path(product_root: Path) -> Path:
     return product_root / ".deltafuse" / TRANSITION_JOURNAL
 
@@ -333,7 +385,7 @@ def advance_change(
                 f"cannot apply gate '{gate}' from status '{current}'; "
                 f"allowed: {sorted(allowed_from)}"
             )
-        if not can_transition(current, target) and target != current:
+        if target != current and not _gate_reachable(current, target):
             raise TransitionError(
                 f"transition table rejects '{current}' -> '{target}'"
             )
@@ -465,14 +517,10 @@ def set_artifact_status(
 
         if task_id:
             allowed = TASK_STATUS_TRANSITIONS
-            file = change_path / "tasks" / f"{task_id}.md"
-            if not file.is_file():
-                raise TransitionError(f"task file not found: {file}")
+            file, task_id = _artifact_file(change_path / "tasks", task_id, "task")
         elif slice_id:
             allowed = SLICE_STATUS_TRANSITIONS
-            file = change_path / "slices" / f"{slice_id}.md"
-            if not file.is_file():
-                raise TransitionError(f"slice file not found: {file}")
+            file, slice_id = _artifact_file(change_path / "slices", slice_id, "slice")
         else:
             allowed = None  # change-level, handled below
             file = change_path / "change.yaml"
@@ -546,6 +594,10 @@ def set_artifact_status(
             "to": status,
             "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+        if file.name != "change.yaml":
+            # The file name need not be the id (TASK-NNN-<slug>.md): the leash
+            # reads the rewritten file from here, not from the id.
+            entry["path"] = file.relative_to(product_root).as_posix()
         entry["receipt"] = _receipt(entry)
         path = transitions_path(product_root)
         path.parent.mkdir(parents=True, exist_ok=True)

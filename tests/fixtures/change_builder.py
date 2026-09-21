@@ -354,7 +354,9 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["evidence"]["red"] = f"evidence/red/{task_id}.yaml"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        self._update_change_yaml({"status": "declaring"})
+        # No status write: the Core never writes 'declaring' to a Change, and a
+        # fixture that did hid the dead end at the declaring gate (q0 run
+        # 20260921T111852Z). The Change stays 'decomposed' until advance.
         return self
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:
