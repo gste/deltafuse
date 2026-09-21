@@ -513,7 +513,7 @@ Fuse-Back — кандидат в weak-model workload, проверяемый р
 T4b переведён в `observed`: прогон, сделавший работу выше 64 000, — fail-safe,
 а не отказ. Оценка прогона умножается на `max(0, 1 − (пик − 64 000) / 64 000)`;
 параметры — `scoring.budget_penalty` в `thresholds.md`. T4 (окно модели)
-остаётся гейтящим. Подробности — в `q0-qualification-baseline/thresholds.md`.
+остаётся гейтящим. Подробности — в `deltafuse-bench/qualify/thresholds.md`.
 
 #### Открытый вопрос: единица бюджета
 
@@ -541,7 +541,7 @@ T4b переведён в `observed`: прогон, сделавший рабо�
 | `deltafuse/src/deltafuse/bench/score.py` | `deltafuse bench score` — «Judge: score a sandbox from the pack», 989 строк внутри пакета фреймворка |
 | `deltafuse/scripts/qualify.py` | свой OpenAI-совместимый цикл инструментов, пороги, кампании; оценивает через `score.py` фреймворка |
 
-**Шаг 1 — перенос, до полной кампании q0.** `qualify.py`, `tokenize_server.py`,
+**Шаг 1 — перенос, до полной кампании q0. Сделано** (`deltafuse-bench` `a6d466b`, `qualify/`). `qualify.py`, `tokenize_server.py`,
 `thresholds.md` (со штрафом за бюджет) и `test_qualify.py` переезжают в
 `deltafuse-bench` как есть; ссылки в `docs/small-llm-contract.md(.ru)`
 обновляются. Baseline с первого прогона производится из репозитория бенча.
@@ -563,7 +563,7 @@ T4b переведён в `observed`: прогон, сделавший рабо�
 агента (роль для ранних pet-проектов: трассировщик запросов агента и просмотрщик
 NDJSON).
 
-Де-факто референсный хост уже есть — `scripts/qualify.py`: OpenAI-совместимый
+Де-факто референсный хост уже есть — `deltafuse-bench/qualify/qualify.py`: OpenAI-совместимый
 цикл инструментов, ограниченная поверхность, Human Gate вне модели, `leash`
 после каждой записи, учёт usage и стоимости. Работает с любым
 OpenAI-совместимым эндпоинтом, включая корпоративный BYOK.

@@ -60,6 +60,6 @@
   violations.
 - Абсолютные численные release thresholds для v3 (T1–T8, для каждого прогона и
   для медиан) зафиксированы в
-  `backlog/roadmap/q0-qualification-baseline/thresholds.md`; прогоны выполняет
-  `scripts/qualify.py`. Ослабление любого порога — отдельный maintainer Decision
+  `deltafuse-bench/qualify/thresholds.md`; прогоны выполняет
+  `deltafuse-bench/qualify/qualify.py`. Ослабление любого порога — отдельный maintainer Decision
   с записью в роадмап.

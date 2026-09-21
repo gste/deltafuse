@@ -7,13 +7,20 @@
 **Пока этот пункт открыт, остальные направления нечем измерить.** Брейншторм не
 нужен ни по одной из трёх — это механика с известным содержанием.
 
+> **Перенос, 2026-09-21.** Раннер, сервер токенайзера и пороги переехали в
+> `deltafuse-bench/qualify/` (коммит бенча `a6d466b`): судья живёт вне
+> фреймворка, который судит. Упоминания `scripts/qualify.py`,
+> `scripts/tokenize_server.py` и `thresholds.md` ниже — история до переноса.
+> Фреймворк под проверкой раннер берёт из `DELTAFUSE_FRAMEWORK` (по умолчанию
+> `../deltafuse`) и пишет в манифест коммиты обоих репозиториев.
+
 ## Статус на 2026-09-21
 
 | работа | состояние |
 | ------ | --------- |
-| 0.1 пороги T1–T8 | **сделано** — [thresholds.md](thresholds.md), плюс T9/T10 как наблюдаемые без гейтинга |
+| 0.1 пороги T1–T8 | **сделано** — [thresholds.md](../../../../deltafuse-bench/qualify/thresholds.md) (в `deltafuse-bench`), плюс T9/T10 как наблюдаемые без гейтинга |
 | 0.2 детерминизм подсчёта | **сделано** — режим в receipt, `DELTAFUSE_TOKENIZER_REQUIRED` запрещает тихий фоллбэк |
-| 0.3 раннер | **сделано** — [`scripts/qualify.py`](../../../scripts/qualify.py) |
+| 0.3 раннер | **сделано** — [`qualify/qualify.py`](../../../../deltafuse-bench/qualify/qualify.py) (в `deltafuse-bench`) |
 | 0.3 блокер `decide --spec` | **исправлен** — переход идёт через `advance_change` с receipt (см. ниже) |
 | 0.3 первый живой прогон | **диагностический выполнен**, квалифицирующий — см. раздел кампании |
 
@@ -217,8 +224,8 @@ llama-server. `GET /health` отдаёт идентичность, и ранне
 Команда первого прогона:
 
 ```
-python scripts/tokenize_server.py --tokenizer %LOCALAPPDATA%/deltafuse/tokenizers/Qwen_Qwen3.8-27B --port 8765
-DELTAFUSE_TOKENIZE_URL=http://127.0.0.1:8765/tokenize OPENROUTER_API_KEY=... python scripts/qualify.py --cases M01-cooldown M02-policy-stats M03-adversarial   --model qwen/qwen3.8-27b --pack ../deltafuse-bench --max-cost 5
+python qualify/tokenize_server.py --tokenizer %LOCALAPPDATA%/deltafuse/tokenizers/Qwen_Qwen3.8-27B --port 8765   # из deltafuse-bench
+DELTAFUSE_TOKENIZE_URL=http://127.0.0.1:8765/tokenize OPENROUTER_API_KEY=... python qualify/qualify.py --cases M01-cooldown M02-policy-stats M03-adversarial   --model qwen/qwen3.8-27b --pack ../deltafuse-bench --max-cost 5
 ```
 
 Раннер реальным подсчётом проверяет, что токенайзер отвечает, и без этого
@@ -242,7 +249,7 @@ DELTAFUSE_TOKENIZE_URL=http://127.0.0.1:8765/tokenize OPENROUTER_API_KEY=... pyt
 квалификации, и это уже не q0: вынесено в роадмап отдельным пунктом
 ([«Эвристика подсчёта не является верхней границей»](../README.md#эвристика-подсчёта-не-является-верхней-границей)).
 
-Перед прогоном: `python scripts/qualify.py --cases M01-cooldown --dry-run`
+Перед прогоном (из `deltafuse-bench`): `python qualify/qualify.py --cases M01-cooldown --dry-run`
 проверяет пороги, пак и окружение, ничего не вызывая.
 
 

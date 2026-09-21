@@ -58,6 +58,6 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
   retries, context tokens, unique files, hallucinated paths, and envelope
   violations.
 - Absolute numerical release thresholds for v3 (T1-T8, per run and for
-  medians) are fixed in `backlog/roadmap/q0-qualification-baseline/thresholds.md`;
-  qualification runs are executed by `scripts/qualify.py`. Weakening any
+  medians) are fixed in `deltafuse-bench/qualify/thresholds.md`;
+  qualification runs are executed by `deltafuse-bench/qualify/qualify.py`. Weakening any
   threshold requires a separate maintainer Decision recorded with the roadmap.
