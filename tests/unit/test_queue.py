@@ -388,3 +388,32 @@ def test_next_keeps_decompose_until_the_decomposed_gate_passes(
     assert selected is not None
     assert selected.skill == "decompose"
     assert "check-gate decomposed" in selected.reason
+
+
+def test_an_intake_note_taken_in_by_an_archived_change_is_not_pending(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run M03 20260921T215701Z: after CHG-001 converged and was archived,
+    `next` offered its intake note again and the Worker opened CHG-002 from the
+    same request."""
+    import json
+
+    from deltafuse.core.queue import intake_sources_pending
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    note = tmp_path / "docs" / "intake" / "M03-adversarial.md"
+    note.write_text("# Request\n- CR-001: something\n", encoding="utf-8")
+    assert intake_sources_pending(tmp_path)
+
+    archived = tmp_path / "docs" / "archive" / "changes" / "2026-09-22-CHG-001-x"
+    archived.mkdir(parents=True)
+    (archived / "change.yaml").write_text(
+        yaml.safe_dump({"id": "CHG-001-x", "status": "archived",
+                        "source": {"request": "request.md", "intake_refs": ["docs/intake/M03-adversarial.md"]}}),
+        encoding="utf-8",
+    )
+    assert not intake_sources_pending(tmp_path)
+    assert main(["next", str(tmp_path), "--json"]) == 0
+    data = json.loads(capsys.readouterr()[0])
+    assert data["halt"]["kind"] == "done"
+
+    (tmp_path / "docs" / "intake" / "another.md").write_text("# New request\n", encoding="utf-8")
+    assert intake_sources_pending(tmp_path)

@@ -15,7 +15,7 @@ from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.transitions import receipt_mismatch
-from deltafuse.core.context import PHASE_CONTRACTS
+from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
 TERMINAL_CHANGE = {
@@ -192,14 +192,45 @@ def changes_dir(product_root: Path) -> Path:
     return product_root / rel
 
 
+def _consumed_intake_refs(product_root: Path) -> set[str]:
+    """Intake sources some Change - active or archived - already took in."""
+    roots = [changes_dir(product_root), product_root / "docs" / "archive" / "changes"]
+    consumed: set[str] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for change_file in root.glob("*/change.yaml"):
+            try:
+                data = yaml.safe_load(change_file.read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            refs = source.get("intake_refs") if isinstance(source, dict) else None
+            for ref in refs or []:
+                if isinstance(ref, str):
+                    consumed.add(posix_relpath(ref))
+    return consumed
+
+
 def intake_sources_pending(product_root: Path) -> bool:
-    """True when docs/intake has a source other than README / .gitkeep."""
+    """True when docs/intake has a source no Change has taken in yet.
+
+    README / .gitkeep never count, and neither does a source named in some
+    Change's `source.intake_refs`, archived ones included. q0 run M03
+    20260921T215701Z: after CHG-001 converged and was archived, its intake
+    note still counted as pending, and the Worker opened CHG-002 from the same
+    request - a loop only the budget would have stopped.
+    """
     intake = product_root / "docs" / "intake"
     if not intake.is_dir():
         return False
     skip = {"readme.md", ".gitkeep"}
+    consumed = _consumed_intake_refs(product_root)
     for path in intake.iterdir():
         if path.name.lower() in skip:
+            continue
+        rel = path.relative_to(product_root).as_posix()
+        if rel in consumed or any(ref.startswith(rel + "/") for ref in consumed):
             continue
         if path.is_file() or path.is_dir():
             return True
