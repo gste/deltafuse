@@ -433,6 +433,21 @@ def set_artifact_status(
                 raise TransitionError(
                     f"cannot set Change status '{status}' from '{current}'"
                 )
+            if status == "specification-proposed":
+                # Proposing hands the spec to the Human Gate. A spec delta that
+                # fails the machine checks is the Worker's to fix: letting it
+                # through put a format error in front of the human, who can
+                # neither accept it (the gate still fails) nor fix it, and the
+                # run died on specify. Everything but the human receipt must
+                # pass first; the errors go back to the Worker.
+                from deltafuse.core.fsm import check_gate
+
+                gate_errors = check_gate(change_path, "specified", assume_status=status)
+                if gate_errors:
+                    raise TransitionError(
+                        "spec delta is not ready for the Human Gate; fix and propose again: "
+                        + "; ".join(gate_errors)
+                    )
             _write_change_status(change_path, data, status)
         else:
             data = _load_change_yaml(change_path)

@@ -144,3 +144,65 @@ def test_advance_from_proposed_still_needs_the_spec_receipt(tmp_path: Path, repo
     _, err = capsys.readouterr()
     assert "without deltafuse decide" in err
     assert _change_status(builder) == "specification-proposed"
+
+
+def _analyzed_with_delta(tmp_path: Path, repo_root: Path, change_id: str, delta: str):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id=change_id, title="Propose").step_intake().step_analyze()
+    builder._core_advance("analyzed")
+    (builder.change_dir / "spec-delta.md").write_text(delta, encoding="utf-8")
+    return builder
+
+
+def _propose(builder) -> int:
+    return main(["state", str(builder.change_dir), "--change", "--status", "specification-proposed"])
+
+
+def test_proposing_a_malformed_spec_delta_goes_back_to_the_worker(tmp_path: Path, repo_root: Path, capsys):
+    """q0 runs M01-1 and M01-2: the model proposed spec-deltas without the
+    frontmatter delimiters or without added/modified/removed. The Core let the
+    proposal through, the Human Gate could neither accept nor fix it, and both
+    runs died on specify. Proposing now requires the machine checks of the
+    specified gate; the errors go to the Worker and the status stays put."""
+    no_delimiters = _analyzed_with_delta(
+        tmp_path / "a", repo_root, "CHG-078", "change: CHG-078\nstatus: proposed\n\n# Spec\n"
+    )
+    assert _propose(no_delimiters) == 1
+    _, err = capsys.readouterr()
+    assert "not ready for the Human Gate" in err and "frontmatter" in err
+    assert _change_status(no_delimiters) == "analyzed"
+
+    missing_ops = _analyzed_with_delta(
+        tmp_path / "b", repo_root, "CHG-079",
+        "---\nchange: CHG-079\nstatus: proposed\nslices: [SLICE-01]\n---\n\n# Spec\n",
+    )
+    assert _propose(missing_ops) == 1
+    _, err = capsys.readouterr()
+    assert "'added' is a required property" in err
+    assert _change_status(missing_ops) == "analyzed"
+
+
+def test_proposing_a_self_accepted_spec_delta_is_refused(tmp_path: Path, repo_root: Path, capsys):
+    """A spec delta the Worker marked accepted itself fails the same check."""
+    builder = _analyzed_with_delta(
+        tmp_path, repo_root, "CHG-080",
+        "---\nchange: CHG-080\nstatus: accepted\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+    )
+    assert _propose(builder) == 1
+    _, err = capsys.readouterr()
+    assert "without deltafuse decide" in err
+
+
+def test_decide_spec_reports_a_transition_that_did_not_land(tmp_path: Path, repo_root: Path, capsys):
+    """If the spec delta breaks after the proposal, accepting it records the
+    click but cannot move the Change. decide used to exit 0 with the errors on
+    stderr, so the caller clicked the same gate again - 76 times in run M01-1."""
+    builder = _spec_proposed(tmp_path, repo_root, "CHG-081", "proposed")
+    delta = builder.change_dir / "spec-delta.md"
+    delta.write_text(delta.read_text(encoding="utf-8").replace("added: []\n", ""), encoding="utf-8")
+
+    assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 1
+    _, err = capsys.readouterr()
+    assert "gate:" in err and "'added' is a required property" in err
+    assert _change_status(builder) == "specification-proposed"

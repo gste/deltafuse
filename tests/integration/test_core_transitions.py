@@ -204,9 +204,18 @@ def test_state_command_writes_core_owned_task_status(
     # slice writes
     assert main(["state", str(builder.change_dir), "--slice", "SLICE-01", "--status", "specified"]) == 0
 
-    # Change-level in-flight status through the Core, from analyzed
+    # Change-level in-flight status through the Core, from analyzed. Proposing
+    # hands the spec to the Human Gate, so the machine checks of the specified
+    # gate must pass first: without spec-delta.md there is nothing to propose.
     builder2 = _analyze_ready(tmp_path, repo_root, "CHG-961")
     advance_change(builder2.change_dir, GATE)
+    assert main(["state", str(builder2.change_dir), "--change", "--status", "specification-proposed"]) == 1
+    assert _read_status(builder2.change_dir) == "analyzed"
+    (builder2.change_dir / "spec-delta.md").write_text(
+        "---\nchange: CHG-961\nstatus: proposed\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+        encoding="utf-8",
+    )
     assert main(["state", str(builder2.change_dir), "--change", "--status", "specification-proposed"]) == 0
     assert _read_status(builder2.change_dir) == "specification-proposed"
 

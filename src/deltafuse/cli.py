@@ -757,10 +757,11 @@ def _main(argv: list[str] | None = None) -> int:
         _journal(
             target,
             cmd="decide",
-            ok=True,
+            ok=bool(result.get("ok")),
             gate=result.get("gate"),
             status=result.get("status"),
             decision=result.get("decision"),
+            errors=list(result.get("gate_errors") or []) if not result.get("ok") else [],
         )
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -774,7 +775,7 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"wrote: {rel}")
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
-        return 0
+        return 0 if result.get("ok") else 1
 
     elif args.command == "leash":
         if args.head and not args.base:

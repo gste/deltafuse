@@ -188,19 +188,24 @@ def apply_decision(
         # to repair it. advance_change takes the mutation lock itself, and the
         # lock is not reentrant, so this runs after the block above.
         gate_errors: list[str] = []
+        transition_failed = False
         if status == "accepted":
             if proposed:
                 try:
                     advance_change(change_dir, "specified")
                 except TransitionError as ex:
+                    # The acceptance is recorded, but the Change did not move.
+                    # Reporting success here left the same Human Gate showing
+                    # forever; the caller must see that the click did not land.
                     gate_errors = [str(ex)]
+                    transition_failed = True
                 else:
                     change_status = "specified"
                     written.append(_rel(product_root, change_file))
             else:
                 gate_errors = check_gate(change_dir, "specified")
         return {
-            "ok": True,
+            "ok": not transition_failed,
             "gate": "spec",
             "status": status,
             "written": written,

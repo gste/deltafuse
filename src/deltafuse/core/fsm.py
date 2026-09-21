@@ -835,7 +835,12 @@ def check_gate(
     change_dir: Path | str,
     gate: str,
     registry: SchemaRegistry | None = None,
+    *,
+    assume_status: str | None = None,
 ) -> list[str]:
+    """Gate errors for a Change. ``assume_status`` evaluates the gate as if
+    change.yaml held that status, without writing it: the Core asks "would
+    this pass once moved?" before it moves anything."""
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
 
@@ -862,6 +867,8 @@ def check_gate(
                 change_status = cdata.get("status")
         except Exception:
             pass
+    if assume_status is not None:
+        change_status = assume_status
 
     gate_lower = gate.lower()
 
