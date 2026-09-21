@@ -37,6 +37,10 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 | `leash` side effects | Zero product writes. Diagnostics on stderr unless `--json`. |
 | `workflow.leash` | Fresh `init` writes `off` (no hook). `advisory`: same violations, exit `0` (hook does not block commit). Missing/`enforce`: exit `≠ 0` when a path is outside `write`. `enforce` and `advisory` install a local `pre-commit` that runs `deltafuse leash`. The hook MUST NOT `git push`. |
 | Halt + envelope | When `halt.kind` is `decision` or `spec`, `envelope` is JSON `null`. Product-code write tools MUST stay off while those buttons are showing. |
+| Diff since base | The guard judges the diff since `--base` (default `HEAD`) against the ready envelopes **and** the envelopes of every step each Change worked through since that base, read from the transition receipts. A finished step's writes are not judged against the step after it; a halt stops new work, not the record of work done. Declare/Implement add only the tasks whose file changed since the base. |
+| Core journals (DF3-007) | `.deltafuse/transitions.jsonl`, `gate-journal.jsonl` and `journal-head` pass only as Core-shaped appends: existing lines untouched, every transition receipt digest intact and the chain replayable, gate receipts in the current format with the chain and head verified. Anything else fails. `.deltafuse/trusted-keys.yaml` never belongs in a Worker diff. |
+
+Receipt digests are not keyed: the guard proves a journal change has the shape the Core writes, not that the Core wrote it. Provenance needs a channel the Worker cannot reach (the `broker-signed` profile); see the roadmap, item 4.
 
 ## Host MUST
 

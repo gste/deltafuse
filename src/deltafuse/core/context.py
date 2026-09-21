@@ -472,7 +472,16 @@ DEFAULT_TASK_BUDGET = {"max_tokens": 64000, "max_files": 24}
 
 
 def posix_relpath(path: str) -> str:
-    return Path(path).as_posix().lstrip("./")
+    """Repo-relative POSIX form: drop leading './' and '/' only.
+
+    `str.lstrip("./")` strips a character set, not a prefix: it turned
+    '.deltafuse/x' into 'deltafuse/x', so no dot-directory ever matched a glob
+    such as '.deltafuse/**'.
+    """
+    rel = Path(path).as_posix()
+    while rel.startswith("./"):
+        rel = rel[2:]
+    return rel.lstrip("/")
 
 
 def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:

@@ -12,6 +12,10 @@ Intake `write` не содержит `src/**`. Declare/Implement оставля�
 
 При `halt.kind` `decision` или `spec` `envelope` — JSON `null`: product-code write-tools выключены, пока висят кнопки.
 
+**По чему судится diff.** Guard сверяет diff от `--base` (по умолчанию `HEAD`) с готовыми envelope **и** с envelope всех шагов, которые каждый Change прошёл с этой базы, — по receipts переходов. Записи законченного шага не судятся по envelope следующего; halt останавливает новую работу, но не запись уже сделанной. Для Declare/Implement добавляются только задачи, чей файл изменился с базы.
+
+**Журналы ядра (DF3-007).** `.deltafuse/transitions.jsonl`, `gate-journal.jsonl` и `journal-head` проходят только как дописывание в форме ядра: старые строки не тронуты, digest каждого receipt перехода сходится и цепочка воспроизводится, gate-receipts текущего формата с проверенными цепочкой и head. Иначе — нарушение. `.deltafuse/trusted-keys.yaml` в diff воркера не бывает никогда. Digest receipt без ключа: guard доказывает форму записи ядра, а не авторство — это п. 4 роадмапа.
+
 ## Хост обязан
 
 | Нужно | Источник | MUST |

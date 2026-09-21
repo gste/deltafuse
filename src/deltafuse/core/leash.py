@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -57,6 +58,11 @@ EXEMPT_GLOBS = (
 )
 EXEMPT_NAMES = frozenset({"README.md", "README.ru.md"})
 CHANGE_ARTIFACT_GLOB = "docs/changes/**"
+# DF3-007: Core journals change only through the deltafuse CLI. The journals a
+# lifecycle step legitimately appends to are verified; the trust roots never
+# belong in a Worker diff.
+CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.jsonl"})
+CORE_OWNED = CORE_JOURNALS | {"trusted-keys.yaml"}
 
 
 
@@ -320,12 +326,218 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     return errors
 
 
+def _git_show(product_root: Path, ref: str, rel_path: str) -> str | None:
+    """File content at a revision; None when the file (or the revision) is absent."""
+    proc = subprocess.run(
+        ["git", "show", f"{ref}:{rel_path}"],
+        cwd=product_root,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.decode("utf-8", errors="replace")
+
+
+def _nonempty_lines(text: str | None) -> list[str]:
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+
+def _journal_lines(
+    product_root: Path, rel_path: str, *, base: str | None, head: str | None
+) -> tuple[list[str], list[str]]:
+    old = _nonempty_lines(_git_show(product_root, base or "HEAD", rel_path))
+    if head:
+        new = _nonempty_lines(_git_show(product_root, head, rel_path))
+    else:
+        path = product_root / rel_path
+        new = _nonempty_lines(path.read_text(encoding="utf-8") if path.is_file() else None)
+    return old, new
+
+
+def _change_dirs(product_root: Path) -> dict[str, Path]:
+    """Change id -> directory for every live Change package."""
+    out: dict[str, Path] = {}
+    for change_yaml in sorted((product_root / "docs" / "changes").glob("*/change.yaml")):
+        try:
+            data = yaml.safe_load(change_yaml.read_text(encoding="utf-8")) or {}
+        except Exception:
+            data = {}
+        change_id = data.get("id") if isinstance(data, dict) else None
+        out[str(change_id or change_yaml.parent.name)] = change_yaml.parent
+    return out
+
+
+def core_journal_errors(
+    product_root: Path,
+    name: str,
+    *,
+    base: str | None = None,
+    head: str | None = None,
+) -> list[str]:
+    """DF3-007: why a Core journal diff is not a Core-shaped append (empty = valid).
+
+    The Worker runs `deltafuse advance` and the human runs `deltafuse decide`
+    inside the same working tree, so the journals legitimately change between
+    commits. A diff is accepted only when it appends entries the Core would have
+    written: existing lines untouched, every transition receipt digest intact
+    and the chain replayable, the gate journal chain and head verified.
+    """
+    from deltafuse.core import gate_receipts
+    from deltafuse.core.transitions import _receipt, receipt_chain_errors
+
+    root = Path(product_root)
+    if name == "journal-head":
+        # The head digest moves with every gate receipt; it is valid exactly
+        # when it matches the verified gate journal.
+        return gate_receipts.journal_errors(root)
+    rel = f".deltafuse/{name}"
+    old, new = _journal_lines(root, rel, base=base, head=head)
+    if new[: len(old)] != old:
+        return ["existing entries were edited, removed or reordered; Core journals are append-only"]
+    appended = new[len(old):]
+    errors: list[str] = []
+    if name == "transitions.jsonl":
+        touched: set[str] = set()
+        for number, raw in enumerate(appended, start=len(old) + 1):
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError:
+                errors.append(f"line {number} is not JSON")
+                continue
+            if not isinstance(entry, dict) or entry.get("kind") not in {"transition", "unblock"}:
+                errors.append(f"line {number} is not a Core transition receipt")
+                continue
+            body = {key: value for key, value in entry.items() if key != "receipt"}
+            if entry.get("receipt") != _receipt(body):
+                errors.append(f"line {number}: receipt digest does not match the entry")
+                continue
+            if isinstance(entry.get("change"), str):
+                touched.add(entry["change"])
+        if errors:
+            return errors
+        dirs = _change_dirs(root)
+        for change_id in sorted(touched):
+            change_dir = dirs.get(change_id)
+            if change_dir is not None:
+                errors.extend(
+                    f"{change_id}: {err}" for err in receipt_chain_errors(root, change_dir)
+                )
+        return errors
+    if name == "gate-journal.jsonl":
+        for number, raw in enumerate(appended, start=len(old) + 1):
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError:
+                errors.append(f"line {number} is not JSON")
+                continue
+            # journal_errors skips legacy lines, but has_click still reads
+            # them: an appended line without the current receipt format
+            # would count as a click without any integrity claim.
+            if not isinstance(entry, dict) or entry.get("receipt_version") != gate_receipts.RECEIPT_VERSION:
+                errors.append(f"line {number} is not a current-format gate receipt")
+        if errors:
+            return errors
+        return gate_receipts.journal_errors(root)
+    return [f"unknown Core journal '{name}'"]
+
+
+def collect_chain_envelopes(
+    product_root: Path,
+    *,
+    base: str | None = None,
+    dirty: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Envelopes of the lifecycle steps each Change worked through since ``base``.
+
+    The ready queue names only the next step, so it alone judges a finished
+    step's writes against the step that follows it: request.md written by
+    intake reads as outside the analyze envelope, and a commit right after
+    `deltafuse advance` is refused. The steps are taken from the transition
+    receipts, which core_journal_errors verifies: from the step after the last
+    gate at ``base`` up to the step after the last gate now.
+
+    Declare and implement are per task, and task progress is not in the
+    transition chain. Their envelopes come from the tasks whose file changed
+    since ``base`` - `deltafuse state` rewrites the task file on every task
+    transition - so a task the Worker never touched adds no paths.
+    """
+    from deltafuse.core.queue import _load_tasks
+    from deltafuse.core.steps import STEP_CONTRACTS, STEP_ORDER
+
+    root = Path(product_root)
+    gate_step = {spec["gate"]: step for step, spec in STEP_CONTRACTS.items()}
+
+    def last_gates(lines: list[str]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for raw in lines:
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if (
+                isinstance(entry, dict)
+                and entry.get("kind") == "transition"
+                and isinstance(entry.get("change"), str)
+                and entry.get("gate") in gate_step
+            ):
+                out[entry["change"]] = entry["gate"]
+        return out
+
+    def step_after(gate: str | None) -> int:
+        if gate is None:
+            return 0
+        return min(STEP_ORDER.index(gate_step[gate]) + 1, len(STEP_ORDER) - 1)
+
+    rel = ".deltafuse/transitions.jsonl"
+    at_base, now = _journal_lines(root, rel, base=base, head=None)
+    base_last, now_last = last_gates(at_base), last_gates(now)
+    changed = {posix_relpath(path) for path in (dirty or [])}
+
+    envelopes: list[dict[str, Any]] = []
+    for change_id, change_dir in _change_dirs(root).items():
+        low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
+        if high < low:
+            continue  # a rewound chain is receipt_chain_errors' business, not a wider fence
+        rel_dir = change_dir.relative_to(root).as_posix()
+        for step in STEP_ORDER[low : high + 1]:
+            spec = STEP_CONTRACTS[step]
+            items: list[WorkItem] = []
+            if step in {"declare", "implement"}:
+                for task_id, _, task_file in _load_tasks(change_dir):
+                    task_rel = task_file.relative_to(root).as_posix()
+                    if task_rel in changed:
+                        items.append(
+                            WorkItem(
+                                kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],
+                                change_id=change_id, path=rel_dir, task=task_id,
+                                task_path=task_rel, reason="receipt chain since base",
+                            )
+                        )
+            else:
+                items.append(
+                    WorkItem(
+                        kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],
+                        change_id=change_id, path=rel_dir, task=None, task_path=None,
+                        reason="receipt chain since base",
+                    )
+                )
+            for item in items:
+                env = build_envelope(item, root)
+                if env:
+                    envelopes.append(env)
+    return envelopes
+
+
 def check_paths(
     rel_paths: list[str],
     envelopes: list[dict[str, Any]] | dict[str, Any] | None = None,
     *,
     envelope: dict[str, Any] | None = None,
     baseline: str = "draft",
+    product_root: Path | None = None,
+    base: str | None = None,
+    head: str | None = None,
 ) -> list[str]:
     """Return violation messages for dirty paths.
 
@@ -334,6 +546,10 @@ def check_paths(
     orphan only after `project.baseline: accepted` (Bootstrap may write
     spec while the baseline is draft). Ready step + uncovered Change
     artifact is still an LS-002 miss.
+
+    Core journals (DF3-007): with ``product_root`` they are verified against
+    ``base`` instead of refused outright, because every `deltafuse advance`
+    and `decide` appends to them; without it any change is refused.
     """
     if isinstance(envelopes, dict):
         env_list = [envelopes]
@@ -344,20 +560,25 @@ def check_paths(
     errors: list[str] = []
     steps = [str(env.get("step") or "?") for env in env_list]
     step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
-    core_owned = {
-        "gate-journal.jsonl",
-        "journal-head",
-        "transitions.jsonl",
-        "trusted-keys.yaml",
-    }
     for raw in _unique(rel_paths):
-        if raw.startswith(".git/") or is_exempt_path(raw):
-            continue
-        head, _, tail = raw.partition("/")
-        if head == ".deltafuse" and tail in core_owned:
+        # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
+        # whole, so checking it second would make the Core-owned guard dead code.
+        top, _, tail = posix_relpath(raw).partition("/")
+        if top == ".deltafuse" and tail in CORE_OWNED:
+            if product_root is not None and tail in CORE_JOURNALS:
+                reasons = core_journal_errors(product_root, tail, base=base, head=head)
+                if not reasons:
+                    continue
+                errors.extend(
+                    f"leash: '{raw}' changed outside the deltafuse CLI: {reason} (DF3-007)"
+                    for reason in reasons
+                )
+                continue
             errors.append(
                 f"leash: '{raw}' is Core-owned; mutate it only through the deltafuse CLI (DF3-007)"
             )
+            continue
+        if raw.startswith(".git/") or is_exempt_path(raw):
             continue
         if _covered_by(raw, env_list) is not None:
             continue

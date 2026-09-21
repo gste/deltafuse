@@ -31,6 +31,7 @@ from deltafuse.core.transitions import TransitionError, advance_change
 from deltafuse.core.leash import (
     LeashError,
     check_paths,
+    collect_chain_envelopes,
     collect_ready_envelopes,
     git_dirty_paths,
     load_baseline,
@@ -788,12 +789,25 @@ def _main(argv: list[str] | None = None) -> int:
             snapshot = queue_snapshot(queue, selected=selected, product_root=root)
             envelope = snapshot.get("envelope")
             halt = snapshot.get("halt")
-            covering = collect_ready_envelopes(queue, root, halt)
             if args.files:
                 dirty = list(args.files)
             else:
                 dirty = git_dirty_paths(root, base=args.base, head=args.head)
-            errors = check_paths(dirty, covering, baseline=load_baseline(root))
+            # Ready envelopes name only the next step; the receipt chain adds the
+            # steps already worked since the base, so a finished step's writes
+            # are not judged against the step after it. A halt stops new work,
+            # not the record of work done, so the chain applies either way.
+            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
+                root, base=args.base, dirty=dirty
+            )
+            errors = check_paths(
+                dirty,
+                covering,
+                baseline=load_baseline(root),
+                product_root=root,
+                base=args.base,
+                head=args.head,
+            )
             mode = load_leash_mode(root)
             skipped = envelope is None and not errors
             ok = not errors
