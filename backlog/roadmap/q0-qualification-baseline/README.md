@@ -551,7 +551,7 @@ M01, фреймворк `9a312df`, бенч `36f27ac`, $0.26, 110 вызовов
 | T2 stages_incomplete | 3 | следствие гейтов ниже |
 | T3 gate_retries | 5 (≤ 2) | модель |
 | T5 unique_files_per_call | 26 | **ошибка судьи**, см. ниже |
-| T6 hallucinated_paths | 1 | модель: читала `src/deltafuse/core/transitions.py` — код фреймворка |
+| T6 hallucinated_paths | 1 | путь из трейсбека падения ядра (см. поправку ниже) |
 | context_peak / framework_input_peak | 23 632 / 9 507 | далеко от 131 072 / 64 000 |
 
 Прошло с первого раза то, на чём падали прошлые прогоны: decompose без петли,
@@ -562,9 +562,16 @@ M01, фреймворк `9a312df`, бенч `36f27ac`, $0.26, 110 вызовов
 1. **Гейты проверяли «хоть один файл evidence», а не каждую задачу.** Declaring
    закрылся с одной объявленной задачей из трёх — две другие после этого
    объявить нельзя (задача не обгоняет Change). `check-gate implemented` сказал
-   «пройдено» при двух задачах в `pending`, и модель вписала `status:
-   implemented` в `change.yaml` руками; очередь остановила Change на
-   рассинхроне статуса и receipt, раннер закончил прогон.
+   «пройдено» при двух задачах в `pending`.
+
+   **Поправка (сквозной тест `test_core_lifecycle`, позже в тот же день):**
+   `status: implemented` в `change.yaml` вписала не модель. Модель вызвала
+   `advance --gate implemented`; `resume_incomplete` приняла последний receipt
+   — `state` задачи `declared` → `implemented` при Change в `declared` — за
+   недописанный переход, записала Change `implemented` без гейта и упала на
+   отсутствующем ключе `gate`. Трейсбек назвал `src/deltafuse/core/transitions.py`
+   — отсюда и «выдуманный» путь T6: модель пошла читать файл из трейсбека.
+   Исправлено в коммите сквозного теста.
 2. **`forbidden_paths: [docs/**]` у задачи убирал из конверта declare и
    implement собственные файлы Change** — evidence, которое пишет
    `deltafuse evidence`, `coverage.yaml`, `change.yaml`: восемь отказов leash на
