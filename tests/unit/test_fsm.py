@@ -1199,3 +1199,18 @@ def test_implemented_gate_needs_every_task_implemented(tmp_path: Path, repo_root
     assert any("task TASK-002 is 'declared'" in e for e in errors), errors
     assert any("task TASK-002 has no green evidence" in e for e in errors), errors
     assert any("task TASK-002 has no regression evidence" in e for e in errors), errors
+
+
+def test_implemented_gate_names_unfinished_tasks_before_stale_evidence(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T181306Z: with TASK-002 still to implement, the first
+    error was TASK-001's stale evidence, and the Worker re-ran it instead of
+    implementing TASK-002 - which then moved src again."""
+    builder = _two_tasks(tmp_path, repo_root, "CHG-706").step_declare("TASK-001").step_declare("TASK-002")
+    builder.step_implement("TASK-001")
+    core = tmp_path / "src" / "core.py"
+    core.parent.mkdir(parents=True, exist_ok=True)
+    core.write_text((core.read_text(encoding="utf-8") if core.is_file() else "") + "# TASK-002 work\n", encoding="utf-8")
+
+    errors = check_gate(builder.change_dir, "implemented")
+    assert "task TASK-002 is 'declared'" in errors[0], errors
+    assert not any("stale evidence" in e for e in errors), errors

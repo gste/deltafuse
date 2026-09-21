@@ -1045,14 +1045,21 @@ def check_gate(
         if route == "code":
             if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
                 errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
-        errors.extend(
-            _tasks_behind_gate(
-                change_path,
-                "implemented",
-                {"implemented", "verified"},
-                ("green", "regression") if route == "code" else ("green",),
-            )
+        behind = _tasks_behind_gate(
+            change_path,
+            "implemented",
+            {"implemented", "verified"},
+            ("green", "regression") if route == "code" else ("green",),
         )
+        if any("every task must be implemented first" in e for e in behind):
+            # Tasks still to implement come first, and an earlier task's stale
+            # evidence is left out: the next task moves src again, and the queue
+            # routes the re-run once every task is implemented. In q0 run
+            # 20260921T181306Z the Worker re-ran TASK-001's evidence on the
+            # first error instead of implementing TASK-002.
+            errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
+        else:
+            errors.extend(behind)
         errors.extend(
             _validate_evidence_changed_paths_contract(
                 change_path, "green", "implement", gate="implemented", route=route
