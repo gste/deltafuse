@@ -5,7 +5,6 @@ import fnmatch
 import json
 import math
 import os
-import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -191,54 +190,26 @@ def is_product_code_path(rel_path: str) -> bool:
     return matches_contract_globs(rel_path, _PRODUCT_CODE_GLOBS)
 
 
-# A03-01 / F-003: words-per-token upper bounds vs ornith/Qwen BPE (not chat completions).
-WORD_FACTOR_EN = 1.3
-WORD_FACTOR_CYRILLIC = 2.2
-WORD_FACTOR_CODE = 2.7
-WORD_FACTOR_YAML = 4.5  # 98/22 from A03-01; roadmap yaml×4 still undercounted
-WORD_FACTOR_LOG = 4.8
-_CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
-_CODE_SUFFIXES = {
-    ".py",
-    ".pyi",
-    ".ps1",
-    ".sh",
-    ".bash",
-    ".js",
-    ".ts",
-    ".tsx",
-    ".jsx",
-    ".rs",
-    ".go",
-    ".java",
-    ".c",
-    ".h",
-    ".cpp",
-    ".cs",
-}
-_YAML_SUFFIXES = {".yaml", ".yml", ".json"}
-_LOG_SUFFIXES = {".log"}
+# A04-01: without a tokenizer the Core estimates tokens from UTF-8 bytes with
+# one constant. Calibrated 2026-09-21 on 281 files against nine tokenizer
+# families (backlog/roadmap/tokenizer-calibration): the median per-file error
+# is +0.9 % on the reference Qwen3.8 and within -9 % .. +10 % for every family.
+# Bytes replaced A03-01's words x factor, whose per-file error was 18-25 %:
+# words gave no rule for `.jsonl` (-82 %), overcounted YAML/JSON by 42 % and
+# switched a whole file to the Cyrillic factor on a single letter. It is an
+# estimate, not an upper bound; 64 000 is an orientation for a unit of work.
+BYTES_PER_TOKEN = 3.75
 
 
-def token_factor(text: str, path: Path | None = None) -> float:
-    """Conservative tokens-per-word factor. Take the max of suffix and script factors."""
-    factor = WORD_FACTOR_EN
-    if path is not None:
-        suffix = path.suffix.lower()
-        if suffix in _YAML_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_YAML)
-        elif suffix in _LOG_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_LOG)
-        elif suffix in _CODE_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_CODE)
-    if _CYRILLIC_RE.search(text):
-        factor = max(factor, WORD_FACTOR_CYRILLIC)
-    return factor
+def estimate_from_bytes(text: str) -> int:
+    """A04-01 estimate: UTF-8 bytes / BYTES_PER_TOKEN, rounded up."""
+    size = len(text.encode("utf-8"))
+    return 0 if size == 0 else math.ceil(size / BYTES_PER_TOKEN)
 
 
 # Q0-2: the heuristic coefficient table is versioned, because a change to it
 # changes every budget verdict that was not measured by an endpoint.
-HEURISTIC_ID = "a03-01"
+HEURISTIC_ID = "a04-01"
 TOKENIZE_URL_ENV = "DELTAFUSE_TOKENIZE_URL"
 TOKENIZER_REQUIRED_ENV = "DELTAFUSE_TOKENIZER_REQUIRED"
 MODE_ENDPOINT = "endpoint"
@@ -322,14 +293,12 @@ def count_tokens(text: str, path: Path | None = None) -> TokenCount:
             f"{TOKENIZER_REQUIRED_ENV} is set but {TOKENIZE_URL_ENV} is empty; "
             "a measured token count is mandatory for a qualification run"
         )
-    words = len(text.split())
-    factor = token_factor(text, path)
-    tokens = 0 if words == 0 else math.ceil(words * factor)
-    return TokenCount(tokens, MODE_HEURISTIC, f"{HEURISTIC_ID}:x{factor}")
+    # `path` stays in the signature for callers; A04-01 does not depend on file type.
+    return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
 
 
 def estimate_tokens(text: str, path: Path | None = None) -> int:
-    """Upper-bound token estimate: optional /tokenize, else A03-01 coefficients."""
+    """Token count: optional /tokenize, else the A04-01 byte estimate."""
     return count_tokens(text, path).tokens
 
 

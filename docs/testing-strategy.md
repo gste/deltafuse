@@ -37,7 +37,7 @@ deltafuse/
 │   └── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
-│   │   ├── context.py                # Upper-bound token estimate (A03-01 factors or /tokenize) and context linter
+│   │   ├── context.py                # Token count (/tokenize or the A04-01 byte estimate) and context linter
 │   │   ├── evidence.py               # Прогон команды продукта и запись evidence YAML (без LLM)
 │   │   ├── queue.py                  # Производная очередь ready/blocked и deltafuse next
 │   │   ├── steps.py                  # Машинный контракт семи шагов (skill, gate, PHASE_CONTRACTS)
@@ -173,7 +173,7 @@ deltafuse/
 
 ### Набор 5. Контекстные бюджеты и контракты (`tests/unit/test_context.py`)
 * **5.1. Token Estimator**:
-  - Upper-bound estimator: EN prose `words * 1.3`; code ×2.7; YAML/JSON ×4.5; logs ×4.8; Cyrillic ×2.2. Optional `DELTAFUSE_TOKENIZE_URL` (`POST /tokenize`); never chat completions (Q-004).
+  - Estimator A04-01: UTF-8 bytes / 3.75, independent of file type and script (calibrated 2026-09-21; an estimate, not an upper bound). Optional `DELTAFUSE_TOKENIZE_URL` (`POST /tokenize`); never chat completions (Q-004).
   - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
