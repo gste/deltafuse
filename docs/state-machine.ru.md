@@ -83,7 +83,7 @@ Change может быть переведён в терминальное сос
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
 | `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `deltafuse next` даёт один Analyze pass за раз; комплект тот же. | На диске есть `routing.yaml`, срезы на каждую routing primary capability и `coverage.yaml`; все claims покрыты; дельты типизированы. |
 | `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). `deltafuse next` даёт один Specify-срез (`spec_refs` только), затем `close`. | Сформирован проект правок в файлах `spec_refs` срезов и `spec-delta.md`, и все машинные проверки гейта `specified`, кроме receipt человека, проходят; иначе `deltafuse state` отказывает и возвращает ошибки воркеру. |
-| `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
+| `analyzed` | `decomposed` | Багфикс: изменение спецификации не требуется (`requirement_delta: none`); `deltafuse next` сразу даёт Decompose. | Гейт `decomposed` доказывает точные ссылки задач на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
 | `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
