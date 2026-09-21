@@ -25,7 +25,7 @@
     "schemas/slice.schema.yaml": "18396296a00268a5c18abaeba3c08e4f6a5413d19bbad0b64c18f7201332da67",
     "schemas/spec-delta.schema.yaml": "ae0b0b1b08461a583897fe47d847d8d2473a5e234f8ebf63a822957929e8c9a9",
     "schemas/task.schema.yaml": "aee0146d0914bfc4b198c1aab80ecad6f1f4d3cdd2f74b6efcd42ff987e47f21",
-    "skills/analyze/SKILL.md": "fd9efa8c15b6fb8725c47d1039186f647a5bc798fb67d3d04ae1ddebe5ab58d8",
+    "skills/analyze/SKILL.md": "ebae8f9af1969284eb7d3ff239a619893d19e074445243dec9eb2ff2939dfd8e",
     "skills/declare/SKILL.md": "5db4d5998bd2237baa544972796e37a7a37492b2db515bb95eff023409a0d004",
     "skills/decompose/SKILL.md": "44cd49f16a9f753c6eaac1b65a178f6debf8c70735357b67891d2df0f5b1fb66",
     "skills/implement/SKILL.md": "542ecd1f540f9d2adee070a8d4df7a55b46bb7822d09595603634228b22e5d51",

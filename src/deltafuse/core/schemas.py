@@ -219,7 +219,9 @@ class SchemaRegistry:
             errors.append(format_schema_error(normalized, error))
         return errors
 
-    def shape_hint(self, schema_name: str) -> str:
+    def shape_hint(
+        self, schema_name: str, path: tuple[str, ...] = (), *, noun: str = "frontmatter keys"
+    ) -> str:
         """One line naming the frontmatter a schema expects, derived from it.
 
         Appended to schema errors for Worker-written frontmatter: in q0 runs
@@ -227,21 +229,25 @@ class SchemaRegistry:
         only the first failing rule.
         """
         schema = self.get_schema(schema_name)
+        for step in path:  # "*" steps into additionalProperties (a map's values)
+            child = schema.get("additionalProperties") if step == "*" else (schema.get("properties") or {}).get(step)
+            schema = child if isinstance(child, dict) else {}
         props = schema.get("properties") or {}
-        parts: list[str] = []
-        for key in schema.get("required") or []:
+        required = list(schema.get("required") or [])
+
+        def describe(key: str) -> str:
             spec = props.get(key) or {}
             if "enum" in spec:
-                parts.append(f"{key} ({'|'.join(str(v) for v in spec['enum'])})")
-            elif spec.get("type") == "array":
+                return f"{key} ({'|'.join(str(v) for v in spec['enum'])})"
+            if spec.get("type") == "array":
                 least = "at least one" if int(spec.get("minItems") or 0) > 0 else "may be empty"
-                parts.append(f"{key} (list, {least})")
-            else:
-                parts.append(key)
-        optional = [key for key in props if key not in (schema.get("required") or [])]
-        line = "expected frontmatter keys: " + ", ".join(parts)
+                return f"{key} (list, {least})"
+            return key
+
+        optional = [key for key in props if key not in required]
+        line = f"expected {noun}: " + ", ".join(describe(key) for key in required)
         if optional:
-            line += "; optional: " + ", ".join(optional)
+            line += "; optional: " + ", ".join(describe(key) for key in optional)
         if schema.get("additionalProperties") is False:
             line += "; no other keys"
         return line
