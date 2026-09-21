@@ -42,7 +42,10 @@ GATE_TARGETS: dict[str, str] = {
 GATE_ALLOWED_FROM: dict[str, set[str]] = {
     "intake": {"normalized"},
     "analyzed": {"normalized", "analyzing"},
-    "specified": {"analyzed"},
+    # analyzed: bug path, spec unchanged. specification-proposed: the Human
+    # Gate path from docs/state-machine.md; check_gate still requires the
+    # spec receipt that only `decide --spec` records.
+    "specified": {"analyzed", "specification-proposed"},
     "decomposed": {"analyzed", "specified", "decomposed"},
     "declaring": {"decomposed", "declaring"},
     "implemented": {"declared", "implementing"},

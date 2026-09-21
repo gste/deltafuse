@@ -97,5 +97,50 @@ def test_hand_written_spec_accepted_does_not_close_specified(tmp_path: Path, rep
     spec_delta_proposed = spec_delta.replace("status: accepted", "status: proposed")
     (builder.change_dir / "spec-delta.md").write_text(spec_delta_proposed, encoding="utf-8")
     assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 0
-    builder._core_advance("specified")
     assert check_gate(builder.change_dir, "specified") == []
+
+
+def _spec_proposed(tmp_path: Path, repo_root: Path, change_id: str, delta_status: str):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id=change_id, title="Spec gate").step_intake().step_analyze()
+    builder._core_advance("analyzed")
+    (builder.change_dir / "spec-delta.md").write_text(
+        f"---\nchange: {change_id}\nstatus: {delta_status}\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+        encoding="utf-8",
+    )
+    builder._update_change_yaml({"status": "specification-proposed"})
+    return builder
+
+
+def _change_status(builder) -> str:
+    import yaml
+
+    return yaml.safe_load((builder.change_dir / "change.yaml").read_text(encoding="utf-8"))["status"]
+
+
+def test_decide_spec_accepted_applies_the_transition_with_a_receipt(tmp_path: Path, repo_root: Path):
+    """decide --spec used to write 'specified' into change.yaml itself: no
+    transition receipt, so the chain replay refused every later Core command and
+    no step existed to repair it. The verdict now goes through advance_change."""
+    from deltafuse.core.transitions import load_receipts, receipt_chain_errors
+
+    builder = _spec_proposed(tmp_path, repo_root, "CHG-076", "proposed")
+    assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 0
+
+    assert _change_status(builder) == "specified"
+    last = [r for r in load_receipts(tmp_path, "CHG-076") if r.get("kind") == "transition"][-1]
+    assert (last["gate"], last["from"], last["to"]) == ("specified", "specification-proposed", "specified")
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
+    assert main(["check-gate", str(builder.change_dir), "--gate", "specified"]) == 0
+
+
+def test_advance_from_proposed_still_needs_the_spec_receipt(tmp_path: Path, repo_root: Path, capsys):
+    """Opening specification-proposed -> specified in the gate table must not let
+    the Worker skip the Human Gate: a hand-accepted spec-delta without decide's
+    receipt still fails the gate, and the status does not move."""
+    builder = _spec_proposed(tmp_path, repo_root, "CHG-077", "accepted")
+    assert main(["advance", str(builder.change_dir), "--gate", "specified"]) == 1
+    _, err = capsys.readouterr()
+    assert "without deltafuse decide" in err
+    assert _change_status(builder) == "specification-proposed"

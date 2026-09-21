@@ -16,6 +16,7 @@ from deltafuse.core import gate_receipts
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
+from deltafuse.core.transitions import TransitionError, advance_change
 
 DECIDE_STATUSES = ("accepted", "rejected")
 
@@ -171,32 +172,41 @@ def apply_decision(
                 artifact=delta,
             )
             change_status = None
-            if status == "accepted":
-                change_file = change_dir / "change.yaml"
+            change_file = change_dir / "change.yaml"
+            proposed = _load_yaml_mapping(change_file).get("status") == "specification-proposed"
+            if status == "rejected" and proposed:
                 data = _load_yaml_mapping(change_file)
-                if data.get("status") == "specification-proposed":
-                    gate_errors = check_gate(change_dir, "specified")
-                    if not gate_errors:
-                        data["status"] = "specified"
-                        _write_yaml_mapping(change_file, data)
-                        change_status = "specified"
-                        written.append(_rel(product_root, change_file))
-            else:
-                change_file = change_dir / "change.yaml"
-                data = _load_yaml_mapping(change_file)
-                if data.get("status") == "specification-proposed":
-                    data["status"] = "analyzed"
-                    _write_yaml_mapping(change_file, data)
-                    change_status = "analyzed"
+                data["status"] = "analyzed"
+                _write_yaml_mapping(change_file, data)
+                change_status = "analyzed"
+                written.append(_rel(product_root, change_file))
+
+        # The accepted verdict moves the Change through advance_change, which
+        # journals the transition receipt the chain replay requires. Writing
+        # 'specified' into change.yaml directly left a status with no receipt:
+        # every later Core command then refused the chain, and no step existed
+        # to repair it. advance_change takes the mutation lock itself, and the
+        # lock is not reentrant, so this runs after the block above.
+        gate_errors: list[str] = []
+        if status == "accepted":
+            if proposed:
+                try:
+                    advance_change(change_dir, "specified")
+                except TransitionError as ex:
+                    gate_errors = [str(ex)]
+                else:
+                    change_status = "specified"
                     written.append(_rel(product_root, change_file))
-            return {
-                "ok": True,
-                "gate": "spec",
-                "status": status,
-                "written": written,
-                "change_status": change_status,
-                "gate_errors": check_gate(change_dir, "specified") if status == "accepted" else [],
-            }
+            else:
+                gate_errors = check_gate(change_dir, "specified")
+        return {
+            "ok": True,
+            "gate": "spec",
+            "status": status,
+            "written": written,
+            "change_status": change_status,
+            "gate_errors": gate_errors,
+        }
 
     product_root = load_product_root(start_path)
     with ProductMutationLock(product_root):
