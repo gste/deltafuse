@@ -316,11 +316,12 @@ class MockChangeBuilder:
         # the Change is still analyzing, then specified - the bug path goes
         # analyzed -> specified with the spec unchanged; the transition table
         # has no analyzed -> decomposed.
-        status = (yaml.safe_load((self.change_dir / "change.yaml").read_text(encoding="utf-8")) or {}).get("status")
+        change = yaml.safe_load((self.change_dir / "change.yaml").read_text(encoding="utf-8")) or {}
+        status = change.get("status")
         if status in {"normalized", "analyzing"}:
             self._core_advance("analyzed")
             status = "analyzed"
-        if status == "analyzed":
+        if status == "analyzed" and change.get("intent") != "bugfix":
             self._core_advance("specified")
         self._core_advance("decomposed")
         return self

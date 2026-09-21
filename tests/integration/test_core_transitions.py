@@ -302,7 +302,6 @@ def test_every_gate_start_reaches_its_target():
 
     known_open = {
         ("analyzed", "normalized"): "the intake gate always runs first",
-        ("decomposed", "analyzed"): "bugfix path, open in the roadmap (item 4)",
     }
     unreachable = {
         (gate, start)

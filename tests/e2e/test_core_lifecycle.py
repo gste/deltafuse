@@ -140,3 +140,24 @@ def test_change_reaches_converged_through_core_commands_only(tmp_path: Path, rep
     assert receipt_chain_errors(tmp_path, change) == []
     remaining = _next(tmp_path)
     assert remaining is None or remaining.change_id != "CHG-990"
+
+
+def test_bugfix_goes_from_analyzed_to_decomposed_through_the_core(tmp_path: Path, repo_root: Path):
+    """The queue sends a bugfix from analyzed to decompose, but the transition
+    table had no analyzed -> decomposed, and the specified gate needs a
+    spec-delta a bugfix does not write: every bugfix Change stopped at
+    `advance --gate decomposed`."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-991", title="Bug").step_intake().step_analyze()
+    builder._update_change_yaml({"intent": "bugfix"})
+    assert advance_change(builder.change_dir, "analyzed")["to"] == "analyzed"
+
+    selected = _next(tmp_path)
+    assert selected.skill == "decompose"
+    builder._core_advance = lambda gate: None  # the Worker writes tasks; the Core advances
+    builder.step_decompose()
+    assert check_gate(builder.change_dir, "decomposed") == []
+    result = advance_change(builder.change_dir, "decomposed")
+    assert (result["from"], result["to"]) == ("analyzed", "decomposed")
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
+    assert _next(tmp_path).skill == "declare"

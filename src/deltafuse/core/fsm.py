@@ -60,7 +60,12 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     "normalized": {"analyzing", "rejected", "duplicate"},
     "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
     "blocked-on-decision": {"analyzing"},
-    "analyzed": {"specification-proposed", "specified", "declaring"},  # declaring for bugfix
+    # decomposed: the bugfix path with the spec unchanged - the queue sends a
+    # bugfix from analyzed to decompose, GATE_ALLOWED_FROM and the receipt
+    # chain already allowed it, and the specified gate needs a spec-delta a
+    # bugfix does not write. Without it every bugfix Change stopped at
+    # `advance --gate decomposed` (found 2026-09-22 by a Core-only walk).
+    "analyzed": {"specification-proposed", "specified", "declaring", "decomposed"},
     "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
     "decomposed": {"declaring"},
