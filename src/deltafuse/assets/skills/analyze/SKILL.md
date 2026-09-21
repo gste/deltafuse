@@ -30,8 +30,34 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
 
 ## Procedure
 
-1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies in `routing.yaml`. `claims` is a map, not a list. The field name is `primary_capability`, not `capability` or `primary`.
-2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that file only. Slice frontmatter uses only slice schema keys (`id`, `change`, `title`, `status: draft`, `primary_capability`, `claims`, …). Put `intent` / `risk` / `size` in the markdown body. In `change.yaml`, `slices` is a list of `{id, status, file}` objects, not strings.
+1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies in `routing.yaml`. `claims` is a map, not a list; a claim takes only these keys (no `kind`, `type`, `related`):
+
+   ```yaml
+   change: CHG-001-example
+   route: code
+   claims:
+     CR-001:
+       summary: One line of the claim
+       primary_capability: <domain>.<capability>
+       related_capabilities: []
+       policies: []
+       confidence: high   # low | medium | high | unknown
+   ```
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome. Write one `slices/SLICE-NN.md` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that file only. Slice frontmatter uses only slice schema keys, in this shape:
+
+   ```yaml
+   ---
+   id: SLICE-01
+   change: CHG-001-example
+   title: One line of the slice outcome
+   status: draft
+   primary_capability: <domain>.<capability>
+   claims: [CR-001]
+   spec_refs: [docs/spec/<domain>/<capability>.md]
+   ---
+   ```
+
+   Put `intent` / `risk` / `size` in the markdown body. In `change.yaml`, `slices` is a list of `{id, status, file}` objects, not strings.
 3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
 4. Classify independently in the slice markdown body, not as extra frontmatter keys: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
 5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.

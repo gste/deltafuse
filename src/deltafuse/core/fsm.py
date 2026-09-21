@@ -248,6 +248,11 @@ def validate_change_package(
             routing_data = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
             errs = registry.validate("routing", routing_data)
             errors.extend(f"routing.yaml: {e}" for e in errs)
+            if any("claims" in e for e in errs):
+                errors.append(
+                    "routing.yaml: "
+                    + registry.shape_hint("routing", ("claims", "*"), noun="keys for each claim")
+                )
         except Exception as ex:
             errors.append(f"routing.yaml parsing error: {ex}")
 
@@ -275,6 +280,8 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
                 errs = registry.validate("slice", meta)
                 errors.extend(f"{slice_file.name}: {e}" for e in errs)
+                if errs:
+                    errors.append(f"{slice_file.name}: {registry.shape_hint('slice')}")
 
                 # Check spec_refs anchors and context budget (N10, P7.6)
                 if isinstance(meta, dict):
