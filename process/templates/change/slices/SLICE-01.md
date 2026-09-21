@@ -11,7 +11,7 @@ claims:
   - CR-001
 depends_on: []
 context_budget:
-  max_tokens: 16000
+  max_tokens: 64000
   max_files: 24
 ---
 

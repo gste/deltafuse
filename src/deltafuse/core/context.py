@@ -468,7 +468,7 @@ def validate_context_budget(
     return errors
 
 
-DEFAULT_TASK_BUDGET = {"max_tokens": 16000, "max_files": 24}
+DEFAULT_TASK_BUDGET = {"max_tokens": 64000, "max_files": 24}
 
 
 def posix_relpath(path: str) -> str:

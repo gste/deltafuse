@@ -315,7 +315,7 @@ def test_validate_task_context_budget_fills_receipt(tmp_path: Path, monkeypatch)
     spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
     receipt: dict = {}
     errs = validate_task_context_budget(
-        {"max_tokens": 16000, "max_files": 24},
+        {"max_tokens": 64000, "max_files": 24},
         ["docs/spec/core.md#REQ-01"],
         ["src/core.py"],
         tmp_path,
@@ -328,4 +328,4 @@ def test_validate_task_context_budget_fills_receipt(tmp_path: Path, monkeypatch)
 
 def test_default_task_budget_matches_contract():
     """docs/small-llm-contract.md pins 64,000 / 24 for framework-controlled input."""
-    assert DEFAULT_TASK_BUDGET == {"max_tokens": 16000, "max_files": 24}
+    assert DEFAULT_TASK_BUDGET == {"max_tokens": 64000, "max_files": 24}
