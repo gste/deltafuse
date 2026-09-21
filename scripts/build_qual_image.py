@@ -14,7 +14,9 @@ sha256, image_id digest, pinned base image and pytest version, commands).
 
 The script prints the immutable digest reference to export as
 DELTAFUSE_QUAL_IMAGE. A mutable tag is never accepted for a release
-campaign (scripts/qualify_executor.py enforces this).
+campaign. NOTE: the container executor this image was built for
+(scripts/qualify_executor.py) was removed in 77dad7f; scripts/qualify.py
+does not use it, so this image currently has no consumer.
 """
 
 from __future__ import annotations
