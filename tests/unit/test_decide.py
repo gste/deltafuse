@@ -206,3 +206,20 @@ def test_decide_spec_reports_a_transition_that_did_not_land(tmp_path: Path, repo
     _, err = capsys.readouterr()
     assert "gate:" in err and "'added' is a required property" in err
     assert _change_status(builder) == "specification-proposed"
+
+
+def test_worker_cannot_advance_a_proposed_spec_past_the_human(tmp_path: Path, repo_root: Path, capsys):
+    """Campaign 20260921T072327Z: seven seconds after proposing, the model ran
+    `deltafuse advance --gate specified` itself and the Change reached
+    'specified' with spec-delta.md still 'proposed' and no spec receipt - the
+    Human Gate skipped. Leaving specification-proposed needs the human's
+    accepted verdict, recorded by decide."""
+    builder = _spec_proposed(tmp_path, repo_root, "CHG-082", "proposed")
+    assert main(["advance", str(builder.change_dir), "--gate", "specified"]) == 1
+    _, err = capsys.readouterr()
+    assert "Human Gate" in err
+    assert _change_status(builder) == "specification-proposed"
+
+    # The human's click is what moves it.
+    assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 0
+    assert _change_status(builder) == "specified"

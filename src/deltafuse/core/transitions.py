@@ -442,7 +442,9 @@ def set_artifact_status(
                 # pass first; the errors go back to the Worker.
                 from deltafuse.core.fsm import check_gate
 
-                gate_errors = check_gate(change_path, "specified", assume_status=status)
+                gate_errors = check_gate(
+                    change_path, "specified", assume_status=status, human=False
+                )
                 if gate_errors:
                     raise TransitionError(
                         "spec delta is not ready for the Human Gate; fix and propose again: "

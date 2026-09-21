@@ -792,6 +792,7 @@ def _human_gate_errors(
     change_status: str | None,
     repo_root: Path,
     spec_delta_file: Path,
+    require_spec_acceptance: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
@@ -828,6 +829,21 @@ def _human_gate_errors(
             "Gate specified: specified requires spec-delta.md accepted via "
             f"deltafuse decide (got {spec_status!r})"
         )
+    # The proposed path to 'specified' is the Human Gate itself: leaving
+    # specification-proposed needs the human's accepted verdict. Without this a
+    # spec delta still 'proposed' passed the gate, and the Worker could run
+    # `deltafuse advance --gate specified` past the human (q0, campaign
+    # 20260921T072327Z). The terminal-status check above then proves the
+    # verdict came through decide.
+    if (
+        require_spec_acceptance
+        and change_status == "specification-proposed"
+        and spec_status != "accepted"
+    ):
+        errors.append(
+            "Gate specified: leaving specification-proposed needs spec-delta.md "
+            f"accepted via deltafuse decide (Human Gate); got {spec_status!r}"
+        )
     return errors
 
 
@@ -837,10 +853,13 @@ def check_gate(
     registry: SchemaRegistry | None = None,
     *,
     assume_status: str | None = None,
+    human: bool = True,
 ) -> list[str]:
     """Gate errors for a Change. ``assume_status`` evaluates the gate as if
     change.yaml held that status, without writing it: the Core asks "would
-    this pass once moved?" before it moves anything."""
+    this pass once moved?" before it moves anything. ``human=False`` leaves out
+    the human verdict a Human Gate waits for - only for checking whether a spec
+    delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
 
@@ -911,6 +930,7 @@ def check_gate(
                 change_status=change_status,
                 repo_root=repo_root,
                 spec_delta_file=spec_delta_file,
+                require_spec_acceptance=human,
             )
         )
         errors.extend(
