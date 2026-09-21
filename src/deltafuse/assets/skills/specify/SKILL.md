@@ -27,7 +27,20 @@ Read the named slice, its typed delta, `spec_refs` from `next`, accepted related
 
 ## Procedure
 
-1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md` using `ADDED`, `MODIFIED`, and `REMOVED` with stable requirement/scenario IDs. Added/modified paths must stay inside this slice's `spec_refs`.
+1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md`. Its frontmatter is required in exactly this shape - lowercase keys, every list present even when empty, each entry a spec path with the requirement anchor; no other keys:
+
+   ```yaml
+   ---
+   change: CHG-001-example
+   status: proposed
+   slices: [SLICE-01]
+   added: [docs/spec/<domain>/<capability>.md#REQ-ID]
+   modified: []
+   removed: []
+   ---
+   ```
+
+   The body may repeat them under `## ADDED`, `## MODIFIED`, `## REMOVED` for the human. Use stable requirement/scenario IDs. Added/modified paths must stay inside this slice's `spec_refs`.
 2. Edit only declared specification files and requirements. Keep the live spec imperative and free of change-log prose.
 3. Apply an accepted capability catalog delta when required.
 4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into the named spec files.

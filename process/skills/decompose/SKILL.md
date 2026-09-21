@@ -29,7 +29,26 @@ Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks
 
 1. Create `docs/changes/<change-id>/tasks/TASK-NNN.md` files (optional `TASK-NNN-<slug>.md` filename). Frontmatter `id` is `TASK-001` (digits only, no slug). Status `pending`, not `proposed`.
 2. Give each task one verifiable outcome that fits one implementation context.
-3. Copy the task template frontmatter: `kind`, `depends_on` (not `dependencies`), `requirement_delta: added` (not `add`), `spec_refs`, `allowed_paths`, `forbidden_paths`, `context_budget`. No `title` or `claims` in frontmatter. In `change.yaml`, `tasks` is a list of strings (`TASK-001`), not objects.
+3. Write the task frontmatter in exactly this shape - every key required, no others (no `title`, `claims`, `dependencies`):
+
+   ```yaml
+   ---
+   id: TASK-001
+   change: CHG-001-example
+   slice: SLICE-01
+   kind: feature          # feature | bugfix | refactor | maintenance | documentation
+   status: pending
+   depends_on: []
+   requirement_delta: added   # none | added | modified | removed | mixed
+   spec_refs: [docs/spec/<domain>/<capability>.md#REQ-ID]
+   design_ref: null
+   allowed_paths: [src/<module>.py, tests/test_<module>.py]
+   forbidden_paths: []
+   context_budget: {max_tokens: 64000, max_files: 24}
+   ---
+   ```
+
+   `forbidden_paths` narrows the task's product scope; on the `code` route never forbid `tests/**` - declare writes the Red test there. In `change.yaml`, `tasks` is a list of strings (`TASK-001`), not objects.
 4. Order `depends_on` and update `coverage.yaml` plus the `tasks` string list in `change.yaml`.
 5. For an implementation bug, derive tasks from observation, reproduction, exact existing spec refs, oracle, unchanged behavior, and scope with `requirement_delta: none`.
 

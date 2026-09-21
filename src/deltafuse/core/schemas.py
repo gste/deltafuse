@@ -219,6 +219,33 @@ class SchemaRegistry:
             errors.append(format_schema_error(normalized, error))
         return errors
 
+    def shape_hint(self, schema_name: str) -> str:
+        """One line naming the frontmatter a schema expects, derived from it.
+
+        Appended to schema errors for Worker-written frontmatter: in q0 runs
+        the Worker repaired one missing key per retry because an error names
+        only the first failing rule.
+        """
+        schema = self.get_schema(schema_name)
+        props = schema.get("properties") or {}
+        parts: list[str] = []
+        for key in schema.get("required") or []:
+            spec = props.get(key) or {}
+            if "enum" in spec:
+                parts.append(f"{key} ({'|'.join(str(v) for v in spec['enum'])})")
+            elif spec.get("type") == "array":
+                least = "at least one" if int(spec.get("minItems") or 0) > 0 else "may be empty"
+                parts.append(f"{key} (list, {least})")
+            else:
+                parts.append(key)
+        optional = [key for key in props if key not in (schema.get("required") or [])]
+        line = "expected frontmatter keys: " + ", ".join(parts)
+        if optional:
+            line += "; optional: " + ", ".join(optional)
+        if schema.get("additionalProperties") is False:
+            line += "; no other keys"
+        return line
+
     def validate_or_raise(self, schema_name: str, data: Any) -> None:
         """Validates data against a schema and raises SchemaValidationError if invalid."""
         errors = self.validate(schema_name, data)
