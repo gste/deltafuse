@@ -333,6 +333,19 @@ def _main(argv: list[str] | None = None) -> int:
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
+    gate_key_parser = subparsers.add_parser(
+        "gate-key",
+        help="Create the human's Ed25519 key for signed Human Gate receipts",
+    )
+    gate_key_parser.add_argument("action", choices=["init"], help="init: create and register a key")
+    gate_key_parser.add_argument("path", nargs="?", default=".", help="Product root")
+    gate_key_parser.add_argument(
+        "--key-file",
+        default=None,
+        help="Where to write the private key (default: ~/.deltafuse/keys/<key_id>.ed25519); "
+        "it must stay outside the product and outside the Worker's reach",
+    )
+
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
         "board",
@@ -778,6 +791,55 @@ def _main(argv: list[str] | None = None) -> int:
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0 if result.get("ok") else 1
+
+    elif args.command == "gate-key":
+        import os
+        import secrets
+
+        from deltafuse.core import ed25519
+        from deltafuse.core.gate_receipts import (
+            BROKER_KEY_FILE_ENV,
+            TRUST_ROOTS_REL,
+            install_trust_root,
+            key_id_for,
+        )
+
+        try:
+            root = load_product_root(Path(args.path)).resolve()
+        except QueueError as ex:
+            print(f"gate-key: {ex}", file=sys.stderr)
+            return 2
+        seed = secrets.token_bytes(32)
+        public = ed25519.public_key(seed)
+        key_id = key_id_for(public)
+        key_file = (
+            Path(args.key_file).expanduser()
+            if args.key_file
+            else Path.home() / ".deltafuse" / "keys" / f"{key_id}.ed25519"
+        ).resolve()
+        if key_file == root or root in key_file.parents:
+            print(
+                "gate-key: the private key must not live inside the product - the Worker "
+                "reads the product",
+                file=sys.stderr,
+            )
+            return 1
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.write_text(seed.hex() + "\n", encoding="utf-8")
+        try:
+            os.chmod(key_file, 0o600)
+        except OSError:
+            pass
+        install_trust_root(root, public_key=public)
+        print(f"key_id: {key_id}")
+        print(f"private key: {key_file}")
+        print(f"trust root: {TRUST_ROOTS_REL} (public key only)")
+        print(
+            f"Set {BROKER_KEY_FILE_ENV}={key_file} in the human's shell before `deltafuse "
+            "decide` - never where the Worker runs. From now on every Human Gate receipt "
+            "must be signed."
+        )
+        return 0
 
     elif args.command == "leash":
         if args.head and not args.base:

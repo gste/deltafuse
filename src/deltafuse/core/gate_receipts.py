@@ -7,12 +7,19 @@ verdicts (decision / spec accept-reject), hash-chained and optionally broker-sig
 Absorbed the legacy `gate_journal.py` (DF3-007 supersedes it): that module declared
 the same JOURNAL_REL and journal_path, duplicated the reader verbatim, and its
 writer `append_click` was dead code.
+
+Signed receipts use Ed25519: the repository holds only public keys
+(`.deltafuse/trusted-keys.yaml`), the human's private key stays outside the
+Worker's reach. The earlier broker-signed profile used HMAC with the secret in
+that same file, so anyone who could read the repository - the Worker - could
+forge a signature; such receipts and trust roots are no longer trusted. Once
+trust roots exist, every later receipt must be signed whatever the configured
+profile, so editing `config.yaml` does not switch signing off.
 """
 
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import os
 import secrets
@@ -22,6 +29,8 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core import ed25519
+
 RECEIPT_VERSION = 2
 JOURNAL_REL = ".deltafuse/gate-journal.jsonl"
 HEAD_REL = ".deltafuse/journal-head"
@@ -29,6 +38,8 @@ TRUST_ROOTS_REL = ".deltafuse/trusted-keys.yaml"
 PROFILES = ("local", "broker-signed")
 TERMINAL_STATUSES = frozenset({"accepted", "rejected"})
 BROKER_KEY_ENV = "DELTAFUSE_BROKER_KEY"
+BROKER_KEY_FILE_ENV = "DELTAFUSE_BROKER_KEY_FILE"
+SIG_ALG = "ed25519"
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "
     "protect against a forged journal (use broker-signed for that)"
@@ -69,7 +80,7 @@ def trust_roots_path(product_root: Path) -> Path:
     return Path(product_root) / TRUST_ROOTS_REL
 
 
-def _load_trust_roots(product_root: Path) -> dict[str, str]:
+def _trust_file(product_root: Path) -> dict[str, Any]:
     path = trust_roots_path(product_root)
     if not path.is_file():
         return {}
@@ -77,25 +88,135 @@ def _load_trust_roots(product_root: Path) -> dict[str, str]:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception:
         return {}
-    if not isinstance(data, dict):
+    return data if isinstance(data, dict) else {}
+
+
+def _load_trust_roots(product_root: Path) -> dict[str, str]:
+    """Registered verification keys: key_id -> Ed25519 public key (hex).
+
+    A file without `alg: ed25519` is the old format, whose `keys` were HMAC
+    secrets stored in the repository; it yields no trusted key.
+    """
+    data = _trust_file(product_root)
+    if data.get("alg") != SIG_ALG:
         return {}
-    return {str(k): str(v) for k, v in data.get("keys", {}).items()}
+    return {str(k): str(v) for k, v in (data.get("keys") or {}).items()}
 
 
-def install_trust_root(product_root: Path, *, key_id: str, secret: str) -> None:
-    """Register one broker verification key (public trust root)."""
+def trust_roots_registered(product_root: Path) -> bool:
+    """True once the trust roots file exists: later receipts must be signed.
+
+    Checked on the file, not on its keys, so an emptied or legacy file does not
+    quietly switch the product back to unsigned receipts.
+    """
+    return trust_roots_path(product_root).is_file()
+
+
+def _signed_since(product_root: Path) -> int:
+    """Index of the first receipt that must be signed (receipts at registration)."""
+    since = _trust_file(product_root).get("since_receipts")
+    return since if isinstance(since, int) and since >= 0 else 0
+
+
+def key_id_for(public: bytes) -> str:
+    return _digest(public)[:12]
+
+
+def install_trust_root(product_root: Path, *, public_key: bytes) -> str:
+    """Register one Ed25519 verification key; returns its key_id.
+
+    The first registration records how many receipts already exist: those were
+    written unsigned under the local profile and stay valid.
+    """
+    if len(public_key) != 32:
+        raise ReceiptError("an Ed25519 public key is 32 bytes")
     path = trust_roots_path(product_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data: dict[str, Any] = {"keys": {}}
-    if path.is_file():
+    current = _trust_file(product_root)
+    keys = dict(_load_trust_roots(product_root))
+    since = current.get("since_receipts") if current.get("alg") == SIG_ALG else None
+    if not isinstance(since, int):
+        since = len(load_receipts(Path(product_root)))
+    key_id = key_id_for(public_key)
+    keys[key_id] = public_key.hex()
+    path.write_text(
+        yaml.safe_dump({"alg": SIG_ALG, "since_receipts": since, "keys": keys}, sort_keys=True),
+        encoding="utf-8",
+    )
+    return key_id
+
+
+def _signing_seed() -> bytes | None:
+    """The human's Ed25519 private key: hex in DELTAFUSE_BROKER_KEY, or a file
+    named by DELTAFUSE_BROKER_KEY_FILE. None when neither is set."""
+    raw = os.environ.get(BROKER_KEY_ENV, "").strip()
+    key_file = os.environ.get(BROKER_KEY_FILE_ENV, "").strip()
+    if not raw and key_file:
         try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            if isinstance(loaded, dict):
-                data = loaded
-        except Exception:
-            pass
-    data.setdefault("keys", {})[key_id] = secret
-    path.write_text(yaml.safe_dump(data, sort_keys=True), encoding="utf-8")
+            raw = Path(key_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as ex:
+            raise ReceiptError(f"cannot read {BROKER_KEY_FILE_ENV}: {ex}") from ex
+    if not raw:
+        return None
+    try:
+        seed = bytes.fromhex(raw)
+    except ValueError:
+        seed = b""
+    if len(seed) != 32:
+        raise ReceiptError(
+            "the broker key must be a 32-byte Ed25519 private key in hex "
+            "(create one with: deltafuse gate-key init)"
+        )
+    return seed
+
+
+def signing_problem(product_root: Path) -> str | None:
+    """Why a Human Gate receipt cannot be recorded right now; None when it can.
+
+    Called before `decide` writes anything, so a refused verdict leaves no
+    artifact marked accepted without its receipt.
+    """
+    root = Path(product_root)
+    if not (load_profile(root) == "broker-signed" or trust_roots_registered(root)):
+        return None
+    try:
+        seed = _signing_seed()
+    except ReceiptError as ex:
+        return str(ex)
+    if seed is None:
+        return (
+            "this product requires signed Human Gate receipts and the human's key "
+            f"is not available ({BROKER_KEY_ENV} or {BROKER_KEY_FILE_ENV}); a Worker "
+            "must not record a Human Gate verdict"
+        )
+    public = ed25519.public_key(seed)
+    if _load_trust_roots(root).get(key_id_for(public)) != public.hex():
+        return (
+            "broker key is not registered in the trust roots "
+            f"({TRUST_ROOTS_REL}); register it with: deltafuse gate-key init"
+        )
+    return None
+
+
+def _signature_problem(entry: dict[str, Any], trust: dict[str, str]) -> str | None:
+    """None when the entry is signed by a registered Ed25519 key; else why not."""
+    if entry.get("sig_alg") != SIG_ALG:
+        return (
+            "not signed with a registered Ed25519 key (HMAC receipts are not "
+            "trusted: their key sat in the repository)"
+        )
+    public = trust.get(str(entry.get("key_id")))
+    if public is None:
+        return f"signed by unknown key_id {entry.get('key_id')!r}"
+    try:
+        ok = ed25519.verify(
+            bytes.fromhex(public),
+            str(entry.get("chain_hash")).encode("utf-8"),
+            bytes.fromhex(str(entry.get("signature"))),
+        )
+    except ValueError:
+        ok = False
+    return None if ok else "broker signature does not verify"
 
 
 def _chain_hash(entry: dict[str, Any]) -> str:
@@ -164,24 +285,18 @@ def record_receipt(
         "nonce": secrets.token_hex(8),
         "prev_hash": prev_hash,
     }
-    if profile == "broker-signed":
-        secret = os.environ.get(BROKER_KEY_ENV)
-        if not secret:
-            raise ReceiptError(
-                f"broker-signed profile requires the host broker key in {BROKER_KEY_ENV}"
-            )
-        key_id = _digest(secret.encode("utf-8"))[:12]
-        trust = _load_trust_roots(root)
-        if key_id not in trust:
-            raise ReceiptError(
-                "broker key is not registered in the trust roots "
-                f"({TRUST_ROOTS_REL}); register it with install_trust_root"
-            )
+    if profile == "broker-signed" or trust_roots_registered(root):
+        problem = signing_problem(root)
+        if problem:
+            raise ReceiptError(problem)
+        seed = _signing_seed()
+        assert seed is not None  # signing_problem checked it
+        key_id = key_id_for(ed25519.public_key(seed))
+        entry["profile"] = "broker-signed"
         entry["key_id"] = key_id
+        entry["sig_alg"] = SIG_ALG
         entry["chain_hash"] = _chain_hash(entry)
-        entry["signature"] = hmac.new(
-            secret.encode("utf-8"), entry["chain_hash"].encode("utf-8"), hashlib.sha256
-        ).hexdigest()
+        entry["signature"] = ed25519.sign(seed, entry["chain_hash"].encode("utf-8")).hex()
     else:
         entry["chain_hash"] = _chain_hash(entry)
         entry["guarantee"] = LOCAL_GUARANTEE
@@ -231,6 +346,7 @@ def journal_errors(product_root: Path) -> list[str]:
 
     seen_nonces: set[str] = set()
     trust = _load_trust_roots(root)
+    signed_from = _signed_since(root) if trust_roots_registered(root) else None
     for index, entry in enumerate(receipts):
         version = entry.get("receipt_version")
         if version is None:
@@ -249,19 +365,11 @@ def journal_errors(product_root: Path) -> list[str]:
         if version != RECEIPT_VERSION:
             errors.append(f"{label}: unsupported receipt_version {version!r}")
             continue
-        if entry.get("profile") == "broker-signed":
-            key_id = entry.get("key_id")
-            secret = trust.get(str(key_id))
-            if secret is None:
-                errors.append(f"{label}: signed by unknown key_id {key_id!r}")
-                continue
-            expected = hmac.new(
-                secret.encode("utf-8"),
-                str(chain).encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
-            if not hmac.compare_digest(expected, str(entry.get("signature"))):
-                errors.append(f"{label}: broker signature does not verify")
+        must_sign = signed_from is not None and index >= signed_from
+        if entry.get("profile") == "broker-signed" or must_sign:
+            problem = _signature_problem(entry, trust)
+            if problem:
+                errors.append(f"{label}: {problem}")
     return errors
 
 
@@ -286,7 +394,11 @@ def has_valid_receipt(
         if artifact is not None and Path(artifact).is_file()
         else None
     )
-    for entry in reversed(load_receipts(root)):
+    all_receipts = load_receipts(root)
+    trust = _load_trust_roots(root)
+    signed_from = _signed_since(root) if trust_roots_registered(root) else None
+    for index in range(len(all_receipts) - 1, -1, -1):
+        entry = all_receipts[index]
         if entry.get("kind") != kind or entry.get("status") != status:
             continue
         if artifact_id and entry.get("id") != artifact_id:
@@ -299,17 +411,11 @@ def has_valid_receipt(
                 continue
             if not entry.get("chain_hash") or _chain_hash(entry) != entry["chain_hash"]:
                 continue
-            if entry.get("profile") == "broker-signed":
-                secret = _load_trust_roots(root).get(str(entry.get("key_id")))
-                if secret is None:
-                    continue
-                expected = hmac.new(
-                    secret.encode("utf-8"),
-                    str(entry["chain_hash"]).encode("utf-8"),
-                    hashlib.sha256,
-                ).hexdigest()
-                if not hmac.compare_digest(expected, str(entry.get("signature"))):
-                    continue
+            must_sign = signed_from is not None and index >= signed_from
+            if (entry.get("profile") == "broker-signed" or must_sign) and _signature_problem(
+                entry, trust
+            ):
+                continue
         if (
             current_digest is not None
             and version is not None
