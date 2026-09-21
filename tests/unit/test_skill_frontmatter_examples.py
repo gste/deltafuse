@@ -97,3 +97,21 @@ def test_routing_claim_error_names_the_claim_shape(tmp_path: Path, repo_root: Pa
         and "no other keys" in e
         for e in errors
     ), errors
+
+
+def test_unquoted_colon_in_yaml_says_to_quote_the_value(tmp_path: Path, repo_root: Path):
+    """q0 run M03 20260921T212331Z: twelve refusals in a row on
+    `summary: Backward compatible: ...` before the Worker quoted it."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-804", title="Colon").step_intake().step_analyze()
+    routing_file = builder.change_dir / "routing.yaml"
+    routing_file.write_text(
+        routing_file.read_text(encoding="utf-8").replace(
+            "summary: Claim CR-001", "summary: Backward compatible: callers keep working"
+        ),
+        encoding="utf-8",
+    )
+    errors = validate_change_package(builder.change_dir)
+    assert any(
+        e.startswith("routing.yaml parsing error") and "must be quoted" in e for e in errors
+    ), errors

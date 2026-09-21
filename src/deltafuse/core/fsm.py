@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 import re
 import yaml
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
 from deltafuse.core.context import (
     validate_context_budget,
     validate_task_context_budget,
@@ -231,7 +231,7 @@ def validate_change_package(
                         "Status mismatch: change.yaml has status 'decomposed' but no task files exist in tasks/"
                     )
         except Exception as ex:
-            errors.append(f"change.yaml parsing error: {ex}")
+            errors.append(f"change.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
     route, route_errs = load_change_route(change_path)
     errors.extend(route_errs)
@@ -254,7 +254,7 @@ def validate_change_package(
                     + registry.shape_hint("routing", ("claims", "*"), noun="keys for each claim")
                 )
         except Exception as ex:
-            errors.append(f"routing.yaml parsing error: {ex}")
+            errors.append(f"routing.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
     # 3. Validate coverage.yaml if present
     coverage_file = change_path / "coverage.yaml"
@@ -270,7 +270,7 @@ def validate_change_package(
                 cov_errs = validate_coverage_completeness(req_claims, cov_data)
                 errors.extend(f"coverage.yaml: {e}" for e in cov_errs)
         except Exception as ex:
-            errors.append(f"coverage.yaml error: {ex}")
+            errors.append(f"coverage.yaml error: {ex}{yaml_error_hint(ex)}")
 
     # 4. Validate slices/
     slices_dir = change_path / "slices"
