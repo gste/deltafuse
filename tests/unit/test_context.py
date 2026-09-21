@@ -27,34 +27,31 @@ def _clear_tokenize_url(monkeypatch):
 
 def test_estimate_tokens_heuristic():
     text = "Hello world from DeltaFuse framework"
-    # 5 English words * 1.3 = 6.5 -> ceil = 7
-    tokens = estimate_tokens(text)
-    assert tokens == 7
+    # A04-01: 36 UTF-8 bytes / 3.75 = 9.6 -> ceil = 10
+    assert estimate_tokens(text) == 10
+    assert estimate_tokens("") == 0
 
 
-def test_estimate_tokens_a03_01_upper_bounds(tmp_path: Path):
-    """A03-01: coefficient fallback is an upper bound vs recorded ornith/Qwen counts."""
-    en = " ".join(["word"] * 20)
-    assert estimate_tokens(en) >= 26
-    assert estimate_tokens(en) <= 32  # 1.3x EN must not inflate absurdly
+def test_estimate_tokens_a04_01_counts_bytes_not_file_type(tmp_path: Path):
+    """A04-01 replaced A03-01's words x factor (calibration 2026-09-21): the
+    estimate follows UTF-8 bytes, so it no longer depends on the suffix or on a
+    single Cyrillic letter."""
+    body = '{"kind": "transition", "gate": "declaring", "from": "decomposed"}\n' * 20
+    as_jsonl = tmp_path / "transitions.jsonl"
+    as_json = tmp_path / "transitions.json"
+    as_jsonl.write_text(body, encoding="utf-8")
+    as_json.write_text(body, encoding="utf-8")
+    # A03-01 counted the .jsonl as English prose, 82 % under the tokenizers.
+    assert estimate_files_tokens([as_jsonl]) == estimate_files_tokens([as_json])
+    assert estimate_files_tokens([as_jsonl]) == -(-len(body.encode("utf-8")) // 3.75)
 
-    ru = " ".join(["проверка"] * 17)
-    assert estimate_tokens(ru) >= 37
+    english = "The declaring gate is closed until every task is declared. " * 10
+    one_letter = english + "ж"
+    # One Cyrillic letter moved a whole A03-01 file from x1.3 to x2.2.
+    assert estimate_tokens(one_letter) - estimate_tokens(english) <= 1
 
-    py = tmp_path / "sample.py"
-    py.write_text(" ".join(["token"] * 30), encoding="utf-8")
-    assert estimate_files_tokens([py]) >= 81
-
-    yaml_file = tmp_path / "manifest.yaml"
-    yaml_file.write_text(" ".join(["key:"] * 22), encoding="utf-8")
-    yaml_est = estimate_files_tokens([yaml_file])
-    assert yaml_est >= 98
-    naive = 29  # historical words*1.3 on 22 words
-    assert yaml_est > naive * 2  # no 70% YAML undercount
-
-    log_file = tmp_path / "trace.log"
-    log_file.write_text(" ".join(["ts"] * 35), encoding="utf-8")
-    assert estimate_files_tokens([log_file]) >= 168
+    russian = "Задача не может обогнать свой Change. " * 10
+    assert estimate_tokens(russian) == -(-len(russian.encode("utf-8")) // 3.75)
 
 
 def test_validate_context_budget(tmp_path: Path):
@@ -214,7 +211,7 @@ def test_count_tokens_reports_heuristic_mode(monkeypatch):
     counted = count_tokens("alpha beta gamma")
     assert counted.mode == "heuristic"
     assert counted.measured is False
-    assert counted.detail.startswith("a03-01:x")
+    assert counted.detail == "a04-01:/3.75"
     assert counted.tokens > 0
 
 
@@ -277,7 +274,7 @@ def test_count_files_tokens_returns_receipt(tmp_path: Path, monkeypatch):
     assert total > 0
     assert receipt["mode"] == "heuristic"
     assert receipt["measured"] is False
-    assert receipt["heuristic"] == "a03-01"
+    assert receipt["heuristic"] == "a04-01"
     assert receipt["endpoint"] is None
     assert receipt["required"] is False
     assert receipt["files_counted"] == 1
