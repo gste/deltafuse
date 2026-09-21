@@ -63,6 +63,9 @@ CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 # belong in a Worker diff.
 CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.jsonl"})
 CORE_OWNED = CORE_JOURNALS | {"trusted-keys.yaml"}
+# Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
+# `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
+CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status"})
 
 
 
@@ -405,7 +408,7 @@ def core_journal_errors(
             except json.JSONDecodeError:
                 errors.append(f"line {number} is not JSON")
                 continue
-            if not isinstance(entry, dict) or entry.get("kind") not in {"transition", "unblock"}:
+            if not isinstance(entry, dict) or entry.get("kind") not in CORE_RECEIPT_KINDS:
                 errors.append(f"line {number} is not a Core transition receipt")
                 continue
             body = {key: value for key, value in entry.items() if key != "receipt"}
@@ -440,6 +443,73 @@ def core_journal_errors(
             return errors
         return gate_receipts.journal_errors(root)
     return [f"unknown Core journal '{name}'"]
+
+
+def _content_at(product_root: Path, rel_path: str, *, head: str | None) -> str | None:
+    if head:
+        return _git_show(product_root, head, rel_path)
+    path = product_root / rel_path
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+def core_status_writes(
+    product_root: Path,
+    *,
+    base: str | None = None,
+    head: str | None = None,
+) -> dict[str, list[str]]:
+    """Task and slice files the Core rewrote through `deltafuse state` since ``base``.
+
+    `deltafuse state` is how a Worker asks the Core to move a slice or task
+    status; the Core rewrites the frontmatter and appends an artifact-status
+    receipt. Those files lie outside the step envelope on purpose - a Worker
+    must not hand-edit them - so the guard recognises the Core's rewrite by its
+    receipt and by its content: only `status` changed, from the first receipt's
+    `from` to the last receipt's `to`, the rest of the frontmatter and the body
+    as before. Maps each path to the reasons it fails (empty = a pure Core
+    status write).
+    """
+    root = Path(product_root)
+    old, new = _journal_lines(root, ".deltafuse/transitions.jsonl", base=base, head=head)
+    if new[: len(old)] != old:
+        return {}  # core_journal_errors reports the rewrite; nothing is vouched for
+    dirs = _change_dirs(root)
+    moves: dict[str, list[dict[str, Any]]] = {}
+    for raw in new[len(old):]:
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict) or entry.get("kind") != "artifact-status":
+            continue
+        folder = {"task": "tasks", "slice": "slices"}.get(str(entry.get("artifact")))
+        change_dir = dirs.get(str(entry.get("change")))
+        if folder is None or change_dir is None or not isinstance(entry.get("artifact_id"), str):
+            continue
+        rel = (change_dir / folder / f"{entry['artifact_id']}.md").relative_to(root).as_posix()
+        moves.setdefault(rel, []).append(entry)
+
+    out: dict[str, list[str]] = {}
+    for rel, entries in moves.items():
+        reasons: list[str] = []
+        try:
+            before_meta, before_body = parse_frontmatter(_git_show(root, base or "HEAD", rel) or "")
+            after_meta, after_body = parse_frontmatter(_content_at(root, rel, head=head) or "")
+        except Exception as ex:
+            out[rel] = [f"cannot compare with the base: {ex}"]
+            continue
+        if before_meta.get("status") != entries[0].get("from"):
+            reasons.append(f"status at the base is not the receipt's '{entries[0].get('from')}'")
+        if after_meta.get("status") != entries[-1].get("to"):
+            reasons.append(f"status is not the receipt's '{entries[-1].get('to')}'")
+        rest_before = {k: v for k, v in before_meta.items() if k != "status"}
+        rest_after = {k: v for k, v in after_meta.items() if k != "status"}
+        if rest_before != rest_after:
+            reasons.append("frontmatter changed beyond status")
+        if before_body.strip() != after_body.strip():
+            reasons.append("body changed")
+        out[rel] = reasons
+    return out
 
 
 def collect_chain_envelopes(
@@ -560,6 +630,9 @@ def check_paths(
     errors: list[str] = []
     steps = [str(env.get("step") or "?") for env in env_list]
     step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
+    status_writes = (
+        core_status_writes(product_root, base=base, head=head) if product_root is not None else {}
+    )
     for raw in _unique(rel_paths):
         # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
         # whole, so checking it second would make the Core-owned guard dead code.
@@ -581,6 +654,16 @@ def check_paths(
         if raw.startswith(".git/") or is_exempt_path(raw):
             continue
         if _covered_by(raw, env_list) is not None:
+            continue
+        status_reasons = status_writes.get(posix_relpath(raw))
+        if status_reasons is not None:
+            if not status_reasons:
+                continue  # a `deltafuse state` rewrite, vouched for by its receipt
+            errors.extend(
+                f"leash: '{raw}' is outside the {step_label} write envelope and not a pure "
+                f"Core status write: {reason}"
+                for reason in status_reasons
+            )
             continue
         if is_product_path(raw, baseline=baseline):
             if not env_list:

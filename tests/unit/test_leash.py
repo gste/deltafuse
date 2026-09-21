@@ -436,3 +436,45 @@ def test_leash_without_product_root_still_refuses_core_journals():
 
     errors = check_paths([".deltafuse/transitions.jsonl"], [], baseline="draft")
     assert errors and "Core-owned" in errors[0]
+
+
+def test_leash_accepts_a_state_rewrite_and_rejects_a_hand_edit_riding_on_it(
+    tmp_path: Path, repo_root: Path, capsys
+):
+    """q0 run M01, specify step: `deltafuse state --slice` rewrites the slice
+    frontmatter, which lies outside the specify envelope on purpose. The guard
+    vouches for it by its artifact-status receipt - and only while nothing but
+    the status changed."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-505", title="State").step_intake().step_analyze()
+    builder._core_advance("analyzed")
+    _git_init_commit(tmp_path)
+
+    assert main(["state", str(builder.change_dir), "--slice", "SLICE-01", "--status", "specified"]) == 0
+    capsys.readouterr()
+    ret, data = _leash_diff(tmp_path, capsys)
+    assert data["violations"] == [], data["violations"]
+    assert ret == 0
+
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    slice_file.write_text(slice_file.read_text(encoding="utf-8") + "\nWidened scope.\n", encoding="utf-8")
+    ret, data = _leash_diff(tmp_path, capsys)
+    assert ret == 1
+    assert any("not a pure Core status write: body changed" in row for row in data["violations"])
+
+
+def test_leash_rejects_a_hand_set_slice_status(tmp_path: Path, repo_root: Path, capsys):
+    """Without the Core's receipt a status edit outside the envelope is just a
+    hand edit."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-506", title="Hand").step_intake().step_analyze()
+    builder._core_advance("analyzed")
+    _git_init_commit(tmp_path)
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    slice_file.write_text(
+        slice_file.read_text(encoding="utf-8").replace("status: draft", "status: specified", 1),
+        encoding="utf-8",
+    )
+    ret, data = _leash_diff(tmp_path, capsys)
+    assert ret == 1
+    assert any("SLICE-01.md" in row for row in data["violations"])
