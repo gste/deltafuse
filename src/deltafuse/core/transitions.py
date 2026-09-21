@@ -571,6 +571,18 @@ def set_artifact_status(
 
             meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
             current = meta.get("status")
+            if current == status:
+                # Asking again for the status it already has is not an error:
+                # q0 run M03 20260921T215701Z re-sent `verified` and was refused.
+                # Nothing is written and no receipt is added.
+                return {
+                    "ok": True,
+                    "artifact": "task" if task_id else "slice",
+                    "from": current,
+                    "to": status,
+                    "receipt": None,
+                    "unchanged": True,
+                }
             if current not in allowed or status not in allowed[current]:
                 raise TransitionError(
                     f"cannot set status '{status}' from '{current}' for {file.name}"
