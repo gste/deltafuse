@@ -246,3 +246,42 @@ def test_verification_phase_writes_run_yaml(tmp_path: Path, repo_root: Path):
     assert "base_revision" in outcome.payload
 
 
+
+
+def test_core_changed_paths_hold_only_the_workers_changes(tmp_path: Path):
+    """q0 run 20260921T081038Z: the Core-derived dirty set also held the Core's
+    own journals, interpreter caches and the evidence file `deltafuse evidence`
+    had just written, and the Worker was told to list them."""
+    import subprocess
+
+    from deltafuse.core.evidence import _core_computed_changed_paths
+
+    def write(rel: str, text: str = "x\n") -> None:
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    write("src/core.py")
+    write(".deltafuse/transitions.jsonl", "{}\n")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.email=e@test", "-c", "user.name=e", "-c", "commit.gpgsign=false",
+         "commit", "-m", "init"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+
+    write("src/core.py", "y\n")
+    write("tests/test_core.py")
+    write(".deltafuse/transitions.jsonl", "{}\n{}\n")
+    write("src/__pycache__/core.cpython-312.pyc")
+    write("tests/.pytest_cache/v/cache/lastfailed", "{}\n")
+    write("docs/changes/CHG-001-x/evidence/red/TASK-001.yaml", "phase: red\n")
+    write("docs/changes/CHG-001-x/tasks/TASK-001.md")
+
+    paths = sorted(p.replace("\\", "/") for p in _core_computed_changed_paths(tmp_path))
+    assert paths == [
+        "docs/changes/CHG-001-x/tasks/TASK-001.md",
+        "src/core.py",
+        "tests/test_core.py",
+    ]

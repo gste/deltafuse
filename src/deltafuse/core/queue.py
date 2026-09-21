@@ -28,6 +28,9 @@ TERMINAL_CHANGE = {
 TASK_DECLARE = {"pending", "declaring"}
 TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
+# Change statuses that own the declare / implement phase of their tasks.
+DECLARE_PHASE = frozenset({"decomposed", "declaring"})
+IMPLEMENT_PHASE = frozenset({"declared", "implementing"})
 
 
 class QueueError(Exception):
@@ -340,7 +343,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     reason=f"Task {tid} status '{tstatus}'",
                 )
             ], []
-        if tstatus in TASK_IMPLEMENT:
+        if tstatus in TASK_IMPLEMENT and status not in DECLARE_PHASE:
             return [
                 _item_for_step(
                     "implement",
@@ -352,7 +355,64 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
 
-    if tasks and all(tstatus in TASK_DONE for _, tstatus, _ in tasks):
+    # The phase of the Change, not only the statuses of its tasks, picks the
+    # step. Reading task statuses alone sent the Worker to implement while the
+    # declaring gate was still closed, and to verify with the Change at
+    # 'decomposed' (q0 run 20260921T081038Z).
+    if tasks and status in DECLARE_PHASE:
+        ahead = [(tid, s) for tid, s, _ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
+        if ahead:
+            tid, tstatus = ahead[0]
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=None,
+                    reason=(
+                        f"Task {tid} is '{tstatus}' while the Change is '{status}': "
+                        "the task ran ahead of the declaring gate"
+                    ),
+                    halt_kind="blocked",
+                )
+            ]
+        declared = [(tid, tfile) for tid, s, tfile in tasks if s in TASK_IMPLEMENT]
+        if declared:
+            tid, tfile = declared[-1]
+            return [
+                _item_for_step(
+                    "declare",
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="Every task is declared; close the declaring gate "
+                    "(check-gate, then advance --gate declaring)",
+                )
+            ], []
+    if tasks and status in IMPLEMENT_PHASE:
+        implemented = [(tid, tfile) for tid, s, tfile in tasks if s == "implemented"]
+        if implemented and all(s in TASK_DONE for _, s, _ in tasks):
+            tid, tfile = implemented[-1]
+            return [
+                _item_for_step(
+                    "implement",
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="Every task is implemented; close the implemented gate "
+                    "(check-gate, then advance --gate implemented)",
+                )
+            ], []
+
+    if tasks and all(tstatus in TASK_DONE for _, tstatus, _ in tasks) and status not in (
+        DECLARE_PHASE | IMPLEMENT_PHASE
+    ):
         return [
             _item_for_step(
                 "verify",

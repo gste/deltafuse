@@ -149,7 +149,10 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
+        .step_declare()
     )
+    # Implement opens only after the Core closed the declaring gate.
+    builder._core_advance("declaring")
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
     meta["status"] = "declared"
@@ -299,3 +302,61 @@ def test_next_json_blocked_decision_has_halt_choices(tmp_path: Path, repo_root: 
     assert any("Reject DEC-0001" in label for label in labels)
     assert any(row["id"] == "inspect" and row["command"] is None for row in data["halt"]["choices"])
     assert any("deltafuse decide" in (row["command"] or "") for row in data["halt"]["choices"])
+
+
+def _set_task_status(builder: MockChangeBuilder, status: str, task_id: str = "TASK-001") -> None:
+    task_file = builder.change_dir / "tasks" / f"{task_id}.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["status"] = status
+    task_file.write_text(
+        f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}",
+        encoding="utf-8",
+    )
+
+
+def _decomposed(tmp_path: Path, repo_root: Path, change_id: str) -> MockChangeBuilder:
+    install(target_dir=tmp_path, framework_root=repo_root)
+    return (
+        MockChangeBuilder(tmp_path, change_id=change_id, title="Phases")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+
+
+def test_next_declared_tasks_close_the_declaring_gate_first(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T081038Z: every task declared, the Change still at
+    'decomposed' - reading task statuses alone sent the Worker to implement
+    with the declaring gate closed."""
+    builder = _decomposed(tmp_path, repo_root, "CHG-041")
+    _set_task_status(builder, "declared")
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "declare"
+    assert "close the declaring gate" in selected.reason
+
+
+def test_next_task_ahead_of_its_change_is_blocked_not_verified(tmp_path: Path, repo_root: Path):
+    """The same run: tasks 'implemented' with the Change at 'decomposed' were
+    routed to verify."""
+    builder = _decomposed(tmp_path, repo_root, "CHG-042")
+    _set_task_status(builder, "implemented")
+    queue = build_work_queue(tmp_path)
+    assert select_next(queue) is None
+    assert any(
+        item.task == "TASK-001" and "ran ahead of the declaring gate" in item.reason
+        for item in queue.blocked
+    )
+
+
+def test_next_implemented_tasks_close_the_implemented_gate_before_verify(
+    tmp_path: Path, repo_root: Path
+):
+    builder = _decomposed(tmp_path, repo_root, "CHG-043").step_declare()
+    builder._core_advance("declaring")
+    _set_task_status(builder, "implemented")
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "implement"
+    assert "close the implemented gate" in selected.reason

@@ -377,6 +377,62 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
 SLICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"specified"},
 }
+# A task status belongs to a phase of its Change: it may not run ahead of the
+# gates the Change has passed. Task target status -> (Change statuses that own
+# that phase, the gate that opens the next one). q0 run 20260921T081038Z: both
+# tasks reached 'implemented' while the Change sat at 'decomposed', and the
+# queue, reading task statuses, sent the Worker to verify.
+TASK_PHASE_CHANGE_STATUSES: dict[str, tuple[set[str], str]] = {
+    "declaring": ({"decomposed", "declaring"}, "decomposed"),
+    "declared": ({"decomposed", "declaring"}, "decomposed"),
+    "implementing": ({"declared", "implementing"}, "declaring"),
+    "implemented": ({"declared", "implementing"}, "declaring"),
+    "verified": ({"implemented", "verifying"}, "implemented"),
+}
+
+# Rank of every forward Change status, in-flight ones between their neighbours.
+_STATUS_RANK: dict[str, float] = {
+    "normalized": 0,
+    "analyzing": 1,
+    "analyzed": 2,
+    "specification-proposed": 2.5,
+    "specified": 3,
+    "decomposed": 4,
+    "declaring": 4.5,
+    "declared": 5,
+    "implementing": 5.5,
+    "implemented": 6,
+    "verifying": 6.5,
+    "converged": 7,
+}
+
+
+def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
+    """Whether `gate` is the Change's turn, or one it already passed.
+
+    check_gate proves a gate's content, not its turn; advance enforces the
+    turn. In q0 run 20260921T081038Z the Worker ran `check-gate implemented` on
+    a Change still at 'decomposed', read "passed", and advance refused it a
+    second later. Statuses outside the forward chain are left to their own
+    contracts.
+    """
+    gate = (gate or "").strip().lower()
+    if gate not in GATE_TARGETS:
+        return []
+    try:
+        current = _load_change_yaml(Path(change_path)).get("status")
+    except TransitionError:
+        return []
+    if current in GATE_ALLOWED_FROM[gate]:
+        return []
+    rank_current = _STATUS_RANK.get(str(current))
+    rank_target = _STATUS_RANK.get(GATE_TARGETS[gate])
+    if rank_current is None or rank_target is None or rank_current >= rank_target:
+        return []  # not a forward status, or the gate is already passed
+    return [
+        f"Gate {gate}: not this Change's turn - status is '{current}', and this gate "
+        f"applies from {sorted(GATE_ALLOWED_FROM[gate])}"
+    ]
 # Change-level in-flight statuses the Worker may request through the Core.
 CHANGE_INFLIGHT_STATUSES = {"specification-proposed"}
 
@@ -462,6 +518,16 @@ def set_artifact_status(
                 raise TransitionError(
                     f"cannot set status '{status}' from '{current}' for {file.name}"
                 )
+            if task_id and status in TASK_PHASE_CHANGE_STATUSES:
+                owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
+                change_status_now = data.get("status")
+                if change_status_now not in owners:
+                    raise TransitionError(
+                        f"task {task_id} cannot become '{status}' while the Change is "
+                        f"'{change_status_now}': a task may not run ahead of its Change "
+                        f"(needs the Change in {sorted(owners)}; pass the '{gate}' gate "
+                        f"first with deltafuse advance)"
+                    )
             meta["status"] = status
             content_bytes = f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8")
             from deltafuse.core.artifact_storage import atomic_create, atomic_replace

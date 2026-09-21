@@ -27,7 +27,7 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
-from deltafuse.core.transitions import TransitionError, advance_change
+from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
 from deltafuse.core.leash import (
     LeashError,
     check_paths,
@@ -512,7 +512,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
-        errors = check_gate(target, args.gate)
+        # A gate whose turn has not come must not read as "passed": advance
+        # would refuse it a moment later.
+        errors = gate_order_errors(target, args.gate) + check_gate(target, args.gate)
         # Q0-2: a gate verdict that rests on a token budget must say how that
         # budget was counted; the configuration is what the campaign pins.
         tokenizer = tokenizer_config()

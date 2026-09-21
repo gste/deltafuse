@@ -142,7 +142,9 @@ def test_next_json_implement_envelope_uses_task_allowed_paths(
         .step_analyze()
         .step_specify()
         .step_decompose()
+        .step_declare()
     )
+    builder._core_advance("declaring")
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.write_text(
         task.read_text(encoding="utf-8").replace("status: pending", "status: implementing"),
@@ -265,7 +267,9 @@ def test_leash_implement_covers_allowed_src(tmp_path: Path, repo_root: Path, cap
         .step_analyze()
         .step_specify()
         .step_decompose()
+        .step_declare()
     )
+    builder._core_advance("declaring")
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.write_text(
         task.read_text(encoding="utf-8").replace("status: pending", "status: implementing"),

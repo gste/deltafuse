@@ -356,6 +356,21 @@ def validate_change_package(
                             errors.append(
                                 f"{task_file.name}: allowed_paths '{apath}' is also in forbidden_paths"
                             )
+                    # On a code route a task proves itself through tests: declare
+                    # writes the Red test under tests/**. Forbidding it made declare
+                    # impossible, and it surfaced only at the declaring gate, where
+                    # the task file is outside the envelope and the Worker cannot
+                    # fix it (q0 run 20260921T081038Z). Refuse it here, where
+                    # decompose still can.
+                    if route not in {"docs", "ops"}:
+                        for probe in ("tests/test_probe.py", "tests/unit/test_probe.py"):
+                            if path_is_listed(probe, [p for p in forbidden if isinstance(p, str)]):
+                                errors.append(
+                                    f"{task_file.name}: forbidden_paths covers tests/**, which "
+                                    "declare must write for the Red test; remove it from "
+                                    "forbidden_paths"
+                                )
+                                break
 
                     context_budget = meta.get("context_budget")
                     if not context_budget or not isinstance(context_budget, dict):

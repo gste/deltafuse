@@ -231,3 +231,45 @@ def test_cli_advance_failure_is_reported_not_raised(tmp_path: Path, repo_root: P
     assert main(["advance", str(builder.change_dir), "--gate", "specified"]) == 1
     _, err = capsys.readouterr()
     assert "advance failed" in err
+
+
+def test_task_status_cannot_run_ahead_of_its_change(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run 20260921T081038Z: both tasks reached 'implemented' through
+    `deltafuse state` while the Change sat at 'decomposed'."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-962")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    capsys.readouterr()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implementing"]) == 1
+    _, err = capsys.readouterr()
+    assert "may not run ahead of its Change" in err
+    assert "'declaring' gate" in err
+    assert "status: declared" in task_file.read_text(encoding="utf-8")
+
+    builder.step_declare()
+    builder._core_advance("declaring")
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implementing"]) == 0
+    assert "status: implementing" in task_file.read_text(encoding="utf-8")
+
+
+def test_check_gate_reports_a_gate_out_of_turn(tmp_path: Path, repo_root: Path, capsys):
+    """The same run: `check-gate implemented` on a Change at 'decomposed' read
+    "passed", and advance refused it a second later."""
+    from deltafuse.core.transitions import gate_order_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-963")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+
+    errors = gate_order_errors(builder.change_dir, "implemented")
+    assert errors and "not this Change's turn" in errors[0]
+    assert gate_order_errors(builder.change_dir, "declaring") == []
+    # A gate already passed is not an ordering error: re-checking stays allowed.
+    assert gate_order_errors(builder.change_dir, "analyzed") == []
+
+    assert main(["check-gate", str(builder.change_dir), "--gate", "implemented"]) != 0
+    out, err = capsys.readouterr()
+    assert "not this Change's turn" in out + err

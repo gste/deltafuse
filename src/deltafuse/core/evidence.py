@@ -13,12 +13,12 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.context import load_change_route
+from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
-from deltafuse.core.leash import git_dirty_paths, LeashError
+from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
 RECORDED_BY = "deltafuse-evidence"
@@ -198,13 +198,35 @@ def write_stamped_evidence(
 
 
 
+_GENERATED_DIRS = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
+
+
 def _core_computed_changed_paths(repo_root: Path) -> list[str]:
-    """Core-derived dirty paths; Worker lists are only an expected subset."""
+    """Core-derived dirty paths the Worker is accountable for.
+
+    Worker lists are an expected subset of this set, so it must hold only the
+    Worker's own changes. q0 run 20260921T081038Z: the raw git diff also held
+    the Core's journals (`.deltafuse/**`), interpreter caches (`__pycache__`)
+    and the evidence file this very command had just written, and the Worker
+    was told to list them - the same class of defect the leash had.
+    """
     try:
-        return git_dirty_paths(repo_root)
+        paths = git_dirty_paths(repo_root)
     except LeashError:
         # No git repository (bench sandbox, fresh install): nothing to derive.
         return []
+    out: list[str] = []
+    for raw in paths:
+        rel = posix_relpath(raw)
+        parts = rel.split("/")
+        if is_exempt_path(rel):
+            continue  # .deltafuse/** and the other leash exemptions
+        if _GENERATED_DIRS.intersection(parts) or rel.endswith(".pyc"):
+            continue
+        if len(parts) > 3 and parts[:2] == ["docs", "changes"] and parts[3] == "evidence":
+            continue  # written by `deltafuse evidence` itself
+        out.append(raw)
+    return out
 
 def run_evidence(
     change_dir: Path | str,

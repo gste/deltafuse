@@ -1103,3 +1103,48 @@ def test_analyze_skill_marks_analysis_md_optional(repo_root: Path):
         encoding="utf-8"
     )
     assert "`analysis.md` is optional" in skill
+
+
+def _forbid(builder: MockChangeBuilder, forbidden: str) -> None:
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(
+        task.read_text(encoding="utf-8").replace(
+            "forbidden_paths: [src/secret.py]", f"forbidden_paths: {forbidden}"
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("forbidden", ['[src/secret.py, "tests/**"]', '["tests/*"]'])
+def test_decompose_refuses_forbidden_tests_on_code_route(
+    tmp_path: Path, repo_root: Path, forbidden: str
+):
+    """q0 run 20260921T081038Z: a task forbade tests/**, so declare could not
+    write its Red test, and it surfaced only at the declaring gate, where the
+    Worker can no longer edit the task file."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-701", title="Forbidden tests")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    assert not any("forbidden_paths covers tests/**" in e for e in validate_change_package(builder.change_dir))
+    _forbid(builder, forbidden)
+    errors = validate_change_package(builder.change_dir)
+    assert any("forbidden_paths covers tests/**" in e for e in errors)
+
+
+def test_docs_route_may_forbid_tests(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-702", title="Docs forbid", route="docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    _forbid(builder, '[src/secret.py, "tests/**"]')
+    errors = validate_change_package(builder.change_dir)
+    assert not any("forbidden_paths covers tests/**" in e for e in errors)
