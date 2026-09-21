@@ -321,6 +321,21 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
             if bounds:
                 slice_bounds[str(meta.get("id") or sf.stem)] = bounds
 
+    # A slice that declares no target_paths is bounded by the capability roots
+    # plus what the Change's route may write in Declare and Implement. The
+    # roots alone (src, tests, docs/spec) never cover an ops route's
+    # deploy/**, docs/ops/**, ops/**: every ops task was blocked, and the slice
+    # that could widen it is outside the decompose envelope. The route's own
+    # write globs are already the widest envelope it has.
+    route, _ = load_change_route(change_path)
+    route_globs = [
+        glob
+        for phase in ("declare", "implement")
+        for glob in phase_write_globs(phase, route or DEFAULT_CHANGE_ROUTE)
+        if not glob.replace("\\", "/").startswith("docs/changes")
+    ]
+    default_bounds = list(dict.fromkeys(list(DEFAULT_CAPABILITY_ROOTS) + route_globs))
+
     errors: list[str] = []
     for tf in sorted(tasks_dir.glob("*.md")):
         try:
@@ -331,7 +346,7 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
         if task_id is not None and tid != task_id:
             continue
         sid = str(meta.get("slice") or "")
-        bounds = slice_bounds.get(sid) or list(DEFAULT_CAPABILITY_ROOTS)
+        bounds = slice_bounds.get(sid) or default_bounds
         for raw in meta.get("allowed_paths") or []:
             task_glob = str(raw)
             if not any(_glob_covers(task_glob, g) for g in bounds):

@@ -161,3 +161,51 @@ def test_bugfix_goes_from_analyzed_to_decomposed_through_the_core(tmp_path: Path
     assert (result["from"], result["to"]) == ("analyzed", "decomposed")
     assert receipt_chain_errors(tmp_path, builder.change_dir) == []
     assert _next(tmp_path).skill == "declare"
+
+
+def test_ops_route_change_is_routed_by_the_queue_to_converged(tmp_path: Path, repo_root: Path):
+    """An ops task's allowed_paths (docs/ops/**) escaped the default slice
+    bounds (src, tests, docs/spec): the queue blocked every ops Change at
+    declare, though each Core command worked when run by hand."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-992", title="Ops", route="ops")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    change = builder.change_dir
+    runbook = tmp_path / "docs" / "ops" / "runbook.md"
+    oracle = [
+        sys.executable,
+        "-c",
+        "from pathlib import Path; p = Path('docs/ops/runbook.md'); "
+        "raise SystemExit(0 if p.is_file() and 'RUNBOOK' in p.read_text() else 1)",
+    ]
+
+    selected = _next(tmp_path)
+    assert (selected.skill, selected.task) == ("declare", "TASK-001")
+    run_evidence(change, phase="red", task="TASK-001", argv=oracle, changed_paths=["docs/ops/runbook.md"])
+    set_artifact_status(change, status="declared", task_id="TASK-001")
+    assert "close the declaring gate" in _next(tmp_path).reason
+    advance_change(change, "declaring")
+
+    assert (_next(tmp_path).skill, _next(tmp_path).task) == ("implement", "TASK-001")
+    runbook.parent.mkdir(parents=True, exist_ok=True)
+    runbook.write_text("RUNBOOK\n", encoding="utf-8")
+    run_evidence(change, phase="green", task="TASK-001", argv=oracle, changed_paths=["docs/ops/runbook.md"])
+    set_artifact_status(change, status="implemented", task_id="TASK-001")
+    assert "close the implemented gate" in _next(tmp_path).reason
+    advance_change(change, "implemented")
+
+    assert _next(tmp_path).skill == "verify"
+    (change / "verification.md").write_text("# Verification\nok\n", encoding="utf-8")
+    run_evidence(change, phase="verification", task=None, argv=oracle)
+    coverage_file = change / "coverage.yaml"
+    coverage = yaml.safe_load(coverage_file.read_text(encoding="utf-8"))
+    for claim in coverage["claims"].values():
+        claim.setdefault("evidence", {})["green"] = "evidence/green/TASK-001.yaml"
+    coverage_file.write_text(yaml.safe_dump(coverage, sort_keys=False), encoding="utf-8")
+    assert check_gate(change, "converged") == []
+    assert advance_change(change, "converged")["to"] == "converged"
