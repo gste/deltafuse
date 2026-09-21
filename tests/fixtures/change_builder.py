@@ -354,8 +354,18 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["evidence"]["red"] = f"evidence/red/{task_id}.yaml"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        # No status write: the Core never writes 'declaring' to a Change, and a
-        # fixture that did hid the dead end at the declaring gate (q0 run
+        # The Worker declares the task (deltafuse state); the gate needs every
+        # task declared with its own Red evidence.
+        task_file = self.change_dir / "tasks" / f"{task_id}.md"
+        if task_file.is_file():
+            meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            if meta.get("status") == "pending":
+                meta["status"] = "declared"
+                front = yaml.safe_dump(meta, sort_keys=False)
+                task_file.write_text(f"---\n{front}---\n{body}", encoding="utf-8")
+
+        # No Change status write: the Core never writes 'declaring' to a Change,
+        # and a fixture that did hid the dead end at the declaring gate (q0 run
         # 20260921T111852Z). The Change stays 'decomposed' until advance.
         return self
 

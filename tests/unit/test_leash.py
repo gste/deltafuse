@@ -530,3 +530,31 @@ def test_leash_ignores_interpreter_caches(tmp_path: Path, repo_root: Path, capsy
     )
     assert ret == 0, data
     assert data["ok"] is True
+
+
+def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run 20260921T130115Z: every task forbade `docs/**`, which removed
+    evidence/, coverage.yaml and change.yaml from the declare and implement
+    envelopes - the evidence `deltafuse evidence` writes read as a violation."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-509", title="Forbid docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(
+        task.read_text(encoding="utf-8").replace(
+            "forbidden_paths: [src/secret.py]", 'forbidden_paths: [src/secret.py, "docs/**"]'
+        ),
+        encoding="utf-8",
+    )
+    ret, data = _next_json(tmp_path, capsys)
+    assert ret == 0
+    write = data["envelope"]["write"]
+    assert data["envelope"]["step"] == "declare"
+    assert "docs/changes/*/evidence/red/**" in write
+    assert "docs/changes/*/change.yaml" in write
+    assert "src/secret.py" not in write

@@ -13,6 +13,14 @@ def _run_file_cmd(*rel: str) -> list[str]:
     return [sys.executable, *rel]
 
 
+def _declare(builder: MockChangeBuilder, task_id: str = "TASK-001") -> None:
+    """The Worker declares the task through the Core; the declaring gate needs
+    every task declared with its own Red evidence."""
+    from deltafuse.core.transitions import set_artifact_status
+
+    set_artifact_status(builder.change_dir, status="declared", task_id=task_id)
+
+
 def _decomposed(tmp_path: Path, repo_root: Path, change_id: str = "CHG-020") -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
@@ -55,6 +63,7 @@ def test_run_evidence_red_behavioral(tmp_path: Path, repo_root: Path):
     assert outcome.payload["exit_code"] != 0
     assert outcome.payload["recorded_by"] == "deltafuse-evidence"
     assert str(outcome.payload["recorded_sha256"]).startswith("sha256:")
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
 
 
@@ -134,6 +143,7 @@ def test_run_evidence_already_green(tmp_path: Path, repo_root: Path):
     assert outcome.authentic
     assert outcome.payload["result"] == "already-green"
     assert outcome.payload["exit_code"] == 0
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
 
 
@@ -203,6 +213,7 @@ def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path
         argv=_run_file_cmd("tests/test_task-001.py"),
         changed_paths=["tests/test_task-001.py"],
     )
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
     payload = dict(outcome.payload)
     payload["exit_code"] = 0

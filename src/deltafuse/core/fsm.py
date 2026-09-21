@@ -655,6 +655,39 @@ def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
     return tasks
 
 
+_TASKS_CLOSED = frozenset({"cancelled", "superseded"})
+
+
+def _tasks_behind_gate(
+    change_path: Path, gate: str, reached: set[str], phases: tuple[str, ...]
+) -> list[str]:
+    """Every live task must have reached `reached` with its own evidence.
+
+    The declaring and implemented gates asked for any evidence file at all. In
+    q0 run 20260921T130115Z the declaring gate closed with one task of three
+    declared - the other two could no longer be declared - and
+    `check-gate implemented` read "passed" with two tasks still pending.
+    """
+    command = {"declaring": "declared", "implemented": "implemented"}[gate]
+    errors: list[str] = []
+    for task_id, meta in sorted(_task_frontmatter_by_id(change_path).items()):
+        status = meta.get("status")
+        if status in _TASKS_CLOSED:
+            continue
+        if status not in reached:
+            errors.append(
+                f"Gate {gate}: task {task_id} is '{status}'; every task must be "
+                f"{command} first (deltafuse state <change> --task {task_id} --status {command})"
+            )
+        for phase in phases:
+            if not (change_path / "evidence" / phase / f"{task_id}.yaml").is_file():
+                errors.append(
+                    f"Gate {gate}: task {task_id} has no {phase} evidence "
+                    f"(evidence/{phase}/{task_id}.yaml)"
+                )
+    return errors
+
+
 def _validate_evidence_changed_paths_contract(
     change_path: Path,
     evidence_phase: str,
@@ -975,6 +1008,14 @@ def check_gate(
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(
+            _tasks_behind_gate(
+                change_path,
+                "declaring",
+                {"declared", "implementing", "implemented", "verified"},
+                ("red",),
+            )
+        )
+        errors.extend(
             _validate_evidence_changed_paths_contract(
                 change_path, "red", "declare", gate="declaring", route=route
             )
@@ -990,6 +1031,14 @@ def check_gate(
         if route == "code":
             if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
                 errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        errors.extend(
+            _tasks_behind_gate(
+                change_path,
+                "implemented",
+                {"implemented", "verified"},
+                ("green", "regression") if route == "code" else ("green",),
+            )
+        )
         errors.extend(
             _validate_evidence_changed_paths_contract(
                 change_path, "green", "implement", gate="implemented", route=route

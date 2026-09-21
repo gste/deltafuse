@@ -20,6 +20,8 @@ Intake `write` не содержит `src/**`. Declare/Implement оставля�
 
 **Кэши интерпретатора.** `*.pyc`, `__pycache__/**` и `.pytest_cache/**` исключены: их пишет запуск Red- и Green-тестов, и воркер не может этого избежать.
 
+**`forbidden_paths` задачи.** На Declare и Implement `forbidden_paths` задачи сужают только её тестовую и продуктовую область. Собственные файлы Change (`docs/changes/*/evidence/**`, `coverage.yaml`, `change.yaml`) остаются в envelope: туда пишет `deltafuse evidence`, и задача, запретившая `docs/**`, не должна превращать это в нарушение.
+
 ## Хост обязан
 
 | Нужно | Источник | MUST |

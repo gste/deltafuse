@@ -188,7 +188,11 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
         test_side = [glob for glob in phase if glob.replace("\\", "/").startswith("tests")]
         product_side = [path for path in allowed_paths if matches_contract_globs(path, phase)]
-        writes = change_side + test_side + product_side
+        # A task's forbidden_paths bound its product and test scope. They never
+        # remove the Change's own files: evidence is written by `deltafuse
+        # evidence`, and a task forbidding `docs/**` made that evidence read as
+        # a write outside the envelope (q0 run 20260921T130115Z).
+        return _unique(change_side + _minus_forbidden(test_side + product_side, forbidden))
     return _unique(_minus_forbidden(writes, forbidden))
 
 
