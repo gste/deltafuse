@@ -50,11 +50,31 @@
 | T1  | Correctness (скрытые oracle-проверки case) | 0 failed checks, `correctness == 100.0`      | частично пройденный case не есть корректная реализация                                        | `score_product(...)`: `checks_total - checks_passed`, `correctness`     |
 | T2  | Process completion                         | 0 незавершённых stages из объявленных в case | lifecycle — контракт, а не рекомендация                                                       | `report.stages[*].pass`, `first_fail is None`                            |
 | T3  | Gate retries                               | ≤ 2 на прогон суммарно; ≤ 1 на stage         | больше — Worker не управляет своим контекстом, а перебирает                                   | журнал Core: `summarize_journal.gate_retries`, `by_stage[*].retries`    |
-| T4  | Context peak на вызов                      | ≤ 131 072 полный вызов; ≤ 64 000 framework-controlled | полный вызов живёт в окне квалификации; остальное — не framework budget                | usage провайдера на вызов + `count_tokens` по переданным файлам         |
+| T4  | Context peak на вызов                      | ≤ 131 072 полный вызов (гейт); ≤ 64 000 framework-controlled (T4b — наблюдаемый, штраф в оценке) | полный вызов живёт в окне квалификации; 64 000 — ориентир единицы работы | usage провайдера на вызов + `count_tokens` по переданным файлам         |
 | T5  | Уникальных файлов на вызов                 | ≤ 24                                         | bounded reads: ни один шаг не грузит репозиторий                                              | подсчёт уникальных путей во входе каждого вызова                        |
 | T6  | Hallucinated paths                         | 0                                            | выдуманный путь = потеря дисковой истинности Process                                          | сверка путей из вызовов с деревом песочницы                             |
 | T7  | Envelope violations                        | 0                                            | leash-инвариант абсолютен                                                                     | `deltafuse leash --json` после каждого stage + `task_envelope_errors`   |
 | T8  | Evidence authenticity                      | 0 ошибок                                     | Red/Green без подлинных команд не являются доказательством                                    | `run_defense_checks`: `evidence.errors`, `receipts.journal_errors`, `leak_detected` |
+
+### T4b — наблюдаемый, превышение стоит оценки, а не вердикта
+
+**Решение владельца, 2026-09-21.** 64 000 — ориентир размера единицы работы,
+а не лимит. Модель, которая сделала работу, но вышла на 80k framework-controlled
+токенов, — это fail-safe сценарий: цель DeltaFuse — сделанная работа, а не
+укладывание в порог, а цель бенчмарка — оценить качество прогона. Поэтому:
+
+- T4b больше не гейтит: превышение попадает в `observed`, вердикт не меняет.
+- T4 (полный вызов ≤ окна квалификации) остаётся гейтящим: вылет за окно — это
+  отказ вызова, а не перерасход.
+- Оценка прогона штрафуется пропорционально превышению:
+  `score_adjusted = score × max(floor, 1 − rate × (пик − reference) / reference)`.
+  Параметры — в блоке `scoring.budget_penalty`; по умолчанию `rate = 1.0`,
+  то есть превышение на 25 % (80k) снимает 25 % оценки, на 100 % (128k) — всю.
+  Пик в пределах 64 000 не штрафуется. Медианы кампании считаются по
+  `score_adjusted`.
+
+Параметры штрафа — часть блока порогов, так что их изменение меняет `revision`
+кампании, как любой порог.
 
 ### Два новых наблюдаемых класса
 
@@ -148,7 +168,9 @@ metrics:
   evidence_errors: 0
   under_routing_rate: 0.0
   structural_formats_per_call: 0
-observed_only: [T9, T10]
+  budget_factor: 1.0
+  score_adjusted: 100.0
+observed_only: [T4b, T9, T10]
 tokenizer:
   mode: endpoint
 calls: <n>
@@ -180,6 +202,12 @@ reference:
 campaign:
   runs_per_case: 3
   require_measured_tokenizer: true
+scoring:
+  budget_penalty:
+    metric: framework_input_peak_tokens
+    reference: 64000
+    rate: 1.0
+    floor: 0.0
 thresholds:
   - id: T1
     metric: correctness_failed_checks
@@ -221,7 +249,8 @@ thresholds:
     metric: framework_input_peak_tokens
     op: lte
     value: 64000
-    gating: true
+    gating: false
+    decision: "owner 2026-09-21: orientation for the unit of work, not a limit; overshoot costs score (scoring.budget_penalty), not the verdict"
     scope: [per_run, median]
   - id: T5
     metric: max_unique_files_per_call

@@ -135,6 +135,30 @@ def evaluate(thresholds: dict[str, Any], metrics: dict[str, Any], scope: str) ->
     return failures, observed
 
 
+def budget_adjusted_score(
+    thresholds: dict[str, Any], metrics: dict[str, Any], score: Any
+) -> dict[str, Any]:
+    """Score of the run after the framework-budget penalty (scoring.budget_penalty).
+
+    The framework budget is an orientation for the unit of work, not a limit
+    (owner decision 2026-09-21): a run that did the work above it keeps its
+    verdict and loses score in proportion to the overshoot. Returns
+    `budget_factor` and `score_adjusted`; both None when the peak or the score
+    was not measured - an unmeasured run is not scored as clean.
+    """
+    cfg = (thresholds.get("scoring") or {}).get("budget_penalty")
+    if not cfg:
+        return {}
+    peak = metrics.get(cfg["metric"])
+    reference = float(cfg["reference"])
+    if peak is None or reference <= 0:
+        return {"budget_factor": None, "score_adjusted": None}
+    overshoot = max(0.0, (float(peak) - reference) / reference)
+    factor = max(float(cfg.get("floor", 0.0)), 1.0 - float(cfg.get("rate", 1.0)) * overshoot)
+    adjusted = None if score is None else round(float(score) * factor, 1)
+    return {"budget_factor": round(factor, 4), "score_adjusted": adjusted}
+
+
 def median_metrics(runs: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Median per metric over runs; a metric missing anywhere stays unmeasured."""
     names: set[str] = set()
@@ -694,6 +718,7 @@ def execute_run(
 
     report = score_product(sandbox_dir, label=worker.model, pack_root=pack)
     metrics = collect_metrics(report, trace)
+    metrics.update(budget_adjusted_score(thresholds, metrics, report.get("score")))
     failures, observed = evaluate(thresholds, metrics, "per_run")
     return {
         "schema_version": SCHEMA_VERSION,

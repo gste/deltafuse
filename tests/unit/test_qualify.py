@@ -306,3 +306,33 @@ def test_cost_ceiling_refuses_the_next_call():
     worker.charge({"cost": 0.05})
     with pytest.raises(qualify.QualificationError):
         worker.check_budget()
+
+
+def test_budget_overshoot_costs_score_in_proportion_not_the_verdict():
+    """Owner decision 2026-09-21: 64,000 is an orientation for the unit of work.
+    T4b is observed; a run above it keeps its verdict and loses score in
+    proportion to the overshoot."""
+    shipped = qualify.load_thresholds()
+    t4b = next(row for row in shipped["thresholds"] if row["id"] == "T4b")
+    assert t4b["gating"] is False
+    t4 = next(row for row in shipped["thresholds"] if row["id"] == "T4")
+    assert t4["gating"] is True  # the model window stays a hard limit
+
+    within = qualify.budget_adjusted_score(shipped, {"framework_input_peak_tokens": 60000}, 90.0)
+    assert within == {"budget_factor": 1.0, "score_adjusted": 90.0}
+    over = qualify.budget_adjusted_score(shipped, {"framework_input_peak_tokens": 80000}, 90.0)
+    assert over == {"budget_factor": 0.75, "score_adjusted": 67.5}
+    double = qualify.budget_adjusted_score(shipped, {"framework_input_peak_tokens": 200000}, 90.0)
+    assert double["budget_factor"] == 0.0 and double["score_adjusted"] == 0.0
+
+    failures, observed = qualify.evaluate(shipped, {"framework_input_peak_tokens": 80000}, "per_run")
+    assert not any(line.startswith("T4b") for line in failures)
+    assert any(line.startswith("T4b") for line in observed)
+
+
+def test_unmeasured_peak_is_not_scored_as_clean():
+    shipped = qualify.load_thresholds()
+    assert qualify.budget_adjusted_score(shipped, {}, 90.0) == {
+        "budget_factor": None,
+        "score_adjusted": None,
+    }
