@@ -5,11 +5,16 @@ import pytest
 from deltafuse.core.context import (
     estimate_tokens,
     estimate_files_tokens,
+    count_tokens,
+    count_files_tokens,
+    token_count_receipt,
     validate_context_budget,
     validate_task_context_budget,
     matches_contract_globs,
     try_endpoint_token_count,
+    DEFAULT_TASK_BUDGET,
     PHASE_CONTRACTS,
+    TokenizerUnavailableError,
     task_write_globs,
     load_change_route,
 )
@@ -198,3 +203,129 @@ def test_try_endpoint_token_count_posts_tokenize_not_chat(monkeypatch):
     assert try_endpoint_token_count("hi") == 4
     assert captured["url"] == "http://127.0.0.1:1240/tokenize"
     assert "/v1/chat/completions" not in str(captured["url"])
+
+
+# --- Q0-2: token counting determinism -------------------------------------
+
+
+def test_count_tokens_reports_heuristic_mode(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    counted = count_tokens("alpha beta gamma")
+    assert counted.mode == "heuristic"
+    assert counted.measured is False
+    assert counted.detail.startswith("a03-01:x")
+    assert counted.tokens > 0
+
+
+def test_count_tokens_reports_endpoint_mode(monkeypatch):
+    class _Resp:
+        def read(self) -> bytes:
+            return b'{"tokens": [1, 2, 3]}'
+
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=2: _Resp())
+    counted = count_tokens("alpha beta gamma")
+    assert counted.mode == "endpoint"
+    assert counted.measured is True
+    assert counted.tokens == 3
+
+
+def test_required_tokenizer_without_url_refuses(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
+    with pytest.raises(TokenizerUnavailableError):
+        count_tokens("alpha beta")
+
+
+def test_required_tokenizer_does_not_fall_back_when_endpoint_fails(monkeypatch):
+    def boom(req: object, timeout: float = 2) -> None:
+        raise OSError("connection refused")
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    with pytest.raises(TokenizerUnavailableError):
+        count_tokens("alpha beta")
+
+
+def test_unrequired_tokenizer_still_falls_back_but_says_so(monkeypatch):
+    def boom(req: object, timeout: float = 2) -> None:
+        raise OSError("connection refused")
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    counted = count_tokens("alpha beta")
+    assert counted.mode == "heuristic"
+    assert counted.measured is False
+
+
+def test_count_files_tokens_returns_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    f1 = tmp_path / "a.md"
+    f1.write_text("alpha beta gamma\n", encoding="utf-8")
+    total, receipt = count_files_tokens([f1, f1])
+    assert total > 0
+    assert receipt["mode"] == "heuristic"
+    assert receipt["measured"] is False
+    assert receipt["heuristic"] == "a03-01"
+    assert receipt["endpoint"] is None
+    assert receipt["required"] is False
+    assert receipt["files_counted"] == 1
+
+
+def test_token_count_receipt_without_counting_is_unknown(monkeypatch):
+    """A configured endpoint is not evidence that it ran."""
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    receipt = token_count_receipt()
+    assert receipt["mode"] == "unknown"
+    assert receipt["measured"] is False
+    assert receipt["endpoint"] == "http://127.0.0.1:1240/tokenize"
+
+
+def test_validate_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    f1 = tmp_path / "a.md"
+    f1.write_text("alpha beta\n", encoding="utf-8")
+    receipt: dict = {}
+    errs = validate_context_budget(
+        {"max_tokens": 1000, "max_files": 5}, [f1], repo_root=tmp_path, receipt=receipt
+    )
+    assert errs == []
+    assert receipt["mode"] == "heuristic"
+    assert receipt["required"] is False
+
+
+def test_validate_task_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    spec = tmp_path / "docs" / "spec" / "core.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
+    receipt: dict = {}
+    errs = validate_task_context_budget(
+        {"max_tokens": 16000, "max_files": 24},
+        ["docs/spec/core.md#REQ-01"],
+        ["src/core.py"],
+        tmp_path,
+        receipt=receipt,
+    )
+    assert errs == []
+    assert receipt["mode"] == "heuristic"
+    assert receipt["files_counted"] == 1
+
+
+def test_default_task_budget_matches_contract():
+    """docs/small-llm-contract.md pins 64,000 / 24 for framework-controlled input."""
+    assert DEFAULT_TASK_BUDGET == {"max_tokens": 16000, "max_files": 24}

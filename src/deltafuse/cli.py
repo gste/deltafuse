@@ -37,7 +37,12 @@ from deltafuse.core.leash import (
     load_leash_mode,
 )
 from deltafuse.core.steps import step_names
-from deltafuse.core.context import validate_context_budget, validate_task_context_budget
+from deltafuse.core.context import (
+    token_count_receipt,
+    tokenizer_config,
+    validate_context_budget,
+    validate_task_context_budget,
+)
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 
@@ -507,6 +512,9 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "check-gate":
         target = Path(args.change_path)
         errors = check_gate(target, args.gate)
+        # Q0-2: a gate verdict that rests on a token budget must say how that
+        # budget was counted; the configuration is what the campaign pins.
+        tokenizer = tokenizer_config()
         _journal(
             target,
             cmd="check-gate",
@@ -514,6 +522,9 @@ def _main(argv: list[str] | None = None) -> int:
             ok=not errors,
             errors=errors,
             n_errors=len(errors),
+            token_endpoint=tokenizer["endpoint"],
+            token_required=tokenizer["required"],
+            token_heuristic=tokenizer["heuristic"],
         )
         if errors:
             print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
@@ -858,6 +869,8 @@ def _main(argv: list[str] | None = None) -> int:
         repo_root = find_repo_root(target)
         slices_dir = target / "slices"
         errors: list[str] = []
+        # Q0-2: the counting mode travels with the verdict into the journal.
+        token_receipt: dict[str, Any] = {}
         if slices_dir.is_dir():
             for sf in slices_dir.glob("*.md"):
                 try:
@@ -869,7 +882,7 @@ def _main(argv: list[str] | None = None) -> int:
                             sp_rel = sref.split("#")[0]
                             ref_files.append(repo_root / sp_rel)
                         b_errs = validate_context_budget(
-                            budget, ref_files, repo_root=repo_root
+                            budget, ref_files, repo_root=repo_root, receipt=token_receipt
                         )
                         errors.extend(f"{sf.name}: {e}" for e in b_errs)
                 except Exception as ex:
@@ -886,6 +899,7 @@ def _main(argv: list[str] | None = None) -> int:
                             meta.get("spec_refs") or [],
                             meta.get("allowed_paths") or [],
                             repo_root,
+                            receipt=token_receipt,
                         )
                         errors.extend(f"{tf.name}: {e}" for e in b_errs)
                     else:
@@ -895,13 +909,27 @@ def _main(argv: list[str] | None = None) -> int:
                         )
                 except Exception as ex:
                     errors.append(f"{tf.name}: {ex}")
-        _journal(target, cmd="lint-context", ok=not errors, errors=errors, n_errors=len(errors))
+        if not token_receipt:
+            token_receipt = token_count_receipt()
+        _journal(
+            target,
+            cmd="lint-context",
+            ok=not errors,
+            errors=errors,
+            n_errors=len(errors),
+            token_mode=token_receipt.get("mode"),
+            token_measured=token_receipt.get("measured"),
+            token_heuristic=token_receipt.get("heuristic"),
+        )
         if errors:
             print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
                 print(f"  - {err}", file=sys.stderr)
             return 1
-        print(f"Context budget for {target} is within limits.")
+        print(
+            f"Context budget for {target} is within limits "
+            f"(tokens counted by {token_receipt.get('mode')})."
+        )
         return 0
 
     elif args.command == "bench":
