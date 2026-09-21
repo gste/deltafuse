@@ -212,3 +212,13 @@ def test_state_command_writes_core_owned_task_status(
 
     # receipt-backed statuses stay Core-gated
     assert main(["state", str(builder2.change_dir), "--change", "--status", "implemented"]) == 1
+
+
+def test_cli_advance_failure_is_reported_not_raised(tmp_path: Path, repo_root: Path, capsys):
+    """_main re-imported TransitionError inside the `state` branch, which made
+    the name local to the whole function: the `advance` branch then raised
+    UnboundLocalError on any refused gate instead of returning 1."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-419")
+    assert main(["advance", str(builder.change_dir), "--gate", "specified"]) == 1
+    _, err = capsys.readouterr()
+    assert "advance failed" in err

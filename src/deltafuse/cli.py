@@ -561,7 +561,10 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "state":
-        from deltafuse.core.transitions import TransitionError, set_artifact_status
+        # TransitionError is already imported at module scope; re-importing it
+        # here would make it a function-local name and leave the `advance`
+        # branch above referencing it before assignment.
+        from deltafuse.core.transitions import set_artifact_status
 
         target = Path(args.change_path)
         try:
