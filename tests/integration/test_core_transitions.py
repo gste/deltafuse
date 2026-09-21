@@ -352,3 +352,17 @@ def test_a_task_status_receipt_is_not_resumed_as_an_advance(tmp_path: Path, repo
     with pytest.raises(TransitionError, match="gate 'implemented' failed"):
         advance_change(builder.change_dir, "implemented")
     assert _read_status(builder.change_dir) == "declared"
+
+
+def test_asking_for_the_status_a_task_already_has_is_not_an_error(tmp_path: Path, repo_root: Path):
+    """q0 run M03 20260921T215701Z re-sent `verified` for a verified task and
+    was refused; nothing needs to happen, and nothing is journaled."""
+    from deltafuse.core.transitions import load_receipts
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-967")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    receipts_before = len(load_receipts(tmp_path, "CHG-967"))
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    assert len(load_receipts(tmp_path, "CHG-967")) == receipts_before

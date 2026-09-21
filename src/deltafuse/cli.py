@@ -596,6 +596,8 @@ def _main(argv: list[str] | None = None) -> int:
         _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif result.get("unchanged"):
+            print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
             print(
                 f"state: {result['artifact']} status {result['from']} -> {result['to']} "
