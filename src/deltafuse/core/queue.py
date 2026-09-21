@@ -12,6 +12,7 @@ from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.transitions import receipt_mismatch
 from deltafuse.core.context import PHASE_CONTRACTS
@@ -236,6 +237,30 @@ def _load_tasks(change_path: Path) -> list[tuple[str, str, Path]]:
     return found
 
 
+def _stale_task_evidence(
+    product_root: Path, change_path: Path, task_ids: list[str]
+) -> list[tuple[str, list[str]]]:
+    """Tasks whose green/regression evidence was stamped on an older tree."""
+    current = compute_product_baseline_revision(product_root)
+    out: list[tuple[str, list[str]]] = []
+    for tid in task_ids:
+        phases: list[str] = []
+        for phase in ("green", "regression"):
+            ev = change_path / "evidence" / phase / f"{tid}.yaml"
+            if not ev.is_file():
+                continue
+            try:
+                data = yaml.safe_load(ev.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError:
+                continue
+            recorded = data.get("base_revision") if isinstance(data, dict) else None
+            if recorded and recorded != current:
+                phases.append(phase)
+        if phases:
+            out.append((tid, phases))
+    return out
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data = _load_change(change_path)
     if not data:
@@ -405,6 +430,28 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     if tasks and status in IMPLEMENT_PHASE:
         implemented = [(tid, tfile) for tid, s, tfile in tasks if s == "implemented"]
         if implemented and all(s in TASK_DONE for _, s, _ in tasks):
+            stale = _stale_task_evidence(product_root, change_path, [tid for tid, _ in implemented])
+            if stale:
+                # Green and regression are stamped with the spec/src tree. A
+                # later task moves it, so an earlier task's evidence no longer
+                # proves its oracle on the code the gate closes over.
+                tid, phases = stale[0]
+                tfile = dict(implemented)[tid]
+                return [
+                    _item_for_step(
+                        "implement",
+                        change_id=change_id,
+                        path=rel,
+                        task=tid,
+                        task_path=_rel(product_root, tfile),
+                        reason=(
+                            f"{' and '.join(phases)} evidence of {tid} predates later changes "
+                            f"to docs/spec/** or src/**; re-run it on the current tree "
+                            f"(deltafuse evidence --phase {phases[0]} --task {tid}), then "
+                            "close the implemented gate"
+                        ),
+                    )
+                ], []
             tid, tfile = implemented[-1]
             return [
                 _item_for_step(

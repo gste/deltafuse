@@ -313,7 +313,16 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
     resumed receipt entry, or None when there is nothing to resume."""
     data = _load_change_yaml(change_path)
     change_id = data.get("id") or change_path.name
-    last = last_receipt(product_root, change_id)
+    # Only a gate transition can be crash residue of `advance`. q0 run
+    # 20260921T130115Z: the last receipt was `state` moving a task from
+    # 'declared' to 'implemented' while the Change was 'declared'; the
+    # matching 'from' was read as an unfinished advance, the Change was
+    # written 'implemented' with no gate, and advance crashed on the missing
+    # 'gate' key - the Worker then chased the traceback's source path.
+    transitions = [
+        row for row in load_receipts(product_root, change_id) if row.get("kind") == "transition"
+    ]
+    last = transitions[-1] if transitions else None
     if last is None:
         return None
     if data.get("status") == last.get("to"):

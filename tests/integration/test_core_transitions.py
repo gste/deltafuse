@@ -336,3 +336,20 @@ def test_state_finds_a_task_by_its_frontmatter_id(tmp_path: Path, repo_root: Pat
     assert main(["state", str(builder.change_dir), "--task", "TASK-009", "--status", "declared"]) == 1
     _, err = capsys.readouterr()
     assert "known task ids: TASK-001" in err
+
+
+def test_a_task_status_receipt_is_not_resumed_as_an_advance(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T130115Z: `state` moved a task 'declared' -> 'implemented'
+    with the Change at 'declared'. The next `advance` read that receipt as an
+    unfinished transition, wrote the Change 'implemented' with no gate and
+    crashed on the missing 'gate' key."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-966")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    builder.step_declare()
+    advance_change(builder.change_dir, "declaring")
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implemented"]) == 0
+
+    with pytest.raises(TransitionError, match="gate 'implemented' failed"):
+        advance_change(builder.change_dir, "implemented")
+    assert _read_status(builder.change_dir) == "declared"

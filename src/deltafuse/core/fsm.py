@@ -533,9 +533,15 @@ def validate_change_package(
                             "must stamp the docs/spec/** and src/** content hash"
                         )
                     elif recorded != current:
+                        rerun = (
+                            f"deltafuse evidence <change> --phase {phase} --task {ev_file.stem}"
+                            if phase != "verification"
+                            else "deltafuse evidence <change> --phase verification"
+                        )
                         errors.append(
                             f"{rel_ev}: stale evidence: base_revision '{recorded}' does not "
-                            f"match current docs/spec/** and src/** tree '{current}'"
+                            f"match current docs/spec/** and src/** tree '{current}'; a later "
+                            f"change moved the tree - re-run it on the current tree: {rerun}"
                         )
             except Exception as ex:
                 errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")

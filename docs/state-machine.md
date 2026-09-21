@@ -76,6 +76,8 @@ stateDiagram-v2
 
 No command writes `declaring`, `implementing` or `verifying` to a Change: the Worker's work in those phases is recorded on its tasks. `deltafuse advance` closes the next gate from the resting status and steps over the in-flight one — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged` — and the receipt records that step. A Change may still hold an in-flight status one legal step past its last receipt.
 
+The `declaring` and `implemented` gates check every task that is not `cancelled` or `superseded`: each must be at the gate's status with its own evidence. Green and regression evidence are stamped with the `docs/spec/**` and `src/**` tree; a later task that changes it makes an earlier task's evidence stale, and `deltafuse next` sends the Worker to re-run that task's evidence on the current tree before the gate can close.
+
 ---
 
 ## Slice Lifecycle State Machine

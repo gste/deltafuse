@@ -102,6 +102,8 @@ Change может быть переведён в терминальное сос
 
 Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может.
 
+Гейты `declaring` и `implemented` проверяют каждую задачу, кроме `cancelled` и `superseded`: каждая должна быть на статусе гейта со своим evidence. Green и regression evidence штампуются деревом `docs/spec/**` и `src/**`; следующая задача, меняющая его, делает evidence предыдущей устаревшим, и `deltafuse next` направляет воркера перезапустить evidence этой задачи на текущем дереве, прежде чем гейт закроется.
+
 ---
 
 ## Slice State Machine
