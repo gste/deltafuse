@@ -17,6 +17,7 @@ from pathlib import Path
 
 import yaml
 
+from deltafuse.core.analyze import write_coverage
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
@@ -127,13 +128,12 @@ def test_change_reaches_converged_through_core_commands_only(tmp_path: Path, rep
     assert _next(tmp_path).skill == "verify"
     (change / "verification.md").write_text("# Verification\nBoth claims verified.\n", encoding="utf-8")
     run_evidence(change, phase="verification", task=None, argv=[sys.executable, oracles["TASK-002"]])
-    coverage_file = change / "coverage.yaml"
-    coverage = yaml.safe_load(coverage_file.read_text(encoding="utf-8"))
-    for claim in coverage["claims"].values():
-        claim.setdefault("evidence", {}).update(
-            {"green": "evidence/green/TASK-001.yaml", "regression": "evidence/regression/TASK-001.yaml"}
-        )
-    coverage_file.write_text(yaml.safe_dump(coverage, sort_keys=False), encoding="utf-8")
+    # The Core maps claims to their tasks and evidence; the Worker does not
+    # write that structure by hand.
+    write_coverage(change)
+    claim = yaml.safe_load((change / "coverage.yaml").read_text(encoding="utf-8"))["claims"]["CR-001"]
+    assert claim["tasks"] == ["TASK-001", "TASK-002"]
+    assert claim["evidence"]["green"] == "evidence/green/TASK-001.yaml"
     assert check_gate(change, "converged") == []
     assert advance_change(change, "converged")["to"] == "converged"
 
@@ -202,10 +202,6 @@ def test_ops_route_change_is_routed_by_the_queue_to_converged(tmp_path: Path, re
     assert _next(tmp_path).skill == "verify"
     (change / "verification.md").write_text("# Verification\nok\n", encoding="utf-8")
     run_evidence(change, phase="verification", task=None, argv=oracle)
-    coverage_file = change / "coverage.yaml"
-    coverage = yaml.safe_load(coverage_file.read_text(encoding="utf-8"))
-    for claim in coverage["claims"].values():
-        claim.setdefault("evidence", {})["green"] = "evidence/green/TASK-001.yaml"
-    coverage_file.write_text(yaml.safe_dump(coverage, sort_keys=False), encoding="utf-8")
+    write_coverage(change)
     assert check_gate(change, "converged") == []
     assert advance_change(change, "converged")["to"] == "converged"

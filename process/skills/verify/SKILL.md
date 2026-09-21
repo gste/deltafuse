@@ -29,7 +29,7 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 2. Check every declared delta projection and unchanged invariant.
 3. Confirm blocking Decisions are terminal and accepted normative consequences exist in spec.
 4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.
-5. If automated full-suite verification is executed at the Change level, record execution evidence under `evidence/verification/run.yaml` (`phase: verification`) with `base_revision` matching the current `docs/spec/**` and `src/**` tree.
+5. Record the Change-level run - the `converged` gate requires it: `deltafuse evidence <change-dir> --phase verification -- <full test command>` writes `evidence/verification/run.yaml` with the current `docs/spec/**` and `src/**` tree. Then run `deltafuse coverage <change-dir>`: the Core maps every claim to its tasks and their evidence in `coverage.yaml`; do not write that mapping by hand.
 6. The `converged` gate checks that `spec-delta.md` `added`/`modified` paths still exist under `docs/spec/**` and that `removed` paths are gone; do not treat archive as a spec merge.
 7. Write `verification.md` with `converged` or an exact gap: `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, or `not-reproduced`. Record `deltafuse state <change-dir> --task <task-id> --status verified` for each implemented task. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
 8. For a gap, stop; do not repair it silently.
