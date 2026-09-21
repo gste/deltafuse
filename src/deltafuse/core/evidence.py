@@ -218,8 +218,11 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
         parts = rel.split("/")
         if is_exempt_path(rel):
             continue  # .deltafuse/**, interpreter caches, the other leash exemptions
-        if len(parts) > 3 and parts[:2] == ["docs", "changes"] and parts[3] == "evidence":
-            continue  # written by `deltafuse evidence` itself
+        if parts[:2] == ["docs", "changes"]:
+            # The Change's own bookkeeping, not a product change: its evidence
+            # (written by this command), task files `state` rewrites, coverage.
+            # q0 run M03 20260921T215701Z asked the Worker to list them.
+            continue
         out.append(raw)
     return out
 

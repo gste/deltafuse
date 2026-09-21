@@ -291,8 +291,9 @@ def test_core_changed_paths_hold_only_the_workers_changes(tmp_path: Path):
     write("docs/changes/CHG-001-x/tasks/TASK-001.md")
 
     paths = sorted(p.replace("\\", "/") for p in _core_computed_changed_paths(tmp_path))
+    # The Change's own files are its bookkeeping (q0 run M03 20260921T215701Z:
+    # task files rewritten by `state` and coverage.yaml were demanded).
     assert paths == [
-        "docs/changes/CHG-001-x/tasks/TASK-001.md",
         "src/core.py",
         "tests/test_core.py",
     ]
