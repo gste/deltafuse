@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deltafuse.cli import main
@@ -360,3 +361,30 @@ def test_next_implemented_tasks_close_the_implemented_gate_before_verify(
     assert selected is not None
     assert selected.skill == "implement"
     assert "close the implemented gate" in selected.reason
+
+
+@pytest.mark.parametrize("status", ["pending", "declared", "implemented"])
+def test_next_keeps_decompose_until_the_decomposed_gate_passes(
+    tmp_path: Path, repo_root: Path, status: str
+):
+    """q0 run 20260921T121031Z: decompose wrote task files that failed the
+    decomposed gate (no `change`, no `slice`, `kind: code`), and `next` sent
+    the Worker to declare, where it could not fix them - twenty minutes of
+    loop. Before that gate the Change's status picks the step."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-044", title="Early tasks")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    tasks = builder.change_dir / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    (tasks / "TASK-001.md").write_text(
+        f"---\nid: TASK-001\nkind: code\nstatus: {status}\n---\n# TASK-001\n",
+        encoding="utf-8",
+    )
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "decompose"
+    assert "check-gate decomposed" in selected.reason

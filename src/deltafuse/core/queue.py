@@ -31,6 +31,9 @@ TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
 # Change statuses that own the declare / implement phase of their tasks.
 DECLARE_PHASE = frozenset({"decomposed", "declaring"})
 IMPLEMENT_PHASE = frozenset({"declared", "implementing"})
+# Change statuses before the decomposed gate: task files may already be on
+# disk, but they are Decompose's output and do not pick the step yet.
+BEFORE_DECOMPOSED = frozenset({"normalized", "analyzing", "analyzed", "specified"})
 
 
 class QueueError(Exception):
@@ -299,8 +302,13 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     from deltafuse.core.leash import task_envelope_errors
 
     envelope_faults = task_envelope_errors(change_path)
+    # Tasks pick the step only once the decomposed gate has passed. q0 run
+    # 20260921T121031Z: task files that failed that gate (missing `change`,
+    # `slice`, a bad `kind`) sent the Worker to declare, where it could not
+    # fix them, and the run looped for twenty minutes.
+    phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
 
-    for tid, tstatus, tfile in tasks:
+    for tid, tstatus, tfile in phase_tasks:
         if tstatus == "blocked":
             return [], [
                 WorkItem(
@@ -410,7 +418,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
 
-    if tasks and all(tstatus in TASK_DONE for _, tstatus, _ in tasks) and status not in (
+    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
     ):
         return [
@@ -457,7 +465,12 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 "decompose",
                 change_id=change_id,
                 path=rel,
-                reason="Change is specified; next is Decompose",
+                reason=(
+                    "Task files are on disk but the decomposed gate has not passed; fix what "
+                    "check-gate decomposed reports, then advance --gate decomposed"
+                    if tasks
+                    else "Change is specified; next is Decompose"
+                ),
             )
         ], []
 
