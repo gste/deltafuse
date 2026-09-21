@@ -30,6 +30,10 @@ dist/
 build/
 _builder.py
 
+# Qualification campaigns (scripts/qualify.py --runs-dir default); each
+# sandbox is its own git repository and must not land in this one.
+bench/runs/
+
 # DeltaFuse generated artifacts (host project .gitignore)
 .deltafuse/hooks/
 .agents/skills/
