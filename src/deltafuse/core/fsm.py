@@ -306,6 +306,8 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
                 errs = registry.validate("task", meta)
                 errors.extend(f"{task_file.name}: {e}" for e in errs)
+                if errs:
+                    errors.append(f"{task_file.name}: {registry.shape_hint('task')}")
                 if isinstance(meta, dict):
                     task_id = meta.get("id")
                     if task_id:
@@ -402,6 +404,8 @@ def validate_change_package(
             meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
+            if errs:
+                errors.append(f"spec-delta.md: {registry.shape_hint('spec-delta')}")
             if isinstance(meta, dict):
                 added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
@@ -422,6 +426,10 @@ def validate_change_package(
                                 errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
+            errors.append(
+                "spec-delta.md: the file starts with a '---' line, then the frontmatter, "
+                f"then '---'; {registry.shape_hint('spec-delta')}"
+            )
 
     # 7. Validate evidence/ (Semantic Validation - P0 / T1, T2, T4)
     evidence_dir = change_path / "evidence"
