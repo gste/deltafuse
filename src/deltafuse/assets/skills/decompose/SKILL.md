@@ -27,7 +27,7 @@ Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks
 
 ## Procedure
 
-1. Create `docs/changes/<change-id>/tasks/TASK-NNN.md` files (optional `TASK-NNN-<slug>.md` filename). Frontmatter `id` is `TASK-001` (digits only, no slug). Status `pending`, not `proposed`.
+1. Create `docs/changes/<change-id>/tasks/TASK-NNN.md` files - name each file exactly after its id, no slug: later steps open the task by that name. Frontmatter `id` is `TASK-001` (digits only, no slug). Status `pending`, not `proposed`.
 2. Give each task one verifiable outcome that fits one implementation context.
 3. Write the task frontmatter in exactly this shape - every key required, no others (no `title`, `claims`, `dependencies`):
 
