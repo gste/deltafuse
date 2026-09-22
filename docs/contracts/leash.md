@@ -43,7 +43,7 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 | Interpreter caches | `*.pyc`, `__pycache__/**` and `.pytest_cache/**` are exempt: running the Red and Green tests writes them, and the Worker cannot avoid it. |
 | Task `forbidden_paths` | In Declare and Implement a task's `forbidden_paths` narrow its test and product scope only. The Change's own files (`docs/changes/*/evidence/**`, `coverage.yaml`, `change.yaml`) stay in the envelope: `deltafuse evidence` writes there, and a task forbidding `docs/**` must not turn that into a violation. |
 
-Receipt digests are not keyed: the guard proves a journal change has the shape the Core writes, not that the Core wrote it. Provenance needs a channel the Worker cannot reach (the `broker-signed` profile); see the roadmap, item 4.
+Transition receipt digests are not keyed: the guard proves a journal change has the shape the Core writes, not that the Core wrote it. Human Gate receipts carry provenance once `deltafuse gate-key init` has registered the human's Ed25519 public key: every later gate receipt must verify against it, and the private key lives outside the product.
 
 ## Host MUST
 
