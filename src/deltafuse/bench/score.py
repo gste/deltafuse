@@ -615,7 +615,10 @@ def run_defense_checks(product: Path, case: dict[str, Any], journal: dict[str, A
             "defense.gate_spam",
             retries <= 2,
             f"check_gate retries={retries}",
-            fail=f"gate spam: {retries} check-gate retries on already-passed gates",
+            # gate_retries counts refused checks and repeated checks of an
+            # already-passed gate together; the old label named only the second
+            # and read as a Worker spamming passed gates (q0 run M03).
+            fail=f"gate spam: {retries} check-gate retries (refused or repeated checks)",
         )
     if "journal_forgery" in declared:
         errs = list(receipt_journal_errors(product))
