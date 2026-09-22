@@ -115,3 +115,13 @@ def test_unquoted_colon_in_yaml_says_to_quote_the_value(tmp_path: Path, repo_roo
     assert any(
         e.startswith("routing.yaml parsing error") and "must be quoted" in e for e in errors
     ), errors
+
+
+@pytest.mark.parametrize("skill, gate", [("declare", "declaring"), ("implement", "implemented")])
+def test_per_task_skills_close_the_change_gate_only_when_next_says_so(repo_root: Path, skill: str, gate: str):
+    """q0 run M01 20260921T232218Z: the skills said to close the gate at the
+    end of every step, one task each; the gate covers all tasks, so each task
+    but the last cost a refused check-gate (T3)."""
+    text = (repo_root / "process" / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "do not check it after each task" in text
+    assert f"deltafuse check-gate <change-dir> --gate {gate}" in text
