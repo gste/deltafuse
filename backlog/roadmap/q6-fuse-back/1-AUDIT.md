@@ -31,8 +31,31 @@ product/
 ```
 
 Capabilities are the unit of routing: a repository-specific, human-gated
-capability catalog maps capabilities to spec references
-(`catalog_spec_refs(product_root, capability)`).
+capability catalog `docs/spec/_capabilities.yaml` (schema
+`process/schemas/capability.schema.yaml`) maps each capability to spec
+references (`catalog_spec_refs(product_root, capability)`) and declares
+`code_roots`, `test_roots`, `type` and a `status` of `active | draft |
+deprecated | removed`. The test runner is declared in `.deltafuse/config.yaml`
+as `workflow.test_commands` (a runner allowlist); evidence is produced only by
+running those commands.
+
+**An adoption path already exists — know it before you add one.** The Bootstrap
+profile (`docs/workflow.md`): `project.baseline: draft` → draft the catalog →
+resolve foundational Decisions (`change: null`) → author the baseline spec
+through Analyze and Specify → a human flips `project.baseline: accepted`; after
+that `docs/spec/**` changes only through Changes and the leash treats a stray
+spec edit as an orphan. Bootstrap assumes a human or Worker writes the spec from
+intent; it has no step that reads existing code and no characterization tests.
+Your design must say whether Fuse-Back feeds Bootstrap (produces what the
+`draft` phase needs), replaces it for brownfield repositories, or sits beside
+it — and why.
+
+**A constraint from q4 (analyze routing).** The planned under-routing detector
+maps the Implement diff to capabilities through `code_roots`. When capabilities
+share a root it is blind (the M02 bench case: three capabilities, one
+`src/ratelimit`). A catalog Fuse-Back extracts from a monolith is exactly where
+overlapping roots will appear. Say whether the handoff requires disjoint
+`code_roots`, and what happens to code no capability owns.
 
 ## The problem
 
@@ -52,7 +75,7 @@ the inverse of the framework's central invariant.
    red/implement/verify."** A flag that skips three of seven stages is a second
    direction of truth wearing different clothes — every downstream gate would
    have to know the flag's state. That is the mechanism by which the `gate`
-   concept already spread across 17 of 38 Core modules. It does not preserve
+   concept already spread across 18 of 38 Core modules. It does not preserve
    unidirectionality; it breaks it more quietly.
 4. **The capability catalog is the handoff artifact.** It is the only artifact
    that describes the code rather than a change, so Fuse-Back's output (populated
@@ -113,7 +136,13 @@ the check that runs at handoff.
 - The adopter's repository may have no test runner wired at all. Say where that
   falls in your sequence.
 - Reuse existing schemas and vocabulary where they fit. Inventing a parallel
-  artifact vocabulary is a cost — price it.
+  artifact vocabulary is a cost — price it. Writes to DeltaFuse artifacts go
+  through the Artifact Writer (`deltafuse artifact create|update`, receipts in
+  `.deltafuse/receipts/`); roadmap item 1 is moving every Worker write there, so
+  a handoff that hand-writes YAML is already behind the framework.
+- The bench judge lives in a separate repository, `deltafuse-bench`. A
+  falsifier measured "on a real repository" needs a corpus there; name what it
+  must contain.
 
 ## What would end this question
 

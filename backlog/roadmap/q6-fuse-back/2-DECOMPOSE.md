@@ -42,6 +42,15 @@ Schemas it must produce against live in the DeltaFuse repository under
 `lock`, `routing`, `slice`, `spec-delta`, `task`. **Read them before writing
 cards** — inventing a parallel vocabulary is a cost tier 1 was told to price.
 
+Checks that already exist on the DeltaFuse side and can serve as the handoff
+verification without changing DeltaFuse: `deltafuse validate-config <root>`
+(config, catalog and product contract, fail-closed), `deltafuse
+validate-layout <root>` (layout, locks, adapters) and `deltafuse artifact
+validate` (one artifact, read-only). A handoff card should name which of them
+its `green` runs. The consuming side of an adoption is the Bootstrap profile
+(`project.baseline: draft` → human flips it to `accepted`); Fuse-Back never
+flips it — that is the human's gate.
+
 ## Card rules
 
 Each card must be executable by a **low-tier model working alone** against the

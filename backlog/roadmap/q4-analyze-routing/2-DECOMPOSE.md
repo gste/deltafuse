@@ -25,15 +25,31 @@ driving an LLM Worker through Intake → Analyze → Specify → Decompose → D
 Implement → Verify. Target Worker: dense <=40B (`qwen/qwen3.8-27b`), 128k context,
 64k/24-file budget per call.
 
-Relevant modules: `core/analyze.py` (three passes: routing | slice | coverage),
-`core/leash.py` (git-diff write guard, `git_dirty_paths`), `core/context.py`
-(context contract and token budget), `core/fsm.py` (gates), `bench/score.py`
-(scoring). Capability → spec refs mapping: `catalog_spec_refs()` in
-`core/analyze.py`.
+**Two repositories.** The framework is `deltafuse`; the judge is
+`deltafuse-bench` (qualification runner `qualify/qualify.py`, thresholds
+`qualify/thresholds.md`, bench cases `cases/`). The judge lives outside the
+framework it judges, and a qualification metric is computed there. Slot **T9
+under-routing rate** already exists: the runner emits `under_routing_rate:
+None` ("unmeasured, not zero") until a producer exists. **A card writes to one
+repository only**; a change needing both is two cards with a dependency.
 
-Test suite: 533 tests, currently all passing. CI matrix: ubuntu/macos/windows ×
-Python 3.10–3.14. Asset bundle drift is guarded by `scripts/sync_assets.py
---check` in three tests.
+Relevant framework modules: `core/analyze.py` (three passes: routing | slice |
+coverage; `catalog_spec_refs()` maps capability → spec refs; capabilities also
+declare `code_roots` in `docs/spec/_capabilities.yaml`), `core/leash.py`
+(git-diff write guard, `git_dirty_paths`), `core/context.py` (context contract,
+token budget, `count_tokens` with a recorded mode), `core/fsm.py` (gates),
+`core/transitions.py` (transition receipts in `.deltafuse/transitions.jsonl`),
+`bench/score.py` (the framework's own scorer used by the judge).
+
+**Corpus gap (tier 1 saw it).** The three baseline cases cannot produce
+under-routing: M01 and M03 have one capability each, M02's three capabilities
+share `code_roots: [src/ratelimit]`. If tier 1's FALSIFIERS need a case that can
+under-route, that case is a card in `deltafuse-bench/cases/`, and it must never
+be sent to an external API before it is part of the public pack.
+
+Framework test suite: about 600 tests, all passing; CI matrix
+ubuntu/macos/windows × Python 3.10–3.14. Asset bundle drift is guarded by
+`scripts/sync_assets.py --check`. The bench has its own suite (about 390 tests).
 
 ## Card rules
 
@@ -71,7 +87,9 @@ Every card has:
    presence must be written to the receipt, not only logged. State the field name.
 6. **Bundle sync.** If a card touches `process/**`, it must also state that
    `scripts/sync_assets.py` runs and that `--check` passes.
-7. Cards are sized for one Worker call each. If `work` does not fit in a few
+7. **Skill load is measured.** A card that adds text to a `SKILL.md` states the
+   words added; `analyze` is already 786 words (~1,550 tokens).
+8. Cards are sized for one Worker call each. If `work` does not fit in a few
    hundred words, split the card.
 
 ## Output contract

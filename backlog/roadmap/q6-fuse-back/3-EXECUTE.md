@@ -38,7 +38,8 @@ not touch files outside the card's `writes`.
 3. **Record the red output verbatim** — command, exit code, failing assertion.
 4. **Implement** the minimal change satisfying `green`. Touch only `writes`.
 5. **Run the card's test.** It must pass.
-6. **Run the full suite.** It must be green. A test that passed before and fails
+6. **Run the full suite.** It must be green — judge by the exit code, not by
+   the tail of the output. A test that passed before and fails
    now is a regression — fix it or revert and report. Never delete or weaken an
    existing test to make the suite pass.
 7. **Report.**

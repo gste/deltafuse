@@ -17,14 +17,20 @@ not touch files outside the card's `writes`.
 
 ## Repository facts
 
+- Two repositories: the framework `deltafuse` and the judge `deltafuse-bench`.
+  The card's `writes` name one of them; work only there.
 - Python package under `src/deltafuse/`. Dependencies: `jsonschema`, `pyyaml`.
   **Do not add a dependency unless the card says to.**
 - Canonical process assets live in `process/**`. The copy under
   `src/deltafuse/assets/**` is **generated** — never edit it by hand. If you
   change anything in `process/**`, run `python scripts/sync_assets.py` and then
   `python scripts/sync_assets.py --check`.
-- Tests run with `python -m pytest`. The suite is green before you start and must
-  be green when you finish.
+- Tests run with `python -m pytest` in the repository the card writes to. The
+  suite is green before you start and must be green when you finish. **Judge by
+  the exit code, not by the tail of the output** (`echo $?` / `$LASTEXITCODE`);
+  a truncated tail has hidden failures here before.
+- On Windows, write multi-line patches as files, not heredocs: heredocs have
+  mangled `\n` and triple quotes in this repository's history.
 - `src/deltafuse/core/` is the deterministic layer: **no LLM calls, no network,
   no randomness, no wall-clock branching in new code.** If the card seems to
   require any of these, stop and report instead of improvising.
