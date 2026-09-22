@@ -214,7 +214,10 @@ def cleanup_orphaned_staging(directory: Path, max_age_seconds: float = 3600.0) -
         if p.is_file():
             try:
                 mtime = p.stat().st_mtime
-                if (now - mtime) >= max_age_seconds:
+                # NTFS stamps mtime from another clock than time.time(): a file
+                # written a moment ago can read as slightly in the future, a
+                # negative age that never reached max_age_seconds=0 (CI flake).
+                if max(0.0, now - mtime) >= max_age_seconds:
                     p.unlink(missing_ok=True)
                     removed_count += 1
             except OSError:
