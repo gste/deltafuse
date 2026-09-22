@@ -104,44 +104,6 @@ def _optional_change_id(raw: Any) -> str | None:
     raise DecideError("change: must be a Change id or null")
 
 
-def _refuse_unsigned(product_root: Path) -> None:
-    """A Human Gate that must be signed and cannot be is refused before any write."""
-    problem = gate_receipts.signing_problem(product_root)
-    if problem:
-        raise DecideError(problem)
-
-
-def _record_or_restore(
-    product_root: Path,
-    artifact: Path,
-    original: bytes,
-    *,
-    kind: str,
-    status: str,
-    rel_path: str,
-    artifact_id: str,
-    change: str | None,
-) -> None:
-    """Record the receipt; if that fails, put the artifact back as it was.
-
-    The verdict was written into the artifact first. Without its receipt it
-    would read as accepted while no receipt backs it.
-    """
-    try:
-        gate_receipts.record_receipt(
-            product_root,
-            kind=kind,
-            status=status,
-            rel_path=rel_path,
-            artifact_id=artifact_id,
-            change=change,
-            artifact=artifact,
-        )
-    except gate_receipts.ReceiptError as ex:
-        atomic_replace(artifact, original)
-        raise DecideError(str(ex)) from ex
-
-
 def apply_decision(
     start: Path | str,
     *,
@@ -162,11 +124,9 @@ def apply_decision(
         else:
             raise DecideError("--spec requires a Change directory (path to change.yaml)")
         with ProductMutationLock(product_root):
-            _refuse_unsigned(product_root)
             delta = change_dir / "spec-delta.md"
             if not delta.is_file():
                 raise DecideError(f"spec-delta.md is missing in {change_dir.as_posix()}")
-            original = delta.read_bytes()
             try:
                 text = replace_frontmatter(delta.read_text(encoding="utf-8"), {"status": status})
             except FrontmatterParseError as ex:
@@ -175,15 +135,14 @@ def apply_decision(
 
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
-            _record_or_restore(
+            gate_receipts.record_receipt(
                 product_root,
-                delta,
-                original,
                 kind="spec",
                 status=status,
                 rel_path=written[0],
                 artifact_id=change_id or change_dir.name,
                 change=change_id,
+                artifact=delta,
             )
             change_status = None
             change_file = change_dir / "change.yaml"
@@ -239,7 +198,6 @@ def apply_decision(
 
     product_root = load_product_root(start_path)
     with ProductMutationLock(product_root):
-        _refuse_unsigned(product_root)
         dec_path = find_decision_file(product_root, str(decision))
         try:
             meta, _ = parse_frontmatter(dec_path.read_text(encoding="utf-8"))
@@ -250,21 +208,19 @@ def apply_decision(
                 f"{dec_path.name} status is '{meta.get('status')}', expected proposed"
             )
         change_id = _optional_change_id(meta.get("change"))
-        original = dec_path.read_bytes()
         new_text = replace_frontmatter(dec_path.read_text(encoding="utf-8"), {"status": status})
         atomic_replace(dec_path, new_text.encode("utf-8"))
 
         written = [_rel(product_root, dec_path)]
         dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
-        _record_or_restore(
+        gate_receipts.record_receipt(
             product_root,
-            dec_path,
-            original,
             kind="decision",
             status=status,
             rel_path=written[0],
             artifact_id=dec_id,
             change=change_id,
+            artifact=dec_path,
         )
         change_dir = None
         if change_id and (start_path / "change.yaml").is_file():
