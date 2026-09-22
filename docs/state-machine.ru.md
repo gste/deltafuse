@@ -82,8 +82,8 @@ Change может быть переведён в терминальное сос
 | `analyzing` | `blocked-on-decision` | Обнаружена развилка, требующая Decision Record со статусом `proposed`. | Создан документ `docs/decisions/DEC-NNNN-*.md`. |
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
 | `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `deltafuse next` даёт один Analyze pass за раз; комплект тот же. | На диске есть `routing.yaml`, срезы на каждую routing primary capability и `coverage.yaml`; все claims покрыты; дельты типизированы. |
-| `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). `deltafuse next` даёт один Specify-срез (`spec_refs` только), затем `close`. | Сформирован проект правок в файлах `spec_refs` срезов и `spec-delta.md`. |
-| `analyzed` | `specified` | Изменение спецификации не требуется (`requirement_delta: none`). | Доказано точными ссылками на существующие требования `REQ-*`. |
+| `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). `deltafuse next` даёт один Specify-срез (`spec_refs` только), затем `close`. | Сформирован проект правок в файлах `spec_refs` срезов и `spec-delta.md`, и все машинные проверки гейта `specified`, кроме receipt человека, проходят; иначе `deltafuse state` отказывает и возвращает ошибки воркеру. |
+| `analyzed` | `decomposed` | Багфикс: изменение спецификации не требуется (`requirement_delta: none`); `deltafuse next` сразу даёт Decompose. | Гейт `decomposed` доказывает точные ссылки задач на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
 | `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
@@ -99,6 +99,10 @@ Change может быть переведён в терминальное сос
 | `normalized` / `analyzing` | `duplicate` | Запрос дублирует уже существующий активный или архивный Change. | Ссылка на оригинальный `CHG-*` зафиксирована в `change.yaml`. |
 | `analyzing` | `superseded` | Change заменён более широким или реструктурированным запросом. | Ссылка на замещающий Change зафиксирована в `change.yaml`. |
 | `converged` | `archived` | Пакет Change целиком перемещён в `docs/archive/changes/<date>-<change-id>/`. | Change удалён из активных списков, история неизменна. |
+
+Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может.
+
+Гейты `declaring` и `implemented` проверяют каждую задачу, кроме `cancelled` и `superseded`: каждая должна быть на статусе гейта со своим evidence. Green и regression evidence штампуются деревом `docs/spec/**` и `src/**`; следующая задача, меняющая его, делает evidence предыдущей устаревшим, и `deltafuse next` направляет воркера перезапустить evidence этой задачи на текущем дереве, прежде чем гейт закроется.
 
 ---
 

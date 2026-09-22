@@ -55,6 +55,11 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
         "spec_status": "unchanged",
     }
     write_stamped_evidence(red_dir / "TASK-001.yaml", ev_not_rep, tmp_path)
+    # The Worker records the Red step on the task through the Core; the
+    # declaring gate needs every task declared with its own Red evidence.
+    from deltafuse.core.transitions import set_artifact_status
+
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert check_gate(builder.change_dir, "declaring") == []
 
     # Transition change to terminal not-reproduced status

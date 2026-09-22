@@ -1,0 +1,33 @@
+kind: slice
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/slice.schema.yaml
+allowed_operations:
+  - create
+  - update
+  - validate
+  - describe
+creatable_semantic_fields:
+  - title
+  - primary_capability
+  - related_capabilities
+  - policies
+  - spec_refs
+  - claims
+  - depends_on
+  - context_budget
+updatable_semantic_fields:
+  - /title
+  - /primary_capability
+  - /related_capabilities
+  - /policies
+  - /spec_refs
+  - /claims
+  - /depends_on
+  - /context_budget
+core_owned_fields:
+  - id
+  - change
+  - status
+initial_defaults:
+  status: draft
+body_allowed: true

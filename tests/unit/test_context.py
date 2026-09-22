@@ -5,11 +5,16 @@ import pytest
 from deltafuse.core.context import (
     estimate_tokens,
     estimate_files_tokens,
+    count_tokens,
+    count_files_tokens,
+    token_count_receipt,
     validate_context_budget,
     validate_task_context_budget,
     matches_contract_globs,
     try_endpoint_token_count,
+    DEFAULT_TASK_BUDGET,
     PHASE_CONTRACTS,
+    TokenizerUnavailableError,
     task_write_globs,
     load_change_route,
 )
@@ -22,34 +27,31 @@ def _clear_tokenize_url(monkeypatch):
 
 def test_estimate_tokens_heuristic():
     text = "Hello world from DeltaFuse framework"
-    # 5 English words * 1.3 = 6.5 -> ceil = 7
-    tokens = estimate_tokens(text)
-    assert tokens == 7
+    # A04-01: 36 UTF-8 bytes / 3.75 = 9.6 -> ceil = 10
+    assert estimate_tokens(text) == 10
+    assert estimate_tokens("") == 0
 
 
-def test_estimate_tokens_a03_01_upper_bounds(tmp_path: Path):
-    """A03-01: coefficient fallback is an upper bound vs recorded ornith/Qwen counts."""
-    en = " ".join(["word"] * 20)
-    assert estimate_tokens(en) >= 26
-    assert estimate_tokens(en) <= 32  # 1.3x EN must not inflate absurdly
+def test_estimate_tokens_a04_01_counts_bytes_not_file_type(tmp_path: Path):
+    """A04-01 replaced A03-01's words x factor (calibration 2026-09-21): the
+    estimate follows UTF-8 bytes, so it no longer depends on the suffix or on a
+    single Cyrillic letter."""
+    body = '{"kind": "transition", "gate": "declaring", "from": "decomposed"}\n' * 20
+    as_jsonl = tmp_path / "transitions.jsonl"
+    as_json = tmp_path / "transitions.json"
+    as_jsonl.write_text(body, encoding="utf-8")
+    as_json.write_text(body, encoding="utf-8")
+    # A03-01 counted the .jsonl as English prose, 82 % under the tokenizers.
+    assert estimate_files_tokens([as_jsonl]) == estimate_files_tokens([as_json])
+    assert estimate_files_tokens([as_jsonl]) == -(-len(body.encode("utf-8")) // 3.75)
 
-    ru = " ".join(["проверка"] * 17)
-    assert estimate_tokens(ru) >= 37
+    english = "The declaring gate is closed until every task is declared. " * 10
+    one_letter = english + "ж"
+    # One Cyrillic letter moved a whole A03-01 file from x1.3 to x2.2.
+    assert estimate_tokens(one_letter) - estimate_tokens(english) <= 1
 
-    py = tmp_path / "sample.py"
-    py.write_text(" ".join(["token"] * 30), encoding="utf-8")
-    assert estimate_files_tokens([py]) >= 81
-
-    yaml_file = tmp_path / "manifest.yaml"
-    yaml_file.write_text(" ".join(["key:"] * 22), encoding="utf-8")
-    yaml_est = estimate_files_tokens([yaml_file])
-    assert yaml_est >= 98
-    naive = 29  # historical words*1.3 on 22 words
-    assert yaml_est > naive * 2  # no 70% YAML undercount
-
-    log_file = tmp_path / "trace.log"
-    log_file.write_text(" ".join(["ts"] * 35), encoding="utf-8")
-    assert estimate_files_tokens([log_file]) >= 168
+    russian = "Задача не может обогнать свой Change. " * 10
+    assert estimate_tokens(russian) == -(-len(russian.encode("utf-8")) // 3.75)
 
 
 def test_validate_context_budget(tmp_path: Path):
@@ -198,3 +200,129 @@ def test_try_endpoint_token_count_posts_tokenize_not_chat(monkeypatch):
     assert try_endpoint_token_count("hi") == 4
     assert captured["url"] == "http://127.0.0.1:1240/tokenize"
     assert "/v1/chat/completions" not in str(captured["url"])
+
+
+# --- Q0-2: token counting determinism -------------------------------------
+
+
+def test_count_tokens_reports_heuristic_mode(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    counted = count_tokens("alpha beta gamma")
+    assert counted.mode == "heuristic"
+    assert counted.measured is False
+    assert counted.detail == "a04-01:/3.75"
+    assert counted.tokens > 0
+
+
+def test_count_tokens_reports_endpoint_mode(monkeypatch):
+    class _Resp:
+        def read(self) -> bytes:
+            return b'{"tokens": [1, 2, 3]}'
+
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=2: _Resp())
+    counted = count_tokens("alpha beta gamma")
+    assert counted.mode == "endpoint"
+    assert counted.measured is True
+    assert counted.tokens == 3
+
+
+def test_required_tokenizer_without_url_refuses(monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
+    with pytest.raises(TokenizerUnavailableError):
+        count_tokens("alpha beta")
+
+
+def test_required_tokenizer_does_not_fall_back_when_endpoint_fails(monkeypatch):
+    def boom(req: object, timeout: float = 2) -> None:
+        raise OSError("connection refused")
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    with pytest.raises(TokenizerUnavailableError):
+        count_tokens("alpha beta")
+
+
+def test_unrequired_tokenizer_still_falls_back_but_says_so(monkeypatch):
+    def boom(req: object, timeout: float = 2) -> None:
+        raise OSError("connection refused")
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    counted = count_tokens("alpha beta")
+    assert counted.mode == "heuristic"
+    assert counted.measured is False
+
+
+def test_count_files_tokens_returns_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    f1 = tmp_path / "a.md"
+    f1.write_text("alpha beta gamma\n", encoding="utf-8")
+    total, receipt = count_files_tokens([f1, f1])
+    assert total > 0
+    assert receipt["mode"] == "heuristic"
+    assert receipt["measured"] is False
+    assert receipt["heuristic"] == "a04-01"
+    assert receipt["endpoint"] is None
+    assert receipt["required"] is False
+    assert receipt["files_counted"] == 1
+
+
+def test_token_count_receipt_without_counting_is_unknown(monkeypatch):
+    """A configured endpoint is not evidence that it ran."""
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    receipt = token_count_receipt()
+    assert receipt["mode"] == "unknown"
+    assert receipt["measured"] is False
+    assert receipt["endpoint"] == "http://127.0.0.1:1240/tokenize"
+
+
+def test_validate_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    f1 = tmp_path / "a.md"
+    f1.write_text("alpha beta\n", encoding="utf-8")
+    receipt: dict = {}
+    errs = validate_context_budget(
+        {"max_tokens": 1000, "max_files": 5}, [f1], repo_root=tmp_path, receipt=receipt
+    )
+    assert errs == []
+    assert receipt["mode"] == "heuristic"
+    assert receipt["required"] is False
+
+
+def test_validate_task_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
+    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
+    spec = tmp_path / "docs" / "spec" / "core.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
+    receipt: dict = {}
+    errs = validate_task_context_budget(
+        {"max_tokens": 64000, "max_files": 24},
+        ["docs/spec/core.md#REQ-01"],
+        ["src/core.py"],
+        tmp_path,
+        receipt=receipt,
+    )
+    assert errs == []
+    assert receipt["mode"] == "heuristic"
+    assert receipt["files_counted"] == 1
+
+
+def test_default_task_budget_matches_contract():
+    """docs/small-llm-contract.md pins 64,000 / 24 for framework-controlled input."""
+    assert DEFAULT_TASK_BUDGET == {"max_tokens": 64000, "max_files": 24}

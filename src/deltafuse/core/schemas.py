@@ -219,6 +219,39 @@ class SchemaRegistry:
             errors.append(format_schema_error(normalized, error))
         return errors
 
+    def shape_hint(
+        self, schema_name: str, path: tuple[str, ...] = (), *, noun: str = "frontmatter keys"
+    ) -> str:
+        """One line naming the frontmatter a schema expects, derived from it.
+
+        Appended to schema errors for Worker-written frontmatter: in q0 runs
+        the Worker repaired one missing key per retry because an error names
+        only the first failing rule.
+        """
+        schema = self.get_schema(schema_name)
+        for step in path:  # "*" steps into additionalProperties (a map's values)
+            child = schema.get("additionalProperties") if step == "*" else (schema.get("properties") or {}).get(step)
+            schema = child if isinstance(child, dict) else {}
+        props = schema.get("properties") or {}
+        required = list(schema.get("required") or [])
+
+        def describe(key: str) -> str:
+            spec = props.get(key) or {}
+            if "enum" in spec:
+                return f"{key} ({'|'.join(str(v) for v in spec['enum'])})"
+            if spec.get("type") == "array":
+                least = "at least one" if int(spec.get("minItems") or 0) > 0 else "may be empty"
+                return f"{key} (list, {least})"
+            return key
+
+        optional = [key for key in props if key not in required]
+        line = f"expected {noun}: " + ", ".join(describe(key) for key in required)
+        if optional:
+            line += "; optional: " + ", ".join(describe(key) for key in optional)
+        if schema.get("additionalProperties") is False:
+            line += "; no other keys"
+        return line
+
     def validate_or_raise(self, schema_name: str, data: Any) -> None:
         """Validates data against a schema and raises SchemaValidationError if invalid."""
         errors = self.validate(schema_name, data)

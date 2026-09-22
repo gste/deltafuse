@@ -5,9 +5,9 @@ import fnmatch
 import json
 import math
 import os
-import re
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 import yaml
@@ -16,6 +16,15 @@ from deltafuse.core.integrity import path_is_inside_repo
 
 class ContextLinterError(Exception):
     """Raised when context contract or budget invariants are violated."""
+    pass
+
+
+class TokenizerUnavailableError(ContextLinterError):
+    """Q0-2: a measured token count was required and could not be obtained.
+
+    Raised instead of falling back to the heuristic, so a qualification run
+    never reports a budget verdict backed by an estimate.
+    """
     pass
 
 
@@ -181,54 +190,62 @@ def is_product_code_path(rel_path: str) -> bool:
     return matches_contract_globs(rel_path, _PRODUCT_CODE_GLOBS)
 
 
-# A03-01 / F-003: words-per-token upper bounds vs ornith/Qwen BPE (not chat completions).
-WORD_FACTOR_EN = 1.3
-WORD_FACTOR_CYRILLIC = 2.2
-WORD_FACTOR_CODE = 2.7
-WORD_FACTOR_YAML = 4.5  # 98/22 from A03-01; roadmap yaml×4 still undercounted
-WORD_FACTOR_LOG = 4.8
-_CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
-_CODE_SUFFIXES = {
-    ".py",
-    ".pyi",
-    ".ps1",
-    ".sh",
-    ".bash",
-    ".js",
-    ".ts",
-    ".tsx",
-    ".jsx",
-    ".rs",
-    ".go",
-    ".java",
-    ".c",
-    ".h",
-    ".cpp",
-    ".cs",
-}
-_YAML_SUFFIXES = {".yaml", ".yml", ".json"}
-_LOG_SUFFIXES = {".log"}
+# A04-01: without a tokenizer the Core estimates tokens from UTF-8 bytes with
+# one constant. Calibrated 2026-09-21 on 281 files against nine tokenizer
+# families (backlog/roadmap/tokenizer-calibration): the median per-file error
+# is +0.9 % on the reference Qwen3.8 and within -9 % .. +10 % for every family.
+# Bytes replaced A03-01's words x factor, whose per-file error was 18-25 %:
+# words gave no rule for `.jsonl` (-82 %), overcounted YAML/JSON by 42 % and
+# switched a whole file to the Cyrillic factor on a single letter. It is an
+# estimate, not an upper bound; 64 000 is an orientation for a unit of work.
+BYTES_PER_TOKEN = 3.75
 
 
-def token_factor(text: str, path: Path | None = None) -> float:
-    """Conservative tokens-per-word factor. Take the max of suffix and script factors."""
-    factor = WORD_FACTOR_EN
-    if path is not None:
-        suffix = path.suffix.lower()
-        if suffix in _YAML_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_YAML)
-        elif suffix in _LOG_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_LOG)
-        elif suffix in _CODE_SUFFIXES:
-            factor = max(factor, WORD_FACTOR_CODE)
-    if _CYRILLIC_RE.search(text):
-        factor = max(factor, WORD_FACTOR_CYRILLIC)
-    return factor
+def estimate_from_bytes(text: str) -> int:
+    """A04-01 estimate: UTF-8 bytes / BYTES_PER_TOKEN, rounded up."""
+    size = len(text.encode("utf-8"))
+    return 0 if size == 0 else math.ceil(size / BYTES_PER_TOKEN)
+
+
+# Q0-2: the heuristic coefficient table is versioned, because a change to it
+# changes every budget verdict that was not measured by an endpoint.
+HEURISTIC_ID = "a04-01"
+TOKENIZE_URL_ENV = "DELTAFUSE_TOKENIZE_URL"
+TOKENIZER_REQUIRED_ENV = "DELTAFUSE_TOKENIZER_REQUIRED"
+MODE_ENDPOINT = "endpoint"
+MODE_HEURISTIC = "heuristic"
+_TRUTHY = frozenset({"1", "true", "yes", "on", "required"})
+
+
+def tokenize_url() -> str:
+    return os.environ.get(TOKENIZE_URL_ENV, "").strip()
+
+
+def tokenizer_required() -> bool:
+    """True when a measured count is mandatory and the heuristic is forbidden.
+
+    Set by a qualification campaign. Outside one the heuristic remains the
+    documented default; what is never allowed is not knowing which ran.
+    """
+    return os.environ.get(TOKENIZER_REQUIRED_ENV, "").strip().lower() in _TRUTHY
+
+
+@dataclass(frozen=True)
+class TokenCount:
+    """One token count plus the mode that produced it."""
+
+    tokens: int
+    mode: str
+    detail: str
+
+    @property
+    def measured(self) -> bool:
+        return self.mode == MODE_ENDPOINT
 
 
 def try_endpoint_token_count(text: str) -> int | None:
     """Optional llama-server POST /tokenize. Never uses chat completions (Q-004)."""
-    url = os.environ.get("DELTAFUSE_TOKENIZE_URL", "").strip()
+    url = tokenize_url()
     if not url:
         return None
     payload = json.dumps({"content": text}).encode("utf-8")
@@ -252,21 +269,49 @@ def try_endpoint_token_count(text: str) -> int | None:
     return None
 
 
+def count_tokens(text: str, path: Path | None = None) -> TokenCount:
+    """Count tokens and name the mode that produced the number.
+
+    Q0-2: the endpoint is tried first, exactly as before. What changed is that
+    the outcome is reported instead of being indistinguishable from a
+    heuristic estimate, and that `DELTAFUSE_TOKENIZER_REQUIRED` turns an
+    unavailable endpoint into a refusal rather than a silent downgrade.
+    """
+    required = tokenizer_required()
+    url = tokenize_url()
+    if url:
+        counted = try_endpoint_token_count(text)
+        if counted is not None:
+            return TokenCount(counted, MODE_ENDPOINT, url)
+        if required:
+            raise TokenizerUnavailableError(
+                f"tokenizer endpoint {url} did not answer and "
+                f"{TOKENIZER_REQUIRED_ENV} forbids the heuristic fallback"
+            )
+    elif required:
+        raise TokenizerUnavailableError(
+            f"{TOKENIZER_REQUIRED_ENV} is set but {TOKENIZE_URL_ENV} is empty; "
+            "a measured token count is mandatory for a qualification run"
+        )
+    # `path` stays in the signature for callers; A04-01 does not depend on file type.
+    return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
+
+
 def estimate_tokens(text: str, path: Path | None = None) -> int:
-    """Upper-bound token estimate: optional /tokenize, else A03-01 coefficients."""
-    counted = try_endpoint_token_count(text)
-    if counted is not None:
-        return counted
-    words = len(text.split())
-    if words == 0:
-        return 0
-    return math.ceil(words * token_factor(text, path))
+    """Token count: optional /tokenize, else the A04-01 byte estimate."""
+    return count_tokens(text, path).tokens
 
 
-def estimate_files_tokens(files: list[Path]) -> int:
-    """Sum estimated tokens over unique existing files (duplicates counted once)."""
+def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
+    """Sum tokens over unique existing files and report how they were counted.
+
+    The receipt is the point of the function: a total on its own does not say
+    whether it can be compared with a total from another machine.
+    """
     total = 0
     seen: set[Path] = set()
+    modes: set[str] = set()
+    details: set[str] = set()
     for f in files:
         try:
             resolved = f.resolve()
@@ -277,21 +322,73 @@ def estimate_files_tokens(files: list[Path]) -> int:
         seen.add(resolved)
         try:
             content = resolved.read_text(encoding="utf-8", errors="ignore")
-            total += estimate_tokens(content, resolved)
         except OSError:
             continue
-    return total
+        counted = count_tokens(content, resolved)
+        total += counted.tokens
+        modes.add(counted.mode)
+        details.add(counted.detail)
+    return total, token_count_receipt(modes, details, files=len(seen))
+
+
+def estimate_files_tokens(files: list[Path]) -> int:
+    """Sum estimated tokens over unique existing files (duplicates counted once)."""
+    return count_files_tokens(files)[0]
+
+
+def tokenizer_config() -> dict[str, Any]:
+    """How this process is configured to count, independent of what it counted."""
+    return {
+        "endpoint": tokenize_url() or None,
+        "required": tokenizer_required(),
+        "heuristic": HEURISTIC_ID,
+    }
+
+
+def token_count_receipt(
+    modes: Iterable[str] = (),
+    details: Iterable[str] = (),
+    *,
+    files: int | None = None,
+) -> dict[str, Any]:
+    """The counting mode as a receipt field, comparable between runs.
+
+    `mode` is `endpoint` only when every file was measured; a run that mixed a
+    live endpoint with the heuristic is `mixed` and is not comparable with a
+    fully measured one. Counting nothing is `unknown`, never a configured mode
+    reported as if it had run — that assumption is the defect being removed.
+    """
+    observed = sorted({m for m in modes if m})
+    if not observed:
+        mode = "unknown"
+    elif len(observed) == 1:
+        mode = observed[0]
+    else:
+        mode = "mixed"
+    receipt: dict[str, Any] = {
+        "mode": mode,
+        "measured": mode == MODE_ENDPOINT,
+        "detail": sorted({d for d in details if d}),
+    }
+    receipt.update(tokenizer_config())
+    if files is not None:
+        receipt["files_counted"] = files
+    return receipt
 
 
 def validate_context_budget(
     context_budget: dict[str, Any],
     files: list[Path],
     repo_root: Path | None = None,
+    receipt: dict[str, Any] | None = None,
 ) -> list[str]:
     """Validates that loaded files do not exceed max_tokens and max_files constraints.
 
     Missing paths and paths outside *repo_root* are errors, not silent skips.
     Duplicate paths are counted once for budget limits.
+
+    Q0-2: when *receipt* is given it is filled with the token counting mode, so
+    the caller can record how the verdict was reached.
     """
     errors: list[str] = []
     max_files = context_budget.get("max_files")
@@ -326,21 +423,34 @@ def validate_context_budget(
         )
 
     if max_tokens is not None:
-        estimated = estimate_files_tokens(unique_files)
+        estimated, counted = count_files_tokens(unique_files)
+        if receipt is not None:
+            receipt.update(counted)
         if estimated > max_tokens:
             errors.append(
                 f"Context budget exceeded: estimated {estimated} tokens loaded, "
                 f"maximum allowed is {max_tokens}"
             )
+    elif receipt is not None:
+        receipt.update(token_count_receipt())
 
     return errors
 
 
-DEFAULT_TASK_BUDGET = {"max_tokens": 16000, "max_files": 24}
+DEFAULT_TASK_BUDGET = {"max_tokens": 64000, "max_files": 24}
 
 
 def posix_relpath(path: str) -> str:
-    return Path(path).as_posix().lstrip("./")
+    """Repo-relative POSIX form: drop leading './' and '/' only.
+
+    `str.lstrip("./")` strips a character set, not a prefix: it turned
+    '.deltafuse/x' into 'deltafuse/x', so no dot-directory ever matched a glob
+    such as '.deltafuse/**'.
+    """
+    rel = Path(path).as_posix()
+    while rel.startswith("./"):
+        rel = rel[2:]
+    return rel.lstrip("/")
 
 
 def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:
@@ -415,8 +525,12 @@ def validate_task_context_budget(
     spec_refs: Sequence[Any],
     allowed_paths: Sequence[Any],
     repo_root: Path,
+    receipt: dict[str, Any] | None = None,
 ) -> list[str]:
-    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes."""
+    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes.
+
+    Q0-2: *receipt* receives the token counting mode when provided.
+    """
     errors: list[str] = []
     max_files = context_budget.get("max_files")
     max_tokens = context_budget.get("max_tokens")
@@ -459,10 +573,14 @@ def validate_task_context_budget(
             f"maximum allowed is {max_files}"
         )
     if max_tokens is not None:
-        estimated = estimate_files_tokens(unique_existing)
+        estimated, counted = count_files_tokens(unique_existing)
+        if receipt is not None:
+            receipt.update(counted)
         if estimated > max_tokens:
             errors.append(
                 f"Context budget exceeded: estimated {estimated} tokens loaded, "
                 f"maximum allowed is {max_tokens}"
             )
+    elif receipt is not None:
+        receipt.update(token_count_receipt())
     return errors

@@ -8,13 +8,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.core import receipts
+from deltafuse.core import gate_receipts as receipts
 from deltafuse.core.installer import install
-
-import hashlib
-
-SECRET = "test-secret-0123456789abcdef"
-KEY_ID = hashlib.sha256(SECRET.encode()).hexdigest()[:12]
 
 
 def _root(tmp_path: Path, repo_root: Path) -> Path:
@@ -61,38 +56,16 @@ def test_local_profile_records_chain_and_declares_weak_guarantee(
     )
 
 
-def test_broker_signed_receipt_verifies_against_trust_roots(
-    tmp_path: Path, repo_root: Path, monkeypatch
+def test_broker_signed_profile_is_refused_with_the_replacement(
+    tmp_path: Path, repo_root: Path
 ):
-    root = _root(tmp_path, repo_root)
-    receipts.install_trust_root(root, key_id=KEY_ID, secret=SECRET)
-    monkeypatch.setenv(receipts.BROKER_KEY_ENV, SECRET)
-    (root / ".deltafuse" / "config.yaml").write_text(
-        yaml.safe_dump({"workflow": {"integrity_profile": "broker-signed"}}),
-        encoding="utf-8",
-    )
-    artifact = _artifact(root)
-
-    receipt = _record(root, artifact)
-
-    assert receipt["profile"] == "broker-signed"
-    assert receipt["key_id"] and receipt["signature"]
-    assert receipts.journal_errors(root) == []
-    assert receipts.has_valid_receipt(
-        root, kind="spec", status="accepted", artifact=artifact
-    )
-
-
-def test_broker_signed_requires_host_key_outside_worker_surface(
-    tmp_path: Path, repo_root: Path, monkeypatch
-):
+    """Removed 2026-09-22: its HMAC secret lived in the repository."""
     root = _root(tmp_path, repo_root)
     (root / ".deltafuse" / "config.yaml").write_text(
         yaml.safe_dump({"workflow": {"integrity_profile": "broker-signed"}}),
         encoding="utf-8",
     )
-    monkeypatch.delenv(receipts.BROKER_KEY_ENV, raising=False)
-    with pytest.raises(receipts.ReceiptError, match="broker"):
+    with pytest.raises(receipts.ReceiptError, match="gate-password"):
         _record(root, _artifact(root))
 
 

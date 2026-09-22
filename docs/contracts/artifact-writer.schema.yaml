@@ -1,0 +1,76 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://deltafuse.dev/contracts/artifact-writer/v1
+title: DeltaFuse Artifact Writer Request Envelope
+description: >
+  Typed operation request envelope for the DeltaFuse Core Artifact Writer service and CLI v1.
+type: object
+additionalProperties: false
+required: [request_id, operation, kind]
+properties:
+  request_id:
+    type: string
+    minLength: 1
+    pattern: "^[a-zA-Z0-9_\\-]+$"
+    description: Unique identifier for idempotency and transaction tracking.
+  operation:
+    type: string
+    enum: [create, update, validate, describe]
+    description: Desired artifact writer operation.
+  kind:
+    type: string
+    enum: [task, slice, spec-delta, routing, change, evidence, coverage, decision, capability, lock]
+    description: Target artifact kind.
+  change:
+    type: string
+    minLength: 1
+    description: Owning Change identifier or directory path.
+  identity:
+    type: string
+    minLength: 1
+    description: Specific artifact ID (e.g. TASK-001, SLICE-01) for create/describe.
+  target:
+    type: string
+    minLength: 1
+    description: Relative file path to the target artifact for update/validate.
+  expected_sha256:
+    type: string
+    pattern: "^(sha256:[a-fA-F0-9]{64}|[a-fA-F0-9]{64})$"
+    description: Expected SHA256 digest of the whole target file prior to update.
+  semantic_payload:
+    type: object
+    description: Closed object containing semantic fields for create.
+  patch:
+    type: object
+    additionalProperties: false
+    description: JSON Pointer patch structure for update.
+    properties:
+      set:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [path, value]
+          properties:
+            path:
+              type: string
+              pattern: "^/.*$"
+              description: JSON Pointer path starting with /
+            value:
+              description: Value to set at pointer path.
+      remove:
+        type: array
+        items:
+          type: string
+          pattern: "^/.*$"
+          description: JSON Pointer path to remove starting with /
+      canonicalize_metadata:
+        type: boolean
+        default: false
+        description: Authorize metadata re-formatting under canonical codec policy.
+  body:
+    type: string
+    description: Optional raw markdown body string.
+  body_replacement:
+    type: string
+    description: Optional raw markdown body replacement string.
+

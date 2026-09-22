@@ -13,6 +13,14 @@ def _run_file_cmd(*rel: str) -> list[str]:
     return [sys.executable, *rel]
 
 
+def _declare(builder: MockChangeBuilder, task_id: str = "TASK-001") -> None:
+    """The Worker declares the task through the Core; the declaring gate needs
+    every task declared with its own Red evidence."""
+    from deltafuse.core.transitions import set_artifact_status
+
+    set_artifact_status(builder.change_dir, status="declared", task_id=task_id)
+
+
 def _decomposed(tmp_path: Path, repo_root: Path, change_id: str = "CHG-020") -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
@@ -55,6 +63,7 @@ def test_run_evidence_red_behavioral(tmp_path: Path, repo_root: Path):
     assert outcome.payload["exit_code"] != 0
     assert outcome.payload["recorded_by"] == "deltafuse-evidence"
     assert str(outcome.payload["recorded_sha256"]).startswith("sha256:")
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
 
 
@@ -134,6 +143,7 @@ def test_run_evidence_already_green(tmp_path: Path, repo_root: Path):
     assert outcome.authentic
     assert outcome.payload["result"] == "already-green"
     assert outcome.payload["exit_code"] == 0
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
 
 
@@ -203,6 +213,7 @@ def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path
         argv=_run_file_cmd("tests/test_task-001.py"),
         changed_paths=["tests/test_task-001.py"],
     )
+    _declare(builder)
     assert check_gate(builder.change_dir, "declaring") == []
     payload = dict(outcome.payload)
     payload["exit_code"] = 0
@@ -212,3 +223,77 @@ def test_tampered_evidence_stamp_fails_targeting(tmp_path: Path, repo_root: Path
     errs = check_gate(builder.change_dir, "declaring")
     assert any("stamp does not match the recorded payload" in e for e in errs)
 
+
+def test_verification_phase_requires_task_none(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-050")
+    import pytest
+    from deltafuse.core.evidence import EvidenceRunError
+    with pytest.raises(EvidenceRunError) as exc_info:
+        run_evidence(
+            builder.change_dir,
+            phase="verification",
+            task="TASK-001",
+            argv=_run_file_cmd("tests/test_task-001.py"),
+        )
+    assert "verification" in str(exc_info.value).lower() or "task" in str(exc_info.value).lower()
+
+
+def test_verification_phase_writes_run_yaml(tmp_path: Path, repo_root: Path):
+    builder = _decomposed(tmp_path, repo_root, "CHG-051")
+    runner_file = tmp_path / "tests" / "test_verif.py"
+    runner_file.parent.mkdir(parents=True, exist_ok=True)
+    runner_file.write_text("raise SystemExit(0)\n", encoding="utf-8")
+
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="verification",
+        task=None,
+        argv=_run_file_cmd("tests/test_verif.py"),
+    )
+    assert outcome.dest == builder.change_dir / "evidence" / "verification" / "run.yaml"
+    assert outcome.dest.is_file()
+    assert outcome.payload["phase"] == "verification"
+    assert outcome.payload["task"] is None
+    assert "base_revision" in outcome.payload
+
+
+
+
+def test_core_changed_paths_hold_only_the_workers_changes(tmp_path: Path):
+    """q0 run 20260921T081038Z: the Core-derived dirty set also held the Core's
+    own journals, interpreter caches and the evidence file `deltafuse evidence`
+    had just written, and the Worker was told to list them."""
+    import subprocess
+
+    from deltafuse.core.evidence import _core_computed_changed_paths
+
+    def write(rel: str, text: str = "x\n") -> None:
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    write("src/core.py")
+    write(".deltafuse/transitions.jsonl", "{}\n")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.email=e@test", "-c", "user.name=e", "-c", "commit.gpgsign=false",
+         "commit", "-m", "init"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+
+    write("src/core.py", "y\n")
+    write("tests/test_core.py")
+    write(".deltafuse/transitions.jsonl", "{}\n{}\n")
+    write("src/__pycache__/core.cpython-312.pyc")
+    write("tests/.pytest_cache/v/cache/lastfailed", "{}\n")
+    write("docs/changes/CHG-001-x/evidence/red/TASK-001.yaml", "phase: red\n")
+    write("docs/changes/CHG-001-x/tasks/TASK-001.md")
+
+    paths = sorted(p.replace("\\", "/") for p in _core_computed_changed_paths(tmp_path))
+    # The Change's own files are its bookkeeping (q0 run M03 20260921T215701Z:
+    # task files rewritten by `state` and coverage.yaml were demanded).
+    assert paths == [
+        "src/core.py",
+        "tests/test_core.py",
+    ]

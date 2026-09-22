@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 import argparse
+import hashlib
 import json
+import re
 import sys
 from pathlib import Path
+
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
 from deltafuse.core.archiver import archive_change, ArchivalError
@@ -24,17 +27,24 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
-from deltafuse.core.transitions import TransitionError, advance_change
+from deltafuse.core import gate_password
+from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
 from deltafuse.core.leash import (
     LeashError,
     check_paths,
+    collect_chain_envelopes,
     collect_ready_envelopes,
     git_dirty_paths,
     load_baseline,
     load_leash_mode,
 )
 from deltafuse.core.steps import step_names
-from deltafuse.core.context import validate_context_budget, validate_task_context_budget
+from deltafuse.core.context import (
+    token_count_receipt,
+    tokenizer_config,
+    validate_context_budget,
+    validate_task_context_budget,
+)
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 
@@ -45,7 +55,225 @@ def _journal(start: Path | str, **event: object) -> None:
     record_event(start, **event)
 
 
+def export_tool_schemas(kind: str | None = None, operation: str | None = None) -> dict[str, Any]:
+    """Export tool argument JSON Schema suitable for LLM / host agent bindings.
+
+    Excludes Core-owned fields (status, schema_version, framework) from public write schemas.
+    """
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+
+    registry = ArtifactRegistry()
+
+    if kind:
+        descriptor = registry.get_descriptor(kind)
+        allowed = descriptor.get("creatable_semantic_fields") or descriptor.get("allowed_semantic_fields") or []
+        public_fields = [f for f in allowed if f not in ("status", "schema_version", "framework", "id", "change")]
+
+        props: dict[str, Any] = {}
+        for field in public_fields:
+            if field in ("allowed_paths", "forbidden_paths", "depends_on", "spec_refs"):
+                props[field] = {"type": "array", "items": {"type": "string"}}
+            elif field == "context_budget":
+                props[field] = {
+                    "type": "object",
+                    "properties": {
+                        "max_tokens": {"type": "integer"},
+                        "max_files": {"type": "integer"},
+                    },
+                }
+            else:
+                props[field] = {"type": "string"}
+
+        if operation == "create":
+            return {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "title": f"Artifact Create Payload Schema ({kind})",
+                "type": "object",
+                "required": ["identity", "semantic_payload"],
+                "properties": {
+                    "identity": {"type": "string", "description": f"Artifact ID for {kind}"},
+                    "semantic_payload": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": props,
+                    },
+                    "body": {"type": "string", "description": "Optional markdown body content"},
+                    "request_id": {"type": "string", "description": "Optional request ID for transaction idempotency"},
+                },
+            }
+        elif operation == "update":
+            return {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "title": f"Artifact Update Patch Schema ({kind})",
+                "type": "object",
+                "required": ["target", "expected_sha256", "patch"],
+                "properties": {
+                    "target": {"type": "string", "description": "Relative file path to target artifact"},
+                    "expected_sha256": {"type": "string", "description": "Expected SHA256 digest of target file"},
+                    "patch": {
+                        "type": "object",
+                        "properties": {
+                            "set": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": ["path", "value"],
+                                    "properties": {
+                                        "path": {"type": "string"},
+                                        "value": {},
+                                    },
+                                },
+                            },
+                            "remove": {"type": "array", "items": {"type": "string"}},
+                            "canonicalize_metadata": {"type": "boolean", "default": False},
+                        },
+                    },
+                    "body_replacement": {"type": "string", "description": "Optional body replacement string"},
+                    "request_id": {"type": "string", "description": "Optional request ID"},
+                },
+            }
+        elif operation == "validate":
+            return {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "title": f"Artifact Validate Schema ({kind})",
+                "type": "object",
+                "required": ["target"],
+                "properties": {
+                    "target": {"type": "string", "description": "Relative target file path or artifact ID"},
+                },
+            }
+
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "DeltaFuse Artifact Writer Tool Call Schema Set",
+        "type": "object",
+        "properties": {
+            "create": {"$ref": "#/definitions/create"},
+            "update": {"$ref": "#/definitions/update"},
+            "validate": {"$ref": "#/definitions/validate"},
+            "describe": {"$ref": "#/definitions/describe"},
+        },
+    }
+
+
+def _read_secret(prompt: str) -> str:
+    """Read a secret from the terminal; refuse when no human is at one."""
+    import getpass
+
+    if not sys.stdin.isatty():
+        raise gate_password.GatePasswordError(
+            "the Human Gate password is read only from an interactive terminal"
+        )
+    return getpass.getpass(prompt)
+
+
+def _gate_password_prompt() -> str:
+    return _read_secret("Human Gate password: ")
+
+
+def _gate_password_command(action: str, target: Path) -> int:
+    try:
+        root = load_product_root(target.resolve())
+    except QueueError as ex:
+        print(f"gate-password: {ex}", file=sys.stderr)
+        return 2
+    enabled = gate_password.is_enabled(root)
+    if action == "status":
+        print(f"gate-password: {'enabled' if enabled else 'disabled'}")
+        return 0
+    try:
+        current = _read_secret("Current password: ") if enabled else None
+        if action == "clear":
+            gate_password.clear_password(root, current)
+            print("gate-password: disabled")
+            return 0
+        new = _read_secret("New password: ")
+        if new != _read_secret("Repeat new password: "):
+            print("gate-password: the passwords differ; nothing changed", file=sys.stderr)
+            return 1
+        gate_password.set_password(root, new, current=current)
+    except gate_password.GatePasswordError as ex:
+        print(f"gate-password: {ex}", file=sys.stderr)
+        return 1
+    print(f"gate-password: enabled ({gate_password.PASSWORD_REL}; stores a salted hash only)")
+    return 0
+
+def _artifact_write_command(args: argparse.Namespace) -> int:
+    """`deltafuse artifact write`: one command, the Core decides create or update."""
+    from deltafuse.core.artifact_lock import ArtifactLockError
+    from deltafuse.core.artifact_patch import ArtifactPatchError
+    from deltafuse.core.artifact_policy import ArtifactPolicyError
+    from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+    from deltafuse.core.artifact_transactions import ArtifactTransactionError
+    from deltafuse.core.artifact_write import split_envelope, write_artifact
+    from deltafuse.core.artifacts import ArtifactServiceError
+
+    max_bytes = 1024 * 1024
+
+    def fail(code: str, message: str, ret: int) -> int:
+        if args.json:
+            print(json.dumps({"ok": False, "error": {"code": code, "message": message}}, ensure_ascii=False, indent=2))
+        print(f"artifact write: {message}", file=sys.stderr)
+        return ret
+
+    try:
+        if args.input == "-":
+            raw_bytes = sys.stdin.buffer.read(max_bytes + 1) if hasattr(sys.stdin, "buffer") else sys.stdin.read().encode("utf-8")
+        else:
+            source = Path(args.input)
+            if not source.is_file():
+                return fail("file_not_found", f"input file not found: {args.input}", 2)
+            raw_bytes = source.read_bytes()
+        raw_json = strict_parse_json(raw_bytes, max_bytes=max_bytes)
+        identity, target, fields, body = split_envelope(raw_json)
+        receipt = write_artifact(
+            Path(args.change),
+            args.kind,
+            identity=identity,
+            target=target,
+            fields=fields,
+            body=body,
+            request_id=raw_json.get("request_id") if isinstance(raw_json, dict) else None,
+        )
+    except ArtifactReaderError as ex:
+        return fail(ex.code, f"input is not valid JSON: {ex.message}", 2)
+    except (ArtifactPolicyError, ArtifactPatchError, ArtifactServiceError) as ex:
+        code = getattr(ex, "code", "artifact_error")
+        ret = 3 if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority") else 2
+        message = str(ex) if str(ex).startswith("[") else f"[{code}] {ex}"
+        return fail(code, message, ret)
+    except (ArtifactLockError, ArtifactTransactionError) as ex:
+        return fail(getattr(ex, "code", "lock_error"), str(ex), 5)
+    if args.json:
+        print(json.dumps({"ok": True, **receipt}, ensure_ascii=False, indent=2))
+    else:
+        print(f"artifact write: {receipt['operation']} {receipt.get('target')}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    """Bound installation/registry failures at the public Artifact CLI boundary."""
+    from deltafuse.core.artifact_registry import ArtifactRegistryError
+    from deltafuse.core.assets import AssetError
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    try:
+        return _main(raw)
+    except (ArtifactRegistryError, AssetError) as ex:
+        if not raw or raw[0] != "artifact":
+            raise
+        message = str(ex)[:512]
+        if "--json" in raw:
+            print(json.dumps({"ok": False, "error": {
+                "code": "asset_resolution_failed", "stage": "schema",
+                "path": "/", "message": message,
+                "hint": "Reinstall a verified framework bundle; in a source checkout run scripts/sync_assets.py.",
+            }}, ensure_ascii=False, indent=2))
+        print(f"Artifact assets unavailable: {message}", file=sys.stderr)
+        return 5
+
+
+def _main(argv: list[str] | None = None) -> int:
     try:
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -129,10 +357,10 @@ def main(argv: list[str] | None = None) -> int:
         "--phase",
         "-p",
         required=True,
-        choices=["red", "green", "regression"],
+        choices=["red", "green", "regression", "verification"],
         help="Evidence phase to record",
     )
-    ev_parser.add_argument("--task", "-t", required=True, help="Task id (TASK-NNN)")
+    ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
     ev_parser.add_argument(
         "--changed-path",
         action="append",
@@ -200,6 +428,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Recorded human choice",
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+
+    # Human Gate password: interactive only, never a flag or an environment
+    # variable - anything a Worker's shell can pass, a Worker can pass.
+    gpw_parser = subparsers.add_parser(
+        "gate-password",
+        help="Set, clear or show the optional Human Gate password (interactive only)",
+    )
+    gpw_parser.add_argument("action", choices=["set", "clear", "status"])
+    gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
 
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
@@ -308,6 +545,55 @@ def main(argv: list[str] | None = None) -> int:
     )
     bench_journal.add_argument("product_dir", help="Product root created by bench init")
 
+    # artifact command (AW-11)
+    art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
+    art_sub = art_parser.add_subparsers(dest="artifact_cmd", required=True)
+
+    art_desc = art_sub.add_parser("describe", help="Describe artifact operation and allowed fields")
+    art_desc.add_argument("--kind", "-k", required=True, help="Target artifact kind")
+    art_desc.add_argument("--operation", "-o", default="create", choices=["create", "update", "validate", "describe"], help="Operation to describe")
+    art_desc.add_argument("--json", action="store_true", help="Output JSON format")
+    art_desc.add_argument("--export-schema", action="store_true", help="Export tool-call argument schema")
+
+    art_create = art_sub.add_parser("create", help="Create an artifact atomically")
+    art_create.add_argument("--kind", "-k", required=True, help="Target artifact kind")
+    art_create.add_argument("--change", "-c", default=".", help="Change package or product root path")
+    art_create.add_argument("--input", "-i", default="-", help="Path to JSON input file or '-' for stdin")
+    art_create.add_argument("--identity", help="Artifact ID; overrides JSON envelope if set")
+    art_create.add_argument("--json", action="store_true", help="Output JSON receipt to stdout")
+
+    art_update = art_sub.add_parser("update", help="Update an artifact atomically")
+    art_update.add_argument("--kind", "-k", required=True, help="Target artifact kind")
+    art_update.add_argument("--change", "-c", default=".", help="Change package or product root path")
+    art_update.add_argument("--input", "-i", default="-", help="Path to JSON input file or '-' for stdin")
+    art_update.add_argument("--target", help="Target relative file path; overrides JSON envelope if set")
+    art_update.add_argument("--expected-sha256", help="Expected SHA256 digest of target file")
+    art_update.add_argument("--json", action="store_true", help="Output JSON receipt to stdout")
+
+    art_write = art_sub.add_parser(
+        "write",
+        help="Create or update a Change artifact: fields plus a prose body (the Worker's path)",
+    )
+    art_write.add_argument("--kind", "-k", required=True, help="task | slice | routing | spec-delta | change")
+    art_write.add_argument("--change", "-c", required=True, help="Change directory")
+    art_write.add_argument(
+        "--input", "-i", required=True,
+        help='JSON file (or - for stdin): {"identity" | "target", "fields": {...}, "body": "..."}',
+    )
+    art_write.add_argument("--json", action="store_true", help="Output the Writer receipt as JSON")
+
+    art_val = art_sub.add_parser("validate", help="Validate an artifact strictly read-only")
+    art_val.add_argument("--kind", "-k", required=True, help="Target artifact kind")
+    art_val.add_argument("--change", "-c", default=".", help="Change package or product root path")
+    art_val.add_argument("--target", "-t", required=True, help="Relative target file path or artifact ID")
+    art_val.add_argument("--json", action="store_true", help="Output JSON validation result to stdout")
+
+    art_idx = art_sub.add_parser("update-index", help="Explicit Change child-index update from existing child on disk")
+    art_idx.add_argument("--change", "-c", default=".", help="Change package directory path")
+    art_idx.add_argument("--child-kind", "-k", required=True, choices=["task", "slice", "spec-delta", "decision"], help="Child artifact kind")
+    art_idx.add_argument("--child-id", "-id", required=True, help="Child artifact ID")
+    art_idx.add_argument("--json", action="store_true", help="Output JSON result to stdout")
+
     args = parser.parse_args(raw)
 
     if args.command == "init":
@@ -343,7 +629,12 @@ def main(argv: list[str] | None = None) -> int:
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
-        errors = check_gate(target, args.gate)
+        # A gate whose turn has not come must not read as "passed": advance
+        # would refuse it a moment later.
+        errors = gate_order_errors(target, args.gate) + check_gate(target, args.gate)
+        # Q0-2: a gate verdict that rests on a token budget must say how that
+        # budget was counted; the configuration is what the campaign pins.
+        tokenizer = tokenizer_config()
         _journal(
             target,
             cmd="check-gate",
@@ -351,6 +642,9 @@ def main(argv: list[str] | None = None) -> int:
             ok=not errors,
             errors=errors,
             n_errors=len(errors),
+            token_endpoint=tokenizer["endpoint"],
+            token_required=tokenizer["required"],
+            token_heuristic=tokenizer["heuristic"],
         )
         if errors:
             print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
@@ -398,7 +692,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "state":
-        from deltafuse.core.transitions import TransitionError, set_artifact_status
+        # TransitionError is already imported at module scope; re-importing it
+        # here would make it a function-local name and leave the `advance`
+        # branch above referencing it before assignment.
+        from deltafuse.core.transitions import set_artifact_status
 
         target = Path(args.change_path)
         try:
@@ -416,6 +713,8 @@ def main(argv: list[str] | None = None) -> int:
         _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif result.get("unchanged"):
+            print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
             print(
                 f"state: {result['artifact']} status {result['from']} -> {result['to']} "
@@ -567,6 +866,7 @@ def main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
+                password_prompt=_gate_password_prompt,
             )
         except DecideError as ex:
             _journal(target, cmd="decide", ok=False, errors=[str(ex)])
@@ -579,10 +879,11 @@ def main(argv: list[str] | None = None) -> int:
         _journal(
             target,
             cmd="decide",
-            ok=True,
+            ok=bool(result.get("ok")),
             gate=result.get("gate"),
             status=result.get("status"),
             decision=result.get("decision"),
+            errors=list(result.get("gate_errors") or []) if not result.get("ok") else [],
         )
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -596,7 +897,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"wrote: {rel}")
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
-        return 0
+        return 0 if result.get("ok") else 1
+
+    elif args.command == "gate-password":
+        return _gate_password_command(args.action, Path(args.path))
 
     elif args.command == "leash":
         if args.head and not args.base:
@@ -611,12 +915,25 @@ def main(argv: list[str] | None = None) -> int:
             snapshot = queue_snapshot(queue, selected=selected, product_root=root)
             envelope = snapshot.get("envelope")
             halt = snapshot.get("halt")
-            covering = collect_ready_envelopes(queue, root, halt)
             if args.files:
                 dirty = list(args.files)
             else:
                 dirty = git_dirty_paths(root, base=args.base, head=args.head)
-            errors = check_paths(dirty, covering, baseline=load_baseline(root))
+            # Ready envelopes name only the next step; the receipt chain adds the
+            # steps already worked since the base, so a finished step's writes
+            # are not judged against the step after it. A halt stops new work,
+            # not the record of work done, so the chain applies either way.
+            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
+                root, base=args.base, dirty=dirty
+            )
+            errors = check_paths(
+                dirty,
+                covering,
+                baseline=load_baseline(root),
+                product_root=root,
+                base=args.base,
+                head=args.head,
+            )
             mode = load_leash_mode(root)
             skipped = envelope is None and not errors
             ok = not errors
@@ -692,6 +1009,8 @@ def main(argv: list[str] | None = None) -> int:
         repo_root = find_repo_root(target)
         slices_dir = target / "slices"
         errors: list[str] = []
+        # Q0-2: the counting mode travels with the verdict into the journal.
+        token_receipt: dict[str, Any] = {}
         if slices_dir.is_dir():
             for sf in slices_dir.glob("*.md"):
                 try:
@@ -703,7 +1022,7 @@ def main(argv: list[str] | None = None) -> int:
                             sp_rel = sref.split("#")[0]
                             ref_files.append(repo_root / sp_rel)
                         b_errs = validate_context_budget(
-                            budget, ref_files, repo_root=repo_root
+                            budget, ref_files, repo_root=repo_root, receipt=token_receipt
                         )
                         errors.extend(f"{sf.name}: {e}" for e in b_errs)
                 except Exception as ex:
@@ -720,6 +1039,7 @@ def main(argv: list[str] | None = None) -> int:
                             meta.get("spec_refs") or [],
                             meta.get("allowed_paths") or [],
                             repo_root,
+                            receipt=token_receipt,
                         )
                         errors.extend(f"{tf.name}: {e}" for e in b_errs)
                     else:
@@ -729,13 +1049,27 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 except Exception as ex:
                     errors.append(f"{tf.name}: {ex}")
-        _journal(target, cmd="lint-context", ok=not errors, errors=errors, n_errors=len(errors))
+        if not token_receipt:
+            token_receipt = token_count_receipt()
+        _journal(
+            target,
+            cmd="lint-context",
+            ok=not errors,
+            errors=errors,
+            n_errors=len(errors),
+            token_mode=token_receipt.get("mode"),
+            token_measured=token_receipt.get("measured"),
+            token_heuristic=token_receipt.get("heuristic"),
+        )
         if errors:
             print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
                 print(f"  - {err}", file=sys.stderr)
             return 1
-        print(f"Context budget for {target} is within limits.")
+        print(
+            f"Context budget for {target} is within limits "
+            f"(tokens counted by {token_receipt.get('mode')})."
+        )
         return 0
 
     elif args.command == "bench":
@@ -796,6 +1130,486 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as ex:
             print(f"Bench failed: {ex}", file=sys.stderr)
             return 2
+
+    elif args.command == "artifact":
+        from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
+        from deltafuse.core.artifact_policy import ArtifactPolicyError, create_authorization_context
+        from deltafuse.core.artifact_lock import ArtifactLockError, resolve_product_root
+        from deltafuse.core.artifact_transactions import ArtifactTransactionError
+        from deltafuse.core.artifact_patch import ArtifactPatchError
+
+        if args.artifact_cmd == "describe":
+            if args.export_schema:
+                schema_out = export_tool_schemas(kind=args.kind, operation=args.operation)
+                print(json.dumps(schema_out, ensure_ascii=False, indent=2))
+                return 0
+
+            root = Path(".").resolve()
+            service = ArtifactService(product_root=root)
+            desc_info = service.describe(kind=args.kind, operation=args.operation)
+            if args.json:
+                print(json.dumps(desc_info, ensure_ascii=False, indent=2))
+            else:
+                print(f"artifact describe: kind '{desc_info['kind']}' operation '{desc_info['operation']}'")
+                print(f"Allowed semantic fields: {', '.join(desc_info['allowed_semantic_fields'])}")
+                print(f"Core-owned fields: {', '.join(desc_info['core_owned_fields'])}")
+            return 0
+
+        elif args.artifact_cmd == "create":
+            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+            from deltafuse.core.artifact_registry import ArtifactRegistry
+
+            MAX_INPUT_BYTES = 1024 * 1024
+
+            try:
+                if args.input == "-":
+                    if hasattr(sys.stdin, "buffer"):
+                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+                    else:
+                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
+                else:
+                    p = Path(args.input)
+                    if not p.is_file():
+                        msg = f"Input file not found: {args.input}"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    stat_size = p.stat().st_size
+                    if stat_size > MAX_INPUT_BYTES:
+                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    raw_bytes = p.read_bytes()
+
+                if len(raw_bytes) > MAX_INPUT_BYTES:
+                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                    print(msg, file=sys.stderr)
+                    return 2
+
+                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
+            except ArtifactReaderError as re_err:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
+                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
+                return 2
+
+            identity = args.identity or raw_json.get("identity")
+            if not identity:
+                msg = "Missing required 'identity' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
+                return 2
+
+            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
+            body = raw_json.get("body", "")
+
+            env_keys = {"request_id", "operation", "change", "identity", "body", "target", "expected_sha256"}
+            if raw_json.get("kind") == args.kind:
+                env_keys.add("kind")
+
+            if "semantic_payload" in raw_json and isinstance(raw_json["semantic_payload"], dict):
+                semantic_payload = raw_json["semantic_payload"]
+                envelope = dict(raw_json)
+                envelope["request_id"] = request_id
+                envelope["operation"] = "create"
+                envelope["kind"] = args.kind
+                envelope["identity"] = identity
+            else:
+                semantic_payload = {k: v for k, v in raw_json.items() if k not in env_keys}
+                envelope = {
+                    "request_id": request_id,
+                    "operation": "create",
+                    "kind": args.kind,
+                    "identity": identity,
+                    "semantic_payload": semantic_payload,
+                }
+                if "change" in raw_json:
+                    envelope["change"] = raw_json["change"]
+                if "body" in raw_json:
+                    envelope["body"] = raw_json["body"]
+
+
+            reg = ArtifactRegistry()
+            env_val = reg.validate_operation_envelope(envelope)
+            if not env_val.valid:
+                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
+                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
+                return 2
+
+            change_dir = Path(args.change).resolve()
+            cid = None
+            expected_cid = None
+            if change_dir.name.startswith("CHG-"):
+                expected_cid = change_dir.name
+
+            if (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    actual_file_cid = pres.metadata.get("id")
+                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    if expected_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    cid = actual_file_cid
+                except Exception as ex:
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
+                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
+                    return 3
+            else:
+                if envelope.get("change"):
+                    cid = envelope.get("change")
+                elif (change_dir / "docs" / "changes").is_dir():
+                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
+                    if len(chg_subdirs) == 1:
+                        cid = chg_subdirs[0]
+                elif expected_cid:
+                    cid = expected_cid
+
+            root = resolve_product_root(change_dir)
+            auth = create_authorization_context(
+                actor="worker",
+                work_item="CLI",
+                product_root=root,
+                change_id=cid,
+            )
+            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
+
+            try:
+                receipt = service.create(
+                    kind=args.kind,
+                    identity=identity,
+                    semantic_payload=semantic_payload,
+                    body=body,
+                    request_id=request_id,
+                )
+            except ArtifactPolicyError as pe:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
+                print(f"Policy denied: {pe}", file=sys.stderr)
+                return 3
+            except ArtifactPatchError as pe:
+                code = pe.code
+                ret = 3 if code == "core_owned_field" else 2
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
+                print(f"Patch error: {pe}", file=sys.stderr)
+                return ret
+            except ArtifactServiceError as se:
+                code = se.code
+                if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority", "stage_halted", "unauthorized_stage"):
+                    ret = 3
+                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
+                    ret = 4
+                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
+                    ret = 2
+                else:
+                    ret = 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
+                print(f"Artifact error: {se}", file=sys.stderr)
+                return ret
+            except ArtifactLockError as le:
+                ret = 4 if "mismatch" in str(le) else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
+                print(f"Lock error: {le}", file=sys.stderr)
+                return ret
+            except ArtifactTransactionError as te:
+                ret = 4 if te.code == "idempotency_conflict" else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
+                print(f"Transaction error: {te}", file=sys.stderr)
+                return ret
+            except Exception as ex:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
+                print(f"Unexpected error: {ex}", file=sys.stderr)
+                return 5
+
+            if args.json:
+                print(json.dumps(receipt, ensure_ascii=False, indent=2))
+            else:
+                print(f"artifact create: kind '{args.kind}' identity '{identity}' created (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
+            return 0
+
+        elif args.artifact_cmd == "write":
+            return _artifact_write_command(args)
+
+        elif args.artifact_cmd == "update":
+            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+            from deltafuse.core.artifact_registry import ArtifactRegistry
+
+            MAX_INPUT_BYTES = 1024 * 1024
+
+            try:
+                if args.input == "-":
+                    if hasattr(sys.stdin, "buffer"):
+                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+                    else:
+                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
+                else:
+                    p = Path(args.input)
+                    if not p.is_file():
+                        msg = f"Input file not found: {args.input}"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    stat_size = p.stat().st_size
+                    if stat_size > MAX_INPUT_BYTES:
+                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                        print(msg, file=sys.stderr)
+                        return 2
+                    raw_bytes = p.read_bytes()
+
+                if len(raw_bytes) > MAX_INPUT_BYTES:
+                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
+                    print(msg, file=sys.stderr)
+                    return 2
+
+                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
+            except ArtifactReaderError as re_err:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
+                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
+                return 2
+
+            target = args.target or raw_json.get("target")
+            expected_sha256 = args.expected_sha256 or raw_json.get("expected_sha256")
+
+            if not target:
+                msg = "Missing required 'target' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
+                return 2
+            if not expected_sha256:
+                msg = "Missing required 'expected_sha256' in JSON input or CLI argument"
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
+                print(msg, file=sys.stderr)
+                return 2
+
+            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
+
+            if "body_replacement" in raw_json:
+                body_replacement = raw_json["body_replacement"]
+            elif "body" in raw_json:
+                body_replacement = raw_json["body"]
+            else:
+                body_replacement = None
+
+            if "patch" in raw_json and isinstance(raw_json["patch"], dict):
+                patch = raw_json["patch"]
+                envelope = dict(raw_json)
+                envelope["request_id"] = request_id
+                envelope["operation"] = "update"
+                envelope["kind"] = args.kind
+                envelope["target"] = target
+                envelope["expected_sha256"] = expected_sha256
+            else:
+                patch = {
+                    "set": raw_json.get("set", []),
+                    "remove": raw_json.get("remove", []),
+                    "canonicalize_metadata": raw_json.get("canonicalize_metadata", False),
+                }
+                envelope = {
+                    "request_id": request_id,
+                    "operation": "update",
+                    "kind": args.kind,
+                    "target": target,
+                    "expected_sha256": expected_sha256,
+                    "patch": patch,
+                }
+                if body_replacement is not None:
+                    envelope["body_replacement"] = body_replacement
+
+            canonicalize_metadata = patch.get("canonicalize_metadata", False) if isinstance(patch, dict) else False
+
+            reg = ArtifactRegistry()
+            env_val = reg.validate_operation_envelope(envelope)
+            if not env_val.valid:
+                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
+                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
+                return 2
+
+            change_dir = Path(args.change).resolve()
+            cid = None
+            expected_cid = None
+            if change_dir.name.startswith("CHG-"):
+                expected_cid = change_dir.name
+
+            if (change_dir / "change.yaml").is_file():
+                try:
+                    from deltafuse.core.artifact_reader import strict_read_artifact
+                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
+                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
+                    actual_file_cid = pres.metadata.get("id")
+                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    if expected_cid and actual_file_cid != expected_cid:
+                        if args.json:
+                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
+                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
+                        return 3
+                    cid = actual_file_cid
+                except Exception as ex:
+                    if args.json:
+                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
+                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
+                    return 3
+            else:
+                if envelope.get("change"):
+                    cid = envelope.get("change")
+                elif (change_dir / "docs" / "changes").is_dir():
+                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
+                    if len(chg_subdirs) == 1:
+                        cid = chg_subdirs[0]
+                elif expected_cid:
+                    cid = expected_cid
+
+            root = resolve_product_root(change_dir)
+            auth = create_authorization_context(
+                actor="worker",
+                work_item="CLI",
+                product_root=root,
+                change_id=cid,
+            )
+            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
+
+            try:
+                receipt = service.update(
+                    kind=args.kind,
+                    target=target,
+                    expected_sha256=expected_sha256,
+                    patch=patch,
+                    body_replacement=body_replacement,
+                    request_id=request_id,
+                    canonicalize_metadata=canonicalize_metadata,
+                )
+            except ArtifactPolicyError as pe:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
+                print(f"Policy denied: {pe}", file=sys.stderr)
+                return 3
+            except ArtifactPatchError as pe:
+                code = pe.code
+                ret = 3 if code == "core_owned_field" else 2
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
+                print(f"Patch error: {pe}", file=sys.stderr)
+                return ret
+            except ArtifactServiceError as se:
+                code = se.code
+                if code in ("core_owned_field", "policy_denied", "missing_core_context"):
+                    ret = 3
+                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
+                    ret = 4
+                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
+                    ret = 2
+                else:
+                    ret = 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
+                print(f"Artifact error: {se}", file=sys.stderr)
+                return ret
+            except ArtifactLockError as le:
+                ret = 4 if "mismatch" in str(le) else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
+                print(f"Lock error: {le}", file=sys.stderr)
+                return ret
+            except ArtifactTransactionError as te:
+                ret = 4 if te.code == "idempotency_conflict" else 5
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
+                print(f"Transaction error: {te}", file=sys.stderr)
+                return ret
+            except Exception as ex:
+                if args.json:
+                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
+                print(f"Unexpected error: {ex}", file=sys.stderr)
+                return 5
+
+            if args.json:
+                print(json.dumps(receipt, ensure_ascii=False, indent=2))
+            else:
+                print(f"artifact update: kind '{args.kind}' target '{target}' updated (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
+            return 0
+
+
+        elif args.artifact_cmd == "validate":
+            change_dir = Path(args.change).resolve()
+            root = resolve_product_root(change_dir)
+            service = ArtifactService(product_root=root, change_dir=change_dir)
+            result = service.validate(kind=args.kind, target=args.target)
+
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                if result["valid"]:
+                    print(f"artifact validate: kind '{args.kind}' target '{args.target}' is valid.")
+                else:
+                    print(f"artifact validate: kind '{args.kind}' target '{args.target}' is INVALID.", file=sys.stderr)
+                    for d in result.get("diagnostics", []):
+                        print(f"  - [{d.get('code')}] {d.get('json_pointer')}: {d.get('message')}", file=sys.stderr)
+
+            return 0 if result["valid"] else 2
+
+        elif args.artifact_cmd == "update-index":
+            from deltafuse.core.scaffold import ScaffoldError, update_change_child_index
+
+            change_dir = Path(args.change).resolve()
+            try:
+                update_change_child_index(
+                    change_dir,
+                    child_kind=args.child_kind,
+                    child_id=args.child_id,
+                )
+            except ScaffoldError as se:
+                print(f"update-index failed: {se}", file=sys.stderr)
+                return 1
+            except Exception as ex:
+                print(f"Unexpected error: {ex}", file=sys.stderr)
+                return 2
+
+            payload = {
+                "ok": True,
+                "change": change_dir.name,
+                "child_kind": args.child_kind,
+                "child_id": args.child_id,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(f"artifact update-index: updated {args.child_kind} '{args.child_id}' in {change_dir.name}")
+            return 0
 
     return 0
 

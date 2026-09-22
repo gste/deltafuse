@@ -92,14 +92,13 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [core-and-worker.md](./core-and-worker.md) ([ru](./core-and-worker.ru.md)) | Core vs Worker; Process is the lifecycle, not a role |
 | [workflow.md](./workflow.md) ([ru](./workflow.ru.md)) | Lifecycle, gates, bugs, Bootstrap, and convergence |
 | [state-machine.md](./state-machine.md) ([ru](./state-machine.ru.md)) | Change, slice, task, and Decision states |
-| [small-llm-contract.md](./small-llm-contract.md) ([ru](./small-llm-contract.ru.md)) | Small-LLM Quality Contract: reference 35B A3B Worker, 32k window, 16k/24 framework budget (V3-FIX-020) |
+| [small-llm-contract.md](./small-llm-contract.md) ([ru](./small-llm-contract.ru.md)) | Small-LLM Quality Contract: reference dense <=40B Worker (qwen3.8-27b), 128k window, 64k/24 framework budget (V3-FIX-020) |
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
 | [roles.md](./roles.md) ([ru](./roles.ru.md)) | AI and human authority boundaries |
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
 | [bench.md](./bench.md) ([ru](./bench.ru.md)) | Agent-agnostic Worker bench (`deltafuse bench`); Core scores the disk |
 | [contracts/board-snapshot.md](./contracts/board-snapshot.md) ([ru](./contracts/board-snapshot.ru.md)) | Read-only board snapshot for fuse-map (`schema_version: 1`) |
 | [contracts/halt.md](./contracts/halt.md) ([ru](./contracts/halt.ru.md)) | Host buttons for `next --json` halt (`kind` + `choices`) |
-| [../../backlog/product/v3/contract-matrix.md](../../backlog/product/v3/contract-matrix.md) | v3 contract matrix: contract × owner × threat class |
 | [contracts/leash.md](./contracts/leash.md) ([ru](./contracts/leash.ru.md)) | Write envelope for `next --json` and `deltafuse leash` |
 
 Executable Worker (LLM) bindings live in `process/skills/**`; the Core machine contract lives in the kernel. Change/artifact schemas live in `process/schemas/**`. Board snapshot, halt, and leash schemas are **tool compatibility** contracts under `docs/contracts/`, not product artifact schemas; do not copy them into consuming products.

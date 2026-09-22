@@ -1,0 +1,13 @@
+kind: lock
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/lock.schema.yaml
+allowed_operations:
+  - validate
+  - describe
+creatable_semantic_fields: []
+updatable_semantic_fields: []
+core_owned_fields:
+  - schema_version
+  - framework
+initial_defaults: {}
+body_allowed: false

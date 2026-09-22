@@ -93,7 +93,15 @@ def init_bench_product(
     case = load_case(case_id, cases, oracle=False)
     case_dir: Path = case["dir"]
     product.mkdir(parents=True, exist_ok=True)
-    install(target_dir=product, framework_root=framework_root, force=True)
+    # A benchmark sandbox is not a host repository integration flow. Its
+    # overwrite decision was already made from directory occupancy above, so
+    # never prompt for or create host-owned instruction files here.
+    install(
+        target_dir=product,
+        framework_root=framework_root,
+        force=True,
+        agents_md="preserve",
+    )
     _copy_tree(case_dir / "seed", product)
     intake_name = str(case.get("intake_name") or f"{case_id}.md")
     intake_src = case_dir / "input.md"

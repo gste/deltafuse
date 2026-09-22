@@ -19,6 +19,18 @@ properties:
     type: array
     items: {type: string}
   spec_status: {enum: [unchanged, changed, not-applicable]}
+  ownership:
+    type: object
+    description: >
+      Verification only (q4 decision D): code paths the Change touched whose
+      owning capabilities routing did not name (unrouted), paths no capability
+      owns (unowned), and how blind the check is on this catalog (resolution).
+    properties:
+      unrouted: {type: object}
+      unowned: {type: array, items: {type: string}}
+      resolution: {type: [number, 'null']}
+      measurable: {type: boolean}
+      reason: {type: string}
   base_revision:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
@@ -37,6 +49,12 @@ allOf:
       required: [task]
       properties:
         task: {type: string, pattern: '^TASK-[0-9]{3,}$'}
+  - if:
+      properties:
+        phase: {const: verification}
+    then:
+      properties:
+        task: {type: 'null'}
   - if:
       properties:
         phase: {enum: [green, regression, verification]}

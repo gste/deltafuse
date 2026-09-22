@@ -112,6 +112,8 @@ deltafuse decide <change-dir> --spec --status accepted
 
 `--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает.
 
+**Пароль Human Gate (опционально).** `deltafuse gate-password set` хранит солёный хэш PBKDF2 в `.deltafuse/gate-password.yaml` (файл ядра: leash отвергает его в diff воркера). После этого `decide` спрашивает пароль в терминале до любой записи и отказывает, если stdin — не терминал; флага или переменной окружения для пароля нет. Каждый receipt пишет `human_check: password` или `none`. `gate-password clear` и смена требуют текущий пароль; `gate-password status` показывает, включён ли он. Пароль закрывает команду `decide`, а не журнал: от модели, подделывающей файлы руками, защищает изоляция воркера на хосте.
+
 Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста по [контракту halt](./contracts/halt.ru.md), ждать, выполнить только `choice.command`. `inspect` (`command: null`) — стоп. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
 Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
@@ -144,6 +146,45 @@ deltafuse leash <product-root>
 deltafuse leash <product-root> --file src/foo.py
 ```
 
+## Artifact Writer
+
+Ядро предоставляет управляемую схемам службу сериализации и валидации для артефактов пакетов Change ([artifact-writer.ru.md](./contracts/artifact-writer.ru.md)).
+
+### Практические примеры использования
+
+```text
+# Проверить поддерживаемые свойства и схемы через инспекцию возможностей
+deltafuse artifact describe --kind task --operation create
+
+# Создать новый артефакт Change из JSON-структуры
+deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+
+# Атомарно обновить артефакт через JSON Pointer patch с проверкой SHA256 целого файла
+deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+
+# Выполнить read-only валидацию схемы и ссылок без изменения диска
+deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+
+# Обновить дочерний индекс родительского Change после создания/обновления задачи/среза
+deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
+```
+
+### Обнаружение возможностей и совместимость
+Клиенты определяют доступность Artifact Writer с помощью `deltafuse artifact describe --kind <kind> --operation <op>`.
+
+**Путь воркера — `artifact write`** (п. 1 роадмапа). Воркер пишет структуру только через Writer: прозу (тело) и поля, а `id`, `change`, `status`, `context_budget` задачи, сам файл и индекс в `change.yaml` пишет ядро: `deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.json`, где `task.json` — `{"identity": "TASK-001", "fields": {...}, "body": "проза"}`. Файла нет — создаётся; есть — меняются только названные поля, ожидаемый sha256 ядро берёт само. Списки `spec-delta` сливаются по слайсам, проза дописывается. Хост с вызовом функций отдаёт тот же вход как типизированный инструмент. Виды: `task`, `slice`, `routing`, `spec-delta`, `change`. Leash отвергает `routing.yaml`, `spec-delta.md`, слайс или задачу, байты которых не породили ни Writer, ни ядро (`deltafuse state`, `decide`).
+
+### Ручное создание и существующие артефакты
+Существующие артефакты никогда автоматически не перезаписываются и не мигрируют массово; Writer читает файлы, созданные вручную. Новые записи `routing.yaml`, `spec-delta.md`, слайсов и задач идут через Writer: leash судит только то, что изменилось с его базы, поэтому уже закоммиченные артефакты не затронуты.
+
+### Явное подтверждение каноникализации
+Для переформатирования или нормализации метаданных неканоничных артефактов требуется явный флаг `--canonicalize-metadata` вместе с проверкой хэша файла. Без явного согласия формативные правки метаданных не применяются.
+
+### Процедура восстановления транзакций
+В случае сбоя или прерывания процесса при операциях создания/обновления Ядро проверяет `.deltafuse/journal/` под блокировкой `ProductMutationLock`. Незавершённые транзакции со статусом `prepared` восстанавливают исходный файл, а транзакции со статусом `published` завершают запись чека receipt и публикации.
+
+
+
 ## Внешние доски
 
 Read-only UI (fuse-map) обязан читать [контракт снимка доски](./contracts/board-snapshot.ru.md) и для карточек, и для колонок/шагов (`layout`). Нельзя разбирать `docs/changes/**` и хардкодить lifecycle. Installer не копирует `docs/contracts/**` в продукт. fuse-map пинит `schema_version` у себя. Этот репозиторий UI доски не содержит.
@@ -165,4 +206,4 @@ Stdout — один JSON. Файлы продукта не пишутся. Не�
 - Артефакты неподдерживаемых версий схем останавливаются с диагностикой `schema_version` и остаются нетронутыми; мигрируйте вручную на v3.
 - Версионирование артефактов (V3-FIX-013): `change`, `evidence` и каталог capabilities несут явный `schema_version: 3`. Вложенные в Change артефакты (`tasks/**`, `slices/**`, `decisions/**`, frontmatter `spec-delta`, `routing.yaml`, `coverage.yaml`) наследуют версию родительского Change — собственного `schema_version` у них нет, и они валидируются fail-closed через контракт Change.
 - Проверяйте весь продуктовый контракт в любой момент: `deltafuse validate-config .`.
-- Human Gate клики живут в `.deltafuse/gate-journal.jsonl` (Core-owned): пересборки обнаруживаются; в профиле `broker-signed` действительны только подписанные брокером receipts.
+- Human Gate клики живут в `.deltafuse/gate-journal.jsonl` (Core-owned): пересборки обнаруживаются. Профиль `broker-signed` удалён (его ключ лежал в репозитории); используйте пароль Human Gate.

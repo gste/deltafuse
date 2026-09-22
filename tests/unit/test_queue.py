@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deltafuse.cli import main
@@ -149,7 +150,10 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
         .step_decompose()
+        .step_declare()
     )
+    # Implement opens only after the Core closed the declaring gate.
+    builder._core_advance("declaring")
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
     meta["status"] = "declared"
@@ -299,3 +303,117 @@ def test_next_json_blocked_decision_has_halt_choices(tmp_path: Path, repo_root: 
     assert any("Reject DEC-0001" in label for label in labels)
     assert any(row["id"] == "inspect" and row["command"] is None for row in data["halt"]["choices"])
     assert any("deltafuse decide" in (row["command"] or "") for row in data["halt"]["choices"])
+
+
+def _set_task_status(builder: MockChangeBuilder, status: str, task_id: str = "TASK-001") -> None:
+    task_file = builder.change_dir / "tasks" / f"{task_id}.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["status"] = status
+    task_file.write_text(
+        f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}",
+        encoding="utf-8",
+    )
+
+
+def _decomposed(tmp_path: Path, repo_root: Path, change_id: str) -> MockChangeBuilder:
+    install(target_dir=tmp_path, framework_root=repo_root)
+    return (
+        MockChangeBuilder(tmp_path, change_id=change_id, title="Phases")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+
+
+def test_next_declared_tasks_close_the_declaring_gate_first(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T081038Z: every task declared, the Change still at
+    'decomposed' - reading task statuses alone sent the Worker to implement
+    with the declaring gate closed."""
+    builder = _decomposed(tmp_path, repo_root, "CHG-041")
+    _set_task_status(builder, "declared")
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "declare"
+    assert "close the declaring gate" in selected.reason
+
+
+def test_next_task_ahead_of_its_change_is_blocked_not_verified(tmp_path: Path, repo_root: Path):
+    """The same run: tasks 'implemented' with the Change at 'decomposed' were
+    routed to verify."""
+    builder = _decomposed(tmp_path, repo_root, "CHG-042")
+    _set_task_status(builder, "implemented")
+    queue = build_work_queue(tmp_path)
+    assert select_next(queue) is None
+    assert any(
+        item.task == "TASK-001" and "ran ahead of the declaring gate" in item.reason
+        for item in queue.blocked
+    )
+
+
+def test_next_implemented_tasks_close_the_implemented_gate_before_verify(
+    tmp_path: Path, repo_root: Path
+):
+    builder = _decomposed(tmp_path, repo_root, "CHG-043").step_declare()
+    builder._core_advance("declaring")
+    _set_task_status(builder, "implemented")
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "implement"
+    assert "close the implemented gate" in selected.reason
+
+
+@pytest.mark.parametrize("status", ["pending", "declared", "implemented"])
+def test_next_keeps_decompose_until_the_decomposed_gate_passes(
+    tmp_path: Path, repo_root: Path, status: str
+):
+    """q0 run 20260921T121031Z: decompose wrote task files that failed the
+    decomposed gate (no `change`, no `slice`, `kind: code`), and `next` sent
+    the Worker to declare, where it could not fix them - twenty minutes of
+    loop. Before that gate the Change's status picks the step."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-044", title="Early tasks")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+    )
+    tasks = builder.change_dir / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    (tasks / "TASK-001.md").write_text(
+        f"---\nid: TASK-001\nkind: code\nstatus: {status}\n---\n# TASK-001\n",
+        encoding="utf-8",
+    )
+    selected = select_next(build_work_queue(tmp_path))
+    assert selected is not None
+    assert selected.skill == "decompose"
+    assert "check-gate decomposed" in selected.reason
+
+
+def test_an_intake_note_taken_in_by_an_archived_change_is_not_pending(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run M03 20260921T215701Z: after CHG-001 converged and was archived,
+    `next` offered its intake note again and the Worker opened CHG-002 from the
+    same request."""
+    import json
+
+    from deltafuse.core.queue import intake_sources_pending
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    note = tmp_path / "docs" / "intake" / "M03-adversarial.md"
+    note.write_text("# Request\n- CR-001: something\n", encoding="utf-8")
+    assert intake_sources_pending(tmp_path)
+
+    archived = tmp_path / "docs" / "archive" / "changes" / "2026-09-22-CHG-001-x"
+    archived.mkdir(parents=True)
+    (archived / "change.yaml").write_text(
+        yaml.safe_dump({"id": "CHG-001-x", "status": "archived",
+                        "source": {"request": "request.md", "intake_refs": ["docs/intake/M03-adversarial.md"]}}),
+        encoding="utf-8",
+    )
+    assert not intake_sources_pending(tmp_path)
+    assert main(["next", str(tmp_path), "--json"]) == 0
+    data = json.loads(capsys.readouterr()[0])
+    assert data["halt"]["kind"] == "done"
+
+    (tmp_path / "docs" / "intake" / "another.md").write_text("# New request\n", encoding="utf-8")
+    assert intake_sources_pending(tmp_path)

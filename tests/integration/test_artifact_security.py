@@ -1,0 +1,360 @@
+"""Integration tests for security boundaries, path protection, crash recovery, and authorization (AW-17)."""
+
+from deltafuse import __version__ as FW_VERSION
+import hashlib
+import json
+from pathlib import Path
+import pytest
+
+from deltafuse.core.artifact_patch import apply_artifact_patch, ArtifactPatchError
+from deltafuse.core.artifact_policy import (
+    create_authorization_context,
+    validate_artifact_policy,
+    resolve_artifact_path,
+    ArtifactPolicyError,
+)
+from deltafuse.core.artifact_lock import ArtifactLockError
+from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
+from deltafuse.core.assets import get_installed_lock_hash
+from deltafuse.core.installer import install
+from deltafuse.core.scaffold import scaffold_change
+
+
+def test_security_unauthorized_status_patch_attack(tmp_path: Path, repo_root: Path):
+    """Verify that updating protected status fields via patch is rejected."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    change_dir = scaffold_change(tmp_path, "CHG-170", route="code", title="Security Test")
+
+    (change_dir / "slices").mkdir(parents=True, exist_ok=True)
+    (change_dir / "slices" / "SLICE-01.md").write_text("---\nid: SLICE-01\nchange: CHG-170\ntitle: Slice 1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n", encoding="utf-8")
+    (change_dir / "docs" / "spec").mkdir(parents=True, exist_ok=True)
+    (change_dir / "docs" / "spec" / "core.md").write_text("# Core Spec\n", encoding="utf-8")
+
+    auth = create_authorization_context(actor="worker", work_item="SLICE-01", product_root=change_dir, change_id="CHG-170")
+    service = ArtifactService(product_root=change_dir, auth_context=auth)
+
+    # 1. Create task
+    task_payload = {
+        "title": "Security task",
+        "kind": "feature",
+        "slice": "SLICE-01",
+        "depends_on": [],
+        "requirement_delta": "none",
+        "spec_refs": ["docs/spec/core.md#REQ-01"],
+        "allowed_paths": ["src/app.py"],
+        "forbidden_paths": [],
+        "context_budget": {"max_tokens": 1000, "max_files": 5},
+    }
+    service.create(kind="task", identity="TASK-001", semantic_payload=task_payload)
+    task_file = change_dir / "tasks" / "TASK-001.md"
+    task_sha = hashlib.sha256(task_file.read_bytes()).hexdigest()
+
+    # 2. Attempt patch attack setting /status to "accepted" or "verified"
+    patch_attack = {
+        "set": [{"path": "/status", "value": "verified"}],
+        "remove": [],
+    }
+    with pytest.raises((ArtifactServiceError, ArtifactPatchError)) as exc_info:
+        service.update(kind="task", target="tasks/TASK-001.md", expected_sha256=task_sha, patch=patch_attack)
+
+    assert any(k in str(exc_info.value).lower() for k in ("protected", "immutable", "unauthorized", "invalid", "not allowed"))
+
+
+def test_security_path_traversal_and_protected_file_attack(tmp_path: Path, repo_root: Path):
+    """Verify that path traversal and writing to protected files (.deltafuse) are denied."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    change_dir = scaffold_change(tmp_path, "CHG-171", route="code", title="Path Security Test")
+
+    # 1. Traversal attempt
+    with pytest.raises(ArtifactPolicyError, match="traversal"):
+        resolve_artifact_path(change_dir, "../../../etc/passwd")
+
+    # 2. Protected .deltafuse file write attempt
+    with pytest.raises(ArtifactPolicyError, match="Protected path"):
+        resolve_artifact_path(change_dir, ".deltafuse/lock.yaml")
+
+
+def test_security_malformed_input_rejection_no_side_effects(tmp_path: Path, repo_root: Path):
+    """Verify that malformed payloads fail validation before mutating files."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    change_dir = scaffold_change(tmp_path, "CHG-172", route="code", title="Malformed Security Test")
+
+    auth = create_authorization_context(actor="worker", work_item="CLI", product_root=change_dir, change_id="CHG-172")
+    service = ArtifactService(product_root=change_dir, auth_context=auth)
+
+    # Payload with invalid property type
+    bad_payload = {
+        "title": "Bad task",
+        "kind": 12345,  # type mismatch (expected string)
+        "allowed_paths": ["src/app.py"],
+    }
+    tasks_dir = change_dir / "tasks"
+
+    with pytest.raises((ArtifactServiceError, ArtifactPolicyError)):
+        service.create(kind="task", identity="TASK-002", semantic_payload=bad_payload)
+
+    # Assert no file created
+    assert not (tasks_dir / "TASK-002.md").exists()
+
+
+def test_security_unauthorized_context_denied(tmp_path: Path, repo_root: Path):
+    """Verify that ArtifactService denies updates when worker attempts to write Core-only kinds (e.g. evidence)."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    change_dir = scaffold_change(tmp_path, "CHG-173", route="code", title="Auth Security Test")
+
+    auth = create_authorization_context(actor="worker", work_item="CLI", product_root=change_dir, change_id="CHG-173")
+    service = ArtifactService(product_root=change_dir, auth_context=auth)
+    with pytest.raises(ArtifactPolicyError, match="Worker cannot write Core-only kind"):
+        service.create(
+            kind="evidence",
+            identity="EV-001",
+            semantic_payload={
+                "title": "Forged evidence",
+            },
+        )
+
+
+def test_aw21_reproduce_security_failures(tmp_path: Path):
+    """AW-21 Red: Reproduce outside-Change write, missing-context write, and stale-envelope write."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".deltafuse").mkdir()
+    lock_hash = get_installed_lock_hash()
+    (repo_root / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        f"  version: {FW_VERSION}\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {lock_hash}\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
+    change1_dir = repo_root / "docs" / "changes" / "CHG-001"
+    change1_dir.mkdir(parents=True)
+    (change1_dir / "change.yaml").write_text("id: CHG-001\nstatus: active\n", encoding="utf-8")
+
+    outside_file = tmp_path / "outside_target.md"
+
+    auth = create_authorization_context(
+        actor="worker",
+        work_item="CHG-001",
+        product_root=repo_root,
+        change_id="CHG-001",
+        stage="implement",
+    )
+    service = ArtifactService(product_root=change1_dir, auth_context=auth)
+
+    # 1. Outside-Change write attempt with absolute path outside product/change root
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError), match="outside|escapes|denied|traversal"):
+        service.create(
+            kind="task",
+            identity=str(outside_file),
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+            body="evil",
+        )
+    assert not outside_file.exists()
+
+    # 2. Missing-context write attempt
+    service_no_auth = ArtifactService(product_root=change1_dir, auth_context=None)
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError)):
+        service_no_auth.create(
+            kind="task",
+            identity="TASK-100",
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+        )
+    assert not (change1_dir / "tasks" / "TASK-100.md").exists()
+
+    # 3. Stale-envelope / halted stage write attempt
+    auth_halted = create_authorization_context(
+        actor="worker",
+        work_item="CHG-001",
+        product_root=repo_root,
+        change_id="CHG-001",
+        stage="halted",
+    )
+    service_halted = ArtifactService(product_root=change1_dir, auth_context=auth_halted)
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError), match="halted|stage|policy_denied|unauthorized"):
+        service_halted.create(
+            kind="task",
+            identity="TASK-101",
+            semantic_payload={"kind": "feature", "allowed_paths": []},
+        )
+    assert not (change1_dir / "tasks" / "TASK-101.md").exists()
+
+
+def test_security_real_platform_symlink_escape_protection(tmp_path: Path):
+    """Verify that resolve_artifact_path rejects symlink targets escaping product root."""
+    import os
+
+    outside = tmp_path / "outside_dir"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("SECRET", encoding="utf-8")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    symlink_target = repo / "linked_dir"
+
+    try:
+        os.symlink(outside, symlink_target, target_is_directory=True)
+    except OSError as err:
+        # If platform privileges prevent symlink creation (e.g., Windows non-admin without dev mode),
+        # verify the privilege failure is explicit and log/handle it cleanly.
+        pytest.skip(f"Symlink creation unavailable on host platform: {err}")
+
+    # Symlink created successfully on host platform: policy MUST reject path escape
+    with pytest.raises(ArtifactPolicyError) as exc_info:
+        resolve_artifact_path(repo, "linked_dir/secret.txt")
+
+    assert exc_info.value.code in ("symlink_escape_denied", "path_traversal_denied")
+
+
+def test_security_windows_ads_device_unc_protection(tmp_path: Path):
+    """Verify that ADS, reserved device names, and UNC paths are denied by policy."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".deltafuse").mkdir()
+
+    # 1. Alternate Data Stream (ADS) attack
+    with pytest.raises(ArtifactPolicyError) as exc_ads:
+        resolve_artifact_path(repo, "tasks/TASK-001.md:stream.txt")
+    assert exc_ads.value.code == "ads_denied"
+
+    # 2. Reserved Device Name attack
+    for dev in ("CON", "PRN", "AUX", "NUL", "COM1", "LPT1"):
+        with pytest.raises(ArtifactPolicyError) as exc_dev:
+            resolve_artifact_path(repo, f"tasks/{dev}.md")
+        assert exc_dev.value.code == "device_name_denied"
+
+    # 3. UNC Path attack
+    with pytest.raises(ArtifactPolicyError) as exc_unc:
+        resolve_artifact_path(repo, "\\\\server\\share\\task.md")
+    assert exc_unc.value.code == "path_traversal_denied"
+
+
+def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
+    """AW37-R1..R4: Reproduce missing/malformed/mismatched identity, unknown stage, and deleted change.yaml."""
+    from deltafuse.cli import main
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".deltafuse").mkdir()
+    lock_hash = get_installed_lock_hash()
+    (repo / ".deltafuse" / "lock.yaml").write_text(
+        "schema_version: 3\n"
+        "framework:\n"
+        f"  version: {FW_VERSION}\n"
+        "  source: deltafuse\n"
+        f"  content_hash: {lock_hash}\n"
+        "workflow:\n"
+        "  call_width: wide\n"
+        "  auto_accept_decisions: false\n",
+        encoding="utf-8",
+    )
+
+    # 1. Mismatched Change ID: directory CHG-905 has change.yaml with id CHG-999
+    chg905 = repo / "docs" / "changes" / "CHG-905"
+    chg905.mkdir(parents=True)
+    (chg905 / "change.yaml").write_text("id: CHG-999\nstatus: implementing\n", encoding="utf-8")
+    (chg905 / "slices").mkdir()
+    (chg905 / "slices" / "SLICE-01.md").write_text(
+        "---\nid: SLICE-01\nchange: CHG-905\ntitle: S1\nstatus: draft\nprimary_capability: core\nclaims:\n  - CR-001\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (chg905 / "docs" / "spec").mkdir(parents=True)
+    (chg905 / "docs" / "spec" / "core.md").write_text("# Core\n", encoding="utf-8")
+
+    inp = tmp_path / "input.json"
+    inp.write_text(
+        json.dumps({
+            "identity": "TASK-001",
+            "semantic_payload": {
+                "title": "Task 1",
+                "kind": "feature",
+                "slice": "SLICE-01",
+                "depends_on": [],
+                "requirement_delta": "none",
+                "spec_refs": ["docs/spec/core.md"],
+                "allowed_paths": ["src/app.py"],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 5},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    ret1 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    assert ret1 == 3
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 2. Unknown/invented lifecycle stage: status: invented-stage
+    (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: invented-stage\n", encoding="utf-8")
+    ret2 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    assert ret2 == 3
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 3. Deleted change.yaml
+    (chg905 / "change.yaml").unlink()
+    ret3 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    assert ret3 == 3
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 4. AW37-F1/F2: Status-only change.yaml (missing ID), null ID, empty ID, wrong type, alternate field
+    for invalid_yaml in [
+        "status: normalized\n",
+        "id: null\nstatus: normalized\n",
+        "id: ''\nstatus: normalized\n",
+        "id: 123\nstatus: normalized\n",
+        "change: CHG-905\nstatus: normalized\n",
+    ]:
+        (chg905 / "change.yaml").write_text(invalid_yaml, encoding="utf-8")
+        ret_f2 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+        assert ret_f2 == 3, f"Expected exit 3 for change.yaml:\n{invalid_yaml}"
+        assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 5. Service-level mutation denial when change.yaml corrupted before commit
+    (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: implementing\n", encoding="utf-8")
+    auth = create_authorization_context(actor="worker", work_item="CLI", product_root=repo, change_id="CHG-905")
+    service = ArtifactService(product_root=repo, change_dir=chg905, auth_context=auth)
+    # Corrupt change.yaml before create commit
+    (chg905 / "change.yaml").write_text("{corrupt yaml: [", encoding="utf-8")
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError)):
+        service.create(
+            kind="task",
+            identity="TASK-001",
+            semantic_payload={
+                "title": "Task 1",
+                "kind": "feature",
+                "slice": "SLICE-01",
+                "depends_on": [],
+                "requirement_delta": "none",
+                "spec_refs": ["docs/spec/core.md"],
+                "allowed_paths": ["src/app.py"],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 5},
+            },
+        )
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()
+
+    # 6. Service-level mutation denial when change.yaml loses ID before commit (status-only)
+    (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: implementing\n", encoding="utf-8")
+    auth2 = create_authorization_context(actor="worker", work_item="CLI", product_root=repo, change_id="CHG-905")
+    service2 = ArtifactService(product_root=repo, change_dir=chg905, auth_context=auth2)
+    (chg905 / "change.yaml").write_text("status: normalized\n", encoding="utf-8")
+    with pytest.raises((ArtifactPolicyError, ArtifactServiceError, ArtifactLockError)):
+        service2.create(
+            kind="task",
+            identity="TASK-001",
+            semantic_payload={
+                "title": "Task 1",
+                "kind": "feature",
+                "slice": "SLICE-01",
+                "depends_on": [],
+                "requirement_delta": "none",
+                "spec_refs": ["docs/spec/core.md"],
+                "allowed_paths": ["src/app.py"],
+                "forbidden_paths": [],
+                "context_budget": {"max_tokens": 1000, "max_files": 5},
+            },
+        )
+    assert not (chg905 / "tasks" / "TASK-001.md").exists()

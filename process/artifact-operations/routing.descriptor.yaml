@@ -1,0 +1,18 @@
+kind: routing
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/routing.schema.yaml
+allowed_operations:
+  - create
+  - update
+  - validate
+  - describe
+creatable_semantic_fields:
+  - route
+  - claims
+updatable_semantic_fields:
+  - /route
+  - /claims
+core_owned_fields:
+  - change
+initial_defaults: {}
+body_allowed: false

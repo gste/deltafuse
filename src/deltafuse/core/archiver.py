@@ -104,8 +104,9 @@ def archive_change(
         )
 
     # Update status to archived
-    change_data["status"] = "archived"
-    change_yaml_file.write_text(yaml.safe_dump(change_data, sort_keys=False), encoding="utf-8")
+    from deltafuse.core.transitions import _write_change_status
+
+    _write_change_status(cpath, change_data, "archived")  # atomic, like every status write
 
     # Move directory safely
     shutil.move(str(cpath), str(dest_dir))

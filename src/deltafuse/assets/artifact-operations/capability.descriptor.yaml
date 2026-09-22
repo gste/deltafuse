@@ -1,0 +1,14 @@
+kind: capability
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/capability.schema.yaml
+allowed_operations:
+  - validate
+  - describe
+creatable_semantic_fields: []
+updatable_semantic_fields: []
+core_owned_fields:
+  - schema_version
+  - domains
+  - policies
+initial_defaults: {}
+body_allowed: false

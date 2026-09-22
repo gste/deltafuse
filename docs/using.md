@@ -112,6 +112,8 @@ deltafuse decide <change-dir> --spec --status accepted
 
 `--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate.
 
+**Human Gate password (optional).** `deltafuse gate-password set` stores a salted PBKDF2 hash in `.deltafuse/gate-password.yaml` (Core-owned: the leash refuses it in a Worker diff). From then on `decide` asks for the password in the terminal before it writes anything, and refuses when stdin is not a terminal; there is no flag or environment variable for it. Each receipt records `human_check: password` or `none`. `gate-password clear` and a change need the current password; `gate-password status` shows whether it is on. The password guards the `decide` command, not the journal: against a model that forges files by hand, isolate the Worker on the host.
+
 Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 
 Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
@@ -144,6 +146,61 @@ deltafuse leash <product-root>
 deltafuse leash <product-root> --file src/foo.py
 ```
 
+## Artifact Writer
+
+Core provides a schema-driven serialization and validation service for Change package artifacts ([artifact-writer.md](./contracts/artifact-writer.md)).
+
+### The Worker's path: `artifact write`
+
+The Worker writes structure only through the Writer; it writes prose (the body) and
+names fields, and the Core writes `id`, `change`, `status`, a task's
+`context_budget`, the file and the `change.yaml` index (roadmap item 1):
+
+```text
+deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.json
+```
+
+`task.json` is `{"identity": "TASK-001", "fields": {...}, "body": "prose"}`. No file
+yet: it is created; a file: only the fields given change, and the Core reads the
+expected sha256 itself. `spec-delta` lists merge per slice and its prose is
+appended. A host with tool calling exposes the same input as a typed tool.
+Kinds: `task`, `slice`, `routing`, `spec-delta`, `change`. The leash refuses a
+`routing.yaml`, `spec-delta.md`, slice or task file whose bytes neither the Writer
+nor the Core (`deltafuse state`, `decide`) produced.
+
+### Practical Usage & Examples
+
+```text
+# Detect capabilities and schemas supported by the installed writer
+deltafuse artifact describe --kind task --operation create
+
+# Create a new Change artifact via JSON payload
+deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
+
+# Update an existing artifact atomically using JSON Pointer patch with target SHA assertion
+deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
+
+# Perform a read-only schema and reference validation pass without modifying files
+deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
+
+# Update parent Change child index after adding or updating a task/slice
+deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
+```
+
+### Capability Detection & Compatibility
+Clients detect Artifact Writer availability using `deltafuse artifact describe --kind <kind> --operation <op>`.
+
+### Legacy Artifacts
+Existing artifacts are never automatically rewritten or bulk-migrated; the Writer reads manually authored ones. New writes of `routing.yaml`, `spec-delta.md`, slices and tasks go through the Writer: the leash judges only what changed since its base, so artifacts already committed are not affected.
+
+### Canonicalization Opt-in
+To reformat or normalize metadata on existing noncanonical artifacts, an explicit `--canonicalize-metadata` opt-in is required alongside expected target hash verification. Noncanonical metadata will not be reformatted without explicit consent.
+
+### Transaction Recovery Procedure
+In the event of process interruption during creation or update operations, the Core checks `.deltafuse/journal/` under `ProductMutationLock`. Pending transactions marked `prepared` are restored to their previous target state, while transactions marked `published` complete receipt finalization and output publication cleanly.
+
+
+
 ## External boards
 
 A read-only UI (fuse-map) must consume the [board snapshot contract](./contracts/board-snapshot.md) for both cards and board layout (columns + steps). It must not parse `docs/changes/**` or hardcode the lifecycle. The installer does not copy `docs/contracts/**` into the product. Fuse-map pins `schema_version` in its own repository. This framework does not ship a board UI.
@@ -163,4 +220,4 @@ Stdout is one JSON object. No product files are written. Missing `.deltafuse/loc
 - Artifacts from unsupported schema versions stop with a `schema_version` diagnostic and are left untouched; migrate them manually to v3.
 - Artifact versioning (V3-FIX-013): `change`, `evidence`, and the capability catalog carry an explicit `schema_version: 3`. Change-nested artifacts (`tasks/**`, `slices/**`, `decisions/**`, `spec-delta` frontmatter, `routing.yaml`, `coverage.yaml`) inherit the schema version of their parent Change artifact — they carry no version of their own and are validated fail-closed through the Change contract.
 - Verify the whole product contract any time with `deltafuse validate-config .`.
-- Human Gate clicks live in `.deltafuse/gate-journal.jsonl` (Core-owned): rebuilds are detected; in `broker-signed` profile only broker-signed receipts validate.
+- Human Gate clicks live in `.deltafuse/gate-journal.jsonl` (Core-owned): rebuilds are detected. The `broker-signed` profile was removed (its key lived in the repository); use the Human Gate password.

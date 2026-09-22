@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 import re
 import yaml
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
 from deltafuse.core.context import (
     validate_context_budget,
     validate_task_context_budget,
@@ -32,7 +32,7 @@ from deltafuse.core.integrity import (
     validate_catalog_capability_specs,
     scan_changed_paths_for_private_test_access,
 )
-from deltafuse.core.gate_journal import TERMINAL_STATUSES, has_click
+from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 
 VALID_CHANGE_STATUSES = {
@@ -60,7 +60,12 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     "normalized": {"analyzing", "rejected", "duplicate"},
     "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
     "blocked-on-decision": {"analyzing"},
-    "analyzed": {"specification-proposed", "specified", "declaring"},  # declaring for bugfix
+    # decomposed: the bugfix path with the spec unchanged - the queue sends a
+    # bugfix from analyzed to decompose, GATE_ALLOWED_FROM and the receipt
+    # chain already allowed it, and the specified gate needs a spec-delta a
+    # bugfix does not write. Without it every bugfix Change stopped at
+    # `advance --gate decomposed` (found 2026-09-22 by a Core-only walk).
+    "analyzed": {"specification-proposed", "specified", "declaring", "decomposed"},
     "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
     "decomposed": {"declaring"},
@@ -89,6 +94,9 @@ def find_repo_root(start_path: Path) -> Path:
     if cur.is_file():
         cur = cur.parent
     while cur != cur.parent:
+        if (cur / "change.yaml").is_file():
+            cur = cur.parent
+            continue
         if (cur / ".deltafuse").is_dir() or ((cur / "docs").is_dir() and cur.name != "docs"):
             return cur
         cur = cur.parent
@@ -223,7 +231,7 @@ def validate_change_package(
                         "Status mismatch: change.yaml has status 'decomposed' but no task files exist in tasks/"
                     )
         except Exception as ex:
-            errors.append(f"change.yaml parsing error: {ex}")
+            errors.append(f"change.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
     route, route_errs = load_change_route(change_path)
     errors.extend(route_errs)
@@ -240,8 +248,13 @@ def validate_change_package(
             routing_data = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
             errs = registry.validate("routing", routing_data)
             errors.extend(f"routing.yaml: {e}" for e in errs)
+            if any("claims" in e for e in errs):
+                errors.append(
+                    "routing.yaml: "
+                    + registry.shape_hint("routing", ("claims", "*"), noun="keys for each claim")
+                )
         except Exception as ex:
-            errors.append(f"routing.yaml parsing error: {ex}")
+            errors.append(f"routing.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
     # 3. Validate coverage.yaml if present
     coverage_file = change_path / "coverage.yaml"
@@ -257,7 +270,7 @@ def validate_change_package(
                 cov_errs = validate_coverage_completeness(req_claims, cov_data)
                 errors.extend(f"coverage.yaml: {e}" for e in cov_errs)
         except Exception as ex:
-            errors.append(f"coverage.yaml error: {ex}")
+            errors.append(f"coverage.yaml error: {ex}{yaml_error_hint(ex)}")
 
     # 4. Validate slices/
     slices_dir = change_path / "slices"
@@ -267,6 +280,8 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
                 errs = registry.validate("slice", meta)
                 errors.extend(f"{slice_file.name}: {e}" for e in errs)
+                if errs:
+                    errors.append(f"{slice_file.name}: {registry.shape_hint('slice')}")
 
                 # Check spec_refs anchors and context budget (N10, P7.6)
                 if isinstance(meta, dict):
@@ -303,6 +318,8 @@ def validate_change_package(
                 meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
                 errs = registry.validate("task", meta)
                 errors.extend(f"{task_file.name}: {e}" for e in errs)
+                if errs:
+                    errors.append(f"{task_file.name}: {registry.shape_hint('task')}")
                 if isinstance(meta, dict):
                     task_id = meta.get("id")
                     if task_id:
@@ -353,6 +370,21 @@ def validate_change_package(
                             errors.append(
                                 f"{task_file.name}: allowed_paths '{apath}' is also in forbidden_paths"
                             )
+                    # On a code route a task proves itself through tests: declare
+                    # writes the Red test under tests/**. Forbidding it made declare
+                    # impossible, and it surfaced only at the declaring gate, where
+                    # the task file is outside the envelope and the Worker cannot
+                    # fix it (q0 run 20260921T081038Z). Refuse it here, where
+                    # decompose still can.
+                    if route not in {"docs", "ops"}:
+                        for probe in ("tests/test_probe.py", "tests/unit/test_probe.py"):
+                            if path_is_listed(probe, [p for p in forbidden if isinstance(p, str)]):
+                                errors.append(
+                                    f"{task_file.name}: forbidden_paths covers tests/**, which "
+                                    "declare must write for the Red test; remove it from "
+                                    "forbidden_paths"
+                                )
+                                break
 
                     context_budget = meta.get("context_budget")
                     if not context_budget or not isinstance(context_budget, dict):
@@ -384,6 +416,8 @@ def validate_change_package(
             meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
             errs = registry.validate("spec-delta", meta)
             errors.extend(f"spec-delta.md: {e}" for e in errs)
+            if errs:
+                errors.append(f"spec-delta.md: {registry.shape_hint('spec-delta')}")
             if isinstance(meta, dict):
                 added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
@@ -404,6 +438,10 @@ def validate_change_package(
                                 errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
+            errors.append(
+                "spec-delta.md: the file starts with a '---' line, then the frontmatter, "
+                f"then '---'; {registry.shape_hint('spec-delta')}"
+            )
 
     # 7. Validate evidence/ (Semantic Validation - P0 / T1, T2, T4)
     evidence_dir = change_path / "evidence"
@@ -515,9 +553,15 @@ def validate_change_package(
                             "must stamp the docs/spec/** and src/** content hash"
                         )
                     elif recorded != current:
+                        rerun = (
+                            f"deltafuse evidence <change> --phase {phase} --task {ev_file.stem}"
+                            if phase != "verification"
+                            else "deltafuse evidence <change> --phase verification"
+                        )
                         errors.append(
                             f"{rel_ev}: stale evidence: base_revision '{recorded}' does not "
-                            f"match current docs/spec/** and src/** tree '{current}'"
+                            f"match current docs/spec/** and src/** tree '{current}'; a later "
+                            f"change moved the tree - re-run it on the current tree: {rerun}"
                         )
             except Exception as ex:
                 errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
@@ -635,6 +679,39 @@ def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
         if isinstance(meta, dict) and isinstance(meta.get("id"), str):
             tasks[meta["id"]] = meta
     return tasks
+
+
+_TASKS_CLOSED = frozenset({"cancelled", "superseded"})
+
+
+def _tasks_behind_gate(
+    change_path: Path, gate: str, reached: set[str], phases: tuple[str, ...]
+) -> list[str]:
+    """Every live task must have reached `reached` with its own evidence.
+
+    The declaring and implemented gates asked for any evidence file at all. In
+    q0 run 20260921T130115Z the declaring gate closed with one task of three
+    declared - the other two could no longer be declared - and
+    `check-gate implemented` read "passed" with two tasks still pending.
+    """
+    command = {"declaring": "declared", "implemented": "implemented"}[gate]
+    errors: list[str] = []
+    for task_id, meta in sorted(_task_frontmatter_by_id(change_path).items()):
+        status = meta.get("status")
+        if status in _TASKS_CLOSED:
+            continue
+        if status not in reached:
+            errors.append(
+                f"Gate {gate}: task {task_id} is '{status}'; every task must be "
+                f"{command} first (deltafuse state <change> --task {task_id} --status {command})"
+            )
+        for phase in phases:
+            if not (change_path / "evidence" / phase / f"{task_id}.yaml").is_file():
+                errors.append(
+                    f"Gate {gate}: task {task_id} has no {phase} evidence "
+                    f"(evidence/{phase}/{task_id}.yaml)"
+                )
+    return errors
 
 
 def _validate_evidence_changed_paths_contract(
@@ -789,9 +866,10 @@ def _human_gate_errors(
     change_status: str | None,
     repo_root: Path,
     spec_delta_file: Path,
+    require_spec_acceptance: bool = False,
 ) -> list[str]:
     errors: list[str] = []
-    from deltafuse.core.receipts import journal_errors as receipt_journal_errors
+    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
 
     errors.extend(receipt_journal_errors(repo_root))
     unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
@@ -807,7 +885,7 @@ def _human_gate_errors(
     spec_status = _spec_delta_status(spec_delta_file)
     if spec_status in TERMINAL_STATUSES:
         rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
-        from deltafuse.core.receipts import has_valid_receipt
+        from deltafuse.core.gate_receipts import has_valid_receipt
 
         if not has_valid_receipt(
             repo_root,
@@ -825,14 +903,47 @@ def _human_gate_errors(
             "Gate specified: specified requires spec-delta.md accepted via "
             f"deltafuse decide (got {spec_status!r})"
         )
+    # The proposed path to 'specified' is the Human Gate itself: leaving
+    # specification-proposed needs the human's accepted verdict. Without this a
+    # spec delta still 'proposed' passed the gate, and the Worker could run
+    # `deltafuse advance --gate specified` past the human (q0, campaign
+    # 20260921T072327Z). The terminal-status check above then proves the
+    # verdict came through decide.
+    if (
+        require_spec_acceptance
+        and change_status == "specification-proposed"
+        and spec_status != "accepted"
+    ):
+        errors.append(
+            "Gate specified: leaving specification-proposed needs spec-delta.md "
+            f"accepted via deltafuse decide (Human Gate); got {spec_status!r}"
+        )
     return errors
+
+
+def _derived_coverage(change_path: Path) -> dict[str, Any] | None:
+    """coverage.yaml as the Core would write it now, or None when it cannot."""
+    from deltafuse.core.analyze import CoverageError, build_coverage_document
+
+    try:
+        return build_coverage_document(change_path)
+    except (CoverageError, OSError):
+        return None
 
 
 def check_gate(
     change_dir: Path | str,
     gate: str,
     registry: SchemaRegistry | None = None,
+    *,
+    assume_status: str | None = None,
+    human: bool = True,
 ) -> list[str]:
+    """Gate errors for a Change. ``assume_status`` evaluates the gate as if
+    change.yaml held that status, without writing it: the Core asks "would
+    this pass once moved?" before it moves anything. ``human=False`` leaves out
+    the human verdict a Human Gate waits for - only for checking whether a spec
+    delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
 
@@ -859,6 +970,8 @@ def check_gate(
                 change_status = cdata.get("status")
         except Exception:
             pass
+    if assume_status is not None:
+        change_status = assume_status
 
     gate_lower = gate.lower()
 
@@ -874,7 +987,9 @@ def check_gate(
                 errors.append("Gate analyzed: routing.yaml is missing")
             elif artifact == "slices/":
                 errors.append("Gate analyzed: at least one slice file in slices/ is required")
-            elif artifact == "coverage.yaml":
+            elif artifact == "coverage.yaml" and _derived_coverage(change_path) is None:
+                # The Core derives coverage and `advance` writes it; the gate
+                # asks only whether it can be derived (roadmap item 4, box A).
                 errors.append("Gate analyzed: coverage.yaml is missing")
         for cap in uncovered_primary_capabilities(change_path):
             errors.append(
@@ -901,6 +1016,7 @@ def check_gate(
                 change_status=change_status,
                 repo_root=repo_root,
                 spec_delta_file=spec_delta_file,
+                require_spec_acceptance=human,
             )
         )
         errors.extend(
@@ -930,6 +1046,14 @@ def check_gate(
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(
+            _tasks_behind_gate(
+                change_path,
+                "declaring",
+                {"declared", "implementing", "implemented", "verified"},
+                ("red",),
+            )
+        )
+        errors.extend(
             _validate_evidence_changed_paths_contract(
                 change_path, "red", "declare", gate="declaring", route=route
             )
@@ -945,6 +1069,21 @@ def check_gate(
         if route == "code":
             if not reg_dir.is_dir() or not list(reg_dir.glob("*.yaml")):
                 errors.append("Gate implemented: Regression evidence in evidence/regression/ is required")
+        behind = _tasks_behind_gate(
+            change_path,
+            "implemented",
+            {"implemented", "verified"},
+            ("green", "regression") if route == "code" else ("green",),
+        )
+        if any("every task must be implemented first" in e for e in behind):
+            # Tasks still to implement come first, and an earlier task's stale
+            # evidence is left out: the next task moves src again, and the queue
+            # routes the re-run once every task is implemented. In q0 run
+            # 20260921T181306Z the Worker re-ran TASK-001's evidence on the
+            # first error instead of implementing TASK-002.
+            errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
+        else:
+            errors.extend(behind)
         errors.extend(
             _validate_evidence_changed_paths_contract(
                 change_path, "green", "implement", gate="implemented", route=route
@@ -996,9 +1135,10 @@ def check_gate(
         cov_file = change_path / "coverage.yaml"
         route, route_errs = load_change_route(change_path)
         errors.extend(route_errs)
-        if cov_file.is_file():
+        derived = _derived_coverage(change_path)
+        if derived is not None or cov_file.is_file():
             try:
-                cov_data = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+                cov_data = derived if derived is not None else yaml.safe_load(cov_file.read_text(encoding="utf-8"))
                 claims_map = cov_data.get("claims", {})
                 for c_id, c_val in claims_map.items():
                     if isinstance(c_val, dict):

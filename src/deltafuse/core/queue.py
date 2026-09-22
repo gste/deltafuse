@@ -12,9 +12,10 @@ from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.transitions import receipt_mismatch
-from deltafuse.core.context import PHASE_CONTRACTS
+from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
 TERMINAL_CHANGE = {
@@ -28,6 +29,12 @@ TERMINAL_CHANGE = {
 TASK_DECLARE = {"pending", "declaring"}
 TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
+# Change statuses that own the declare / implement phase of their tasks.
+DECLARE_PHASE = frozenset({"decomposed", "declaring"})
+IMPLEMENT_PHASE = frozenset({"declared", "implementing"})
+# Change statuses before the decomposed gate: task files may already be on
+# disk, but they are Decompose's output and do not pick the step yet.
+BEFORE_DECOMPOSED = frozenset({"normalized", "analyzing", "analyzed", "specified"})
 
 
 class QueueError(Exception):
@@ -185,14 +192,45 @@ def changes_dir(product_root: Path) -> Path:
     return product_root / rel
 
 
+def _consumed_intake_refs(product_root: Path) -> set[str]:
+    """Intake sources some Change - active or archived - already took in."""
+    roots = [changes_dir(product_root), product_root / "docs" / "archive" / "changes"]
+    consumed: set[str] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for change_file in root.glob("*/change.yaml"):
+            try:
+                data = yaml.safe_load(change_file.read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            refs = source.get("intake_refs") if isinstance(source, dict) else None
+            for ref in refs or []:
+                if isinstance(ref, str):
+                    consumed.add(posix_relpath(ref))
+    return consumed
+
+
 def intake_sources_pending(product_root: Path) -> bool:
-    """True when docs/intake has a source other than README / .gitkeep."""
+    """True when docs/intake has a source no Change has taken in yet.
+
+    README / .gitkeep never count, and neither does a source named in some
+    Change's `source.intake_refs`, archived ones included. q0 run M03
+    20260921T215701Z: after CHG-001 converged and was archived, its intake
+    note still counted as pending, and the Worker opened CHG-002 from the same
+    request - a loop only the budget would have stopped.
+    """
     intake = product_root / "docs" / "intake"
     if not intake.is_dir():
         return False
     skip = {"readme.md", ".gitkeep"}
+    consumed = _consumed_intake_refs(product_root)
     for path in intake.iterdir():
         if path.name.lower() in skip:
+            continue
+        rel = path.relative_to(product_root).as_posix()
+        if rel in consumed or any(ref.startswith(rel + "/") for ref in consumed):
             continue
         if path.is_file() or path.is_dir():
             return True
@@ -228,6 +266,30 @@ def _load_tasks(change_path: Path) -> list[tuple[str, str, Path]]:
             found.append((tid, status, task_file))
     found.sort(key=lambda row: _task_sort_key(row[0]))
     return found
+
+
+def _stale_task_evidence(
+    product_root: Path, change_path: Path, task_ids: list[str]
+) -> list[tuple[str, list[str]]]:
+    """Tasks whose green/regression evidence was stamped on an older tree."""
+    current = compute_product_baseline_revision(product_root)
+    out: list[tuple[str, list[str]]] = []
+    for tid in task_ids:
+        phases: list[str] = []
+        for phase in ("green", "regression"):
+            ev = change_path / "evidence" / phase / f"{tid}.yaml"
+            if not ev.is_file():
+                continue
+            try:
+                data = yaml.safe_load(ev.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError:
+                continue
+            recorded = data.get("base_revision") if isinstance(data, dict) else None
+            if recorded and recorded != current:
+                phases.append(phase)
+        if phases:
+            out.append((tid, phases))
+    return out
 
 
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
@@ -296,8 +358,13 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     from deltafuse.core.leash import task_envelope_errors
 
     envelope_faults = task_envelope_errors(change_path)
+    # Tasks pick the step only once the decomposed gate has passed. q0 run
+    # 20260921T121031Z: task files that failed that gate (missing `change`,
+    # `slice`, a bad `kind`) sent the Worker to declare, where it could not
+    # fix them, and the run looped for twenty minutes.
+    phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
 
-    for tid, tstatus, tfile in tasks:
+    for tid, tstatus, tfile in phase_tasks:
         if tstatus == "blocked":
             return [], [
                 WorkItem(
@@ -340,7 +407,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     reason=f"Task {tid} status '{tstatus}'",
                 )
             ], []
-        if tstatus in TASK_IMPLEMENT:
+        if tstatus in TASK_IMPLEMENT and status not in DECLARE_PHASE:
             return [
                 _item_for_step(
                     "implement",
@@ -352,7 +419,86 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
 
-    if tasks and all(tstatus in TASK_DONE for _, tstatus, _ in tasks):
+    # The phase of the Change, not only the statuses of its tasks, picks the
+    # step. Reading task statuses alone sent the Worker to implement while the
+    # declaring gate was still closed, and to verify with the Change at
+    # 'decomposed' (q0 run 20260921T081038Z).
+    if tasks and status in DECLARE_PHASE:
+        ahead = [(tid, s) for tid, s, _ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
+        if ahead:
+            tid, tstatus = ahead[0]
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=None,
+                    reason=(
+                        f"Task {tid} is '{tstatus}' while the Change is '{status}': "
+                        "the task ran ahead of the declaring gate"
+                    ),
+                    halt_kind="blocked",
+                )
+            ]
+        declared = [(tid, tfile) for tid, s, tfile in tasks if s in TASK_IMPLEMENT]
+        if declared:
+            tid, tfile = declared[-1]
+            return [
+                _item_for_step(
+                    "declare",
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="Every task is declared; close the declaring gate "
+                    "(check-gate, then advance --gate declaring)",
+                )
+            ], []
+    if tasks and status in IMPLEMENT_PHASE:
+        implemented = [(tid, tfile) for tid, s, tfile in tasks if s == "implemented"]
+        if implemented and all(s in TASK_DONE for _, s, _ in tasks):
+            stale = _stale_task_evidence(product_root, change_path, [tid for tid, _ in implemented])
+            if stale:
+                # Green and regression are stamped with the spec/src tree. A
+                # later task moves it, so an earlier task's evidence no longer
+                # proves its oracle on the code the gate closes over.
+                tid, phases = stale[0]
+                tfile = dict(implemented)[tid]
+                return [
+                    _item_for_step(
+                        "implement",
+                        change_id=change_id,
+                        path=rel,
+                        task=tid,
+                        task_path=_rel(product_root, tfile),
+                        reason=(
+                            f"{' and '.join(phases)} evidence of {tid} predates later changes "
+                            f"to docs/spec/** or src/**; re-run it on the current tree "
+                            f"(deltafuse evidence --phase {phases[0]} --task {tid}), then "
+                            "close the implemented gate"
+                        ),
+                    )
+                ], []
+            tid, tfile = implemented[-1]
+            return [
+                _item_for_step(
+                    "implement",
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason="Every task is implemented; close the implemented gate "
+                    "(check-gate, then advance --gate implemented)",
+                )
+            ], []
+
+    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
+        DECLARE_PHASE | IMPLEMENT_PHASE
+    ):
         return [
             _item_for_step(
                 "verify",
@@ -397,7 +543,12 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 "decompose",
                 change_id=change_id,
                 path=rel,
-                reason="Change is specified; next is Decompose",
+                reason=(
+                    "Task files are on disk but the decomposed gate has not passed; fix what "
+                    "check-gate decomposed reports, then advance --gate decomposed"
+                    if tasks
+                    else "Change is specified; next is Decompose"
+                ),
             )
         ], []
 

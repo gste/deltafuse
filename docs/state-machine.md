@@ -20,7 +20,7 @@ stateDiagram-v2
     
     analyzed --> specification_proposed: specify
     specification_proposed --> specified: human gate passed
-    analyzed --> specified: implementation bug (spec unchanged)
+    analyzed --> decomposed: implementation bug (spec unchanged)
     
     specified --> decomposed: decompose
     decomposed --> declaring: declare
@@ -58,8 +58,8 @@ stateDiagram-v2
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
 | `analyzing` | Routing and slice analysis in progress. `deltafuse next` names one Analyze pass at a time; `analyzed` still needs routing+slices covering every routing primary capability+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
-| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. | `specification-proposed`, `specified` (bug: spec unchanged) | Zero unaccepted blocking decisions. |
-| `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. | `specified` | Human approval of specification delta. |
+| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. A bugfix goes to Decompose instead. | `specification-proposed`, `decomposed` (bugfix: spec unchanged; the `decomposed` gate proves the exact `spec_refs`) | Zero unaccepted blocking decisions. |
+| `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. Entered only when every machine check of the `specified` gate passes except the human receipt; otherwise `deltafuse state` refuses and returns the errors to the Worker. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` added/modified files must stay in slice `spec_refs`. `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `declaring` | All tasks validated against `task.schema.yaml`. |
 | `declaring` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `declared`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. Private `_` access is rejected on `route: code`. |
@@ -73,6 +73,10 @@ stateDiagram-v2
 | `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
 | `not-reproduced` | Defect not reproduced during analysis, declaring, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
 | `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
+
+No command writes `declaring`, `implementing` or `verifying` to a Change: the Worker's work in those phases is recorded on its tasks. `deltafuse advance` closes the next gate from the resting status and steps over the in-flight one — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged` — and the receipt records that step. A Change may still hold an in-flight status one legal step past its last receipt.
+
+The `declaring` and `implemented` gates check every task that is not `cancelled` or `superseded`: each must be at the gate's status with its own evidence. Green and regression evidence are stamped with the `docs/spec/**` and `src/**` tree; a later task that changes it makes an earlier task's evidence stale, and `deltafuse next` sends the Worker to re-run that task's evidence on the current tree before the gate can close.
 
 ---
 

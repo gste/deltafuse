@@ -1,24 +1,23 @@
-"""Human Gate receipts and integrity profiles (DF3-007 / DR-3.0-3).
+"""Human Gate receipt chain: the single writer and reader of `.deltafuse/gate-journal.jsonl`.
 
-Two profiles:
+Not to be confused with `artifact_transactions.py`, which owns receipts for artifact
+writes (idempotency, crash recovery). This module owns receipts for human gate
+verdicts (decision / spec accept-reject), hash-chained.
 
-- ``local``: hash-chained receipts — tamper-evident against accidental
-  corruption, and honest about not protecting against a forged journal.
-- ``broker-signed``: every receipt is HMAC-signed by the host broker with a
-  key that never lives in the Worker surface (env ``DELTAFUSE_BROKER_KEY``);
-  Core verifies against public trust roots in ``.deltafuse/trusted-keys.yaml``.
+The broker-signed profile was removed on 2026-09-22: it signed with HMAC and
+kept the secret in `.deltafuse/trusted-keys.yaml`, in the repository the Worker
+reads, so it protected nothing. Who may answer a Human Gate is guarded by the
+optional password (`gate_password`), recorded per receipt as `human_check`.
 
-The journal is append-only and chained; a head digest in
-``.deltafuse/journal-head`` makes truncation and replacement detectable.
-Editing or rebuilding the journal never produces a valid Human Gate.
+Absorbed the legacy `gate_journal.py` (DF3-007 supersedes it): that module declared
+the same JOURNAL_REL and journal_path, duplicated the reader verbatim, and its
+writer `append_click` was dead code.
 """
 
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
-import os
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,12 +28,19 @@ import yaml
 RECEIPT_VERSION = 2
 JOURNAL_REL = ".deltafuse/gate-journal.jsonl"
 HEAD_REL = ".deltafuse/journal-head"
-TRUST_ROOTS_REL = ".deltafuse/trusted-keys.yaml"
-PROFILES = ("local", "broker-signed")
-BROKER_KEY_ENV = "DELTAFUSE_BROKER_KEY"
+PROFILES = ("local",)
+REMOVED_PROFILES = {
+    "broker-signed": (
+        "integrity_profile 'broker-signed' was removed: its HMAC secret lived in "
+        "the repository, so it protected nothing; guard the Human Gate with "
+        "`deltafuse gate-password set` instead"
+    ),
+}
+TERMINAL_STATUSES = frozenset({"accepted", "rejected"})
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "
-    "protect against a forged journal (use broker-signed for that)"
+    "protect against a forged journal (the Human Gate password guards the "
+    "decide command, not the journal)"
 )
 
 
@@ -56,6 +62,8 @@ def load_profile(product_root: Path) -> str:
         workflow = data.get("workflow") if isinstance(data, dict) else None
         raw = workflow.get("integrity_profile") if isinstance(workflow, dict) else None
         if raw is not None:
+            if raw in REMOVED_PROFILES:
+                raise ReceiptError(REMOVED_PROFILES[raw])
             if raw not in PROFILES:
                 raise ReceiptError(
                     f"unknown integrity_profile {raw!r}; expected one of {list(PROFILES)}"
@@ -66,39 +74,6 @@ def load_profile(product_root: Path) -> str:
 
 def journal_path(product_root: Path) -> Path:
     return Path(product_root) / JOURNAL_REL
-
-
-def trust_roots_path(product_root: Path) -> Path:
-    return Path(product_root) / TRUST_ROOTS_REL
-
-
-def _load_trust_roots(product_root: Path) -> dict[str, str]:
-    path = trust_roots_path(product_root)
-    if not path.is_file():
-        return {}
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return {str(k): str(v) for k, v in data.get("keys", {}).items()}
-
-
-def install_trust_root(product_root: Path, *, key_id: str, secret: str) -> None:
-    """Register one broker verification key (public trust root)."""
-    path = trust_roots_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data: dict[str, Any] = {"keys": {}}
-    if path.is_file():
-        try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            if isinstance(loaded, dict):
-                data = loaded
-        except Exception:
-            pass
-    data.setdefault("keys", {})[key_id] = secret
-    path.write_text(yaml.safe_dump(data, sort_keys=True), encoding="utf-8")
 
 
 def _chain_hash(entry: dict[str, Any]) -> str:
@@ -139,8 +114,13 @@ def record_receipt(
     artifact_id: str,
     change: str | None,
     artifact: Path,
+    human_check: str = "none",
 ) -> dict[str, Any]:
-    """Append one versioned Human Gate receipt (Core only; never git push)."""
+    """Append one versioned Human Gate receipt (Core only; never git push).
+
+    `human_check` records how the Core knew a human answered: "password" when
+    the Human Gate password was verified, "none" when the product has none.
+    """
     if kind not in {"decision", "spec"}:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
     if status not in {"accepted", "rejected"}:
@@ -163,31 +143,13 @@ def record_receipt(
         "change": change,
         "artifact_sha256": _digest(artifact_file.read_bytes()),
         "actor": "human-via-core",
+        "human_check": human_check,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nonce": secrets.token_hex(8),
         "prev_hash": prev_hash,
     }
-    if profile == "broker-signed":
-        secret = os.environ.get(BROKER_KEY_ENV)
-        if not secret:
-            raise ReceiptError(
-                f"broker-signed profile requires the host broker key in {BROKER_KEY_ENV}"
-            )
-        key_id = _digest(secret.encode("utf-8"))[:12]
-        trust = _load_trust_roots(root)
-        if key_id not in trust:
-            raise ReceiptError(
-                "broker key is not registered in the trust roots "
-                f"({TRUST_ROOTS_REL}); register it with install_trust_root"
-            )
-        entry["key_id"] = key_id
-        entry["chain_hash"] = _chain_hash(entry)
-        entry["signature"] = hmac.new(
-            secret.encode("utf-8"), entry["chain_hash"].encode("utf-8"), hashlib.sha256
-        ).hexdigest()
-    else:
-        entry["chain_hash"] = _chain_hash(entry)
-        entry["guarantee"] = LOCAL_GUARANTEE
+    entry["chain_hash"] = _chain_hash(entry)
+    entry["guarantee"] = LOCAL_GUARANTEE
 
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True)
     path = journal_path(root)
@@ -207,10 +169,19 @@ def _head_digest(product_root: Path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
 
 
-def _write_head(product_root: Path, digest: str) -> None:
-    path = _head_path(product_root)
+def _atomic_write(path: Path, content: bytes) -> None:
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(digest + "\n", encoding="utf-8")
+    if path.is_file():
+        atomic_replace(path, content)
+    else:
+        atomic_create(path, content)
+
+
+def _write_head(product_root: Path, digest: str) -> None:
+    # Atomic: a torn head read as "journal truncated or replaced".
+    _atomic_write(_head_path(product_root), (digest + "\n").encode("utf-8"))
 
 
 def journal_errors(product_root: Path) -> list[str]:
@@ -233,7 +204,6 @@ def journal_errors(product_root: Path) -> list[str]:
             )
 
     seen_nonces: set[str] = set()
-    trust = _load_trust_roots(root)
     for index, entry in enumerate(receipts):
         version = entry.get("receipt_version")
         if version is None:
@@ -251,20 +221,6 @@ def journal_errors(product_root: Path) -> list[str]:
             seen_nonces.add(nonce)
         if version != RECEIPT_VERSION:
             errors.append(f"{label}: unsupported receipt_version {version!r}")
-            continue
-        if entry.get("profile") == "broker-signed":
-            key_id = entry.get("key_id")
-            secret = trust.get(str(key_id))
-            if secret is None:
-                errors.append(f"{label}: signed by unknown key_id {key_id!r}")
-                continue
-            expected = hmac.new(
-                secret.encode("utf-8"),
-                str(chain).encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
-            if not hmac.compare_digest(expected, str(entry.get("signature"))):
-                errors.append(f"{label}: broker signature does not verify")
     return errors
 
 
@@ -280,7 +236,7 @@ def has_valid_receipt(
     """True when a receipt for this click still matches the artifact bytes.
 
     A receipt whose artifact changed after the click is stale and no longer
-    counts (DF3-007 item 5). Signature/chain integrity is verified per entry.
+    counts (DF3-007 item 5). Chain integrity is verified per entry.
     """
     root = Path(product_root)
     want_rel = rel_path.replace("\\", "/") if rel_path else None
@@ -302,17 +258,6 @@ def has_valid_receipt(
                 continue
             if not entry.get("chain_hash") or _chain_hash(entry) != entry["chain_hash"]:
                 continue
-            if entry.get("profile") == "broker-signed":
-                secret = _load_trust_roots(root).get(str(entry.get("key_id")))
-                if secret is None:
-                    continue
-                expected = hmac.new(
-                    secret.encode("utf-8"),
-                    str(entry["chain_hash"]).encode("utf-8"),
-                    hashlib.sha256,
-                ).hexdigest()
-                if not hmac.compare_digest(expected, str(entry.get("signature"))):
-                    continue
         if (
             current_digest is not None
             and version is not None
@@ -320,4 +265,29 @@ def has_valid_receipt(
         ):
             continue  # stale: artifact changed after the click
         return True
+    return False
+
+
+def has_click(
+    product_root: Path,
+    *,
+    kind: str,
+    status: str,
+    artifact_id: str | None = None,
+    rel_path: str | None = None,
+) -> bool:
+    """True when the journal records this terminal status for the artifact.
+
+    Weaker than `has_valid_receipt`: it does not re-check the artifact bytes or
+    the chain, so a stale click still counts. Kept as its own predicate because
+    `fsm.py` deliberately uses both.
+    """
+    want_path = rel_path.replace("\\", "/") if rel_path else None
+    for event in reversed(load_receipts(product_root)):
+        if event.get("kind") != kind or event.get("status") != status:
+            continue
+        if artifact_id and event.get("id") == artifact_id:
+            return True
+        if want_path and event.get("path") == want_path:
+            return True
     return False

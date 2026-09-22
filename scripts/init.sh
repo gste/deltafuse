@@ -277,7 +277,7 @@ if [ -f "$GITIGNORE" ]; then
     done
 fi
 
-Locker_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
+LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 
 if [ -f "$LOCK_PATH" ] && [ "$FORCE" -ne 1 ] && ! grep -Fq "content_hash: sha256:$FRAMEWORK_HASH" "$LOCK_PATH"; then
   printf 'A different DeltaFuse lock already exists. Rerun with --force for an explicit upgrade.\n' >&2

@@ -1,0 +1,182 @@
+schema_version: 1
+generated: '2026-09-21T10:22:49+00:00'
+heuristic_measured: a03-01
+corpus:
+  files: 281
+  words: 178756
+  sources:
+  - deltafuse
+  - deltafuse-bench
+  - runs
+default:
+  factors:
+    en: 1.75
+    cyrillic: 2.27
+    code: 2.86
+    yaml: 3.08
+    log: null
+  spread:
+    en:
+    - 1.72
+    - 1.88
+    cyrillic:
+    - 2.12
+    - 2.72
+    code:
+    - 2.81
+    - 3.46
+    yaml:
+    - 3.02
+    - 3.52
+    log: null
+families:
+  qwen3.8:
+    source: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    factors:
+      en: 1.8
+      cyrillic: 2.16
+      code: 3.04
+      yaml: 3.27
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  qwen3:
+    source: Qwen/Qwen3-32B
+    revision: 9216db5781bf21249d130ec9da846c4624c16137
+    factors:
+      en: 1.75
+      cyrillic: 2.39
+      code: 2.85
+      yaml: 3.08
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  llama3:
+    source: unsloth/Llama-3.1-8B-Instruct
+    revision: 4699cc75b550f9c6f3173fb80f4703b62d946aa5
+    factors:
+      en: 1.72
+      cyrillic: 2.27
+      code: 2.81
+      yaml: 3.02
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  mistral-tekken:
+    source: mistralai/Mistral-Nemo-Instruct-2407
+    revision: 04d8a90549d23fc6bd7f642064003592df51e9b3
+    factors:
+      en: 1.86
+      cyrillic: 2.28
+      code: 3.04
+      yaml: 3.26
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  deepseek-v3:
+    source: deepseek-ai/DeepSeek-V3
+    revision: e815299b0bcbac849fa540c768ef21845365c9eb
+    factors:
+      en: 1.8
+      cyrillic: 2.32
+      code: 3.06
+      yaml: 3.23
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  glm:
+    source: zai-org/GLM-4.5
+    revision: cbb2c7cfb52fa128a9660cb1a7a78e017899e115
+    factors:
+      en: 1.73
+      cyrillic: 2.13
+      code: 2.82
+      yaml: 3.02
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  gemma3:
+    source: unsloth/gemma-3-27b-it
+    revision: 7a5a3053dbd5d1d58e48159e87b9df2fc545a49a
+    factors:
+      en: 1.88
+      cyrillic: 2.2
+      code: 3.46
+      yaml: 3.52
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  openai-o200k:
+    source: tiktoken:o200k_base
+    revision: o200k_base-n_vocab-200019
+    factors:
+      en: 1.73
+      cyrillic: 2.12
+      code: 2.86
+      yaml: 3.07
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+  openai-cl100k:
+    source: tiktoken:cl100k_base
+    revision: cl100k_base-n_vocab-100277
+    factors:
+      en: 1.72
+      cyrillic: 2.72
+      code: 2.81
+      yaml: 3.02
+      log: null
+    n_files:
+      en: 69
+      cyrillic: 30
+      code: 129
+      yaml: 53
+      log: 0
+skipped:
+- family: claude
+  reason: not enabled
+models:
+  qwen/qwen3.8: qwen3.8
+  qwen/: qwen3
+  meta-llama/llama-3: llama3
+  mistralai/: mistral-tekken
+  deepseek/: deepseek-v3
+  z-ai/glm: glm
+  google/gemma-3: gemma3
+  openai/gpt-4o: openai-o200k
+  openai/gpt-5: openai-o200k
+  openai/gpt-4: openai-cl100k
+  anthropic/: claude

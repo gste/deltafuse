@@ -332,6 +332,43 @@ def _change_id(change_path: Path) -> str:
     return change_path.name
 
 
+def _slice_tasks(change_path: Path) -> dict[str, list[str]]:
+    """Task ids per slice, from task frontmatter, in id order."""
+    out: dict[str, list[str]] = {}
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return out
+    for task_file in sorted(tasks_dir.glob("*.md")):
+        try:
+            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict) and isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
+            out.setdefault(meta["slice"], []).append(meta["id"])
+    for ids in out.values():
+        ids.sort()
+    return out
+
+
+def _derived_evidence(change_path: Path, task_ids: list[str]) -> dict[str, str]:
+    """Evidence links for a claim: the first of its tasks with a file per phase.
+
+    The converged gate needs every claim mapped to green (and regression on the
+    code route). The Worker had to write that structure by hand at verify, and
+    no skill said so; the Core knows which files exist.
+    """
+    links: dict[str, str] = {}
+    for phase in ("red", "green", "regression"):
+        for task_id in task_ids:
+            rel = f"evidence/{phase}/{task_id}.yaml"
+            if (change_path / rel).is_file():
+                links[phase] = rel
+                break
+    if (change_path / "evidence" / "verification" / "run.yaml").is_file():
+        links["verification"] = "evidence/verification/run.yaml"
+    return links
+
+
 def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     """Derive coverage.yaml from request claims, routing, and slice frontmatter."""
     path = Path(change_path)
@@ -354,6 +391,7 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     existing = _load_yaml_mapping(path / "coverage.yaml") or {}
     existing_claims = existing.get("claims") if isinstance(existing.get("claims"), dict) else {}
     slice_ids = {row.slice_id for row in slices}
+    slice_tasks = _slice_tasks(path)
 
     claims_out: dict[str, Any] = {}
     unmapped: list[str] = []
@@ -375,6 +413,8 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             spec_refs = list(record.spec_refs)
         prev_tasks = prev.get("tasks") if isinstance(prev, dict) else None
         tasks = [item for item in prev_tasks if isinstance(item, str)] if isinstance(prev_tasks, list) else []
+        if not tasks:
+            tasks = list(slice_tasks.get(record.slice_id, []))
         prev_evidence = prev.get("evidence") if isinstance(prev, dict) else None
         evidence: dict[str, str] = {}
         if isinstance(prev_evidence, dict):
@@ -382,6 +422,8 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
                 value = prev_evidence.get(key)
                 if isinstance(value, str) and value:
                     evidence[key] = value
+        for key, value in _derived_evidence(path, tasks).items():
+            evidence.setdefault(key, value)  # an explicit link wins
         status = prev.get("status") if isinstance(prev, dict) else None
         if not isinstance(status, str) or status not in _COVERAGE_STATUSES:
             status = "pending"
@@ -398,9 +440,32 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
 
 
 def write_coverage(change_path: Path | str) -> Path:
-    """Write coverage.yaml. Does not set Change status or touch spec/code."""
-    path = Path(change_path)
+    """Write coverage.yaml via validated internal serialization and ProductMutationLock. Does not set Change status or touch spec/code."""
+    from deltafuse.core.artifact_codec import strict_encode_yaml
+    from deltafuse.core.artifact_lock import ProductMutationLock
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+    from deltafuse.core.fsm import find_repo_root
+
+    path = Path(change_path).resolve()
     dest = path / "coverage.yaml"
     document = build_coverage_document(path)
-    dest.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+    registry = ArtifactRegistry()
+    val_res = registry.validate_storage_schema("coverage", document)
+    if not val_res.valid:
+        diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
+        raise CoverageError(f"Coverage schema validation failed: {'; '.join(diag_msgs)}")
+
+    product_root = find_repo_root(path)
+    content_str = strict_encode_yaml(document, kind="coverage")
+    content_bytes = content_str.encode("utf-8")
+
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+    with ProductMutationLock(product_root):
+        if dest.is_file():
+            atomic_replace(dest, content_bytes)
+        else:
+            atomic_create(dest, content_bytes)
+
     return dest
+

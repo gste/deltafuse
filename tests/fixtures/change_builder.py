@@ -17,16 +17,17 @@ class MockChangeBuilder:
         route: str = "code",
     ): 
         self.root_dir = root_dir
-        self.change_dir = root_dir / "docs" / "changes" / f"{change_id}-test"
-        self.change_dir.mkdir(parents=True, exist_ok=True)
         self.change_id = change_id
+        self.change_dir = root_dir / "docs" / "changes" / self.change_id
+        self.change_dir.mkdir(parents=True, exist_ok=True)
         self.title = title
         self.route = route
         spec_dir = self.root_dir / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
         spec_core = spec_dir / "core.md"
-        if spec_dir.is_dir() and not spec_core.exists():
+        if not spec_core.exists():
             spec_core.write_text("# Core Spec\n## REQ-01\nCore requirement.\n", encoding="utf-8")
-        if spec_dir.is_dir() and spec_core.is_file():
+        if spec_core.is_file():
             self._ensure_core_capability()
 
     def _ensure_core_capability(self) -> None:
@@ -86,13 +87,25 @@ class MockChangeBuilder:
         from datetime import datetime, timezone
 
         from deltafuse.core.transitions import (
+            GATE_ALLOWED_FROM,
             GATE_TARGETS,
+            _gate_reachable,
             _receipt,
             transitions_path,
         )
 
         cfile = self.change_dir / "change.yaml"
         data = yaml.safe_load(cfile.read_text(encoding="utf-8")) or {}
+        # The fixture skips check_gate (its artifacts are minimal), never the
+        # order: receipts the Core would refuse hid the dead ends q0 single runs
+        # found on 2026-09-21.
+        current, target = data.get("status"), GATE_TARGETS[gate]
+        if current not in GATE_ALLOWED_FROM[gate] or (
+            current != target and not _gate_reachable(current, target)
+        ):
+            raise AssertionError(
+                f"fixture bug: the Core would refuse gate {gate!r} from status {current!r}"
+            )
         entry: dict[str, Any] = {
             "kind": "transition",
             "change": data.get("id", self.change_id),
@@ -215,8 +228,10 @@ class MockChangeBuilder:
             "slices": slice_objs,
         })
         # Core owns the transition; the intake receipt leaves the Change
-        # Worker-held in `analyzing`.
-        self._core_advance("intake")
+        # Worker-held in `analyzing`. A second analyze pass is not a second intake.
+        status = (yaml.safe_load((self.change_dir / "change.yaml").read_text(encoding="utf-8")) or {}).get("status")
+        if status == "normalized":
+            self._core_advance("intake")
         return self
 
     def step_specify(self) -> MockChangeBuilder:
@@ -231,13 +246,16 @@ class MockChangeBuilder:
             f"---\n\n# Spec Delta\nDetails\n"
         )
         (self.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+        # The Core order: the analyzed gate, the proposal, the Human Gate.
+        self._core_advance("analyzed")
         self._update_change_yaml({"status": "specification-proposed"})
         from deltafuse.core.decide import apply_decision
 
-        apply_decision(self.change_dir, status="accepted", spec=True)
-        # Human Gate accepted: Core records the analyzed + specified transitions.
-        self._core_advance("analyzed")
-        self._core_advance("specified")
+        result = apply_decision(self.change_dir, status="accepted", spec=True)
+        if not result.get("ok"):
+            # The minimal fixture artifacts need not pass the real gate; the
+            # receipt still follows the order the Core enforces.
+            self._core_advance("specified")
         return self
 
     def step_decompose(self, tasks: list[dict[str, Any]] | None = None) -> MockChangeBuilder:
@@ -294,6 +312,17 @@ class MockChangeBuilder:
         self._update_change_yaml({
             "tasks": task_ids,
         })
+        # Walk the gates the Core would require on the way: analyzed first if
+        # the Change is still analyzing, then specified - the bug path goes
+        # analyzed -> specified with the spec unchanged; the transition table
+        # has no analyzed -> decomposed.
+        change = yaml.safe_load((self.change_dir / "change.yaml").read_text(encoding="utf-8")) or {}
+        status = change.get("status")
+        if status in {"normalized", "analyzing"}:
+            self._core_advance("analyzed")
+            status = "analyzed"
+        if status == "analyzed" and change.get("intent") != "bugfix":
+            self._core_advance("specified")
         self._core_advance("decomposed")
         return self
 
@@ -353,7 +382,19 @@ class MockChangeBuilder:
                 cov["claims"]["CR-001"]["evidence"]["red"] = f"evidence/red/{task_id}.yaml"
             cov_file.write_text(yaml.safe_dump(cov), encoding="utf-8")
 
-        self._update_change_yaml({"status": "declaring"})
+        # The Worker declares the task (deltafuse state); the gate needs every
+        # task declared with its own Red evidence.
+        task_file = self.change_dir / "tasks" / f"{task_id}.md"
+        if task_file.is_file():
+            meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            if meta.get("status") == "pending":
+                meta["status"] = "declared"
+                front = yaml.safe_dump(meta, sort_keys=False)
+                task_file.write_text(f"---\n{front}---\n{body}", encoding="utf-8")
+
+        # No Change status write: the Core never writes 'declaring' to a Change,
+        # and a fixture that did hid the dead end at the declaring gate (q0 run
+        # 20260921T111852Z). The Change stays 'decomposed' until advance.
         return self
 
     def step_implement(self, task_id: str = "TASK-001") -> MockChangeBuilder:

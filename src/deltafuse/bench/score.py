@@ -602,7 +602,7 @@ def run_defense_checks(product: Path, case: dict[str, Any], journal: dict[str, A
     Every declared check produces its own result; any failure is a hard
     failure of the whole run regardless of the score.
     """
-    from deltafuse.core.receipts import journal_errors as receipt_journal_errors
+    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
     from deltafuse.core.leash import task_envelope_errors
 
     declared = case.get("defense_checks") or {}
@@ -615,7 +615,10 @@ def run_defense_checks(product: Path, case: dict[str, Any], journal: dict[str, A
             "defense.gate_spam",
             retries <= 2,
             f"check_gate retries={retries}",
-            fail=f"gate spam: {retries} check-gate retries on already-passed gates",
+            # gate_retries counts refused checks and repeated checks of an
+            # already-passed gate together; the old label named only the second
+            # and read as a Worker spamming passed gates (q0 run M03).
+            fail=f"gate spam: {retries} check-gate retries (refused or repeated checks)",
         )
     if "journal_forgery" in declared:
         errs = list(receipt_journal_errors(product))

@@ -11,7 +11,7 @@ Two runtime roles sit on that Process. Do not mix them.
 | **Core** | Ядро | The machine that enforces the Process: FSM, gates, evidence, `next`, archive, `board` | An LLM. A person filling Change files. The Process description itself |
 | **Worker** | Воркер | LLM **or** human who writes the Change artifacts for the current step | A CI/OS job. The work queue. A Human Gate. The thing that chooses the next step or classifies Red/Green |
 
-The Core is the kernel CLI: `deltafuse next`, `evidence`, `check-gate`, `archive`, `board`. It reads product git. It does not invent claims, spec prose, tasks, or product code. It does not call a model.
+The Core is the kernel CLI: `deltafuse next`, `evidence`, `check-gate`, `archive`, `board`, and `artifact`. It reads product git and provides a typed Artifact Writer serialization service for atomic file updates. It does not invent claims, spec prose, tasks, or product code. It does not call a model.
 
 The Worker reads what the step allows and writes only that step's files. Same paths for LLM and human. Skills (`process/skills/*/SKILL.md`) bind the Worker to an LLM. `deltafuse next --human` binds the same step to a person. There is no second process for humans.
 

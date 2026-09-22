@@ -1,0 +1,98 @@
+$schema: "http://json-schema.org/draft/2020-12/schema"
+$id: "https://deltafuse.dev/contracts/artifact-writer/receipt/v1"
+title: "Artifact Writer Receipt Schema"
+type: object
+required:
+  - request_id
+  - transaction_id
+  - operation
+  - kind
+  - target
+  - operation_schema
+  - storage_schema
+  - serializer_revision
+  - request_sha256
+  - payload_sha256
+  - result_sha256
+  - changed
+  - outcome
+  - timestamp
+  - authority
+  - validation_scopes
+  - receipt_sha256
+additionalProperties: false
+properties:
+  request_id:
+    type: string
+  transaction_id:
+    type: string
+  operation:
+    type: string
+  kind:
+    type: string
+  target:
+    type: string
+  operation_schema:
+    type: object
+    required:
+      - version
+      - content_hash
+    properties:
+      version:
+        type: string
+      content_hash:
+        type: string
+  storage_schema:
+    type: object
+    required:
+      - kind
+      - version
+      - id
+      - content_hash
+    properties:
+      kind:
+        type: string
+      version:
+        type: integer
+      id:
+        type: string
+      content_hash:
+        type: string
+  serializer_revision:
+    type: integer
+  request_sha256:
+    type: string
+  payload_sha256:
+    type: string
+  previous_sha256:
+    type: ["string", "null"]
+  result_sha256:
+    type: string
+  changed:
+    type: boolean
+  outcome:
+    type: string
+    enum: ["committed", "unchanged", "uncertain", "failed"]
+  timestamp:
+    type: string
+  authority:
+    type: object
+    required:
+      - actor
+      - work_item
+      - product_root
+    properties:
+      actor:
+        type: string
+      work_item:
+        type: string
+      product_root:
+        type: string
+  validation_scopes:
+    type: array
+    items:
+      type: object
+  receipt_sha256:
+    type: string
+  digest:
+    type: string

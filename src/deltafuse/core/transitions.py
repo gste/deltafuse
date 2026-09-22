@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
@@ -41,7 +42,10 @@ GATE_TARGETS: dict[str, str] = {
 GATE_ALLOWED_FROM: dict[str, set[str]] = {
     "intake": {"normalized"},
     "analyzed": {"normalized", "analyzing"},
-    "specified": {"analyzed"},
+    # analyzed: bug path, spec unchanged. specification-proposed: the Human
+    # Gate path from docs/state-machine.md; check_gate still requires the
+    # spec receipt that only `decide --spec` records.
+    "specified": {"analyzed", "specification-proposed"},
     "decomposed": {"analyzed", "specified", "decomposed"},
     "declaring": {"decomposed", "declaring"},
     "implemented": {"declared", "implementing"},
@@ -87,6 +91,58 @@ class TransitionError(Exception):
     """Rejected or inconsistent lifecycle transition."""
 
 
+def _gate_reachable(current: str | None, target: str) -> bool:
+    """A gate closes from a resting status over the in-flight one between.
+
+    No command writes 'declaring', 'implementing' or 'verifying' to a Change,
+    so the gate from 'decomposed' to 'declared' has to step over 'declaring'
+    (GATE_ALLOWED_FROM already lists 'decomposed'). q0 run 20260921T111852Z:
+    `advance --gate declaring` failed on 'decomposed' -> 'declared' with every
+    task declared and the gate passing - no Worker could get past it.
+    """
+    if can_transition(current, target):
+        return True
+    return any(
+        can_transition(current, mid) and can_transition(mid, target)
+        for mid in _INFLIGHT_STATUSES
+    )
+
+
+def _artifact_file(folder: Path, artifact_id: str, kind: str) -> tuple[Path, str]:
+    """The task or slice file for `artifact_id`, and its canonical id.
+
+    The decompose skill allows `TASK-NNN-<slug>.md` with frontmatter id
+    `TASK-NNN`, and `deltafuse next` names tasks by that id. q0 run
+    20260921T111852Z: `state --task TASK-002` was refused for
+    `TASK-002-penalty-window.md` because only `<id>.md` was looked up.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    known: dict[str, list[Path]] = {}
+    for candidate in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+        try:
+            meta, _ = parse_frontmatter(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        meta_id = meta.get("id") if isinstance(meta, dict) else None
+        if isinstance(meta_id, str):
+            known.setdefault(meta_id, []).append(candidate)
+    exact = folder / f"{artifact_id}.md"
+    if exact.is_file():
+        canonical = next((i for i, files in known.items() if exact in files), artifact_id)
+        return exact, canonical
+    matches = known.get(artifact_id, [])
+    if len(matches) == 1:
+        return matches[0], artifact_id
+    if len(matches) > 1:
+        names = ", ".join(p.name for p in matches)
+        raise TransitionError(f"{kind} id {artifact_id} is declared by several files: {names}")
+    raise TransitionError(
+        f"{kind} file not found for id {artifact_id} in {folder}; "
+        f"known {kind} ids: {', '.join(sorted(known)) or 'none'}"
+    )
+
+
 def transitions_path(product_root: Path) -> Path:
     return product_root / ".deltafuse" / TRANSITION_JOURNAL
 
@@ -105,16 +161,66 @@ def _load_change_yaml(change_path: Path) -> dict[str, Any]:
 
 
 def _write_change_status(change_path: Path, data: dict[str, Any], status: str) -> None:
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     data["status"] = status
-    (change_path / "change.yaml").write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    change_file = change_path / "change.yaml"
+    content_bytes = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
+    if change_file.is_file():
+        atomic_replace(change_file, content_bytes)
+    else:
+        atomic_create(change_file, content_bytes)
+
 
 
 def _receipt(entry: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(entry, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
+
+
+def append_receipt(product_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    """The single writer of transitions.jsonl: stamp the digest, append a line.
+
+    `advance`, `state` and `decide` each carried their own copy of this; one
+    writer keeps the receipt format in one place (roadmap item 1).
+    """
+    entry = dict(entry)
+    entry.setdefault("recorded", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    entry["receipt"] = _receipt(entry)
+    path = transitions_path(product_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return entry
+
+
+def record_change_status(
+    change_path: Path | str, *, status: str, kind: str, gate: str, **extra: Any
+) -> dict[str, Any]:
+    """A Core status write outside `advance` - decide's unblock, a rejected spec.
+
+    The receipt is appended first and change.yaml written second, the order
+    `advance` uses: a crash in between leaves the receipt as the source of
+    truth. decide's unblock wrote the status first and the receipt after, so a
+    crash there left a status no receipt backed. The caller holds the product
+    mutation lock.
+    """
+    change_path = Path(change_path)
+    product_root = find_repo_root(change_path)
+    data = _load_change_yaml(change_path)
+    entry = append_receipt(
+        product_root,
+        {
+            "kind": kind,
+            "change": data.get("id") or change_path.name,
+            "gate": gate,
+            "from": data.get("status"),
+            "to": status,
+            **extra,
+        },
+    )
+    _write_change_status(change_path, data, status)
+    return entry
 
 
 def load_receipts(product_root: Path, change_id: str) -> list[dict[str, Any]]:
@@ -252,7 +358,16 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
     resumed receipt entry, or None when there is nothing to resume."""
     data = _load_change_yaml(change_path)
     change_id = data.get("id") or change_path.name
-    last = last_receipt(product_root, change_id)
+    # Only a gate transition can be crash residue of `advance`. q0 run
+    # 20260921T130115Z: the last receipt was `state` moving a task from
+    # 'declared' to 'implemented' while the Change was 'declared'; the
+    # matching 'from' was read as an unfinished advance, the Change was
+    # written 'implemented' with no gate, and advance crashed on the missing
+    # 'gate' key - the Worker then chased the traceback's source path.
+    transitions = [
+        row for row in load_receipts(product_root, change_id) if row.get("kind") == "transition"
+    ]
+    last = transitions[-1] if transitions else None
     if last is None:
         return None
     if data.get("status") == last.get("to"):
@@ -261,6 +376,24 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
         return None  # hand-edited status, not a crash residue
     _write_change_status(change_path, data, last["to"])
     return last
+
+
+# Gates that read coverage.yaml. The Core derives it from routing, slices,
+# tasks and evidence, so it refreshes it itself before judging: a missing or
+# stale mapping was a gate the Worker could only fix by running a Core command
+# it had to remember (roadmap item 4: box B -> box A).
+COVERAGE_GATES = frozenset({"analyzed", "converged"})
+
+
+def _refresh_coverage(change_path: Path) -> None:
+    from deltafuse.core.analyze import CoverageError, write_coverage
+
+    if not (change_path / "routing.yaml").is_file():
+        return
+    try:
+        write_coverage(change_path)
+    except CoverageError:
+        pass  # the gate names what is missing (a slice, a claim)
 
 
 def advance_change(
@@ -286,73 +419,72 @@ def advance_change(
         raise TransitionError(f"Change directory not found: {change_path}")
     product_root = find_repo_root(change_path)
 
-    # Crash residue from a previous advance: the receipt is authoritative,
-    # so finishing the pending write completes the transition.
-    resumed = resume_incomplete(product_root, change_path)
-    if resumed is not None:
+    if gate in COVERAGE_GATES:
+        _refresh_coverage(change_path)
+
+    with ProductMutationLock(product_root):
+        # Crash residue from a previous advance: the receipt is authoritative,
+        # so finishing the pending write completes the transition.
+        resumed = resume_incomplete(product_root, change_path)
+        if resumed is not None:
+            return {
+                "ok": True,
+                "gate": resumed["gate"],
+                "from": resumed["from"],
+                "to": resumed["to"],
+                "receipt": resumed["receipt"],
+                "resumed": True,
+            }
+
+        data = _load_change_yaml(change_path)
+        change_id = data.get("id") or change_path.name
+        current = data.get("status")
+        target = GATE_TARGETS[gate]
+        allowed_from = GATE_ALLOWED_FROM[gate]
+
+        # V3-FIX-009: the existing receipt chain must be intact before this gate
+        # may append to it — a hand-rewound or hand-advanced status halts here.
+        chain_errors = receipt_chain_errors(product_root, change_path)
+        if chain_errors:
+            raise TransitionError(
+                f"transition chain invalid: {'; '.join(chain_errors)}"
+            )
+
+        errors = check_gate(change_path, gate, registry=registry)
+        if errors:
+            raise TransitionError(
+                f"gate '{gate}' failed: {'; '.join(errors)}"
+            )
+        if current not in allowed_from:
+            raise TransitionError(
+                f"cannot apply gate '{gate}' from status '{current}'; "
+                f"allowed: {sorted(allowed_from)}"
+            )
+        if target != current and not _gate_reachable(current, target):
+            raise TransitionError(
+                f"transition table rejects '{current}' -> '{target}'"
+            )
+
+        entry: dict[str, Any] = {
+            "kind": "transition",
+            "change": change_id,
+            "gate": gate,
+            "from": current,
+            "to": target,
+            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        entry = append_receipt(product_root, entry)
+
+        _write_change_status(change_path, data, target)
+
         return {
             "ok": True,
-            "gate": resumed["gate"],
-            "from": resumed["from"],
-            "to": resumed["to"],
-            "receipt": resumed["receipt"],
-            "resumed": True,
+            "gate": gate,
+            "from": current,
+            "to": target,
+            "receipt": entry["receipt"],
+            "resumed": resumed is not None,
         }
-
-    data = _load_change_yaml(change_path)
-    change_id = data.get("id") or change_path.name
-    current = data.get("status")
-    target = GATE_TARGETS[gate]
-    allowed_from = GATE_ALLOWED_FROM[gate]
-
-    # V3-FIX-009: the existing receipt chain must be intact before this gate
-    # may append to it — a hand-rewound or hand-advanced status halts here.
-    chain_errors = receipt_chain_errors(product_root, change_path)
-    if chain_errors:
-        raise TransitionError(
-            f"transition chain invalid: {'; '.join(chain_errors)}"
-        )
-
-    errors = check_gate(change_path, gate, registry=registry)
-    if errors:
-        raise TransitionError(
-            f"gate '{gate}' failed: {'; '.join(errors)}"
-        )
-    if current not in allowed_from:
-        raise TransitionError(
-            f"cannot apply gate '{gate}' from status '{current}'; "
-            f"allowed: {sorted(allowed_from)}"
-        )
-    if not can_transition(current, target) and target != current:
-        raise TransitionError(
-            f"transition table rejects '{current}' -> '{target}'"
-        )
-
-    entry: dict[str, Any] = {
-        "kind": "transition",
-        "change": change_id,
-        "gate": gate,
-        "from": current,
-        "to": target,
-        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    entry["receipt"] = _receipt(entry)
-
-    path = transitions_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    _write_change_status(change_path, data, target)
-
-    return {
-        "ok": True,
-        "gate": gate,
-        "from": current,
-        "to": target,
-        "receipt": entry["receipt"],
-        "resumed": resumed is not None,
-    }
 
 
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
@@ -367,6 +499,62 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
 SLICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"specified"},
 }
+# A task status belongs to a phase of its Change: it may not run ahead of the
+# gates the Change has passed. Task target status -> (Change statuses that own
+# that phase, the gate that opens the next one). q0 run 20260921T081038Z: both
+# tasks reached 'implemented' while the Change sat at 'decomposed', and the
+# queue, reading task statuses, sent the Worker to verify.
+TASK_PHASE_CHANGE_STATUSES: dict[str, tuple[set[str], str]] = {
+    "declaring": ({"decomposed", "declaring"}, "decomposed"),
+    "declared": ({"decomposed", "declaring"}, "decomposed"),
+    "implementing": ({"declared", "implementing"}, "declaring"),
+    "implemented": ({"declared", "implementing"}, "declaring"),
+    "verified": ({"implemented", "verifying"}, "implemented"),
+}
+
+# Rank of every forward Change status, in-flight ones between their neighbours.
+_STATUS_RANK: dict[str, float] = {
+    "normalized": 0,
+    "analyzing": 1,
+    "analyzed": 2,
+    "specification-proposed": 2.5,
+    "specified": 3,
+    "decomposed": 4,
+    "declaring": 4.5,
+    "declared": 5,
+    "implementing": 5.5,
+    "implemented": 6,
+    "verifying": 6.5,
+    "converged": 7,
+}
+
+
+def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
+    """Whether `gate` is the Change's turn, or one it already passed.
+
+    check_gate proves a gate's content, not its turn; advance enforces the
+    turn. In q0 run 20260921T081038Z the Worker ran `check-gate implemented` on
+    a Change still at 'decomposed', read "passed", and advance refused it a
+    second later. Statuses outside the forward chain are left to their own
+    contracts.
+    """
+    gate = (gate or "").strip().lower()
+    if gate not in GATE_TARGETS:
+        return []
+    try:
+        current = _load_change_yaml(Path(change_path)).get("status")
+    except TransitionError:
+        return []
+    if current in GATE_ALLOWED_FROM[gate]:
+        return []
+    rank_current = _STATUS_RANK.get(str(current))
+    rank_target = _STATUS_RANK.get(GATE_TARGETS[gate])
+    if rank_current is None or rank_target is None or rank_current >= rank_target:
+        return []  # not a forward status, or the gate is already passed
+    return [
+        f"Gate {gate}: not this Change's turn - status is '{current}', and this gate "
+        f"applies from {sorted(GATE_ALLOWED_FROM[gate])}"
+    ]
 # Change-level in-flight statuses the Worker may request through the Core.
 CHANGE_INFLIGHT_STATUSES = {"specification-proposed"}
 
@@ -392,63 +580,109 @@ def set_artifact_status(
         raise TransitionError(f"Change directory not found: {change_path}")
     product_root = find_repo_root(change_path)
 
-    chain_errors = receipt_chain_errors(product_root, change_path)
-    if chain_errors:
-        raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
+    with ProductMutationLock(product_root):
+        chain_errors = receipt_chain_errors(product_root, change_path)
+        if chain_errors:
+            raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
 
-    if task_id:
-        allowed = TASK_STATUS_TRANSITIONS
-        file = change_path / "tasks" / f"{task_id}.md"
-        if not file.is_file():
-            raise TransitionError(f"task file not found: {file}")
-    elif slice_id:
-        allowed = SLICE_STATUS_TRANSITIONS
-        file = change_path / "slices" / f"{slice_id}.md"
-        if not file.is_file():
-            raise TransitionError(f"slice file not found: {file}")
-    else:
-        allowed = None  # change-level, handled below
-        file = change_path / "change.yaml"
+        if task_id:
+            allowed = TASK_STATUS_TRANSITIONS
+            file, task_id = _artifact_file(change_path / "tasks", task_id, "task")
+        elif slice_id:
+            allowed = SLICE_STATUS_TRANSITIONS
+            file, slice_id = _artifact_file(change_path / "slices", slice_id, "slice")
+        else:
+            allowed = None  # change-level, handled below
+            file = change_path / "change.yaml"
 
-    if file.name == "change.yaml":
-        data = _load_change_yaml(change_path)
-        change_id = data.get("id") or change_path.name
-        current = data.get("status")
-        if status not in CHANGE_INFLIGHT_STATUSES:
-            raise TransitionError(
-                f"Change status '{status}' is Core-gated; use deltafuse advance"
-            )
-        if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
-            raise TransitionError(
-                f"cannot set Change status '{status}' from '{current}'"
-            )
-        _write_change_status(change_path, data, status)
-    else:
-        data = _load_change_yaml(change_path)
-        change_id = data.get("id") or change_path.name
-        from deltafuse.core.frontmatter import parse_frontmatter
+        if file.name == "change.yaml":
+            data = _load_change_yaml(change_path)
+            change_id = data.get("id") or change_path.name
+            current = data.get("status")
+            if status not in CHANGE_INFLIGHT_STATUSES:
+                raise TransitionError(
+                    f"Change status '{status}' is Core-gated; use deltafuse advance"
+                )
+            if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
+                raise TransitionError(
+                    f"cannot set Change status '{status}' from '{current}'"
+                )
+            if status == "specification-proposed":
+                # Proposing hands the spec to the Human Gate. A spec delta that
+                # fails the machine checks is the Worker's to fix: letting it
+                # through put a format error in front of the human, who can
+                # neither accept it (the gate still fails) nor fix it, and the
+                # run died on specify. Everything but the human receipt must
+                # pass first; the errors go back to the Worker.
+                from deltafuse.core.fsm import check_gate
 
-        meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
-        current = meta.get("status")
-        if current not in allowed or status not in allowed[current]:
-            raise TransitionError(
-                f"cannot set status '{status}' from '{current}' for {file.name}"
-            )
-        meta["status"] = status
-        file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+                gate_errors = check_gate(
+                    change_path, "specified", assume_status=status, human=False
+                )
+                if gate_errors:
+                    raise TransitionError(
+                        "spec delta is not ready for the Human Gate; fix and propose again: "
+                        + "; ".join(gate_errors)
+                    )
+            _write_change_status(change_path, data, status)
+        else:
+            data = _load_change_yaml(change_path)
+            change_id = data.get("id") or change_path.name
+            from deltafuse.core.frontmatter import parse_frontmatter
 
-    entry: dict[str, Any] = {
-        "kind": "artifact-status",
-        "change": change_id,
-        "artifact": "change" if change_status else ("task" if task_id else "slice"),
-        "artifact_id": task_id or slice_id,
-        "from": current,
-        "to": status,
-        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    entry["receipt"] = _receipt(entry)
-    path = transitions_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}
+            meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
+            current = meta.get("status")
+            if current == status:
+                # Asking again for the status it already has is not an error:
+                # q0 run M03 20260921T215701Z re-sent `verified` and was refused.
+                # Nothing is written and no receipt is added.
+                return {
+                    "ok": True,
+                    "artifact": "task" if task_id else "slice",
+                    "from": current,
+                    "to": status,
+                    "receipt": None,
+                    "unchanged": True,
+                }
+            if current not in allowed or status not in allowed[current]:
+                raise TransitionError(
+                    f"cannot set status '{status}' from '{current}' for {file.name}"
+                )
+            if task_id and status in TASK_PHASE_CHANGE_STATUSES:
+                owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
+                change_status_now = data.get("status")
+                if change_status_now not in owners:
+                    raise TransitionError(
+                        f"task {task_id} cannot become '{status}' while the Change is "
+                        f"'{change_status_now}': a task may not run ahead of its Change "
+                        f"(needs the Change in {sorted(owners)}; pass the '{gate}' gate "
+                        f"first with deltafuse advance)"
+                    )
+            meta["status"] = status
+            content_bytes = f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8")
+            from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+            if file.is_file():
+                atomic_replace(file, content_bytes)
+            else:
+                atomic_create(file, content_bytes)
+
+
+        entry: dict[str, Any] = {
+            "kind": "artifact-status",
+            "change": change_id,
+            "artifact": "change" if change_status else ("task" if task_id else "slice"),
+            "artifact_id": task_id or slice_id,
+            "from": current,
+            "to": status,
+            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        if file.name != "change.yaml":
+            # The file name need not be the id (TASK-NNN-<slug>.md): the leash
+            # reads the rewritten file from here, not from the id.
+            entry["path"] = file.relative_to(product_root).as_posix()
+            # The leash accepts a structural artifact only when its last writer
+            # is known: the Artifact Writer or the Core, each by the sha256 of
+            # what it wrote (roadmap item 1).
+            entry["sha256"] = hashlib.sha256(file.read_bytes()).hexdigest()
+        entry = append_receipt(product_root, entry)
+        return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}

@@ -1,0 +1,26 @@
+kind: evidence
+operation_version: "1"
+storage_schema_id: https://deltafuse.dev/schemas/v3/evidence.schema.yaml
+allowed_operations:
+  - validate
+  - describe
+creatable_semantic_fields: []
+updatable_semantic_fields: []
+core_owned_fields:
+  - schema_version
+  - change
+  - task
+  - phase
+  - timestamp
+  - command
+  - exit_code
+  - result
+  - failure_category
+  - summary
+  - changed_paths
+  - spec_status
+  - base_revision
+  - recorded_by
+  - recorded_sha256
+initial_defaults: {}
+body_allowed: false

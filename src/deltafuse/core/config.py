@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.receipts import PROFILES
+from deltafuse.core.gate_receipts import PROFILES, REMOVED_PROFILES
 
 KNOWN_TOP_KEYS = {"schema_version", "framework", "paths", "context", "workflow", "project", "adapters"}
 KNOWN_WORKFLOW_KEYS = {
@@ -86,7 +86,9 @@ def validate_config(product_root: Path | str) -> list[str]:
                     f"config.yaml: workflow.leash {mode!r} must be one of {sorted(LEASH_MODES)}"
                 )
             profile = workflow.get("integrity_profile")
-            if profile is not None and profile not in PROFILES:
+            if profile in REMOVED_PROFILES:
+                errors.append(f"config.yaml: {REMOVED_PROFILES[profile]}")
+            elif profile is not None and profile not in PROFILES:
                 errors.append(
                     f"config.yaml: workflow.integrity_profile {profile!r} must be one of {sorted(PROFILES)}"
                 )

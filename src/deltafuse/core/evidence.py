@@ -13,12 +13,12 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.context import load_change_route
+from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
-from deltafuse.core.leash import git_dirty_paths, LeashError
+from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
 RECORDED_BY = "deltafuse-evidence"
@@ -103,7 +103,7 @@ def _is_authentic(
         if route == "code":
             return failure_category == AUTHENTIC_RED_CATEGORY
         return True
-    if phase in {"green", "regression"}:
+    if phase in {"green", "regression", "verification"}:
         return result == "passed"
     return False
 
@@ -166,38 +166,89 @@ def evidence_stamp_error(payload: dict[str, Any], product_root: Path) -> str | N
     return None
 
 
-def write_stamped_evidence(path: Path, payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
-    """Stamp *payload* and write YAML. Used by the runner and test fixtures."""
+def write_stamped_evidence(
+    path: Path,
+    payload: dict[str, Any],
+    product_root: Path,
+    lock_timeout: float = 5.0,
+) -> dict[str, Any]:
+    """Stamp *payload* and write YAML under ProductMutationLock using atomic storage."""
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+    from deltafuse.core.artifact_lock import ProductMutationLock
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+
+    registry = ArtifactRegistry()
+    val_res = registry.validate_storage_schema("evidence", payload)
+    if not val_res.valid:
+        diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
+        raise EvidenceRunError(f"Evidence storage schema validation failed: {'; '.join(diag_msgs)}")
+
     stamped = stamp_evidence(payload, product_root)
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    yaml_bytes = yaml.safe_dump(stamped, sort_keys=False, allow_unicode=True).encode("utf-8")
+
+    with ProductMutationLock(product_root, timeout=lock_timeout):
+        if dest.is_file():
+            atomic_replace(dest, yaml_bytes)
+        else:
+            atomic_create(dest, yaml_bytes)
+
     return stamped
 
 
 
 def _core_computed_changed_paths(repo_root: Path) -> list[str]:
-    """Core-derived dirty paths; Worker lists are only an expected subset."""
+    """Core-derived dirty paths the Worker is accountable for.
+
+    Worker lists are an expected subset of this set, so it must hold only the
+    Worker's own changes. q0 run 20260921T081038Z: the raw git diff also held
+    the Core's journals (`.deltafuse/**`), interpreter caches (`__pycache__`)
+    and the evidence file this very command had just written, and the Worker
+    was told to list them - the same class of defect the leash had.
+    """
     try:
-        return git_dirty_paths(repo_root)
+        paths = git_dirty_paths(repo_root)
     except LeashError:
         # No git repository (bench sandbox, fresh install): nothing to derive.
         return []
+    out: list[str] = []
+    for raw in paths:
+        rel = posix_relpath(raw)
+        parts = rel.split("/")
+        if is_exempt_path(rel):
+            continue  # .deltafuse/**, interpreter caches, the other leash exemptions
+        if parts[:2] == ["docs", "changes"]:
+            # The Change's own bookkeeping, not a product change: its evidence
+            # (written by this command), task files `state` rewrites, coverage.
+            # q0 run M03 20260921T215701Z asked the Worker to list them.
+            continue
+        out.append(raw)
+    return out
 
 def run_evidence(
     change_dir: Path | str,
     *,
     phase: str,
-    task: str,
+    task: str | None = None,
     argv: list[str],
     changed_paths: list[str] | None = None,
     timeout: int = 90,
 ) -> EvidenceOutcome:
-    """Execute *argv* at the product root and write evidence/<phase>/<task>.yaml."""
-    if phase not in {"red", "green", "regression"}:
+    """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml."""
+    if phase not in {"red", "green", "regression", "verification"}:
         raise EvidenceRunError(f"Unsupported evidence phase '{phase}'")
     if not argv:
         raise EvidenceRunError("Command argv is required after '--'")
+
+    if phase == "verification":
+        if task is not None and task != "null" and task != "":
+            raise EvidenceRunError(f"Verification phase requires task=None, got '{task}'")
+        task = None
+    else:
+        if not task:
+            raise EvidenceRunError(f"Evidence phase '{phase}' requires task ID (e.g. TASK-001)")
+
     change_path = Path(change_dir).resolve()
     if not change_path.is_dir():
         raise EvidenceRunError(f"Change package directory not found: {change_path}")
@@ -206,6 +257,11 @@ def run_evidence(
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])
+    if not rel_paths and phase != "verification":
+        # The Core computes the changed set from git anyway and refused a list
+        # that missed any of it; with no list it records its own (roadmap item
+        # 4: box B -> box A). A list the Worker gives is still checked.
+        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root))
 
     def _as_text(raw: object) -> str:
         if raw is None:
@@ -264,10 +320,19 @@ def run_evidence(
         "changed_paths": rel_paths,
         "spec_status": "unchanged",
     }
-    if phase in {"green", "regression"}:
+    if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
 
-    dest = change_path / "evidence" / phase / f"{task}.yaml"
+    if phase == "verification":
+        # q4 decision D, phase 1: the code the Change touched against the
+        # capabilities routing named. Recorded, not judged (T9 in the bench).
+        from deltafuse.core.ownership import under_routing
+
+        payload["ownership"] = under_routing(repo_root, change_path)
+        dest = change_path / "evidence" / "verification" / "run.yaml"
+    else:
+        dest = change_path / "evidence" / phase / f"{task}.yaml"
+
     payload = write_stamped_evidence(dest, payload, repo_root)
 
     errors = list(route_errs)

@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 import yaml
-from deltafuse.core.gate_journal import TERMINAL_STATUSES, has_click
+from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
 from deltafuse.core.frontmatter import parse_frontmatter
 
 

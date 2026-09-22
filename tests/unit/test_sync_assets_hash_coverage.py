@@ -85,11 +85,11 @@ def test_tampered_init_py_detected_by_check(tmp_path):
     assert "__init__.py" in proc.stdout
 
 
-def test_tampered_init_py_invalidates_bundle(tmp_path):
+def test_tampered_init_py_invalidates_bundle(tmp_path, monkeypatch):
     """_verify_bundle rejects a swapped package marker."""
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    os.environ["DELTAFUSE_TEST_REPO"] = str(_make_repo(tmp_path))
-    os.environ["DELTAFUSE_TEST_ASSETS"] = str(tmp_path / "assets")
+    monkeypatch.setenv("DELTAFUSE_TEST_REPO", str(_make_repo(tmp_path)))
+    monkeypatch.setenv("DELTAFUSE_TEST_ASSETS", str(tmp_path / "assets"))
     import importlib
 
     import sync_assets
@@ -102,10 +102,10 @@ def test_tampered_init_py_invalidates_bundle(tmp_path):
         sync_assets._verify_bundle(assets)
 
 
-def test_removed_marker_and_extra_file_detected(tmp_path):
+def test_removed_marker_and_extra_file_detected(tmp_path, monkeypatch):
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    os.environ["DELTAFUSE_TEST_REPO"] = str(_make_repo(tmp_path))
-    os.environ["DELTAFUSE_TEST_ASSETS"] = str(tmp_path / "assets")
+    monkeypatch.setenv("DELTAFUSE_TEST_REPO", str(_make_repo(tmp_path)))
+    monkeypatch.setenv("DELTAFUSE_TEST_ASSETS", str(tmp_path / "assets"))
     import importlib
 
     import sync_assets
@@ -140,10 +140,10 @@ def _make_link(target: Path, link: Path) -> None:
                    target_is_directory=target.is_dir())
 
 
-def test_junction_inside_bundle_rejected(tmp_path):
+def test_junction_inside_bundle_rejected(tmp_path, monkeypatch):
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    os.environ["DELTAFUSE_TEST_REPO"] = str(_make_repo(tmp_path))
-    os.environ["DELTAFUSE_TEST_ASSETS"] = str(tmp_path / "assets")
+    monkeypatch.setenv("DELTAFUSE_TEST_REPO", str(_make_repo(tmp_path)))
+    monkeypatch.setenv("DELTAFUSE_TEST_ASSETS", str(tmp_path / "assets"))
     import importlib
 
     import sync_assets
@@ -158,10 +158,10 @@ def test_junction_inside_bundle_rejected(tmp_path):
         sync_assets._verify_bundle(assets)
 
 
-def test_broken_link_inside_bundle_rejected(tmp_path):
+def test_broken_link_inside_bundle_rejected(tmp_path, monkeypatch):
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    os.environ["DELTAFUSE_TEST_REPO"] = str(_make_repo(tmp_path))
-    os.environ["DELTAFUSE_TEST_ASSETS"] = str(tmp_path / "assets")
+    monkeypatch.setenv("DELTAFUSE_TEST_REPO", str(_make_repo(tmp_path)))
+    monkeypatch.setenv("DELTAFUSE_TEST_ASSETS", str(tmp_path / "assets"))
     import importlib
 
     import sync_assets

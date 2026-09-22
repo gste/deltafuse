@@ -1103,3 +1103,114 @@ def test_analyze_skill_marks_analysis_md_optional(repo_root: Path):
         encoding="utf-8"
     )
     assert "`analysis.md` is optional" in skill
+
+
+def _forbid(builder: MockChangeBuilder, forbidden: str) -> None:
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(
+        task.read_text(encoding="utf-8").replace(
+            "forbidden_paths: [src/secret.py]", f"forbidden_paths: {forbidden}"
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("forbidden", ['[src/secret.py, "tests/**"]', '["tests/*"]'])
+def test_decompose_refuses_forbidden_tests_on_code_route(
+    tmp_path: Path, repo_root: Path, forbidden: str
+):
+    """q0 run 20260921T081038Z: a task forbade tests/**, so declare could not
+    write its Red test, and it surfaced only at the declaring gate, where the
+    Worker can no longer edit the task file."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-701", title="Forbidden tests")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    assert not any("forbidden_paths covers tests/**" in e for e in validate_change_package(builder.change_dir))
+    _forbid(builder, forbidden)
+    errors = validate_change_package(builder.change_dir)
+    assert any("forbidden_paths covers tests/**" in e for e in errors)
+
+
+def test_docs_route_may_forbid_tests(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-702", title="Docs forbid", route="docs")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    _forbid(builder, '[src/secret.py, "tests/**"]')
+    errors = validate_change_package(builder.change_dir)
+    assert not any("forbidden_paths covers tests/**" in e for e in errors)
+
+
+def _two_tasks(tmp_path: Path, repo_root: Path, change_id: str) -> MockChangeBuilder:
+    install(target_dir=tmp_path, framework_root=repo_root)
+    return (
+        MockChangeBuilder(tmp_path, change_id=change_id, title="Two tasks")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose(
+            tasks=[
+                {"id": "TASK-001", "slice": "SLICE-01", "depends_on": []},
+                {"id": "TASK-002", "slice": "SLICE-01", "depends_on": ["TASK-001"]},
+            ]
+        )
+    )
+
+
+def test_declaring_gate_needs_every_task_declared(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T130115Z: the gate asked for any Red evidence file and
+    closed with one task of three declared; the others could no longer be
+    declared."""
+    builder = _two_tasks(tmp_path, repo_root, "CHG-703").step_declare("TASK-001")
+    errors = check_gate(builder.change_dir, "declaring")
+    assert any("task TASK-002 is 'pending'" in e for e in errors), errors
+    assert any("task TASK-002 has no red evidence" in e for e in errors), errors
+    assert not any("TASK-001" in e for e in errors), errors
+
+    builder.step_declare("TASK-002")
+    assert not any("TASK-00" in e for e in check_gate(builder.change_dir, "declaring"))
+
+
+def test_declaring_gate_skips_cancelled_tasks(tmp_path: Path, repo_root: Path):
+    builder = _two_tasks(tmp_path, repo_root, "CHG-704").step_declare("TASK-001")
+    task = builder.change_dir / "tasks" / "TASK-002.md"
+    task.write_text(
+        task.read_text(encoding="utf-8").replace("status: pending", "status: cancelled"),
+        encoding="utf-8",
+    )
+    assert not any("TASK-002" in e for e in check_gate(builder.change_dir, "declaring"))
+
+
+def test_implemented_gate_needs_every_task_implemented(tmp_path: Path, repo_root: Path):
+    """The same run: `check-gate implemented` read "passed" with two tasks
+    still pending, and the Worker hand-wrote the Change status."""
+    builder = _two_tasks(tmp_path, repo_root, "CHG-705").step_declare("TASK-001").step_declare("TASK-002")
+    builder.step_implement("TASK-001")
+    errors = check_gate(builder.change_dir, "implemented")
+    assert any("task TASK-002 is 'declared'" in e for e in errors), errors
+    assert any("task TASK-002 has no green evidence" in e for e in errors), errors
+    assert any("task TASK-002 has no regression evidence" in e for e in errors), errors
+
+
+def test_implemented_gate_names_unfinished_tasks_before_stale_evidence(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T181306Z: with TASK-002 still to implement, the first
+    error was TASK-001's stale evidence, and the Worker re-ran it instead of
+    implementing TASK-002 - which then moved src again."""
+    builder = _two_tasks(tmp_path, repo_root, "CHG-706").step_declare("TASK-001").step_declare("TASK-002")
+    builder.step_implement("TASK-001")
+    core = tmp_path / "src" / "core.py"
+    core.parent.mkdir(parents=True, exist_ok=True)
+    core.write_text((core.read_text(encoding="utf-8") if core.is_file() else "") + "# TASK-002 work\n", encoding="utf-8")
+
+    errors = check_gate(builder.change_dir, "implemented")
+    assert "task TASK-002 is 'declared'" in errors[0], errors
+    assert not any("stale evidence" in e for e in errors), errors

@@ -19,7 +19,9 @@ def test_intake_skill_forbids_provenance_yaml(repo_root: Path):
     text = (repo_root / "process" / "skills" / "intake" / "SKILL.md").read_text(
         encoding="utf-8"
     )
-    assert "Do not add `provenance`" in text
+    # Roadmap item 1: the Core scaffolds change.yaml; provenance stays prose.
+    assert "do not write `change.yaml` yourself" in text
+    assert "Provenance section" in text
     assert "CR-001" in text
 
 

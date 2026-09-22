@@ -15,7 +15,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 
 1. If no Change or task was named, run `deltafuse next --step implement` at the product root and use `path` / `task_path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure). Record Green and regression with `deltafuse evidence`, not by hand-writing YAML.
-3. Close with `deltafuse check-gate <change-dir> --gate implemented`. Halt if it exits non-zero. Then run `deltafuse advance <change-dir> --gate implemented` so the Core stamps the transition; halt if that exits non-zero.
+3. The `implemented` gate covers every task of the Change, so do not check it after each task: while `deltafuse next` names another task, implement that one (each task records its own state, Procedure step 6); when `next` says to re-run a task's evidence, re-run it. When `next` says to close the implemented gate, close with `deltafuse check-gate <change-dir> --gate implemented`. Halt if it exits non-zero. Then run `deltafuse advance <change-dir> --gate implemented` so the Core stamps the transition; halt if that exits non-zero.
 4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
@@ -30,7 +30,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 1. Verify the task is `declared` and Red evidence matches the frozen target.
 2. Implement the minimum production change inside allowed scope.
 3. Record Green with the kernel, not by hand-writing YAML:
-   `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <target-command>`.
+   `deltafuse evidence <change-dir> --phase green --task <task-id> -- <target-command>`. The Core records the changed files itself (`--changed-path` is optional).
 4. Record scoped regression the same way (`--phase regression`). The runner fills `exit_code`, `failure_category`, and `base_revision`.
 5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. CLI exit 0 is required for both Green and regression.
 6. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status implemented`; retain the task file and its history inside the Change.

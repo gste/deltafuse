@@ -6,6 +6,21 @@ from typing import Any
 import yaml
 
 
+def yaml_error_hint(error: Exception) -> str:
+    """A fix for the YAML mistake Workers make most, appended to a parse error.
+
+    q0 run M03 20260921T212331Z: `summary: Backward compatible: ...` failed to
+    parse twelve times in a row; PyYAML says "mapping values are not allowed
+    here", which does not say to quote the value.
+    """
+    if "mapping values are not allowed" in str(error):
+        return (
+            " - a value that contains ': ' must be quoted, e.g. "
+            'summary: "Backward compatible: callers keep working"'
+        )
+    return ""
+
+
 class FrontmatterParseError(Exception):
     """Raised when Markdown frontmatter parsing fails."""
     pass
@@ -35,7 +50,7 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
             raise FrontmatterParseError(f"Frontmatter YAML must be a mapping/dict, got {type(data).__name__}")
         return data, body
     except yaml.YAMLError as e:
-        raise FrontmatterParseError(f"YAML parsing error in frontmatter: {e}") from e
+        raise FrontmatterParseError(f"YAML parsing error in frontmatter: {e}{yaml_error_hint(e)}") from e
 
 
 def replace_frontmatter(content: str, updates: dict[str, Any]) -> str:

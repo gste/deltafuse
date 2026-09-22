@@ -204,11 +204,189 @@ def test_state_command_writes_core_owned_task_status(
     # slice writes
     assert main(["state", str(builder.change_dir), "--slice", "SLICE-01", "--status", "specified"]) == 0
 
-    # Change-level in-flight status through the Core, from analyzed
+    # Change-level in-flight status through the Core, from analyzed. Proposing
+    # hands the spec to the Human Gate, so the machine checks of the specified
+    # gate must pass first: without spec-delta.md there is nothing to propose.
     builder2 = _analyze_ready(tmp_path, repo_root, "CHG-961")
     advance_change(builder2.change_dir, GATE)
+    assert main(["state", str(builder2.change_dir), "--change", "--status", "specification-proposed"]) == 1
+    assert _read_status(builder2.change_dir) == "analyzed"
+    (builder2.change_dir / "spec-delta.md").write_text(
+        "---\nchange: CHG-961\nstatus: proposed\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+        encoding="utf-8",
+    )
     assert main(["state", str(builder2.change_dir), "--change", "--status", "specification-proposed"]) == 0
     assert _read_status(builder2.change_dir) == "specification-proposed"
 
     # receipt-backed statuses stay Core-gated
     assert main(["state", str(builder2.change_dir), "--change", "--status", "implemented"]) == 1
+
+
+def test_cli_advance_failure_is_reported_not_raised(tmp_path: Path, repo_root: Path, capsys):
+    """_main re-imported TransitionError inside the `state` branch, which made
+    the name local to the whole function: the `advance` branch then raised
+    UnboundLocalError on any refused gate instead of returning 1."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-419")
+    assert main(["advance", str(builder.change_dir), "--gate", "specified"]) == 1
+    _, err = capsys.readouterr()
+    assert "advance failed" in err
+
+
+def test_task_status_cannot_run_ahead_of_its_change(tmp_path: Path, repo_root: Path, capsys):
+    """q0 run 20260921T081038Z: both tasks reached 'implemented' through
+    `deltafuse state` while the Change sat at 'decomposed'."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-962")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    capsys.readouterr()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implementing"]) == 1
+    _, err = capsys.readouterr()
+    assert "may not run ahead of its Change" in err
+    assert "'declaring' gate" in err
+    assert "status: declared" in task_file.read_text(encoding="utf-8")
+
+    builder.step_declare()
+    builder._core_advance("declaring")
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implementing"]) == 0
+    assert "status: implementing" in task_file.read_text(encoding="utf-8")
+
+
+def test_check_gate_reports_a_gate_out_of_turn(tmp_path: Path, repo_root: Path, capsys):
+    """The same run: `check-gate implemented` on a Change at 'decomposed' read
+    "passed", and advance refused it a second later."""
+    from deltafuse.core.transitions import gate_order_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-963")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+
+    errors = gate_order_errors(builder.change_dir, "implemented")
+    assert errors and "not this Change's turn" in errors[0]
+    assert gate_order_errors(builder.change_dir, "declaring") == []
+    # A gate already passed is not an ordering error: re-checking stays allowed.
+    assert gate_order_errors(builder.change_dir, "analyzed") == []
+
+    assert main(["check-gate", str(builder.change_dir), "--gate", "implemented"]) != 0
+    out, err = capsys.readouterr()
+    assert "not this Change's turn" in out + err
+
+
+def test_declaring_gate_closes_from_decomposed(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T111852Z: every task declared and `check-gate declaring`
+    passing, `advance --gate declaring` still failed on 'decomposed' ->
+    'declared'. No command writes 'declaring' to a Change; a fixture that did
+    hid the dead end."""
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-964")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    builder.step_declare()
+    assert _read_status(builder.change_dir) == "decomposed"
+
+    result = advance_change(builder.change_dir, "declaring")
+    assert (result["from"], result["to"]) == ("decomposed", "declared")
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
+
+
+def test_every_gate_start_reaches_its_target():
+    """GATE_ALLOWED_FROM said a gate may close from a status the transition
+    table could not leave for the gate's target. The known exceptions are
+    listed with their reason; a new one fails here instead of in a run."""
+    from deltafuse.core.transitions import GATE_ALLOWED_FROM, GATE_TARGETS, _gate_reachable
+
+    known_open = {
+        ("analyzed", "normalized"): "the intake gate always runs first",
+    }
+    unreachable = {
+        (gate, start)
+        for gate, starts in GATE_ALLOWED_FROM.items()
+        for start in starts
+        if start != GATE_TARGETS[gate] and not _gate_reachable(start, GATE_TARGETS[gate])
+    }
+    assert unreachable == set(known_open)
+    for gate, start in (("declaring", "decomposed"), ("implemented", "declared"), ("converged", "implemented")):
+        assert _gate_reachable(start, GATE_TARGETS[gate]), (gate, start)
+
+
+def test_state_finds_a_task_by_its_frontmatter_id(tmp_path: Path, repo_root: Path, capsys):
+    """The decompose skill allows TASK-NNN-<slug>.md with id TASK-NNN, and
+    `next` names the task by that id; `state` looked only for TASK-NNN.md
+    (q0 run 20260921T111852Z)."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-965")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    slug = task.with_name("TASK-001-penalty-config.md")
+    task.rename(slug)
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    assert "status: declared" in slug.read_text(encoding="utf-8")
+    receipt = last_receipt(tmp_path, "CHG-965")
+    assert receipt["artifact_id"] == "TASK-001"
+    assert receipt["path"].endswith("/tasks/TASK-001-penalty-config.md")
+    capsys.readouterr()
+
+    assert main(["state", str(builder.change_dir), "--task", "TASK-009", "--status", "declared"]) == 1
+    _, err = capsys.readouterr()
+    assert "known task ids: TASK-001" in err
+
+
+def test_a_task_status_receipt_is_not_resumed_as_an_advance(tmp_path: Path, repo_root: Path):
+    """q0 run 20260921T130115Z: `state` moved a task 'declared' -> 'implemented'
+    with the Change at 'declared'. The next `advance` read that receipt as an
+    unfinished transition, wrote the Change 'implemented' with no gate and
+    crashed on the missing 'gate' key."""
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-966")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    builder.step_declare()
+    advance_change(builder.change_dir, "declaring")
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implemented"]) == 0
+
+    with pytest.raises(TransitionError, match="gate 'implemented' failed"):
+        advance_change(builder.change_dir, "implemented")
+    assert _read_status(builder.change_dir) == "declared"
+
+
+def test_asking_for_the_status_a_task_already_has_is_not_an_error(tmp_path: Path, repo_root: Path):
+    """q0 run M03 20260921T215701Z re-sent `verified` for a verified task and
+    was refused; nothing needs to happen, and nothing is journaled."""
+    from deltafuse.core.transitions import load_receipts
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-967")
+    advance_change(builder.change_dir, GATE)
+    builder.step_decompose()
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    receipts_before = len(load_receipts(tmp_path, "CHG-967"))
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    assert len(load_receipts(tmp_path, "CHG-967")) == receipts_before
+
+
+def test_a_rejected_spec_returns_to_analyzed_with_a_receipt(tmp_path: Path, repo_root: Path):
+    """Roadmap item 1: `decide --spec rejected` rewrote change.yaml to
+    'analyzed' with no receipt; every other Core status write has one."""
+    from deltafuse.core.decide import apply_decision
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-968")
+    advance_change(builder.change_dir, GATE)
+    (builder.change_dir / "spec-delta.md").write_text(
+        "---\nchange: CHG-968\nstatus: proposed\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+        encoding="utf-8",
+    )
+    assert main(["state", str(builder.change_dir), "--change", "--status", "specification-proposed"]) == 0
+
+    result = apply_decision(builder.change_dir, status="rejected", spec=True)
+    assert result["change_status"] == "analyzed"
+    assert _read_status(builder.change_dir) == "analyzed"
+    receipt = last_receipt(tmp_path, "CHG-968")
+    assert (receipt["kind"], receipt["from"], receipt["to"]) == ("artifact-status", "specification-proposed", "analyzed")
+    assert receipt["reason"] == "spec rejected"
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
