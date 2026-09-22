@@ -366,3 +366,27 @@ def test_asking_for_the_status_a_task_already_has_is_not_an_error(tmp_path: Path
     receipts_before = len(load_receipts(tmp_path, "CHG-967"))
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     assert len(load_receipts(tmp_path, "CHG-967")) == receipts_before
+
+
+def test_a_rejected_spec_returns_to_analyzed_with_a_receipt(tmp_path: Path, repo_root: Path):
+    """Roadmap item 1: `decide --spec rejected` rewrote change.yaml to
+    'analyzed' with no receipt; every other Core status write has one."""
+    from deltafuse.core.decide import apply_decision
+    from deltafuse.core.transitions import receipt_chain_errors
+
+    builder = _analyze_ready(tmp_path, repo_root, "CHG-968")
+    advance_change(builder.change_dir, GATE)
+    (builder.change_dir / "spec-delta.md").write_text(
+        "---\nchange: CHG-968\nstatus: proposed\nslices: [SLICE-01]\n"
+        "added: []\nmodified: []\nremoved: []\n---\n\n# Spec\n",
+        encoding="utf-8",
+    )
+    assert main(["state", str(builder.change_dir), "--change", "--status", "specification-proposed"]) == 0
+
+    result = apply_decision(builder.change_dir, status="rejected", spec=True)
+    assert result["change_status"] == "analyzed"
+    assert _read_status(builder.change_dir) == "analyzed"
+    receipt = last_receipt(tmp_path, "CHG-968")
+    assert (receipt["kind"], receipt["from"], receipt["to"]) == ("artifact-status", "specification-proposed", "analyzed")
+    assert receipt["reason"] == "spec rejected"
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []

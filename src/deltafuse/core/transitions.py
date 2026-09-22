@@ -178,6 +178,51 @@ def _receipt(entry: dict[str, Any]) -> str:
     ).hexdigest()
 
 
+def append_receipt(product_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    """The single writer of transitions.jsonl: stamp the digest, append a line.
+
+    `advance`, `state` and `decide` each carried their own copy of this; one
+    writer keeps the receipt format in one place (roadmap item 1).
+    """
+    entry = dict(entry)
+    entry.setdefault("recorded", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    entry["receipt"] = _receipt(entry)
+    path = transitions_path(product_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return entry
+
+
+def record_change_status(
+    change_path: Path | str, *, status: str, kind: str, gate: str, **extra: Any
+) -> dict[str, Any]:
+    """A Core status write outside `advance` - decide's unblock, a rejected spec.
+
+    The receipt is appended first and change.yaml written second, the order
+    `advance` uses: a crash in between leaves the receipt as the source of
+    truth. decide's unblock wrote the status first and the receipt after, so a
+    crash there left a status no receipt backed. The caller holds the product
+    mutation lock.
+    """
+    change_path = Path(change_path)
+    product_root = find_repo_root(change_path)
+    data = _load_change_yaml(change_path)
+    entry = append_receipt(
+        product_root,
+        {
+            "kind": kind,
+            "change": data.get("id") or change_path.name,
+            "gate": gate,
+            "from": data.get("status"),
+            "to": status,
+            **extra,
+        },
+    )
+    _write_change_status(change_path, data, status)
+    return entry
+
+
 def load_receipts(product_root: Path, change_id: str) -> list[dict[str, Any]]:
     """All recorded receipts for one Change, oldest first."""
     path = transitions_path(product_root)
@@ -407,12 +452,7 @@ def advance_change(
             "to": target,
             "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        entry["receipt"] = _receipt(entry)
-
-        path = transitions_path(product_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        entry = append_receipt(product_root, entry)
 
         _write_change_status(change_path, data, target)
 
@@ -619,9 +659,5 @@ def set_artifact_status(
             # The file name need not be the id (TASK-NNN-<slug>.md): the leash
             # reads the rewritten file from here, not from the id.
             entry["path"] = file.relative_to(product_root).as_posix()
-        entry["receipt"] = _receipt(entry)
-        path = transitions_path(product_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        entry = append_receipt(product_root, entry)
         return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}

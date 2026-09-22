@@ -39,16 +39,6 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_yaml_mapping(path: Path, data: dict[str, Any]) -> None:
-    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
-    content_bytes = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
-    if path.is_file():
-        atomic_replace(path, content_bytes)
-    else:
-        atomic_create(path, content_bytes)
-
-
-
 def find_decision_file(product_root: Path, decision: str) -> Path:
     raw = decision.strip()
     if not raw:
@@ -86,28 +76,11 @@ def _unblock_change_if_decisions_resolved(product_root: Path, change_id: str, ch
         return None
     if data.get("status") != "blocked-on-decision":
         return None
-    from deltafuse.core.transitions import _receipt, transitions_path
+    from deltafuse.core.transitions import record_change_status
 
-    import json as _json
-    from datetime import datetime, timezone
-
-    data["status"] = "analyzing"
-    _write_yaml_mapping(change_file, data)
     # V3-FIX-009: decide is a Core command, so its unblock transition is
-    # journaled like any other Core status write.
-    entry = {
-        "kind": "unblock",
-        "change": data.get("id") or change_dir.name,
-        "gate": "decide",
-        "from": "blocked-on-decision",
-        "to": "analyzing",
-        "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    entry["receipt"] = _receipt(entry)
-    path = transitions_path(product_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline=chr(10)) as handle:
-        handle.write(_json.dumps(entry, ensure_ascii=False) + chr(10))
+    # journaled like any other Core status write - receipt first.
+    record_change_status(change_dir, status="analyzing", kind="unblock", gate="decide")
     return "analyzing"
 
 
@@ -175,9 +148,19 @@ def apply_decision(
             change_file = change_dir / "change.yaml"
             proposed = _load_yaml_mapping(change_file).get("status") == "specification-proposed"
             if status == "rejected" and proposed:
-                data = _load_yaml_mapping(change_file)
-                data["status"] = "analyzed"
-                _write_yaml_mapping(change_file, data)
+                from deltafuse.core.transitions import record_change_status
+
+                # The rejected proposal returns to analyzed with a receipt, like
+                # every other Core status write (roadmap item 1: it was a bare
+                # write of change.yaml).
+                record_change_status(
+                    change_dir,
+                    status="analyzed",
+                    kind="artifact-status",
+                    gate="decide",
+                    artifact="change",
+                    reason="spec rejected",
+                )
                 change_status = "analyzed"
                 written.append(_rel(product_root, change_file))
 

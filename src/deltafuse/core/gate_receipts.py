@@ -204,10 +204,19 @@ def _head_digest(product_root: Path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
 
 
-def _write_head(product_root: Path, digest: str) -> None:
-    path = _head_path(product_root)
+def _atomic_write(path: Path, content: bytes) -> None:
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(digest + "\n", encoding="utf-8")
+    if path.is_file():
+        atomic_replace(path, content)
+    else:
+        atomic_create(path, content)
+
+
+def _write_head(product_root: Path, digest: str) -> None:
+    # Atomic: a torn head read as "journal truncated or replaced".
+    _atomic_write(_head_path(product_root), (digest + "\n").encode("utf-8"))
 
 
 def journal_errors(product_root: Path) -> list[str]:
