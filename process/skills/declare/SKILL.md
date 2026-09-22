@@ -31,7 +31,7 @@ Do not read implementation internals unless the oracle cannot otherwise be expre
 2. Freeze the declared oracle from the task and specification: what must become true.
 3. Add or modify the smallest automated test that demonstrates the missing behavior or defect.
 4. Run that test against unchanged production code by calling the kernel, not by hand-writing YAML:
-   `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
+   `deltafuse evidence <change-dir> --phase red --task <task-id> -- <command>`. The Core records the changed files itself (`--changed-path` is optional).
 5. Require CLI exit 0 (authentic Red): expected behavior failure (`behavioral-mismatch`), not compilation, import, fixture, environment, or `_`-prefixed internals. Import/syntax still write YAML but are not a gate pass.
 6. `changed_paths` must stay inside `PHASE_CONTRACTS` Declare write scope (`tests/**`, Red evidence); do not list production `src/**`.
 7. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status declared` (only after valid Red). Never set task or Change status by hand.

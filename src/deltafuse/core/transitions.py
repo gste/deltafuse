@@ -378,6 +378,24 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
     return last
 
 
+# Gates that read coverage.yaml. The Core derives it from routing, slices,
+# tasks and evidence, so it refreshes it itself before judging: a missing or
+# stale mapping was a gate the Worker could only fix by running a Core command
+# it had to remember (roadmap item 4: box B -> box A).
+COVERAGE_GATES = frozenset({"analyzed", "converged"})
+
+
+def _refresh_coverage(change_path: Path) -> None:
+    from deltafuse.core.analyze import CoverageError, write_coverage
+
+    if not (change_path / "routing.yaml").is_file():
+        return
+    try:
+        write_coverage(change_path)
+    except CoverageError:
+        pass  # the gate names what is missing (a slice, a claim)
+
+
 def advance_change(
     start: Path | str,
     gate: str,
@@ -400,6 +418,9 @@ def advance_change(
     if not change_path.is_dir():
         raise TransitionError(f"Change directory not found: {change_path}")
     product_root = find_repo_root(change_path)
+
+    if gate in COVERAGE_GATES:
+        _refresh_coverage(change_path)
 
     with ProductMutationLock(product_root):
         # Crash residue from a previous advance: the receipt is authoritative,

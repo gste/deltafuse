@@ -257,6 +257,11 @@ def run_evidence(
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])
+    if not rel_paths and phase != "verification":
+        # The Core computes the changed set from git anyway and refused a list
+        # that missed any of it; with no list it records its own (roadmap item
+        # 4: box B -> box A). A list the Worker gives is still checked.
+        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root))
 
     def _as_text(raw: object) -> str:
         if raw is None:

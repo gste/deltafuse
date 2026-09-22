@@ -449,8 +449,12 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
         for raw in meta.get("allowed_paths") or []:
             task_glob = str(raw)
             if not any(_glob_covers(task_glob, g) for g in bounds):
+                # The bound, not a field name: slices carry no target_paths in
+                # the schema, so "escapes target_paths" named nothing the
+                # Worker could see or change (roadmap item 4, box B).
                 errors.append(
-                    f"Task {tid}: allowed_paths '{task_glob}' escapes slice '{sid}' target_paths"
+                    f"Task {tid}: allowed_paths '{task_glob}' is outside what this Change may "
+                    f"write; use paths under {', '.join(bounds)}"
                 )
     return errors
 

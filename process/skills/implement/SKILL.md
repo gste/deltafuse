@@ -30,7 +30,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 1. Verify the task is `declared` and Red evidence matches the frozen target.
 2. Implement the minimum production change inside allowed scope.
 3. Record Green with the kernel, not by hand-writing YAML:
-   `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <target-command>`.
+   `deltafuse evidence <change-dir> --phase green --task <task-id> -- <target-command>`. The Core records the changed files itself (`--changed-path` is optional).
 4. Record scoped regression the same way (`--phase regression`). The runner fills `exit_code`, `failure_category`, and `base_revision`.
 5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. CLI exit 0 is required for both Green and regression.
 6. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status implemented`; retain the task file and its history inside the Change.

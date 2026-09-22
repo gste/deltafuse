@@ -1,4 +1,4 @@
-"""E2E: the Worker's path after roadmap item 1, from intake to declare.
+"""E2E: the Worker's path after roadmap items 1 and 4, from intake to converged.
 
 Every structural artifact is written by `deltafuse artifact write`, every status
 by the Core, and after each step the leash judges the diff since the last
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -57,7 +58,7 @@ def _selected(root: Path):
     return select_next(build_work_queue(root))
 
 
-def test_the_writer_path_reaches_declare_with_a_clean_leash(tmp_path: Path, repo_root: Path, capsys):
+def test_the_writer_path_reaches_converged_with_a_clean_leash(tmp_path: Path, repo_root: Path, capsys):
     root = tmp_path / "product"
     inputs = tmp_path / "inputs"
     inputs.mkdir()
@@ -100,7 +101,8 @@ def test_the_writer_path_reaches_declare_with_a_clean_leash(tmp_path: Path, repo
         "spec_refs": ["docs/spec/core.md"],
     }, "body": "Print a banner on start. Unchanged: start-up itself."})
     _step_done(root, capsys, "analyze slice")
-    _cli(capsys, "coverage", str(change))
+    # No `deltafuse coverage`: the gate judges the coverage the Core can derive
+    # and `advance` writes it (roadmap item 4, box A).
     _cli(capsys, "check-gate", str(change), "--gate", "analyzed")
     _cli(capsys, "advance", str(change), "--gate", "analyzed")
     _step_done(root, capsys, "analyze coverage")
@@ -130,5 +132,45 @@ def test_the_writer_path_reaches_declare_with_a_clean_leash(tmp_path: Path, repo
     _cli(capsys, "advance", str(change), "--gate", "decomposed")
     _step_done(root, capsys, "decompose")
 
+    # Declare: the Red oracle; no --changed-path, the Core records the set.
     selected = _selected(root)
     assert (selected.skill, selected.task) == ("declare", "TASK-001")
+    oracle = root / "tests" / "test_banner.py"
+    oracle.parent.mkdir(parents=True, exist_ok=True)
+    oracle.write_text(
+        "from pathlib import Path\n"
+        "assert 'BANNER' in Path('src/app.py').read_text(encoding='utf-8') if Path('src/app.py').is_file() else False, 'no banner'\n",
+        encoding="utf-8",
+    )
+    run = [sys.executable, "tests/test_banner.py"]
+    _cli(capsys, "evidence", str(change), "--phase", "red", "--task", "TASK-001", "--", *run)
+    red = yaml.safe_load((change / "evidence" / "red" / "TASK-001.yaml").read_text(encoding="utf-8"))
+    assert red["changed_paths"] == ["tests/test_banner.py"]
+    _cli(capsys, "state", str(change), "--task", "TASK-001", "--status", "declared")
+    _cli(capsys, "check-gate", str(change), "--gate", "declaring")
+    _cli(capsys, "advance", str(change), "--gate", "declaring")
+    _step_done(root, capsys, "declare")
+
+    # Implement: the code, Green and Regression, the gate.
+    assert _selected(root).skill == "implement"
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "app.py").write_text("BANNER = 'hello'\n", encoding="utf-8")
+    for phase in ("green", "regression"):
+        _cli(capsys, "evidence", str(change), "--phase", phase, "--task", "TASK-001", "--", *run)
+    _cli(capsys, "state", str(change), "--task", "TASK-001", "--status", "implemented")
+    _cli(capsys, "check-gate", str(change), "--gate", "implemented")
+    _cli(capsys, "advance", str(change), "--gate", "implemented")
+    _step_done(root, capsys, "implement")
+
+    # Verify: the report, the Change-level run; coverage is the Core's.
+    assert _selected(root).skill == "verify"
+    (change / "verification.md").write_text("# Verification\n\nconverged\n", encoding="utf-8")
+    _cli(capsys, "evidence", str(change), "--phase", "verification", "--", *run)
+    ownership = yaml.safe_load((change / "evidence" / "verification" / "run.yaml").read_text(encoding="utf-8"))["ownership"]
+    assert ownership["measurable"] is True and ownership["unrouted"] == {}, ownership
+    _cli(capsys, "state", str(change), "--task", "TASK-001", "--status", "verified")
+    _cli(capsys, "check-gate", str(change), "--gate", "converged")
+    _cli(capsys, "advance", str(change), "--gate", "converged")
+    claim = yaml.safe_load((change / "coverage.yaml").read_text(encoding="utf-8"))["claims"]["CR-001"]
+    assert claim["evidence"]["green"] == "evidence/green/TASK-001.yaml"
+    _step_done(root, capsys, "verify")

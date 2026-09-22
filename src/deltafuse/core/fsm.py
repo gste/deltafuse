@@ -921,6 +921,16 @@ def _human_gate_errors(
     return errors
 
 
+def _derived_coverage(change_path: Path) -> dict[str, Any] | None:
+    """coverage.yaml as the Core would write it now, or None when it cannot."""
+    from deltafuse.core.analyze import CoverageError, build_coverage_document
+
+    try:
+        return build_coverage_document(change_path)
+    except (CoverageError, OSError):
+        return None
+
+
 def check_gate(
     change_dir: Path | str,
     gate: str,
@@ -977,7 +987,9 @@ def check_gate(
                 errors.append("Gate analyzed: routing.yaml is missing")
             elif artifact == "slices/":
                 errors.append("Gate analyzed: at least one slice file in slices/ is required")
-            elif artifact == "coverage.yaml":
+            elif artifact == "coverage.yaml" and _derived_coverage(change_path) is None:
+                # The Core derives coverage and `advance` writes it; the gate
+                # asks only whether it can be derived (roadmap item 4, box A).
                 errors.append("Gate analyzed: coverage.yaml is missing")
         for cap in uncovered_primary_capabilities(change_path):
             errors.append(
@@ -1123,9 +1135,10 @@ def check_gate(
         cov_file = change_path / "coverage.yaml"
         route, route_errs = load_change_route(change_path)
         errors.extend(route_errs)
-        if cov_file.is_file():
+        derived = _derived_coverage(change_path)
+        if derived is not None or cov_file.is_file():
             try:
-                cov_data = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+                cov_data = derived if derived is not None else yaml.safe_load(cov_file.read_text(encoding="utf-8"))
                 claims_map = cov_data.get("claims", {})
                 for c_id, c_val in claims_map.items():
                     if isinstance(c_val, dict):
