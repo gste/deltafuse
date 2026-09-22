@@ -1,5 +1,10 @@
 # q4 / tier 1 — output (2026-09-22)
 
+> **Решение владельца 2026-09-22:** фаза 2 (отказ на `converged` с откатом в
+> Analyze) снята. Остаётся фаза 1 — запись владения и T9. Вернуть фазу 2 можно
+> только после отдельного аудита пути отката: у ребра `verifying → analyzing`
+> нет команды, а повторный проход через уже реализованные задачи не проверен.
+
 Tier-1 answer to [1-AUDIT.md](1-AUDIT.md), produced against framework
 `3a26a0a` and bench `a2b835f`. Input for [2-DECOMPOSE.md](2-DECOMPOSE.md).
 
