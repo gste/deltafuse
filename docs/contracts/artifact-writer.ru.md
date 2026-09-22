@@ -2,7 +2,7 @@
 
 **Версия контракта:** 1  
 **Целевая схема хранения:** v3  
-**Версия фреймворка:** 3.1.0  
+**Версия фреймворка:** 3.2.0  
 **Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/v1`  
 **Receipt Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/receipt/v1`  
 

@@ -7,14 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-09-22
+
+The first version qualified against the dense ≤40B reference Worker
+(`qwen/qwen3.8-27b`): two q0 baseline runs converged with correctness 100.
+Roadmap: `backlog/roadmap/README.md`.
+
 ### Added
 
+- **The Worker writes structure only through the Artifact Writer** (roadmap
+  item 1). `deltafuse artifact write --kind K --change DIR --input FILE`
+  creates or updates a task, slice, routing, spec-delta, change field or
+  Decision from fields plus a prose body. The Core reads the expected sha256
+  itself and defaults `context_budget`, the `change.yaml` index, a Decision's
+  `DEC-NNNN` id, owner and date; spec-delta lists merge per slice. Skills
+  teach Writer inputs instead of frontmatter; intake scaffolds with
+  `deltafuse new`.
+- The leash accepts `routing.yaml`, `spec-delta.md`, slices, tasks and
+  `docs/decisions/DEC-*.md` only when their bytes match a known writer: the
+  Writer's receipt, `deltafuse state` (its receipt now records `sha256`) or
+  `decide` (gate journal).
+- **Code ownership record** (q4 decision D, phase 1): verification evidence
+  carries `ownership` - the capabilities a Change's code entered (through the
+  catalog's `code_roots`) that routing did not name, unowned paths, and how
+  blind the check is. Observed only; the bench reads it as T9.
+- **Optional Human Gate password**: `deltafuse gate-password set|clear|status`
+  stores a salted PBKDF2-SHA256 hash; `decide` asks for it interactively before
+  any write. Receipts record `human_check`.
+- Token counts record their mode; `DELTAFUSE_TOKENIZER_REQUIRED` refuses the
+  heuristic. The heuristic is `a04-01`: UTF-8 bytes / 3.75. Default
+  framework-controlled budget 64,000 tokens / 24 files.
 - Schema-driven Artifact Writer: `deltafuse artifact describe|create|update|validate|update-index` CLI subcommands and typed Python `ArtifactService` for schema-valid Change artifact creation and atomic JSON Pointer updates.
 - Bounded artifact reader (`strict_read_artifact`), frontmatter/YAML codec with explicit formatting canonicalization opt-in (`canonicalize_metadata`), product mutation locking, durable transaction receipts, and authority policy enforcement.
 - Small-model paired evaluation protocol (`evaluate_artifact_writer.py`), independent semantic oracle, and evaluation corpus (`tests/fixtures/artifact_writer_eval/eval_corpus.json`).
 
+### Changed
+
+- Three gate refusals moved from the Worker to the Core (roadmap item 4, gate
+  boxes): the `analyzed` and `converged` gates judge the coverage the Core can
+  derive and `advance` writes `coverage.yaml`; `deltafuse evidence` without
+  `--changed-path` records the Core-computed changed set; the `allowed_paths`
+  refusal names the paths the Change may write instead of a slice field that
+  does not exist.
+- Gates need every task; tasks follow their Change's phase; gates close from
+  the resting status; a bugfix goes from `analyzed` to `decomposed`; ops-route
+  tasks are not blocked by the default bounds.
+- One writer for `transitions.jsonl`; Core status writes journal first; the
+  archive and `journal-head` are written atomically; `decide` writes a verdict
+  and its receipt together or neither.
+- Skills and schema errors name the whole expected shape; a YAML value with
+  `': '` gets a hint to quote it; task files are named exactly after their id.
+- The qualification judge moved to `deltafuse-bench`.
+
+### Removed
+
+- Integrity profile `broker-signed`: its HMAC secret lived in the repository.
+  A config naming it is refused with a pointer to the Human Gate password.
+
 ### Fixed
 
+- `decide --spec accepted` goes through `advance_change`; leaving
+  `specification-proposed` needs the human's accepted verdict; a malformed
+  spec delta stays with the Worker, not the Human Gate.
+- The leash judges the Worker's diff, not the Core's own writes, and recognises
+  `deltafuse state` rewrites by their receipt.
+- A task receipt is never resumed as an advance; asking for the status a task
+  already has is not an error; an intake note a Change already took in is not
+  pending.
 - Remediated review findings across `AW-21` through `AW-36`:
   - `AW-21`: Core authorization context enforcement, target path containment inside `docs/changes/<change_id>/`, and halted stage rejection.
   - `AW-22`: Semantic field omission checks and reference validation against existing slice, spec, and dependency files on disk.

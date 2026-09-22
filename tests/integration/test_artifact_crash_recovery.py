@@ -1,6 +1,7 @@
 """Integration tests for crash boundary recovery and durable receipt finalization (AW-09)."""
 
 from __future__ import annotations
+from deltafuse import __version__ as FW_VERSION
 
 import hashlib
 from pathlib import Path
@@ -180,7 +181,7 @@ def test_receipt_failure_after_publish_preserves_journal_state_and_raises(tmp_pa
     root.mkdir()
     lock_hash = get_installed_lock_hash()
     (root / ".deltafuse" / "lock.yaml").parent.mkdir(parents=True, exist_ok=True)
-    (root / ".deltafuse" / "lock.yaml").write_text(f"schema_version: 3\nframework:\n  version: '3.1.0'\n  source: deltafuse\n  content_hash: '{lock_hash}'\n", encoding="utf-8")
+    (root / ".deltafuse" / "lock.yaml").write_text(f"schema_version: 3\nframework:\n  version: '{FW_VERSION}'\n  source: deltafuse\n  content_hash: '{lock_hash}'\n", encoding="utf-8")
     chg_dir = root / "docs" / "changes" / "CHG-200"
     chg_dir.mkdir(parents=True, exist_ok=True)
     (chg_dir / "change.yaml").write_text("id: CHG-200\nstatus: active\n", encoding="utf-8")

@@ -1,5 +1,6 @@
 """Integration tests for security boundaries, path protection, crash recovery, and authorization (AW-17)."""
 
+from deltafuse import __version__ as FW_VERSION
 import hashlib
 import json
 from pathlib import Path
@@ -122,7 +123,7 @@ def test_aw21_reproduce_security_failures(tmp_path: Path):
     (repo_root / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"
@@ -242,7 +243,7 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
     (repo / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"

@@ -1,3 +1,4 @@
+from deltafuse import __version__ as FW_VERSION
 import importlib.util
 import json
 import os
@@ -66,7 +67,7 @@ def test_subprocess_artifact_create_via_stdin(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"
@@ -123,7 +124,7 @@ def test_subprocess_artifact_core_owned_field_denied(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"
@@ -164,7 +165,7 @@ def test_subprocess_artifact_update_retry_and_idempotency(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"
@@ -244,7 +245,7 @@ def test_aw37_cli_create_missing_change_authority_rejected(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {get_installed_lock_hash()}\n",
         encoding="utf-8",
@@ -293,7 +294,7 @@ def test_aw38_cli_create_missing_content_hash_rejected(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n",
         encoding="utf-8",
     )

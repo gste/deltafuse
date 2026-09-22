@@ -1,6 +1,7 @@
 """Unit tests for the typed Artifact Writer service (AW-10)."""
 
 from __future__ import annotations
+from deltafuse import __version__ as FW_VERSION
 
 import hashlib
 from pathlib import Path
@@ -21,7 +22,7 @@ def product_root(tmp_path: Path) -> Path:
     (root / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"
@@ -378,7 +379,7 @@ def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Pat
 
     # Part A: Malformed lock.yaml (unsupported schema_version: 99)
     lock_file = root / ".deltafuse" / "lock.yaml"
-    lock_file.write_text("schema_version: 99\nframework:\n  version: 3.1.0\n", encoding="utf-8")
+    lock_file.write_text(f"schema_version: 99\nframework:\n  version: {FW_VERSION}\n", encoding="utf-8")
 
     auth = AuthorizationContext(
         actor="worker",
@@ -422,7 +423,7 @@ def test_reproduce_finding_4_malformed_lock_and_receipt_provenance(tmp_path: Pat
     lock_file.write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {get_installed_lock_hash()}\n"
         "workflow:\n"
@@ -667,11 +668,11 @@ def test_aw34_missing_slice_selection_and_malformed_slice_rejection(tmp_path: Pa
     root = tmp_path / "repo"
     root.mkdir()
     (root / ".deltafuse").mkdir()
-    (root / ".deltafuse" / "config.yaml").write_text("framework_version: 3.1.0\n", encoding="utf-8")
+    (root / ".deltafuse" / "config.yaml").write_text(f"framework_version: {FW_VERSION}\n", encoding="utf-8")
     (root / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n",
         encoding="utf-8",

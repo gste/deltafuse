@@ -4,6 +4,7 @@ Tests CLI parsing, JSON stdin/file inputs, exit codes (0, 2, 3, 4, 5),
 core-owned field protection, Unicode preservation, and tool argument schemas.
 """
 
+from deltafuse import __version__ as FW_VERSION
 import json
 from pathlib import Path
 import pytest
@@ -46,7 +47,7 @@ def _setup_cli_test_dir(tmp_path):
     (tmp_path / ".deltafuse" / "lock.yaml").write_text(
         "schema_version: 3\n"
         "framework:\n"
-        "  version: 3.1.0\n"
+        f"  version: {FW_VERSION}\n"
         "  source: deltafuse\n"
         f"  content_hash: {lock_hash}\n"
         "workflow:\n"

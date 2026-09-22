@@ -1,5 +1,6 @@
 """Unit tests for typed patch application and immutable-field protection (AW-05)."""
 
+from deltafuse import __version__ as FW_VERSION
 import pytest
 from deltafuse.core.artifact_patch import (
     apply_artifact_patch,
@@ -82,7 +83,7 @@ def test_ancestor_descendant_overlap_rejected():
         "id": "CHG-001",
         "title": "Title",
         "status": "normalized",
-        "framework": {"version": "3.1.0", "content_hash": "sha256:" + ("0" * 64)},
+        "framework": {"version": FW_VERSION, "content_hash": "sha256:" + ("0" * 64)},
         "intent": "bugfix",
         "risk": "low",
         "source": {"request": "request.md", "intake_refs": []},

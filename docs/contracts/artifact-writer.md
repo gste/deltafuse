@@ -2,7 +2,7 @@
 
 **Contract Version:** 1  
 **Target Storage Schemas:** v3  
-**Framework Version:** 3.1.0  
+**Framework Version:** 3.2.0  
 **Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/v1`  
 **Receipt Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/receipt/v1`  
 

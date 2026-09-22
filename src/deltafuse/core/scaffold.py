@@ -31,6 +31,8 @@ class ScaffoldError(Exception):
 
 
 def _get_framework_info(product_root: Path) -> dict[str, str]:
+    from deltafuse import __version__ as running_version
+
     lock = product_root / ".deltafuse" / "lock.yaml"
     if lock.is_file():
         try:
@@ -38,13 +40,13 @@ def _get_framework_info(product_root: Path) -> dict[str, str]:
             if isinstance(data, dict) and isinstance(data.get("framework"), dict):
                 fw = data["framework"]
                 return {
-                    "version": str(fw.get("version", "3.1.0")),
+                    "version": str(fw.get("version", running_version)),
                     "content_hash": str(fw.get("content_hash", "sha256:" + ("0" * 64))),
                 }
         except Exception:
             pass
     return {
-        "version": "3.1.0",
+        "version": running_version,
         "content_hash": "sha256:" + ("0" * 64),
     }
 
