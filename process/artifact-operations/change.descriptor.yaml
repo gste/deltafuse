@@ -13,6 +13,7 @@ updatable_semantic_fields:
   - /source/request
   - /source/intake_refs
   - /analysis/summary
+  - /route
 core_owned_fields:
   - schema_version
   - id

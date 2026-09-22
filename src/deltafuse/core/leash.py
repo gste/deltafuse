@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -246,6 +247,102 @@ def is_product_path(rel_path: str, *, baseline: str = "draft") -> bool:
 
 def is_change_artifact(rel_path: str) -> bool:
     return matches_contract_globs(posix_relpath(rel_path), [CHANGE_ARTIFACT_GLOB])
+
+
+def structural_kind(rel_path: str) -> str | None:
+    """The Writer kind of a structural Change artifact, or None for prose and code.
+
+    Roadmap item 1: these files are structure the Worker never writes by hand;
+    `deltafuse artifact write` writes them and the Core rewrites their status.
+    """
+    parts = posix_relpath(rel_path).split("/")
+    if len(parts) < 4 or parts[0] != "docs" or parts[1] != "changes":
+        return None
+    tail = parts[3:]
+    if tail == ["routing.yaml"]:
+        return "routing"
+    if tail == ["spec-delta.md"]:
+        return "spec-delta"
+    if len(tail) == 2 and tail[1].endswith(".md"):
+        return {"slices": "slice", "tasks": "task"}.get(tail[0])
+    return None
+
+
+def _bytes_at(product_root: Path, rel_path: str, *, head: str | None) -> bytes | None:
+    if head:
+        proc = subprocess.run(
+            ["git", "show", f"{head}:{rel_path}"], cwd=product_root, capture_output=True, check=False
+        )
+        return proc.stdout if proc.returncode == 0 else None
+    path = product_root / rel_path
+    return path.read_bytes() if path.is_file() else None
+
+
+def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str, set[str]]:
+    """sha256 of every structural write whose writer is known, per path.
+
+    Three writers leave a digest of what they wrote: the Artifact Writer
+    (`result_sha256` in `.deltafuse/receipts/`), `deltafuse state`
+    (`sha256` in its artifact-status receipt) and `decide` (`artifact_sha256`
+    in the gate journal). A file whose bytes match none of them was written by
+    hand. The digests are not keyed: like the journals, this proves the shape
+    of the Core's path, not provenance (docs/contracts/leash.md).
+    """
+    root = Path(product_root)
+    out: dict[str, set[str]] = {}
+
+    def add(rel: Any, digest: Any) -> None:
+        if isinstance(rel, str) and isinstance(digest, str) and digest:
+            out.setdefault(posix_relpath(rel), set()).add(digest.removeprefix("sha256:").lower())
+
+    receipt_names: list[str] = []
+    if head:
+        listing = subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", head, ".deltafuse/receipts"],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+        receipt_names = [line for line in listing.stdout.splitlines() if line.endswith(".json")]
+    else:
+        folder = root / ".deltafuse" / "receipts"
+        if folder.is_dir():
+            receipt_names = [f".deltafuse/receipts/{p.name}" for p in folder.glob("*.json")]
+    for rel in receipt_names:
+        try:
+            receipt = json.loads(_bytes_at(root, rel, head=head) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if isinstance(receipt, dict) and receipt.get("outcome", "committed") == "committed":
+            add(receipt.get("target"), receipt.get("result_sha256"))
+    for journal, digest_key in ((".deltafuse/transitions.jsonl", "sha256"),
+                                (".deltafuse/gate-journal.jsonl", "artifact_sha256")):
+        text = _bytes_at(root, journal, head=head)
+        for line in (text or b"").decode("utf-8", errors="replace").splitlines():
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                add(entry.get("path"), entry.get(digest_key))
+    return out
+
+
+def hand_written_errors(
+    product_root: Path, rel_path: str, *, head: str | None, vouched: dict[str, set[str]]
+) -> list[str]:
+    """A structural artifact whose bytes no known writer produced."""
+    kind = structural_kind(rel_path)
+    if kind is None:
+        return []
+    rel = posix_relpath(rel_path)
+    data = _bytes_at(Path(product_root), rel, head=head)
+    if data is None:
+        return []  # deleted: the envelope decides
+    if hashlib.sha256(data).hexdigest() in vouched.get(rel, set()):
+        return []
+    return [
+        f"leash: '{rel}' was written by hand; write {kind} artifacts with "
+        f"`deltafuse artifact write --kind {kind} --change <change-dir>` (roadmap item 1)"
+    ]
 
 
 def collect_ready_envelopes(queue: Any, product_root: Path, halt: Any) -> list[dict[str, Any]]:
@@ -670,6 +767,7 @@ def check_paths(
     status_writes = (
         core_status_writes(product_root, base=base, head=head) if product_root is not None else {}
     )
+    vouched = vouched_digests(product_root, head=head) if product_root is not None else {}
     for raw in _unique(rel_paths):
         # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
         # whole, so checking it second would make the Core-owned guard dead code.
@@ -691,6 +789,8 @@ def check_paths(
         if raw.startswith(".git/") or is_exempt_path(raw):
             continue
         if _covered_by(raw, env_list) is not None:
+            if product_root is not None:
+                errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
         status_reasons = status_writes.get(posix_relpath(raw))
         if status_reasons is not None:

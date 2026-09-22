@@ -10,6 +10,7 @@ one key per retry.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -22,28 +23,45 @@ from deltafuse.core.schemas import default_registry
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
-def _yaml_examples(skill: Path) -> list[dict]:
-    """Every ```yaml block of a skill, dedented, without its '---' frame."""
+def _json_examples(skill: Path) -> list[dict]:
+    """Every ```json block of a skill: the Artifact Writer inputs it teaches."""
     text = skill.read_text(encoding="utf-8")
-    blocks = re.findall(r"```yaml\n(.*?)```", text, re.S)
-    assert blocks, f"{skill} shows no yaml example"
-    out = []
-    for block in blocks:
-        lines = [line for line in block.splitlines() if line.strip() and line.strip() != "---"]
-        indent = min(len(line) - len(line.lstrip()) for line in lines)
-        out.append(yaml.safe_load("\n".join(line[indent:] for line in lines)))
-    return out
+    blocks = re.findall(r"```json\s*\n(.*?)```", text, re.S)
+    assert blocks, f"{skill} shows no Writer input example"
+    return [json.loads(block) for block in blocks]
 
 
-@pytest.mark.parametrize(
-    "skill, schemas",
-    [("specify", ["spec-delta"]), ("decompose", ["task"]), ("analyze", ["routing", "slice"])],
-)
-def test_skill_yaml_examples_pass_their_schemas(repo_root: Path, skill: str, schemas: list[str]):
-    examples = _yaml_examples(repo_root / "process" / "skills" / skill / "SKILL.md")
-    assert len(examples) == len(schemas)
-    for example, schema in zip(examples, schemas):
-        assert default_registry.validate(schema, example) == [], schema
+PLACEHOLDERS = {
+    "<domain>.<capability>": "system.core",
+    "docs/spec/<domain>/<capability>.md": "docs/spec/core.md",
+    "#REQ-ID": "#REQ-01",
+    "src/<module>.py": "src/app.py",
+    "tests/test_<module>.py": "tests/test_app.py",
+}
+
+
+def _concrete(example: dict) -> dict:
+    text = json.dumps(example)
+    for placeholder, value in PLACEHOLDERS.items():
+        text = text.replace(placeholder, value)
+    return json.loads(text)
+
+
+def test_the_skills_writer_examples_are_accepted_by_the_writer(tmp_path: Path, repo_root: Path):
+    """Roadmap item 1: the skills teach Writer inputs, not frontmatter. Each
+    example, with its placeholders filled, must pass the Writer as taught - in
+    lifecycle order, on one Change."""
+    from deltafuse.core.artifact_write import split_envelope, write_artifact
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-800", title="Examples").step_intake()
+    for skill, kinds in (("analyze", ["routing", "slice"]), ("specify", ["spec-delta"]), ("decompose", ["task"])):
+        examples = _json_examples(repo_root / "process" / "skills" / skill / "SKILL.md")
+        assert len(examples) == len(kinds), skill
+        for example, kind in zip(examples, kinds):
+            identity, target, fields, body = split_envelope(_concrete(example))
+            receipt = write_artifact(builder.change_dir, kind, identity=identity, target=target, fields=fields, body=body)
+            assert receipt["operation"] == "create", (skill, kind)
 
 
 def test_task_schema_error_names_the_whole_shape(tmp_path: Path, repo_root: Path):

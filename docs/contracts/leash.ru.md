@@ -18,6 +18,8 @@ Intake `write` не содержит `src/**`. Declare/Implement оставля�
 
 **Записи статуса ядром.** Файл задачи или слайса вне envelope проходит только как перезапись, которую делает `deltafuse state`: с базы дописан receipt `artifact-status`, статус сменился с `from` первого receipt на `to` последнего, остальной frontmatter и тело не изменились. Файл называет поле `path` receipt (это может быть `TASK-NNN-<slug>.md`; принимается только файл из `tasks/` или `slices/` этого Change). Любая другая правка такого файла — нарушение envelope.
 
+**Структурные артефакты.** `routing.yaml`, `spec-delta.md`, `slices/*.md` и `tasks/*.md` Change проходят, даже внутри envelope, только если их байты совпадают с digest известного писателя: receipt Artifact Writer (`result_sha256` в `.deltafuse/receipts/`), `deltafuse state` (`sha256` в receipt `artifact-status`) или `decide` (`artifact_sha256` в журнале гейтов). Рукописный файл — нарушение с подсказкой команды `deltafuse artifact write` (п. 1 роадмапа).
+
 **Кэши интерпретатора.** `*.pyc`, `__pycache__/**` и `.pytest_cache/**` исключены: их пишет запуск Red- и Green-тестов, и воркер не может этого избежать.
 
 **`forbidden_paths` задачи.** На Declare и Implement `forbidden_paths` задачи сужают только её тестовую и продуктовую область. Собственные файлы Change (`docs/changes/*/evidence/**`, `coverage.yaml`, `change.yaml`) остаются в envelope: туда пишет `deltafuse evidence`, и задача, запретившая `docs/**`, не должна превращать это в нарушение.

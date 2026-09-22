@@ -27,20 +27,22 @@ Read the named slice, its typed delta, `spec_refs` from `next`, accepted related
 
 ## Procedure
 
-1. If `requirement_delta` changes requirements, write a bounded `spec-delta.md`. Its frontmatter is required in exactly this shape - lowercase keys, every list present even when empty, each entry a spec path with the requirement anchor; no other keys:
+1. If `requirement_delta` changes requirements, record this slice in `spec-delta.md` with `deltafuse artifact write --kind spec-delta --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. Name only this slice's entries - every list present even when empty, each entry a spec path with the requirement anchor; the Core merges them with earlier slices and appends your prose:
 
-   ```yaml
-   ---
-   change: CHG-001-example
-   status: proposed
-   slices: [SLICE-01]
-   added: [docs/spec/<domain>/<capability>.md#REQ-ID]
-   modified: []
-   removed: []
-   ---
+   ```json
+   {
+     "identity": "spec-delta",
+     "fields": {
+       "slices": ["SLICE-01"],
+       "added": ["docs/spec/<domain>/<capability>.md#REQ-ID"],
+       "modified": [],
+       "removed": []
+     },
+     "body": "## SLICE-01\n\nWhat changes for the human reviewer, in prose."
+   }
    ```
 
-   The body may repeat them under `## ADDED`, `## MODIFIED`, `## REMOVED` for the human. Use stable requirement/scenario IDs. Added/modified paths must stay inside this slice's `spec_refs`.
+   Use stable requirement/scenario IDs. Added/modified paths must stay inside this slice's `spec_refs`.
 2. Edit only declared specification files and requirements. Keep the live spec imperative and free of change-log prose.
 3. Apply an accepted capability catalog delta when required.
 4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into the named spec files.

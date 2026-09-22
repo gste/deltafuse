@@ -7,8 +7,10 @@ allowed_operations:
   - validate
   - describe
 creatable_semantic_fields:
+  - route
   - claims
 updatable_semantic_fields:
+  - /route
   - /claims
 core_owned_fields:
   - change

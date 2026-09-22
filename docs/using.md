@@ -150,6 +150,24 @@ deltafuse leash <product-root> --file src/foo.py
 
 Core provides a schema-driven serialization and validation service for Change package artifacts ([artifact-writer.md](./contracts/artifact-writer.md)).
 
+### The Worker's path: `artifact write`
+
+The Worker writes structure only through the Writer; it writes prose (the body) and
+names fields, and the Core writes `id`, `change`, `status`, a task's
+`context_budget`, the file and the `change.yaml` index (roadmap item 1):
+
+```text
+deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.json
+```
+
+`task.json` is `{"identity": "TASK-001", "fields": {...}, "body": "prose"}`. No file
+yet: it is created; a file: only the fields given change, and the Core reads the
+expected sha256 itself. `spec-delta` lists merge per slice and its prose is
+appended. A host with tool calling exposes the same input as a typed tool.
+Kinds: `task`, `slice`, `routing`, `spec-delta`, `change`. The leash refuses a
+`routing.yaml`, `spec-delta.md`, slice or task file whose bytes neither the Writer
+nor the Core (`deltafuse state`, `decide`) produced.
+
 ### Practical Usage & Examples
 
 ```text
@@ -170,10 +188,10 @@ deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task 
 ```
 
 ### Capability Detection & Compatibility
-Clients detect Artifact Writer availability using `deltafuse artifact describe --kind <kind> --operation <op>`. If the subcommand is unavailable or returns unsupported kind errors, clients fall back to manual frontmatter authoring.
+Clients detect Artifact Writer availability using `deltafuse artifact describe --kind <kind> --operation <op>`.
 
-### Manual Authoring Fallback & Legacy Artifacts
-Manual YAML/frontmatter authoring remains fully valid and supported. Existing artifacts are never automatically rewritten or bulk-migrated. The Artifact Writer reads legacy and manually authored artifacts seamlessly.
+### Legacy Artifacts
+Existing artifacts are never automatically rewritten or bulk-migrated; the Writer reads manually authored ones. New writes of `routing.yaml`, `spec-delta.md`, slices and tasks go through the Writer: the leash judges only what changed since its base, so artifacts already committed are not affected.
 
 ### Canonicalization Opt-in
 To reformat or normalize metadata on existing noncanonical artifacts, an explicit `--canonicalize-metadata` opt-in is required alongside expected target hash verification. Noncanonical metadata will not be reformatted without explicit consent.

@@ -198,6 +198,59 @@ def _gate_password_command(action: str, target: Path) -> int:
     print(f"gate-password: enabled ({gate_password.PASSWORD_REL}; stores a salted hash only)")
     return 0
 
+def _artifact_write_command(args: argparse.Namespace) -> int:
+    """`deltafuse artifact write`: one command, the Core decides create or update."""
+    from deltafuse.core.artifact_lock import ArtifactLockError
+    from deltafuse.core.artifact_patch import ArtifactPatchError
+    from deltafuse.core.artifact_policy import ArtifactPolicyError
+    from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
+    from deltafuse.core.artifact_transactions import ArtifactTransactionError
+    from deltafuse.core.artifact_write import split_envelope, write_artifact
+    from deltafuse.core.artifacts import ArtifactServiceError
+
+    max_bytes = 1024 * 1024
+
+    def fail(code: str, message: str, ret: int) -> int:
+        if args.json:
+            print(json.dumps({"ok": False, "error": {"code": code, "message": message}}, ensure_ascii=False, indent=2))
+        print(f"artifact write: {message}", file=sys.stderr)
+        return ret
+
+    try:
+        if args.input == "-":
+            raw_bytes = sys.stdin.buffer.read(max_bytes + 1) if hasattr(sys.stdin, "buffer") else sys.stdin.read().encode("utf-8")
+        else:
+            source = Path(args.input)
+            if not source.is_file():
+                return fail("file_not_found", f"input file not found: {args.input}", 2)
+            raw_bytes = source.read_bytes()
+        raw_json = strict_parse_json(raw_bytes, max_bytes=max_bytes)
+        identity, target, fields, body = split_envelope(raw_json)
+        receipt = write_artifact(
+            Path(args.change),
+            args.kind,
+            identity=identity,
+            target=target,
+            fields=fields,
+            body=body,
+            request_id=raw_json.get("request_id") if isinstance(raw_json, dict) else None,
+        )
+    except ArtifactReaderError as ex:
+        return fail(ex.code, f"input is not valid JSON: {ex.message}", 2)
+    except (ArtifactPolicyError, ArtifactPatchError, ArtifactServiceError) as ex:
+        code = getattr(ex, "code", "artifact_error")
+        ret = 3 if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority") else 2
+        message = str(ex) if str(ex).startswith("[") else f"[{code}] {ex}"
+        return fail(code, message, ret)
+    except (ArtifactLockError, ArtifactTransactionError) as ex:
+        return fail(getattr(ex, "code", "lock_error"), str(ex), 5)
+    if args.json:
+        print(json.dumps({"ok": True, **receipt}, ensure_ascii=False, indent=2))
+    else:
+        print(f"artifact write: {receipt['operation']} {receipt.get('target')}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Bound installation/registry failures at the public Artifact CLI boundary."""
     from deltafuse.core.artifact_registry import ArtifactRegistryError
@@ -516,6 +569,18 @@ def _main(argv: list[str] | None = None) -> int:
     art_update.add_argument("--target", help="Target relative file path; overrides JSON envelope if set")
     art_update.add_argument("--expected-sha256", help="Expected SHA256 digest of target file")
     art_update.add_argument("--json", action="store_true", help="Output JSON receipt to stdout")
+
+    art_write = art_sub.add_parser(
+        "write",
+        help="Create or update a Change artifact: fields plus a prose body (the Worker's path)",
+    )
+    art_write.add_argument("--kind", "-k", required=True, help="task | slice | routing | spec-delta | change")
+    art_write.add_argument("--change", "-c", required=True, help="Change directory")
+    art_write.add_argument(
+        "--input", "-i", required=True,
+        help='JSON file (or - for stdin): {"identity" | "target", "fields": {...}, "body": "..."}',
+    )
+    art_write.add_argument("--json", action="store_true", help="Output the Writer receipt as JSON")
 
     art_val = art_sub.add_parser("validate", help="Validate an artifact strictly read-only")
     art_val.add_argument("--kind", "-k", required=True, help="Target artifact kind")
@@ -1283,6 +1348,9 @@ def _main(argv: list[str] | None = None) -> int:
             else:
                 print(f"artifact create: kind '{args.kind}' identity '{identity}' created (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
             return 0
+
+        elif args.artifact_cmd == "write":
+            return _artifact_write_command(args)
 
         elif args.artifact_cmd == "update":
             from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json

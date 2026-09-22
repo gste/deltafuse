@@ -27,29 +27,30 @@ Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks
 
 ## Procedure
 
-1. Create `docs/changes/<change-id>/tasks/TASK-NNN.md` files - name each file exactly after its id, no slug: later steps open the task by that name. Frontmatter `id` is `TASK-001` (digits only, no slug). Status `pending`, not `proposed`.
-2. Give each task one verifiable outcome that fits one implementation context.
-3. Write the task frontmatter in exactly this shape - every key required, no others (no `title`, `claims`, `dependencies`):
+1. Create each task with the Artifact Writer, one call per task: `deltafuse artifact write --kind task --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status`, `context_budget` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. The Core also adds the task to `change.yaml`.
+2. Give each task one verifiable outcome that fits one implementation context. The input, with ids `TASK-001`, `TASK-002`, … (digits only):
 
-   ```yaml
-   ---
-   id: TASK-001
-   change: CHG-001-example
-   slice: SLICE-01
-   kind: feature          # feature | bugfix | refactor | maintenance | documentation
-   status: pending
-   depends_on: []
-   requirement_delta: added   # none | added | modified | removed | mixed
-   spec_refs: [docs/spec/<domain>/<capability>.md#REQ-ID]
-   design_ref: null
-   allowed_paths: [src/<module>.py, tests/test_<module>.py]
-   forbidden_paths: []
-   context_budget: {max_tokens: 64000, max_files: 24}
-   ---
+   ```json
+   {
+     "identity": "TASK-001",
+     "fields": {
+       "slice": "SLICE-01",
+       "title": "One line of the outcome",
+       "kind": "feature",
+       "depends_on": [],
+       "requirement_delta": "added",
+       "spec_refs": ["docs/spec/<domain>/<capability>.md#REQ-ID"],
+       "design_ref": null,
+       "allowed_paths": ["src/<module>.py", "tests/test_<module>.py"],
+       "forbidden_paths": []
+     },
+     "body": "The outcome, the test oracle and the unchanged behaviour, in prose."
+   }
    ```
 
-   `forbidden_paths` narrows the task's product scope; on the `code` route never forbid `tests/**` - declare writes the Red test there. In `change.yaml`, `tasks` is a list of strings (`TASK-001`), not objects.
-4. Order `depends_on` and update `coverage.yaml` plus the `tasks` string list in `change.yaml`.
+   `kind`: feature | bugfix | refactor | maintenance | documentation. `requirement_delta`: none | added | modified | removed | mixed. `forbidden_paths` narrows the task's product scope; on the `code` route never forbid `tests/**` - declare writes the Red test there.
+3. To change a task, call `artifact write` again with the same `identity` and only the fields that change.
+4. Order `depends_on`. The Core derives `coverage.yaml` (`deltafuse coverage`).
 5. For an implementation bug, derive tasks from observation, reproduction, exact existing spec refs, oracle, unchanged behavior, and scope with `requirement_delta: none`.
 
 Do not copy normative spec text, hide a design choice inside a task, estimate primarily by lines of code, or modify production code.

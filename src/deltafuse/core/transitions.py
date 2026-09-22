@@ -659,5 +659,9 @@ def set_artifact_status(
             # The file name need not be the id (TASK-NNN-<slug>.md): the leash
             # reads the rewritten file from here, not from the id.
             entry["path"] = file.relative_to(product_root).as_posix()
+            # The leash accepts a structural artifact only when its last writer
+            # is known: the Artifact Writer or the Core, each by the sha256 of
+            # what it wrote (roadmap item 1).
+            entry["sha256"] = hashlib.sha256(file.read_bytes()).hexdigest()
         entry = append_receipt(product_root, entry)
         return {"ok": True, "artifact": entry["artifact"], "from": current, "to": status, "receipt": entry["receipt"]}
