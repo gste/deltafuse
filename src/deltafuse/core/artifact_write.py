@@ -29,7 +29,8 @@ from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
 
 ENVELOPE_KEYS = frozenset({"identity", "target", "fields", "body", "request_id"})
 MERGED_LISTS = {"spec-delta": ("slices", "added", "modified", "removed")}
-INDEXED_KINDS = ("task", "slice")
+INDEXED_KINDS = ("task", "slice", "decision")
+DECISION_ID = re.compile(r"^DEC-([0-9]{4,})")
 CHANGE_ID = re.compile(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$")
 
 
@@ -104,7 +105,7 @@ def write_artifact(
     from deltafuse.core.artifact_lock import resolve_product_root
 
     change_path = Path(change_dir).resolve()
-    if not identity and not target:
+    if not identity and not target and kind != "decision":
         raise ArtifactServiceError(
             "name the artifact: 'identity' (e.g. TASK-001, SLICE-01) or 'target' (a path in the Change)",
             code="required_property_missing",
@@ -114,12 +115,21 @@ def write_artifact(
         actor="worker", work_item="CLI", product_root=root, change_id=_change_id(change_path)
     )
     service = ArtifactService(product_root=root, change_dir=change_path, auth_context=auth)
-    path = service._resolve_target_path(kind, target or identity)
+    if kind == "decision":
+        identity, path = _decision_target(root, identity, target)
+    else:
+        path = service._resolve_target_path(kind, target or identity)
 
     if path.is_file():
         descriptor = service.registry.get_descriptor(kind)
         core_owned = set(descriptor.get("core_owned_fields") or [])
         current = _current_metadata(path)
+        if kind == "decision" and current.get("status") != "proposed":
+            raise ArtifactServiceError(
+                f"{path.name} is {current.get('status')!r}: a decided Decision is the human's; "
+                "propose a new one that names it in 'supersedes'",
+                code="policy_denied",
+            )
         patch_fields = {}
         for key, value in fields.items():
             if key in core_owned and current.get(key) == value:
@@ -151,6 +161,12 @@ def write_artifact(
     payload = dict(fields)
     if kind == "task" and "context_budget" not in payload:
         payload["context_budget"] = _product_budget(root)
+    if kind == "decision":
+        from datetime import date
+
+        # The human owner answers it; the Worker only proposes (decide.py).
+        payload.setdefault("owner", "human")
+        payload.setdefault("date", date.today().isoformat())
     receipt = service.create(
         kind=kind, identity=identity, semantic_payload=payload, body=body or "", request_id=request_id
     )
@@ -159,6 +175,33 @@ def write_artifact(
 
         update_change_child_index(change_path, kind, identity)
     return {**receipt, "operation": "create"}
+
+
+def _decision_target(root: Path, identity: str | None, target: str | None) -> tuple[str, Path]:
+    """(DEC id, file) for a Decision: an existing one by id or path, or the next free id.
+
+    A Decision's id is the Core's: the Worker may leave it out and the Core
+    allocates the next `DEC-NNNN` after those in `docs/decisions/`.
+    """
+    folder = root / "docs" / "decisions"
+    if target:
+        path = (root / target).resolve() if not Path(target).is_absolute() else Path(target)
+        match = DECISION_ID.match(path.name)
+        if not match:
+            raise ArtifactServiceError(f"{target} is not a DEC-NNNN file", code="invalid_envelope")
+        return path.stem, path
+    if identity and identity.lower() != "new":
+        if not DECISION_ID.match(identity):
+            raise ArtifactServiceError(
+                f"Decision identity must be DEC-NNNN or omitted, got {identity!r}", code="invalid_envelope"
+            )
+        existing = sorted(folder.glob(f"{identity}*.md")) if folder.is_dir() else []
+        exact = [p for p in existing if p.stem == identity or p.stem.startswith(identity + "-")]
+        return identity, exact[0] if exact else folder / f"{identity}.md"
+    numbers = [
+        int(m.group(1)) for m in (DECISION_ID.match(p.name) for p in folder.glob("DEC-*.md")) if m
+    ] if folder.is_dir() else []
+    return f"DEC-{max(numbers + [0]) + 1:04d}", folder / f"DEC-{max(numbers + [0]) + 1:04d}.md"
 
 
 def _current_body(path: Path) -> str:

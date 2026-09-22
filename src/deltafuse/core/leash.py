@@ -256,6 +256,8 @@ def structural_kind(rel_path: str) -> str | None:
     `deltafuse artifact write` writes them and the Core rewrites their status.
     """
     parts = posix_relpath(rel_path).split("/")
+    if len(parts) == 3 and parts[:2] == ["docs", "decisions"] and parts[2].startswith("DEC-") and parts[2].endswith(".md"):
+        return "decision"
     if len(parts) < 4 or parts[0] != "docs" or parts[1] != "changes":
         return None
     tail = parts[3:]

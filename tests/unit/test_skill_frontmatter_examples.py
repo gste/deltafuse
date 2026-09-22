@@ -55,7 +55,7 @@ def test_the_skills_writer_examples_are_accepted_by_the_writer(tmp_path: Path, r
 
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-800", title="Examples").step_intake()
-    for skill, kinds in (("analyze", ["routing", "slice"]), ("specify", ["spec-delta"]), ("decompose", ["task"])):
+    for skill, kinds in (("analyze", ["routing", "slice", "decision"]), ("specify", ["spec-delta"]), ("decompose", ["task"])):
         examples = _json_examples(repo_root / "process" / "skills" / skill / "SKILL.md")
         assert len(examples) == len(kinds), skill
         for example, kind in zip(examples, kinds):

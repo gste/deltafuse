@@ -31,7 +31,9 @@ class ArtifactPolicyError(Exception):
 _INTERNAL_CORE_SECRET = "INTERNAL_CORE_SECRET_TOKEN"
 _PROTECTED_PATH_PREFIXES = (".deltafuse/", ".git/")
 _DEVICE_NAMES = {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
-_CORE_ONLY_KINDS = {"evidence", "coverage", "decision", "capability", "lock"}
+# A Decision *proposal* is the Worker's (status stays Core-owned: only
+# `deltafuse decide` accepts or rejects it), so decision is not Core-only.
+_CORE_ONLY_KINDS = {"evidence", "coverage", "capability", "lock"}
 
 
 @dataclass(frozen=True)

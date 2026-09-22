@@ -137,3 +137,58 @@ def test_leash_diff_flags_a_hand_written_task_in_the_envelope(tmp_path: Path, re
     ret, data = _leash_diff(tmp_path, capsys)
     assert ret == 1
     assert any("TASK-010.md' was written by hand" in row for row in data["violations"])
+
+
+DECISION = {
+    "title": "Store penalties in memory or in Redis",
+    "kind": "architecture",
+    "affects": {"capabilities": ["system.core"], "spec_refs": ["docs/spec/core.md"]},
+}
+
+
+def test_a_decision_gets_the_next_id_and_its_change(tmp_path: Path, repo_root: Path):
+    import yaml as _yaml
+
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    builder = _specified(tmp_path, repo_root, "CHG-610")
+    receipt = write_artifact(builder.change_dir, "decision", fields=dict(DECISION), body="## Question\n\nWhere?\n")
+    assert receipt["operation"] == "create"
+    folder = tmp_path / "docs" / "decisions"
+    created = sorted(p.name for p in folder.glob("DEC-*.md") if p.name != "DEC-0000-template.md")
+    assert created == ["DEC-0001.md"]
+    meta, body = parse_frontmatter((folder / "DEC-0001.md").read_text(encoding="utf-8"))
+    assert meta["id"] == "DEC-0001" and meta["change"] == "CHG-610" and meta["status"] == "proposed"
+    assert meta["owner"] == "human" and "Where?" in body
+    change = _yaml.safe_load((builder.change_dir / "change.yaml").read_text(encoding="utf-8"))
+    assert "DEC-0001" in change["decisions"]
+    write_artifact(builder.change_dir, "decision", fields=dict(DECISION))
+    assert (folder / "DEC-0002.md").is_file()
+
+
+def test_a_decided_decision_is_the_humans(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.decide import apply_decision
+
+    builder = _specified(tmp_path, repo_root, "CHG-611")
+    write_artifact(builder.change_dir, "decision", fields=dict(DECISION))
+    write_artifact(builder.change_dir, "decision", identity="DEC-0001", fields={"title": "Sharper question"})
+    apply_decision(tmp_path, status="accepted", decision="DEC-0001")
+    with pytest.raises(ArtifactServiceError, match="the human's"):
+        write_artifact(builder.change_dir, "decision", identity="DEC-0001", fields={"title": "Rewrite history"})
+
+
+def test_the_leash_vouches_writer_and_decide_and_refuses_a_hand_written_decision(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.decide import apply_decision
+
+    builder = _specified(tmp_path, repo_root, "CHG-612")
+    rel = "docs/decisions/DEC-0001.md"
+    write_artifact(builder.change_dir, "decision", fields=dict(DECISION))
+    assert structural_kind(rel) == "decision"
+    assert hand_written_errors(tmp_path, rel, head=None, vouched=vouched_digests(tmp_path)) == []
+    apply_decision(tmp_path, status="accepted", decision="DEC-0001")
+    assert hand_written_errors(tmp_path, rel, head=None, vouched=vouched_digests(tmp_path)) == []
+
+    hand = tmp_path / "docs" / "decisions" / "DEC-0002.md"
+    hand.write_text((tmp_path / rel).read_text(encoding="utf-8").replace("DEC-0001", "DEC-0002"), encoding="utf-8")
+    errors = hand_written_errors(tmp_path, "docs/decisions/DEC-0002.md", head=None, vouched=vouched_digests(tmp_path))
+    assert errors and "--kind decision" in errors[0]

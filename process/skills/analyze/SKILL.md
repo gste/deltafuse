@@ -68,7 +68,20 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
 3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
 4. Classify independently in the slice `body`, not as extra fields: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
 5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
-6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices. Do not accept them.
+6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices, with `deltafuse artifact write --kind decision --change <change-dir>` (or the host's `artifact_write` tool). Leave `identity` out: the Core allocates `DEC-NNNN`, links it to this Change and keeps it `proposed`. Only the human accepts it (`deltafuse decide`); never write a Decision file by hand.
+
+   ```json
+   {
+     "fields": {
+       "title": "One line of the question",
+       "kind": "architecture",
+       "affects": {"capabilities": ["<domain>.<capability>"], "spec_refs": ["docs/spec/<domain>/<capability>.md"]}
+     },
+     "body": "## Question and context\n\n...\n\n## Options and trade-offs\n\n..."
+   }
+   ```
+
+   `kind`: product | architecture | integration | policy | operational.
 7. Re-run only affected slices after human clarification or a terminal Decision.
 8. Do not invent `coverage.yaml`. The Core writes it from routing and slice frontmatter (`deltafuse coverage`).
 

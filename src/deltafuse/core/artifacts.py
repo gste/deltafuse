@@ -135,6 +135,9 @@ class ArtifactService:
             target_path = (self.change_dir / "routing.yaml").resolve()
         elif kind == "change":
             target_path = (self.change_dir / "change.yaml").resolve()
+        elif kind == "decision":
+            # Decisions live at the product root, not inside the Change.
+            target_path = (self.product_root / "docs" / "decisions" / f"{identity_or_target}.md").resolve()
         else:
             target_path = (self.change_dir / f"{identity_or_target}.md").resolve()
 
@@ -256,7 +259,7 @@ class ArtifactService:
         else:
             slice_id = None
 
-        initial_status = "pending" if kind == "task" else "draft" if kind == "slice" else "proposed" if kind == "spec-delta" else "active"
+        initial_status = "pending" if kind == "task" else "draft" if kind == "slice" else "proposed" if kind in ("spec-delta", "decision") else "active"
         if kind == "task":
             title_text = payload_copy.pop("title", None)
             if title_text:
@@ -280,7 +283,7 @@ class ArtifactService:
         if kind == "task":
             metadata["slice"] = slice_id
 
-        if kind not in ("task", "slice"):
+        if kind not in ("task", "slice", "decision"):
             metadata.pop("id", None)
 
         val_res = self.registry.validate_storage_schema(kind, metadata)
