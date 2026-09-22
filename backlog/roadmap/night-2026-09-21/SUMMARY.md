@@ -1,7 +1,7 @@
 # Итог ночи 2026-09-21 → 22
 
 Коротко для владельца. Подробности — [PLAN.md](PLAN.md) (журнал),
-[DECISIONS.md](DECISIONS.md) (решения D1–D9, принятые без тебя),
+[DECISIONS.md](DECISIONS.md) (решения D1–D10, принятые без тебя),
 `../q0-qualification-baseline/README.md` (записи прогонов).
 
 ## Главное
