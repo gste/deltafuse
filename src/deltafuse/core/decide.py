@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -12,8 +12,8 @@ from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 
 from deltafuse.core.fsm import check_gate, find_repo_root
-from deltafuse.core import gate_receipts
-from deltafuse.core.gate_receipts import TERMINAL_STATUSES
+from deltafuse.core import gate_password, gate_receipts
+from deltafuse.core.gate_receipts import ReceiptError, TERMINAL_STATUSES
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 from deltafuse.core.transitions import TransitionError, advance_change
@@ -104,14 +104,62 @@ def _optional_change_id(raw: Any) -> str | None:
     raise DecideError("change: must be a Change id or null")
 
 
+def _check_password(product_root: Path, password_prompt: Callable[[], str] | None) -> str:
+    """Ask for the Human Gate password when the product has one; before any write."""
+    if not gate_password.is_enabled(product_root):
+        return "none"
+    if password_prompt is None:
+        raise DecideError(
+            "this product guards the Human Gate with a password; run `deltafuse decide` "
+            "yourself in an interactive terminal"
+        )
+    try:
+        password = password_prompt()
+    except gate_password.GatePasswordError as ex:
+        raise DecideError(str(ex)) from ex
+    try:
+        ok = gate_password.verify_password(product_root, password)
+    except gate_password.GatePasswordError as ex:
+        raise DecideError(str(ex)) from ex
+    if not ok:
+        raise DecideError("wrong Human Gate password; nothing was written")
+    return "password"
+
+
+def _write_with_receipt(
+    product_root: Path,
+    artifact: Path,
+    text: str,
+    **receipt: Any,
+) -> None:
+    """Write the verdict and its receipt together, or neither.
+
+    The receipt hashes the written artifact, so the artifact goes first; if the
+    receipt cannot be recorded, the artifact is restored. An `accepted` status
+    with no receipt read as a verdict no human gave (roadmap item 1 audit).
+    """
+    before = artifact.read_bytes()
+    atomic_replace(artifact, text.encode("utf-8"))
+    try:
+        gate_receipts.record_receipt(product_root, artifact=artifact, **receipt)
+    except (ReceiptError, OSError) as ex:
+        atomic_replace(artifact, before)
+        raise DecideError(f"Human Gate receipt was not recorded, verdict undone: {ex}") from ex
+
+
 def apply_decision(
     start: Path | str,
     *,
     status: str,
     decision: str | None = None,
     spec: bool = False,
+    password_prompt: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
-    """Write the human's recorded choice. Does not run from `next`."""
+    """Write the human's recorded choice. Does not run from `next`.
+
+    `password_prompt` is called only when the product has a Human Gate password;
+    it is asked before the mutation lock, so a human typing holds nothing.
+    """
     if status not in DECIDE_STATUSES:
         raise DecideError(f"status must be accepted or rejected, got {status!r}")
     if bool(decision) == bool(spec):
@@ -123,6 +171,7 @@ def apply_decision(
             product_root = find_repo_root(change_dir)
         else:
             raise DecideError("--spec requires a Change directory (path to change.yaml)")
+        human_check = _check_password(product_root, password_prompt)
         with ProductMutationLock(product_root):
             delta = change_dir / "spec-delta.md"
             if not delta.is_file():
@@ -131,18 +180,19 @@ def apply_decision(
                 text = replace_frontmatter(delta.read_text(encoding="utf-8"), {"status": status})
             except FrontmatterParseError as ex:
                 raise DecideError(f"spec-delta.md: {ex}") from ex
-            atomic_replace(delta, text.encode("utf-8"))
 
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
-            gate_receipts.record_receipt(
+            _write_with_receipt(
                 product_root,
+                delta,
+                text,
                 kind="spec",
                 status=status,
                 rel_path=written[0],
                 artifact_id=change_id or change_dir.name,
                 change=change_id,
-                artifact=delta,
+                human_check=human_check,
             )
             change_status = None
             change_file = change_dir / "change.yaml"
@@ -191,12 +241,14 @@ def apply_decision(
             "ok": not transition_failed,
             "gate": "spec",
             "status": status,
+            "human_check": human_check,
             "written": written,
             "change_status": change_status,
             "gate_errors": gate_errors,
         }
 
     product_root = load_product_root(start_path)
+    human_check = _check_password(product_root, password_prompt)
     with ProductMutationLock(product_root):
         dec_path = find_decision_file(product_root, str(decision))
         try:
@@ -209,18 +261,19 @@ def apply_decision(
             )
         change_id = _optional_change_id(meta.get("change"))
         new_text = replace_frontmatter(dec_path.read_text(encoding="utf-8"), {"status": status})
-        atomic_replace(dec_path, new_text.encode("utf-8"))
 
         written = [_rel(product_root, dec_path)]
         dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_path.stem
-        gate_receipts.record_receipt(
+        _write_with_receipt(
             product_root,
+            dec_path,
+            new_text,
             kind="decision",
             status=status,
             rel_path=written[0],
             artifact_id=dec_id,
             change=change_id,
-            artifact=dec_path,
+            human_check=human_check,
         )
         change_dir = None
         if change_id and (start_path / "change.yaml").is_file():
@@ -242,6 +295,7 @@ def apply_decision(
             "ok": True,
             "gate": "decision",
             "status": status,
+            "human_check": human_check,
             "decision": dec_id,
             "written": written,
             "change_status": change_status,

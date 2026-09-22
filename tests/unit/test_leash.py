@@ -335,7 +335,7 @@ def test_deltafuse_dir_is_exempt_but_core_journals_stay_guarded():
 
     assert is_exempt_path(".deltafuse/bench.yaml")
     assert check_paths([".deltafuse/bench.yaml"], [], baseline="draft") == []
-    for journal in ("transitions.jsonl", "gate-journal.jsonl", "journal-head", "trusted-keys.yaml"):
+    for journal in ("transitions.jsonl", "gate-journal.jsonl", "journal-head", "gate-password.yaml"):
         errors = check_paths([f".deltafuse/{journal}"], [], baseline="draft")
         assert errors and "Core-owned" in errors[0], journal
 

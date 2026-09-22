@@ -112,6 +112,8 @@ deltafuse decide <change-dir> --spec --status accepted
 
 `--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate.
 
+**Human Gate password (optional).** `deltafuse gate-password set` stores a salted PBKDF2 hash in `.deltafuse/gate-password.yaml` (Core-owned: the leash refuses it in a Worker diff). From then on `decide` asks for the password in the terminal before it writes anything, and refuses when stdin is not a terminal; there is no flag or environment variable for it. Each receipt records `human_check: password` or `none`. `gate-password clear` and a change need the current password; `gate-password status` shows whether it is on. The password guards the `decide` command, not the journal: against a model that forges files by hand, isolate the Worker on the host.
+
 Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 
 Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
@@ -200,4 +202,4 @@ Stdout is one JSON object. No product files are written. Missing `.deltafuse/loc
 - Artifacts from unsupported schema versions stop with a `schema_version` diagnostic and are left untouched; migrate them manually to v3.
 - Artifact versioning (V3-FIX-013): `change`, `evidence`, and the capability catalog carry an explicit `schema_version: 3`. Change-nested artifacts (`tasks/**`, `slices/**`, `decisions/**`, `spec-delta` frontmatter, `routing.yaml`, `coverage.yaml`) inherit the schema version of their parent Change artifact — they carry no version of their own and are validated fail-closed through the Change contract.
 - Verify the whole product contract any time with `deltafuse validate-config .`.
-- Human Gate clicks live in `.deltafuse/gate-journal.jsonl` (Core-owned): rebuilds are detected; in `broker-signed` profile only broker-signed receipts validate.
+- Human Gate clicks live in `.deltafuse/gate-journal.jsonl` (Core-owned): rebuilds are detected. The `broker-signed` profile was removed (its key lived in the repository); use the Human Gate password.

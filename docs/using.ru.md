@@ -112,6 +112,8 @@ deltafuse decide <change-dir> --spec --status accepted
 
 `--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает.
 
+**Пароль Human Gate (опционально).** `deltafuse gate-password set` хранит солёный хэш PBKDF2 в `.deltafuse/gate-password.yaml` (файл ядра: leash отвергает его в diff воркера). После этого `decide` спрашивает пароль в терминале до любой записи и отказывает, если stdin — не терминал; флага или переменной окружения для пароля нет. Каждый receipt пишет `human_check: password` или `none`. `gate-password clear` и смена требуют текущий пароль; `gate-password status` показывает, включён ли он. Пароль закрывает команду `decide`, а не журнал: от модели, подделывающей файлы руками, защищает изоляция воркера на хосте.
+
 Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста по [контракту halt](./contracts/halt.ru.md), ждать, выполнить только `choice.command`. `inspect` (`command: null`) — стоп. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
 Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
@@ -202,4 +204,4 @@ Stdout — один JSON. Файлы продукта не пишутся. Не�
 - Артефакты неподдерживаемых версий схем останавливаются с диагностикой `schema_version` и остаются нетронутыми; мигрируйте вручную на v3.
 - Версионирование артефактов (V3-FIX-013): `change`, `evidence` и каталог capabilities несут явный `schema_version: 3`. Вложенные в Change артефакты (`tasks/**`, `slices/**`, `decisions/**`, frontmatter `spec-delta`, `routing.yaml`, `coverage.yaml`) наследуют версию родительского Change — собственного `schema_version` у них нет, и они валидируются fail-closed через контракт Change.
 - Проверяйте весь продуктовый контракт в любой момент: `deltafuse validate-config .`.
-- Human Gate клики живут в `.deltafuse/gate-journal.jsonl` (Core-owned): пересборки обнаруживаются; в профиле `broker-signed` действительны только подписанные брокером receipts.
+- Human Gate клики живут в `.deltafuse/gate-journal.jsonl` (Core-owned): пересборки обнаруживаются. Профиль `broker-signed` удалён (его ключ лежал в репозитории); используйте пароль Human Gate.

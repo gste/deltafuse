@@ -27,6 +27,7 @@ from deltafuse.core.queue import (
     select_next,
 )
 from deltafuse.core.decide import DecideError, apply_decision
+from deltafuse.core import gate_password
 from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
 from deltafuse.core.leash import (
     LeashError,
@@ -154,6 +155,48 @@ def export_tool_schemas(kind: str | None = None, operation: str | None = None) -
         },
     }
 
+
+def _read_secret(prompt: str) -> str:
+    """Read a secret from the terminal; refuse when no human is at one."""
+    import getpass
+
+    if not sys.stdin.isatty():
+        raise gate_password.GatePasswordError(
+            "the Human Gate password is read only from an interactive terminal"
+        )
+    return getpass.getpass(prompt)
+
+
+def _gate_password_prompt() -> str:
+    return _read_secret("Human Gate password: ")
+
+
+def _gate_password_command(action: str, target: Path) -> int:
+    try:
+        root = load_product_root(target.resolve())
+    except QueueError as ex:
+        print(f"gate-password: {ex}", file=sys.stderr)
+        return 2
+    enabled = gate_password.is_enabled(root)
+    if action == "status":
+        print(f"gate-password: {'enabled' if enabled else 'disabled'}")
+        return 0
+    try:
+        current = _read_secret("Current password: ") if enabled else None
+        if action == "clear":
+            gate_password.clear_password(root, current)
+            print("gate-password: disabled")
+            return 0
+        new = _read_secret("New password: ")
+        if new != _read_secret("Repeat new password: "):
+            print("gate-password: the passwords differ; nothing changed", file=sys.stderr)
+            return 1
+        gate_password.set_password(root, new, current=current)
+    except gate_password.GatePasswordError as ex:
+        print(f"gate-password: {ex}", file=sys.stderr)
+        return 1
+    print(f"gate-password: enabled ({gate_password.PASSWORD_REL}; stores a salted hash only)")
+    return 0
 
 def main(argv: list[str] | None = None) -> int:
     """Bound installation/registry failures at the public Artifact CLI boundary."""
@@ -332,6 +375,15 @@ def _main(argv: list[str] | None = None) -> int:
         help="Recorded human choice",
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+
+    # Human Gate password: interactive only, never a flag or an environment
+    # variable - anything a Worker's shell can pass, a Worker can pass.
+    gpw_parser = subparsers.add_parser(
+        "gate-password",
+        help="Set, clear or show the optional Human Gate password (interactive only)",
+    )
+    gpw_parser.add_argument("action", choices=["set", "clear", "status"])
+    gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
 
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
@@ -749,6 +801,7 @@ def _main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
+                password_prompt=_gate_password_prompt,
             )
         except DecideError as ex:
             _journal(target, cmd="decide", ok=False, errors=[str(ex)])
@@ -780,6 +833,9 @@ def _main(argv: list[str] | None = None) -> int:
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0 if result.get("ok") else 1
+
+    elif args.command == "gate-password":
+        return _gate_password_command(args.action, Path(args.path))
 
     elif args.command == "leash":
         if args.head and not args.base:

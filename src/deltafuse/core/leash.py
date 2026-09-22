@@ -70,7 +70,9 @@ CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 # lifecycle step legitimately appends to are verified; the trust roots never
 # belong in a Worker diff.
 CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.jsonl"})
-CORE_OWNED = CORE_JOURNALS | {"trusted-keys.yaml"}
+# gate-password.yaml: a Worker that replaced the hash with its own password, or
+# deleted it, could answer the Human Gate itself.
+CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml"}
 # Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
 # `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
 CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status"})
