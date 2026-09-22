@@ -50,7 +50,18 @@ def get_executing_framework_identity() -> tuple[str, set[str]]:
 
 
 def get_installed_lock_hash() -> str:
-    """Return an authentic sha256:... lock content_hash string for executing framework."""
+    """Return an authentic sha256:... lock content_hash string for executing framework.
+
+    The packaged bundle's manifest hash comes first: it is the one every copy
+    verifies - a wheel installed elsewhere knows only that hash, while a source
+    checkout also knows the process/ tree hash. Picking the alphabetically
+    first of the two made a lock written from a checkout fail in an installed
+    copy whenever the process/ hash happened to sort first (CI, macOS, 3.2.0).
+    """
+    bundle = bundle_root()
+    if bundle is not None and (bundle / "manifest.json").is_file():
+        digest = hashlib.sha256((bundle / "manifest.json").read_bytes()).hexdigest().lower()
+        return f"sha256:{digest}"
     _, valid_hashes = get_executing_framework_identity()
     for h in sorted(valid_hashes):
         if h.startswith("sha256:"):
