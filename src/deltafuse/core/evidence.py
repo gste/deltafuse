@@ -319,6 +319,11 @@ def run_evidence(
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
 
     if phase == "verification":
+        # q4 decision D, phase 1: the code the Change touched against the
+        # capabilities routing named. Recorded, not judged (T9 in the bench).
+        from deltafuse.core.ownership import under_routing
+
+        payload["ownership"] = under_routing(repo_root, change_path)
         dest = change_path / "evidence" / "verification" / "run.yaml"
     else:
         dest = change_path / "evidence" / phase / f"{task}.yaml"
