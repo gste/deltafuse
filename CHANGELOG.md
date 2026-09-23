@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-09-23
+
+### Removed
+
+- **`deltafuse bench score` and `deltafuse bench compare`.** The judge moved
+  to `deltafuse-bench` (`deltafuse-bench score|compare`): a change to the
+  judge must not ride in the same commit as a change to the code it judges
+  (roadmap: one harness in deltafuse-bench). `deltafuse bench init` and
+  `deltafuse bench journal` stay - a product produces its own journal.
+
+### Fixed
+
+- `deltafuse state --change` read the status table backwards, which let a
+  Change return to `specification-proposed` from `specified` and reopen a
+  Human Gate the human had answered.
+- The stale bugfix shortcut `analyzed -> declaring` is gone: no command could
+  take it, and it made `declared` formally reachable without decompose.
+- A gate refused only because it waits for the human is counted as
+  `human_waits`, not as the Worker's retry.
+- `next` carries `skill_path`, so a Worker does not guess where its skill
+  lives.
+
 ## [3.2.1] - 2026-09-23
 
 ### Changed

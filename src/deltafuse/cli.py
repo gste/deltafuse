@@ -520,25 +520,9 @@ def _main(argv: list[str] | None = None) -> int:
         default=None,
         help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
     )
-    bench_score = bench_sub.add_parser("score", help="Judge: score a sandbox from the pack (not for the Worker)")
-    bench_score.add_argument("product_dir", help="Product root created by bench init")
-    bench_score.add_argument("--stage", choices=list(BENCH_STAGES), help="Score one lifecycle step")
-    bench_score.add_argument("--json", action="store_true", help="Write the scorecard as JSON")
-    bench_score.add_argument("--label", default=None, help="Run label (agent+model) stored in the JSON")
-    bench_score.add_argument("--out-file", default=None, help="Save JSON outside the sandbox")
-    bench_score.add_argument(
-        "--pack",
-        default=None,
-        help=f"Judge pack required unless {BENCH_PACK_ENV} is set",
-    )
-    bench_score.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Include hidden-suite pytest output (judge-only; do not share with the Worker)",
-    )
-    bench_cmp = bench_sub.add_parser("compare", help="Compare two bench score JSON files")
-    bench_cmp.add_argument("left", help="First score JSON")
-    bench_cmp.add_argument("right", help="Second score JSON")
+    # `score` and `compare` live in deltafuse-bench since 3.3.0: the judge is
+    # versioned apart from the framework it measures (roadmap: one harness in
+    # deltafuse-bench). The framework keeps only what a product produces.
     bench_journal = bench_sub.add_parser(
         "journal",
         help="Judge: collect Core attempts from a sandbox journal (no LLM)",
@@ -1075,7 +1059,6 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "bench":
         from deltafuse.bench import BenchError
         from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
-        from deltafuse.bench.score import compare_reports, format_score, score_product
 
         try:
             if args.bench_cmd == "init":
@@ -1093,37 +1076,17 @@ def _main(argv: list[str] | None = None) -> int:
                 print(format_worker_start_prompt(meta))
                 print("----- end -----")
                 return 0
-            if args.bench_cmd == "score":
-                from deltafuse.bench.loader import assert_scorecard_outside_sandbox
-
-                product = Path(args.product_dir)
-                if args.out_file:
-                    assert_scorecard_outside_sandbox(args.out_file, product)
-                report = score_product(
-                    args.product_dir,
-                    stage=args.stage,
-                    label=args.label,
-                    pack_root=args.pack,
-                    reveal_hidden=args.verbose,
-                )
-                payload = json.dumps(report, ensure_ascii=False, indent=2)
-                if args.out_file:
-                    Path(args.out_file).write_text(payload + "\n", encoding="utf-8")
-                if args.json:
-                    print(payload)
-                else:
-                    print(format_score(report))
-                return 0 if report.get("pass") else 1
             if args.bench_cmd == "journal":
                 from deltafuse.bench.journal import collect_attempts, load_events
 
                 payload = collect_attempts(load_events(Path(args.product_dir).resolve()))
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
                 return 0
-            left = json.loads(Path(args.left).read_text(encoding="utf-8"))
-            right = json.loads(Path(args.right).read_text(encoding="utf-8"))
-            print(compare_reports(left, right))
-            return 0
+            print(
+                "Scoring moved to the judge: `deltafuse-bench score <product-dir> --pack <pack>`",
+                file=sys.stderr,
+            )
+            return 2
         except BenchError as ex:
             print(f"Bench failed: {ex}", file=sys.stderr)
             return 2

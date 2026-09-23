@@ -242,7 +242,7 @@ deltafuse board . --json
 # 10. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse bench init M02-policy-stats ./m02
 deltafuse bench journal ./m02
-deltafuse bench score ./m02 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench score ./m02 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```
 

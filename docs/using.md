@@ -127,7 +127,7 @@ Install a product sandbox, let any Worker fill it, then score **from a judge hos
 ```text
 deltafuse bench init M02-policy-stats <product-dir>
 deltafuse bench journal <product-dir>
-deltafuse bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json
 ```
 
