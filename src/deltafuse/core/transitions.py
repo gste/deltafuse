@@ -603,7 +603,10 @@ def set_artifact_status(
                 raise TransitionError(
                     f"Change status '{status}' is Core-gated; use deltafuse advance"
                 )
-            if current not in ALLOWED_CHANGE_TRANSITIONS.get(status, set()):
+            # The table maps from -> to. Reading it backwards let a Change
+            # go back to `specification-proposed` from `specified`, reopening
+            # a Human Gate the human had already answered (found 2026-09-23).
+            if status not in ALLOWED_CHANGE_TRANSITIONS.get(str(current), set()):
                 raise TransitionError(
                     f"cannot set Change status '{status}' from '{current}'"
                 )

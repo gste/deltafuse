@@ -28,9 +28,13 @@ Start with what `next` lists in `allowed_read`. Route before loading detailed sp
 
 After routing, read only the spec modules in `spec_refs` for the named capability, related Decision records, and explicitly requested diagnostic evidence. Do not load the whole spec, codebase, tests, or unrelated Changes/tasks.
 
+## Writing artifacts
+
+Every artifact below is written with `deltafuse artifact write --kind <kind> --change <change-dir> --input <file.json>`, or the host's `artifact_write` tool with the same fields; put the JSON file under `.deltafuse/tmp/`. You write fields and prose; the Core writes `id`, `change`, `status`, the file and the `change.yaml` index. Never write these files by hand - the leash refuses them. A refused field comes back with its reason: fix that field and call again.
+
 ## Procedure
 
-1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies, and write `routing.yaml` with `deltafuse artifact write --kind routing --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. `claims` is a map, not a list; a claim takes only these keys. When a claim's implementation must change code another capability owns (its `code_roots` in the catalog), list that capability in `related_capabilities`.
+1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies, and write `routing.yaml` (kind `routing`). `claims` is a map, not a list; a claim takes only these keys. When a claim's implementation must change code another capability owns (its `code_roots` in the catalog), list that capability in `related_capabilities`.
 
    ```json
    {
@@ -51,7 +55,7 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
    ```
 
    `confidence`: low | medium | high | unknown. `route`: code (default) | docs | ops.
-2. Split the Change into analytical slices with one primary capability and independently verifiable outcome, one `SLICE-NN` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that slice only, with `deltafuse artifact write --kind slice --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. The Core also adds the slice to `change.yaml`.
+2. Split the Change into analytical slices with one primary capability and independently verifiable outcome, one `SLICE-NN` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that slice only (kind `slice`).
 
    ```json
    {
@@ -68,7 +72,7 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
 3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
 4. Classify independently in the slice `body`, not as extra fields: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
 5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
-6. Create proposed Decision records for material product, architecture, integration, policy, or operational choices, with `deltafuse artifact write --kind decision --change <change-dir>` (or the host's `artifact_write` tool). Leave `identity` out: the Core allocates `DEC-NNNN`, links it to this Change and keeps it `proposed`. Only the human accepts it (`deltafuse decide`); never write a Decision file by hand.
+6. Create proposed Decision records (kind `decision`) only for material product, architecture, integration, policy or operational choices the request leaves open. Leave `identity` out: the Core allocates `DEC-NNNN` and keeps it `proposed`; only the human accepts it. A Decision no one needs costs the run: do not raise one for a choice the request already settles.
 
    ```json
    {
@@ -91,7 +95,7 @@ If context exceeds budget, split by connected capability components and outcomes
 
 Exit only when all claims are routed, every routing primary capability has a slice, every slice has a typed delta, blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
 
-Write `routing.yaml` and `slices/**` through `deltafuse artifact write`, and Decision/catalog proposals. The Core writes `coverage.yaml` and the `change.yaml` index. `analysis.md` is optional.
+Write `routing.yaml`, `slices/**` and any Decision or catalog proposal through the Writer. The Core writes `coverage.yaml` and the `change.yaml` index. `analysis.md` is optional.
 
 `deltafuse next` always selects one Analyze pass (`routing` | one `slice` | `coverage`), including when lock `workflow.call_width` is `wide`. Leave status `analyzing` until routing, slices, and coverage are on disk — call width does not close the gate. Do not skip Specify. Do not auto-accept Decisions.
 

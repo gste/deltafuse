@@ -77,7 +77,7 @@ python -m pytest --cov=deltafuse --cov-report=term-missing
 ### Worker bench (no LLM)
 ```bash
 deltafuse bench init M02-policy-stats ./m02
-deltafuse bench score ./m02 --pack . --json --label smoke --out-file ../scores/smoke.json
+deltafuse-bench score ./m02 --pack . --json --label smoke --out-file ../scores/smoke.json
 ```
 
 ### Continuous Integration (CI)

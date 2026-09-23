@@ -61,6 +61,10 @@ class WorkItem:
     allowed_write: list[str] = field(default_factory=list)
     halt_kind: str | None = None
     intake_pending: bool | None = None
+    # Where this step's skill is installed. Named, not guessed: a Worker that
+    # had only the skill's name read `docs/skills` and counted a hallucinated
+    # path against itself (M01 on gemma-4-26b-a4b, 2026-09-22).
+    skill_path: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -575,6 +579,42 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     return [], []
 
 
+DEFAULT_ADAPTER_ROOTS = (".agents/skills", ".cursor/skills", ".gemini/skills")
+
+
+def adapter_skill_roots(product_root: Path) -> list[str]:
+    """Where installed skills live, from `adapters.roots` in the product config."""
+    try:
+        data = yaml.safe_load((product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return list(DEFAULT_ADAPTER_ROOTS)
+    adapters = data.get("adapters") if isinstance(data, dict) else None
+    roots = adapters.get("roots") if isinstance(adapters, dict) else None
+    if isinstance(roots, list) and roots:
+        return [str(r) for r in roots if isinstance(r, str) and r.strip()]
+    return list(DEFAULT_ADAPTER_ROOTS)
+
+
+def skill_file(product_root: Path, skill: str | None) -> str | None:
+    """Installed `SKILL.md` of a step, relative to the product root."""
+    if not skill:
+        return None
+    for root in adapter_skill_roots(product_root):
+        candidate = product_root / root / skill / "SKILL.md"
+        if candidate.is_file():
+            return candidate.relative_to(product_root).as_posix()
+    return None
+
+
+def _name_skill_files(queue: "WorkQueue", product_root: Path) -> None:
+    cache: dict[str, str | None] = {}
+    for item in [*queue.ready, *queue.blocked]:
+        if item.skill and item.skill not in cache:
+            cache[item.skill] = skill_file(product_root, item.skill)
+        if item.skill:
+            item.skill_path = cache[item.skill]
+
+
 def build_work_queue(
     start: Path | str,
     *,
@@ -611,6 +651,7 @@ def build_work_queue(
                     intake_pending=pending,
                 )
             )
+    _name_skill_files(queue, product_root)
     return queue
 
 
@@ -749,6 +790,7 @@ def format_item(item: WorkItem) -> str:
         f"path: {item.path or '-'}",
         f"task: {item.task or '-'}",
         f"task_path: {item.task_path or '-'}",
+        f"skill_path: {item.skill_path or '-'}",
     ]
     if item.analyze_pass:
         lines.append(f"analyze_pass: {item.analyze_pass}")
@@ -822,6 +864,7 @@ def format_human_guide(item: WorkItem) -> str:
         f"path: {item.path or '-'}",
         f"task: {item.task or '-'}",
         f"task_path: {item.task_path or '-'}",
+        f"skill_path: {item.skill_path or '-'}",
     ]
     if item.analyze_pass:
         lines.append(f"analyze_pass: {item.analyze_pass}")
