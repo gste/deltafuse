@@ -66,7 +66,12 @@ def test_fsm_canonical_statuses_and_transitions():
     assert can_transition("blocked-on-decision", "analyzing")
     assert can_transition("analyzing", "analyzed")
     assert can_transition("analyzed", "specification-proposed")
-    assert can_transition("analyzed", "declaring")  # Bug path
+    # The bug path is analyzed -> decomposed (00c9160). The older shortcut
+    # analyzed -> declaring stayed in the table with no command able to take
+    # it, and it made `declared` reachable without decompose (removed
+    # 2026-09-23).
+    assert can_transition("analyzed", "decomposed")
+    assert not can_transition("analyzed", "declaring")
     assert can_transition("specification-proposed", "specified")
     assert can_transition("specified", "decomposed")
     assert can_transition("decomposed", "declaring")

@@ -65,7 +65,7 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     # chain already allowed it, and the specified gate needs a spec-delta a
     # bugfix does not write. Without it every bugfix Change stopped at
     # `advance --gate decomposed` (found 2026-09-22 by a Core-only walk).
-    "analyzed": {"specification-proposed", "specified", "declaring", "decomposed"},
+    "analyzed": {"specification-proposed", "specified", "decomposed"},
     "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
     "specified": {"decomposed"},
     "decomposed": {"declaring"},
