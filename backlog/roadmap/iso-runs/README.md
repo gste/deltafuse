@@ -72,8 +72,18 @@ python qualify/iso.py pack --out D:/iso/pack-1 --cases M01-cooldown M02-policy-s
 В среде (скопировать папку целиком):
 
 ```
-run.ps1 --endpoint http://<host>:<port>/v1/chat/completions --served-model <имя модели у провайдера> [--api-key-env ИМЯ] [--repeats 3] [--campaign-id X]
+run.ps1 --endpoint http://<host>:<port>/v1/chat/completions --served-model <имя модели у провайдера> --model <идентичность для порогов> [--ask-key | --api-key-env ИМЯ] [--repeats 3] [--campaign-id X]
 ```
+
+Ключ: `--ask-key` спрашивает его скрытым вводом и передаёт раннеру через
+переменную окружения — в историю оболочки и в командную строку он не попадает.
+`--api-key-env` принимает **имя** переменной, а не сам ключ.
+
+Медленный или ограниченный квотой эндпоинт: `--request-timeout` (по умолчанию
+120 с), `--max-retries`, `--max-step-calls` (по умолчанию 24),
+`--max-run-minutes`. Время, проведённое в ожидании после отказов, попадает в
+отчёт как `provider_wait_s` — без него «медленная модель» и «жёсткая квота»
+неотличимы.
 
 Прервалось — тот же `--campaign-id`: готовые прогоны сохраняются. Результат —
 `results-<campaign>.zip` рядом с `run.ps1`.
@@ -83,6 +93,10 @@ run.ps1 --endpoint http://<host>:<port>/v1/chat/completions --served-model <им
 ```
 python qualify/iso.py import D:/iso/pack-1/results-<campaign>.zip
 ```
+
+Импорт судит фреймворком того коммита, что записан в `PACK.json` (временный
+worktree, если домашняя копия на другом коммите), и печатает, каким коммитом
+бенча он судил. Пересудить текущим кодом — только явно, `--judge-with-current`.
 
 Порядок дальше: одна диагностическая кампания в среде, затем проверка сразу всех
 реализованных пунктов роадмапа (решение владельца: q4 и остальные — одним
