@@ -417,3 +417,19 @@ def test_an_intake_note_taken_in_by_an_archived_change_is_not_pending(tmp_path: 
 
     (tmp_path / "docs" / "intake" / "another.md").write_text("# New request\n", encoding="utf-8")
     assert intake_sources_pending(tmp_path)
+
+
+def test_next_names_the_skill_file_so_the_worker_does_not_guess(tmp_path: Path, repo_root: Path):
+    """gemma-4-26b-a4b on M01 (2026-09-22) read `docs/skills`: it had the
+    skill's name and no path, and the guess counted against T6."""
+    from deltafuse.core.installer import install
+    from deltafuse.core.queue import build_work_queue, select_next, skill_file
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    MockChangeBuilder(tmp_path, change_id="CHG-820", title="Skill path").step_intake()
+    item = select_next(build_work_queue(tmp_path))
+    assert item is not None and item.skill
+    assert item.skill_path == f".agents/skills/{item.skill}/SKILL.md"
+    assert (tmp_path / item.skill_path).is_file()
+    assert skill_file(tmp_path, "nosuchskill") is None

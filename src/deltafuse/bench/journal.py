@@ -183,6 +183,26 @@ def _cycle_key(event: dict[str, Any]) -> tuple[str, str]:
     return cmd, ""
 
 
+# A gate that is only waiting for the human's verdict. The Worker cannot act
+# on it: counting the refusal as a retry blamed the model for the queue's own
+# halt (M01 on qwen/qwen3.8-27b, 2026-09-22 - two of its three retries).
+HUMAN_WAIT_MARKERS = (
+    "accepted via deltafuse decide",
+    "without deltafuse decide",
+    "is blocked-on-decision",
+)
+
+
+def waits_for_human(event: dict[str, Any]) -> bool:
+    """True when every error of a refused gate is the human's verdict."""
+    if str(event.get("cmd") or "") != "check-gate" or event.get("ok"):
+        return False
+    errors = [str(e) for e in (event.get("errors") or [])]
+    if not errors or len(errors) != int(event.get("n_errors") or len(errors)):
+        return False  # clipped list: some error may be the Worker's
+    return all(any(marker in error for marker in HUMAN_WAIT_MARKERS) for error in errors)
+
+
 def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Roll Core journal lines into command counts and gate/evidence cycles."""
     commands: dict[str, dict[str, int]] = {
@@ -198,9 +218,15 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
             cycles.append(current)
             current = None
 
+    human_waits = 0
     for event in events:
         cmd = str(event.get("cmd") or "unknown")
         ok = bool(event.get("ok"))
+        if waits_for_human(event):
+            # Not an attempt and not a retry: the Worker asked a gate that only
+            # the human can close, and the skills tell it to stop there.
+            human_waits += 1
+            continue
         slot = commands.setdefault(cmd, {"n": 0, "ok": 0, "fail": 0})
         slot["n"] += 1
         slot["ok" if ok else "fail"] += 1
@@ -256,6 +282,7 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
         "commands": commands,
         "gates": gates,
         "cycles": cycles,
+        "human_waits": human_waits,
         "retries": {
             "check_gate": gate_fail,
             "evidence": evidence_fail,
@@ -277,6 +304,9 @@ def summarize_journal(events: list[dict[str, Any]]) -> dict[str, Any]:
     retries = collected.get("retries") or {}
     return {
         "observed": bool(events),
+        # Gate refusals that only wait for the human: reported, never charged
+        # to the model.
+        "human_waits": int(collected.get("human_waits") or 0),
         "check_gate": {
             name: {"attempts": int(row.get("n") or 0), "failures": int(row.get("fail") or 0)}
             for name, row in gates.items()

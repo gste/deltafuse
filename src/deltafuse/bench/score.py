@@ -937,6 +937,7 @@ def score_product(
             "coverage": journal.get("coverage_retries", 0),
             "total": journal.get("retries", 0),
             "gate_attempts": journal.get("gate_attempts", 0),
+            "human_waits": journal.get("human_waits", 0),
             "by_gate": journal.get("check_gate") or {},
         },
         "attempts": collect_attempts(events),
