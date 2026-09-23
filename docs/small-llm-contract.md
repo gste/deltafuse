@@ -7,12 +7,22 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
 
 ## Reference frame
 
-- The reference lower-bound Worker class is a **dense model of up to 40B
-  parameters**. Sparse/A3B models are not the reference: success on them is an
-  acceptable side effect, not a qualification target.
+- The reference lower-bound Worker class is a **model of up to 40B total
+  parameters**, dense or sparse. An MoE model counts by its total parameters,
+  not its active ones: a 35B-A3B is inside the class, a 235B-A22B is not.
+- **Sparse models came back into the class on 2026-09-23.** The exclusion
+  rested on a single observation — that an A3B model does not finish the
+  lifecycle. On framework 3.2.0 two of them did: `qwen3.6-35b-a3b` (MoE 35B/A3B)
+  and `gemma-4-26b-a4b-it` (MoE 26B/A4B) both reached `converged` with
+  correctness 100 and T10 = 0, alongside the dense reference
+  (`backlog/roadmap/runs-2026-09-22/README.md`). One run each on the simplest
+  case is enough to drop a ban that rested on the opposite claim; it is not
+  enough to make either of them a reference.
 - The first qualification model is **`qwen/qwen3.8-27b`** via OpenRouter — dense
   27B, 1M context, 32,768 max output. It is chosen because it mirrors the
-  production case the framework is built for: a corporate BYOK dense ~27B.
+  production case the framework is built for: a corporate BYOK dense ~27B. It
+  stays the model the verdict is read from: a result on any other model of the
+  class is evidence about the class, never a substitute for the reference.
 - The floor-edge secondary is **`qwen/qwen3-32b`** — dense 32B, 131,072 context,
   16,384 max output. It sits at the 40B boundary.
 - Prices are not part of this contract: they change without notice. Campaign

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The reference Worker class is a model of up to 40B total parameters, dense
+  or sparse** (owner decision 2026-09-23, documentation only). The ban on
+  sparse/A3B rested on one observation - that such a model does not finish the
+  lifecycle - and on 3.2.0 two of them did, with correctness 100 and T10 = 0.
+  An MoE model counts by total parameters, not active ones. `qwen/qwen3.8-27b`
+  stays the model the qualification verdict is read from.
+
 ## [3.3.0] - 2026-09-23
 
 ### Removed
