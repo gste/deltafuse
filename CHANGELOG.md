@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.3.3] - 2026-09-23
 
+### Fixed
+
+- **The runner allowlist identifies a runner by its name, not by its path.**
+  `D:\proj\.venv\Scripts\pytest.exe` is pytest; the allowlist compared
+  `argv[0]` literally and refused it as a substituted runner. Where pytest is
+  not on PATH - the normal case in an isolated environment - this took every
+  evidence command a run made: 27 of 27 in one isolated M01 run, 13 refusals
+  across the runs of 2026-09-23. A `python -c` one-liner is still refused,
+  and the full argv stays in the evidence record.
+- The unreachable copy of the `code` branch in `runner_is_authorized` is
+  gone; it sat after the branch's `return` and could never run.
+- A refused Red record says what the Core read: the last error line of the
+  output and why it is not a behavioural failure. This was the largest class
+  of refusal in those runs (52 of 89) and the only evidence of it was the
+  verdict - the log of a refused attempt is never stored.
+
 ### Changed
 
 - **The reference Worker class is a model of up to 40B total parameters, dense

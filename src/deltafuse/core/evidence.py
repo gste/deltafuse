@@ -53,6 +53,28 @@ def classify_failure(log: str, exit_code: int) -> str | None:
     return "fixture-error"
 
 
+def _why_not_behavioral(log: str) -> str:
+    """The line the classifier read, so a refusal can be acted on.
+
+    52 of the 89 evidence refusals in the runs of 2026-09-23 were this one,
+    and the record kept only the verdict: the log of a refused attempt is
+    never stored, so neither the Worker nor a later reader could tell an
+    erroring test from a passing one. The Core saw the output; it can say
+    what it saw.
+    """
+    lines = [line.strip() for line in (log or "").splitlines() if line.strip()]
+    if not lines:
+        return "the command printed nothing to read"
+    culprit = next(
+        (line for line in reversed(lines) if "Error" in line or "error" in line),
+        lines[-1],
+    )
+    return (
+        "no AssertionError in the output, so the test did not fail on a value; "
+        f"last error line: {culprit[:160]}"
+    )
+
+
 def _posix_paths(paths: list[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -359,7 +381,8 @@ def run_evidence(
         and category != AUTHENTIC_RED_CATEGORY
     ):
         errors.append(
-            f"Red failure_category is '{category}', not '{AUTHENTIC_RED_CATEGORY}'"
+            f"Red failure_category is '{category}', not '{AUTHENTIC_RED_CATEGORY}': "
+            f"{_why_not_behavioral(log)}"
         )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
