@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-09-23
+
+### Changed
+
+- Bench scoring: a check may be **advisory**. It costs a fixed slice of the
+  score (`ADVISORY_PENALTY`, 3 points) and is listed in `advisory_findings`,
+  but it does not fail its stage and stays out of correctness. The first one
+  is `no.unexpected.decision`: the reference model proposed a well-founded
+  Decision on a case that expects none, which cost it correctness and a failed
+  stage - two gating thresholds - for reading the request less sharply than it
+  deserved (owner decision 2026-09-23).
+
 ## [3.2.0] - 2026-09-22
 
 The first version qualified against the dense ≤40B reference Worker

@@ -77,8 +77,22 @@ def assert_sandbox_clean(product: Path) -> None:
         )
 
 
-def _check(cid: str, ok: bool, detail: str = "", *, fail: str | None = None) -> dict[str, Any]:
-    row: dict[str, Any] = {"id": cid, "pass": bool(ok)}
+def _check(
+    cid: str,
+    ok: bool,
+    detail: str = "",
+    *,
+    fail: str | None = None,
+    advisory: bool = False,
+) -> dict[str, Any]:
+    """One scored check. `advisory` costs its points but does not fail the stage.
+
+    Owner decision 2026-09-23: a Worker that proposes a well-founded Decision on
+    a case that expects none did not do damage - it did not read the request
+    sharply enough. That is worth a small deduction, not a failed stage and a
+    failed T2.
+    """
+    row: dict[str, Any] = {"id": cid, "pass": bool(ok), **({"advisory": True} if advisory else {})}
     text = detail if ok or fail is None else fail
     if text:
         row["detail"] = text
@@ -169,11 +183,18 @@ def _status(change_dir: Path | None) -> str | None:
     return value if isinstance(value, str) else None
 
 
+# Points a single advisory finding takes off the score (owner, 2026-09-23).
+ADVISORY_PENALTY = 3.0
+
+
 def _stage_result(checks: list[dict[str, Any]], metrics: dict[str, Any]) -> dict[str, Any]:
     present = next((c for c in checks if c["id"] == "present"), None)
     runnable = [c for c in checks if c["id"] != "present"]
-    passed_n = sum(1 for c in checks if c.get("pass"))
-    total_n = len(checks)
+    # Advisory findings are reported apart (advisory_findings); counting them
+    # here would put them back into the correctness gate they were taken out of.
+    counted = [c for c in checks if not c.get("advisory")]
+    passed_n = sum(1 for c in counted if c.get("pass"))
+    total_n = len(counted)
     rate = round(passed_n / total_n, 4) if total_n else 0.0
     stats = {
         "checks_passed": passed_n,
@@ -188,7 +209,7 @@ def _stage_result(checks: list[dict[str, Any]], metrics: dict[str, Any]) -> dict
             "metrics": metrics,
             **stats,
         }
-    passed = all(c["pass"] for c in runnable) if runnable else False
+    passed = all(c["pass"] for c in runnable if not c.get("advisory")) if runnable else False
     return {
         "status": "pass" if passed else "fail",
         "pass": passed,
@@ -277,7 +298,7 @@ def _apply_points(stages: dict[str, Any], case: dict[str, Any]) -> tuple[float, 
         stage_earned = 0.0
         stage_max = 0.0
         for check in row.get("checks") or []:
-            if not _is_rank_check(check):
+            if not _is_rank_check(check) or check.get("advisory"):
                 continue
             weight = _weight_for(str(check["id"]), case)
             stage_max += weight
@@ -380,7 +401,12 @@ def score_analyze(product: Path, case: dict[str, Any], change_dir: Path | None) 
     checks.append(_check("coverage.yaml", (change_dir / "coverage.yaml").is_file()))
     if not case.get("ambiguity_expected"):
         checks.append(
-            _check("no.unexpected.decision", not _decisions(product), "this case must not block on DEC")
+            _check(
+                "no.unexpected.decision",
+                not _decisions(product),
+                "this case must not block on DEC",
+                advisory=True,
+            )
         )
     nxt = _next_skill(product)
     if status == "analyzed":
@@ -852,6 +878,15 @@ def score_product(
     checks_total = sum(int(stages[name].get("checks_total") or 0) for name in wanted)
     points_earned, points_max = _apply_points(stages, case)
     correctness = round(100.0 * points_earned / points_max, 1) if points_max else 0.0
+    # Owner decision 2026-09-23: reading the request less sharply than it
+    # deserved (an unneeded Decision proposal) is not a product defect and does
+    # not fail the correctness gate; it lowers the score.
+    advisory_findings = [
+        str(check.get("id"))
+        for name in wanted
+        for check in stages[name].get("checks") or []
+        if check.get("advisory") and not check.get("pass")
+    ]
     process: float | None = None
     efficiency: float | None = None
     if journal.get("observed") and journal["gate_attempts"]:
@@ -869,6 +904,8 @@ def score_product(
     score_reason: str | None = None
     if process is not None:
         score = round(mix_c * correctness + mix_p * process, 1)
+        # Each advisory finding costs a fixed slice of the score.
+        score = round(max(0.0, score - ADVISORY_PENALTY * len(advisory_findings)), 1)
     else:
         score_reason = "no_retry_journal"
     return {
@@ -892,6 +929,7 @@ def score_product(
         "score": score,
         "score_reason": score_reason,
         "score_mix": {"correctness": mix_c, "process": mix_p},
+        "advisory_findings": advisory_findings,
         "retries": {
             "observed": bool(journal.get("observed")),
             "check_gate": journal.get("gate_retries", 0),
