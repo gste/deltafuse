@@ -84,7 +84,7 @@ return "fixture-error"
 
 ## Что сделано вместе с этим
 
-- **JVM-раннеры добавлены в allowlist.** До 3.3.3 `mvn test`, `mvn -B test`,
+- **JVM-раннеры добавлены в allowlist.** До 3.3.4 `mvn test`, `mvn -B test`,
   `./mvnw test`, `gradle test`, `./gradlew test` отвергались все до одного:
   в списке были pytest, tox, npm, cargo, go — и ни одного JVM. Java-продукт не
   мог записать ни одного доказательства, не прописав `workflow.test_commands`

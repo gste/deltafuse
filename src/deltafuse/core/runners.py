@@ -25,7 +25,7 @@ CODE_RUNNER_PREFIXES: tuple[tuple[str, ...], ...] = (
 # Maven and Gradle take their flags before the goal (`mvn -B test`,
 # `gradle --no-daemon test`), so a prefix never matches them. They are
 # recognised by the name of the tool plus a goal that runs tests - the shape
-# the allowlist actually cares about. Until 3.3.3 no JVM runner was listed at
+# the allowlist actually cares about. Until 3.3.4 no JVM runner was listed at
 # all and a Java product could stamp no evidence without configuring
 # `workflow.test_commands` by hand.
 JVM_RUNNERS = frozenset({"mvn", "mvnw", "gradle", "gradlew"})

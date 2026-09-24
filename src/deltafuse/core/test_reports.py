@@ -1,6 +1,6 @@
 """What the test runner itself said, instead of what its log looked like.
 
-Until 3.3.3 a Red record was judged by scanning the log for the substring
+Until 3.3.4 a Red record was judged by scanning the log for the substring
 ``assert``. The same ``TypeError`` was `behavioral-mismatch` when pytest
 echoed the source line and `fixture-error` when it did not, so the Worker's
 choice of ``--tb=short`` decided whether its evidence was accepted: 52 of the
@@ -176,7 +176,7 @@ def green_covers_red(red_failed: list[str], report: TestReport) -> list[str]:
 
     The point of a Red record is that the test discriminates the change. That
     is only shown when the same test passes afterwards - nothing checked it
-    before 3.3.3, so a Red test with a typo in it and a Green run of a
+    before 3.3.4, so a Red test with a typo in it and a Green run of a
     different test read as a finished task.
     """
     passed = {name for name, got in report.outcomes.items() if got == PASSED}
