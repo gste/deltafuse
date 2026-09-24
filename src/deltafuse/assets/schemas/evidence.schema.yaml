@@ -19,6 +19,21 @@ properties:
     type: array
     items: {type: string}
   spec_status: {enum: [unchanged, changed, not-applicable]}
+  tests:
+    type: object
+    additionalProperties: false
+    description: >
+      What the runner itself reported, read from its JUnit XML (pytest is
+      asked for one; Maven and Gradle write theirs anyway). `failed` means a
+      test ran and did not pass, `not_run` that collection, compilation or a
+      fixture kept it from running - the distinction the two ecosystems spell
+      differently and the Red rule is written in.
+    properties:
+      source: {enum: [junitxml, surefire]}
+      failed: {type: array, items: {type: string}}
+      passed: {type: array, items: {type: string}}
+      not_run: {type: array, items: {type: string}}
+      skipped: {type: array, items: {type: string}}
   ownership:
     type: object
     description: >

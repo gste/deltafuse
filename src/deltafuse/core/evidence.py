@@ -9,6 +9,7 @@ import hashlib
 import json
 import shlex
 import subprocess
+import time
 from typing import Any
 
 import yaml
@@ -18,6 +19,16 @@ from deltafuse.core.fsm import find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
+from deltafuse.core.test_reports import (
+    FAILED,
+    NOT_RUN,
+    PASSED,
+    SKIPPED,
+    green_covers_red,
+    read_report,
+    red_is_authentic,
+    wants_junit_flag,
+)
 from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
@@ -107,6 +118,22 @@ def _sanitize_command(argv: list[str]) -> str:
         return " ".join(argv)
 
 
+def _red_failed_tests(change_path: Path, task: str | None) -> list[str]:
+    """The tests the Red record of this task says failed."""
+    if not task:
+        return []
+    record = change_path / "evidence" / "red" / f"{task}.yaml"
+    if not record.is_file():
+        return []
+    try:
+        data = yaml.safe_load(record.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    tests = data.get("tests") if isinstance(data, dict) else None
+    failed = tests.get("failed") if isinstance(tests, dict) else None
+    return [str(name) for name in failed or [] if str(name).strip()]
+
+
 def _is_authentic(
     *,
     phase: str,
@@ -114,6 +141,8 @@ def _is_authentic(
     failure_category: str | None,
     route: str,
     private_errors: list[str],
+    red_from_report: bool = False,
+    report_says_red: bool = False,
 ) -> bool:
     if phase == "red":
         if route == "code" and private_errors:
@@ -123,6 +152,8 @@ def _is_authentic(
         if result != "expected-failure":
             return False
         if route == "code":
+            if red_from_report:
+                return report_says_red
             return failure_category == AUTHENTIC_RED_CATEGORY
         return True
     if phase in {"green", "regression", "verification"}:
@@ -293,9 +324,20 @@ def run_evidence(
         return str(raw)
 
     timed_out = False
+    # pytest writes a machine-readable report only when asked; the Core asks,
+    # so the Worker's choice of `--tb=` stops deciding how its evidence reads.
+    report_dir = repo_root / ".deltafuse" / "tmp"
+    junit_path: Path | None = None
+    run_argv = list(argv)
+    if wants_junit_flag(argv):
+        report_dir.mkdir(parents=True, exist_ok=True)
+        junit_path = report_dir / f"junit-{phase}-{task or 'run'}.xml"
+        junit_path.unlink(missing_ok=True)
+        run_argv = [*argv, f"--junitxml={junit_path}"]
+    started_at = time.time()
     try:
         proc = subprocess.run(
-            argv,
+            run_argv,
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -315,6 +357,7 @@ def run_evidence(
             log = f"command timed out after {timeout}s"
         timed_out = True
 
+    report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
@@ -342,6 +385,14 @@ def run_evidence(
         "changed_paths": rel_paths,
         "spec_status": "unchanged",
     }
+    if report is not None:
+        payload["tests"] = {
+            "source": report.source,
+            "failed": report.ids(FAILED),
+            "passed": report.ids(PASSED),
+            "not_run": report.ids(NOT_RUN),
+            "skipped": report.ids(SKIPPED),
+        }
     if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
 
@@ -374,16 +425,30 @@ def run_evidence(
                 f"missing {missing}"
             )
     errors.extend(private_errors)
-    if (
-        phase == "red"
-        and route == "code"
-        and result == "expected-failure"
-        and category != AUTHENTIC_RED_CATEGORY
-    ):
-        errors.append(
-            f"Red failure_category is '{category}', not '{AUTHENTIC_RED_CATEGORY}': "
-            f"{_why_not_behavioral(log)}"
-        )
+    red_from_report = False
+    if phase == "red" and route == "code" and result == "expected-failure":
+        if report is not None:
+            # The runner's own report, read through its ecosystem's meaning of
+            # `<error>`: pytest says the test never ran, Surefire says it ran
+            # and threw. The rule is written in neutral words for that reason.
+            red_from_report = True
+            ok, why = red_is_authentic(report)
+            if not ok:
+                errors.append(f"Red is not authentic: {why}")
+        elif category != AUTHENTIC_RED_CATEGORY:
+            # No machine-readable report from this runner: the old heuristic,
+            # marked as such in the record so a weaker verdict is visible.
+            errors.append(
+                f"Red failure_category is '{category}', not '{AUTHENTIC_RED_CATEGORY}': "
+                f"{_why_not_behavioral(log)}"
+            )
+    if phase == "green" and route == "code" and report is not None:
+        missing = green_covers_red(_red_failed_tests(change_path, task), report)
+        if missing:
+            errors.append(
+                "Green did not turn the Red tests green; still not passing: "
+                f"{missing[:5]}"
+            )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if timed_out:
@@ -395,6 +460,8 @@ def run_evidence(
         failure_category=category,
         route=route,
         private_errors=private_errors,
+        red_from_report=red_from_report,
+        report_says_red=bool(report is not None and red_is_authentic(report)[0]),
     )
     if runner_ok is False:
         authentic = False

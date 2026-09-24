@@ -22,6 +22,22 @@ CODE_RUNNER_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("cargo", "test"),
     ("go", "test"),
 )
+# Maven and Gradle take their flags before the goal (`mvn -B test`,
+# `gradle --no-daemon test`), so a prefix never matches them. They are
+# recognised by the name of the tool plus a goal that runs tests - the shape
+# the allowlist actually cares about. Until 3.3.3 no JVM runner was listed at
+# all and a Java product could stamp no evidence without configuring
+# `workflow.test_commands` by hand.
+JVM_RUNNERS = frozenset({"mvn", "mvnw", "gradle", "gradlew"})
+JVM_TEST_GOALS = frozenset({"test", "verify", "check", "integration-test"})
+
+
+def _is_jvm_test_command(argv: list[str]) -> bool:
+    if _as_runner_name(argv[0]).lower() not in JVM_RUNNERS:
+        return False
+    return any(arg.split(":")[-1].lower() in JVM_TEST_GOALS for arg in argv[1:])
+
+
 # docs/ops routes verify file-oracle style checks; plain interpreters are fine.
 DEFAULT_ROUTE_PREFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     "code": CODE_RUNNER_PREFIXES,
@@ -42,7 +58,10 @@ def _as_runner_name(argv0: str) -> str:
     record, so a substitution is still visible to a reader.
     """
     name = Path(argv0.replace("\\", "/")).name
-    return name[:-4] if name.lower().endswith(".exe") else name
+    for suffix in (".exe", ".cmd", ".bat"):
+        if name.lower().endswith(suffix):
+            return name[: -len(suffix)]
+    return name
 
 
 def _match(argv: list[str], prefixes: tuple[tuple[str, ...], ...]) -> bool:
@@ -93,7 +112,7 @@ def runner_is_authorized(
     if route == "code":
         # pytest-family runners, or a real script file on disk — never a
         # ``python -c`` one-liner substituted for the project runner.
-        if _match(argv, CODE_RUNNER_PREFIXES):
+        if _match(argv, CODE_RUNNER_PREFIXES) or _is_jvm_test_command(argv):
             return True
         return (
             python_like

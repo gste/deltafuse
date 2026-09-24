@@ -64,6 +64,12 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
   instead of a silent heuristic fallback: an estimate can never back a
   qualification verdict, and a mode that varies between machines poisons the
   bench the thresholds are measured against.
+- **Red is what the runner reported, not what its log looked like.** The Core
+  reads the runner's own report (it asks pytest for one; Maven and Gradle
+  write theirs anyway) and applies one rule in both ecosystems: the named
+  tests ran and none passed. What kept a test from running - compilation,
+  collection, a fixture - is not Red. On a compiled language a Red test needs
+  the signature to exist, so Declare adds the stub and takes Red against it.
 - Quality is measured by the disk-based bench: correctness, completed stages,
   retries, context tokens, unique files, hallucinated paths, and envelope
   violations.

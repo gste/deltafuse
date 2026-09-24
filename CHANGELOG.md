@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.3.3] - 2026-09-23
+## [3.3.3] - 2026-09-24
+
+### Changed
+
+- **Red is what the runner reported, not what its log looked like**
+  (`backlog/roadmap/q7-red-evidence/1-DECISION.md`). The Core read the log
+  for the substring `assert`, so the same `TypeError` was authentic when
+  pytest echoed the source line and refused when it did not: the Worker's
+  `--tb=` decided whether its evidence counted, and 52 of the 89 evidence
+  refusals of 2026-09-23 came from that. The Core now reads the runner's own
+  JUnit XML - it adds `--junitxml` for pytest itself, and finds what Surefire,
+  Failsafe and Gradle write anyway - and applies one rule in both
+  ecosystems: the tests ran and none passed. What kept a test from running
+  (compilation, collection, a fixture) is not Red, and the refusal says which
+  tests and why. A runner with no report falls back to the old heuristic, and
+  the record shows which path gave the verdict.
+  **The two ecosystems spell `<error>` differently** - pytest means "never
+  ran", Surefire means "ran and threw" - so each has its own adapter and the
+  canonical Java red, a stub throwing `UnsupportedOperationException`, is
+  authentic.
+- **Green must turn the Red tests green.** The evidence record now carries the
+  test ids the runner reported, and a Green run is refused when a test the
+  Red record listed as failed is still not passing. Nothing checked this
+  before: a Red test with a typo and a Green run of another test read as a
+  finished task.
+- **Declare on a compiled language is two moves.** A test cannot name what
+  does not compile, so the stub comes first and Red is taken against it. Said
+  in the contract and in the declare skill.
+
+### Added
+
+- **JVM runners in the authorized-runner allowlist.** `mvn`, `mvnw`, `gradle`
+  and `gradlew` with a test goal (`test`, `verify`, `check`,
+  `integration-test`) are recognised; flags before the goal (`mvn -B test`)
+  are fine, and `mvn deploy` is still refused. Until now the list held
+  pytest, tox, npm, cargo and go, so a Java product could stamp no evidence
+  at all without configuring `workflow.test_commands` by hand.
 
 ### Fixed
 
