@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.3.3] - 2026-09-24
 
+### Added
+
+- **A Change that needs a capability the catalog lacks can be analysed**
+  (`backlog/roadmap/q8-new-capability/1-DECISION.md`). It could not before:
+  routing refuses a name the catalog does not hold, and `docs/spec/**` is
+  writable only in Specify - after the `analyzed` gate - so the only legal
+  move was to route into a neighbouring capability. M02 run 1 did exactly
+  that and failed every downstream check.
+  `deltafuse capability propose <domain>.<name> --summary ... --spec ...`
+  adds the entry as a `draft`; routing accepts a draft and checks only the
+  shape of its spec path, because Specify is what writes that file. The
+  `specified` gate refuses to close while a capability the Change routes into
+  is still a draft - the human makes it active when accepting the
+  specification - and `converged` checks again, which is the catalog rule q6
+  was holding.
+  The catalog stays the human's file: no phase gets it in its write envelope,
+  and the Core's write is vouched for by a `capability-draft` receipt with the
+  digest it wrote, the way `deltafuse state` vouches for a status rewrite.
+
 ### Changed
 
 - **Red is what the runner reported, not what its log looked like**

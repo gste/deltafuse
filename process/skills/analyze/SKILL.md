@@ -55,6 +55,10 @@ Every artifact below is written with `deltafuse artifact write --kind <kind> --c
    ```
 
    `confidence`: low | medium | high | unknown. `route`: code (default) | docs | ops.
+
+   Routing names capabilities the catalog already holds. When the request needs one it does not, propose it before routing - do not fold the work into a neighbouring capability:
+   `deltafuse capability propose <domain>.<name> --summary "one line" --spec docs/spec/<domain>/<name>.md`.
+   It is added as a `draft`, routing accepts a draft, Specify writes that spec file, and the human makes it active when accepting the specification. Never edit the catalog by hand.
 2. Split the Change into analytical slices with one primary capability and independently verifiable outcome, one `SLICE-NN` per primary capability (`SLICE-01`, `SLICE-02`, …). Do not collapse a multi-capability Change into a single `SLICE-01`. The Core names the next capability; write that slice only (kind `slice`).
 
    ```json
