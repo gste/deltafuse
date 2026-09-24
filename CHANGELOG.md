@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.4] - 2026-09-24
+
+### Added
+
+- **A Change that needs a capability the catalog lacks can be analysed**
+  (`backlog/roadmap/q8-new-capability/1-DECISION.md`). It could not before:
+  routing refuses a name the catalog does not hold, and `docs/spec/**` is
+  writable only in Specify - after the `analyzed` gate - so the only legal
+  move was to route into a neighbouring capability. M02 run 1 did exactly
+  that and failed every downstream check.
+  `deltafuse capability propose <domain>.<name> --summary ... --spec ...`
+  adds the entry as a `draft`; routing accepts a draft and checks only the
+  shape of its spec path, because Specify is what writes that file. The
+  `specified` gate refuses to close while a capability the Change routes into
+  is still a draft - the human makes it active when accepting the
+  specification - and `converged` checks again, which is the catalog rule q6
+  was holding.
+  The catalog stays the human's file: no phase gets it in its write envelope,
+  and the Core's write is vouched for by a `capability-draft` receipt with the
+  digest it wrote, the way `deltafuse state` vouches for a status rewrite.
+
+### Changed
+
+- **Red is what the runner reported, not what its log looked like**
+  (`backlog/roadmap/q7-red-evidence/1-DECISION.md`). The Core read the log
+  for the substring `assert`, so the same `TypeError` was authentic when
+  pytest echoed the source line and refused when it did not: the Worker's
+  `--tb=` decided whether its evidence counted, and 52 of the 89 evidence
+  refusals of 2026-09-23 came from that. The Core now reads the runner's own
+  JUnit XML - it adds `--junitxml` for pytest itself, and finds what Surefire,
+  Failsafe and Gradle write anyway - and applies one rule in both
+  ecosystems: the tests ran and none passed. What kept a test from running
+  (compilation, collection, a fixture) is not Red, and the refusal says which
+  tests and why. A runner with no report falls back to the old heuristic, and
+  the record shows which path gave the verdict.
+  **The two ecosystems spell `<error>` differently** - pytest means "never
+  ran", Surefire means "ran and threw" - so each has its own adapter and the
+  canonical Java red, a stub throwing `UnsupportedOperationException`, is
+  authentic.
+- **Green must turn the Red tests green.** The evidence record now carries the
+  test ids the runner reported, and a Green run is refused when a test the
+  Red record listed as failed is still not passing. Nothing checked this
+  before: a Red test with a typo and a Green run of another test read as a
+  finished task.
+- **Declare on a compiled language is two moves.** A test cannot name what
+  does not compile, so the stub comes first and Red is taken against it. Said
+  in the contract and in the declare skill.
+
+### Added
+
+- **JVM runners in the authorized-runner allowlist.** `mvn`, `mvnw`, `gradle`
+  and `gradlew` with a test goal (`test`, `verify`, `check`,
+  `integration-test`) are recognised; flags before the goal (`mvn -B test`)
+  are fine, and `mvn deploy` is still refused. Until now the list held
+  pytest, tox, npm, cargo and go, so a Java product could stamp no evidence
+  at all without configuring `workflow.test_commands` by hand.
+
+### Fixed
+
+- **The runner allowlist identifies a runner by its name, not by its path.**
+  `D:\proj\.venv\Scripts\pytest.exe` is pytest; the allowlist compared
+  `argv[0]` literally and refused it as a substituted runner. Where pytest is
+  not on PATH - the normal case in an isolated environment - this took every
+  evidence command a run made: 27 of 27 in one isolated M01 run, 13 refusals
+  across the runs of 2026-09-23. A `python -c` one-liner is still refused,
+  and the full argv stays in the evidence record.
+- The unreachable copy of the `code` branch in `runner_is_authorized` is
+  gone; it sat after the branch's `return` and could never run.
+- A refused Red record says what the Core read: the last error line of the
+  output and why it is not a behavioural failure. This was the largest class
+  of refusal in those runs (52 of 89) and the only evidence of it was the
+  verdict - the log of a refused attempt is never stored.
+
 ### Changed
 
 - **The reference Worker class is a model of up to 40B total parameters, dense

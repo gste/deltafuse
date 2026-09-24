@@ -171,6 +171,39 @@ def _gate_password_prompt() -> str:
     return _read_secret("Human Gate password: ")
 
 
+def _capability_command(args) -> int:
+    """Propose a capability the catalog does not have yet, as a draft (q8).
+
+    Routing refuses a name the catalog does not hold, and the catalog is
+    writable only in Specify - after the `analyzed` gate. A Change that needs
+    a new capability had no legal move in Analyze at all.
+    """
+    from deltafuse.core import capability
+
+    try:
+        root = load_product_root(Path(args.path).resolve())
+    except QueueError as ex:
+        print(f"capability: {ex}", file=sys.stderr)
+        return 2
+    try:
+        written = capability.propose_capability(
+            root,
+            args.name,
+            summary=args.summary,
+            spec=args.spec,
+            code_roots=args.code_root or [],
+        )
+    except capability.CapabilityError as ex:
+        print(f"capability: {ex}", file=sys.stderr)
+        return 1
+    print(
+        f"capability: {written['capability']} proposed as a draft in {written['path']}; "
+        f"its spec is {written['spec']} (Specify writes it) and the human makes it "
+        "active when accepting the specification"
+    )
+    return 0
+
+
 def _gate_password_command(action: str, target: Path) -> int:
     try:
         root = load_product_root(target.resolve())
@@ -437,6 +470,24 @@ def _main(argv: list[str] | None = None) -> int:
     )
     gpw_parser.add_argument("action", choices=["set", "clear", "status"])
     gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
+
+    cap_parser = subparsers.add_parser(
+        "capability",
+        help="Propose a capability the catalog does not have yet (draft, Analyze)",
+    )
+    cap_sub = cap_parser.add_subparsers(dest="capability_command", required=True)
+    cap_propose = cap_sub.add_parser(
+        "propose", help="Add <domain>.<capability> to the catalog as a draft"
+    )
+    cap_propose.add_argument("name", help="<domain>.<capability>, e.g. monitoring.usage_stats")
+    cap_propose.add_argument("--summary", required=True, help="One line: what it is responsible for")
+    cap_propose.add_argument(
+        "--spec", required=True, help="Spec file Specify will write, under docs/spec/"
+    )
+    cap_propose.add_argument(
+        "--code-root", action="append", default=[], help="Code root it will own (repeatable)"
+    )
+    cap_propose.add_argument("--path", default=".", help="Product root")
 
     # board snapshot (FM-001)
     board_parser = subparsers.add_parser(
@@ -882,6 +933,9 @@ def _main(argv: list[str] | None = None) -> int:
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0 if result.get("ok") else 1
+
+    elif args.command == "capability":
+        return _capability_command(args)
 
     elif args.command == "gate-password":
         return _gate_password_command(args.action, Path(args.path))

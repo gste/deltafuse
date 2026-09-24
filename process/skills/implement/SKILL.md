@@ -32,7 +32,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 3. Record Green with the kernel, not by hand-writing YAML:
    `deltafuse evidence <change-dir> --phase green --task <task-id> -- <target-command>`. The Core records the changed files itself (`--changed-path` is optional).
 4. Record scoped regression the same way (`--phase regression`). The runner fills `exit_code`, `failure_category`, and `base_revision`.
-5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. CLI exit 0 is required for both Green and regression.
+5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. CLI exit 0 is required for both Green and regression. Green must pass the very tests the Red record lists as failed; the Core refuses a Green that leaves any of them red.
 6. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status implemented`; retain the task file and its history inside the Change.
 
 If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.

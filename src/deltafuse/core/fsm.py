@@ -826,6 +826,26 @@ def _validate_spec_delta_matches_disk(
     return errors
 
 
+def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> list[str]:
+    """A capability this Change routes into must be the human's before it closes.
+
+    The Worker may propose one in Analyze (`deltafuse capability propose`,
+    q8 decision) and the catalog carries it as a draft until the human accepts
+    the spec at the `specified` gate. Checked again at `converged`: this is the
+    catalog rule q6 was holding - no Change converges into a draft.
+    """
+    from deltafuse.core.analyze import routing_primary_capabilities
+    from deltafuse.core.capability import draft_capabilities
+
+    drafts = draft_capabilities(repo_root, routing_primary_capabilities(change_path))
+    return [
+        f"Gate {gate}: capability '{name}' is still a draft in "
+        "docs/spec/_capabilities.yaml; the human accepts it (status: active) "
+        "together with the specification"
+        for name in drafts
+    ]
+
+
 def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
     """Analyze substeps not yet on disk. `analyzed` requires this list to be empty.
 
@@ -1009,6 +1029,7 @@ def check_gate(
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
             errors.append("Gate specified: spec-delta.md is missing")
+        errors.extend(_draft_capability_errors("specified", change_path, repo_root))
         errors.extend(
             _human_gate_errors(
                 gate="specified",
@@ -1113,6 +1134,7 @@ def check_gate(
             errors.append("Gate converged: verification.md is missing")
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
+        errors.extend(_draft_capability_errors("converged", change_path, repo_root))
 
         # Check all tasks frontmatter status (P1 / T3 / RM-005)
         if tasks_dir.is_dir():

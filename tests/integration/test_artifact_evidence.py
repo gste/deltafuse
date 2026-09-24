@@ -83,3 +83,119 @@ def test_cli_evidence_verification_subprocess(tmp_path: Path, repo_root: Path):
     assert proc.returncode == 0
     run_yaml = builder.change_dir / "evidence" / "verification" / "run.yaml"
     assert run_yaml.is_file()
+
+
+def _pytest_product(tmp_path: Path, repo_root: Path, change_id: str) -> MockChangeBuilder:
+    """A decomposed Change whose product has a real pytest suite."""
+    builder = _decomposed_change(tmp_path, repo_root, change_id)
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(exist_ok=True)
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src" / "limiter.py").write_text(
+        "class Limiter:\n    def __init__(self):\n        pass\n", encoding="utf-8"
+    )
+    return builder
+
+
+def test_red_is_read_from_the_runners_own_report(tmp_path: Path, repo_root: Path):
+    """The Core asks pytest for a report and judges Red by what it says.
+
+    Before 3.3.3 the verdict came from scanning the log for `assert`, so the
+    same TypeError passed with a full traceback and was refused with
+    `--tb=short` (52 of 89 evidence refusals on 2026-09-23). Both forms must
+    now read the same.
+    """
+    builder = _pytest_product(tmp_path, repo_root, "CHG-140")
+    (tmp_path / "tests" / "test_penalty.py").write_text(
+        "import sys\n"
+        "sys.path.insert(0, 'src')\n"
+        "from limiter import Limiter\n"
+        "\n"
+        "def test_penalty_seconds_is_accepted():\n"
+        "    limiter = Limiter(penalty_seconds=10.0)\n"
+        "    assert limiter is not None\n",
+        encoding="utf-8",
+    )
+
+    for flags in ([], ["--tb=short", "-q"]):
+        outcome = run_evidence(
+            builder.change_dir,
+            phase="red",
+            task="TASK-001",
+            argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py", *flags],
+            changed_paths=["tests/test_penalty.py"],
+        )
+        # A TypeError from the product is a test that ran and did not pass.
+        assert outcome.authentic, (flags, outcome.errors, outcome.payload.get("summary"))
+        tests = outcome.payload["tests"]
+        assert tests["source"] == "junitxml"
+        assert any("test_penalty_seconds_is_accepted" in name for name in tests["failed"])
+        assert tests["not_run"] == []
+
+
+def test_a_test_that_cannot_run_is_not_red(tmp_path: Path, repo_root: Path):
+    builder = _pytest_product(tmp_path, repo_root, "CHG-141")
+    (tmp_path / "tests" / "test_broken.py").write_text(
+        "import pytest\n"
+        "\n"
+        "@pytest.fixture\n"
+        "def clock():\n"
+        "    raise RuntimeError('fixture is broken')\n"
+        "\n"
+        "def test_needs_clock(clock):\n"
+        "    assert clock\n",
+        encoding="utf-8",
+    )
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_broken.py"],
+        changed_paths=["tests/test_broken.py"],
+    )
+    assert not outcome.authentic
+    assert any("could not run" in e for e in outcome.errors), outcome.errors
+    assert outcome.payload["tests"]["not_run"]
+
+
+def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
+    builder = _pytest_product(tmp_path, repo_root, "CHG-142")
+    (tmp_path / "tests" / "test_penalty.py").write_text(
+        "import sys\n"
+        "sys.path.insert(0, 'src')\n"
+        "from limiter import Limiter\n"
+        "\n"
+        "def test_penalty_seconds_is_accepted():\n"
+        "    assert Limiter(penalty_seconds=10.0) is not None\n",
+        encoding="utf-8",
+    )
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py"],
+        changed_paths=["tests/test_penalty.py"],
+    )
+    assert red.authentic
+
+    # Green on a different test does not close the task.
+    (tmp_path / "tests" / "test_other.py").write_text(
+        "def test_unrelated():\n    assert True\n", encoding="utf-8"
+    )
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_other.py"],
+        changed_paths=["tests/test_other.py"],
+    )
+    assert any("did not turn the Red tests green" in e for e in green.errors), green.errors
+
+    # The same test, once the product implements it, does.
+    (tmp_path / "src" / "limiter.py").write_text(
+        "class Limiter:\n    def __init__(self, penalty_seconds=0.0):\n"
+        "        self.penalty_seconds = penalty_seconds\n",
+        encoding="utf-8",
+    )
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py"],
+        changed_paths=["src/limiter.py"],
+    )
+    assert not [e for e in green.errors if "did not turn the Red tests green" in e], green.errors

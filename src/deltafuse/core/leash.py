@@ -76,7 +76,9 @@ CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.js
 CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml"}
 # Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
 # `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
-CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status"})
+# `capability-draft`: `deltafuse capability propose` adding a draft to the
+# catalog in Analyze (q8 decision).
+CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft"})
 
 
 
@@ -278,6 +280,16 @@ def _bytes_at(product_root: Path, rel_path: str, *, head: str | None) -> bytes |
         return proc.stdout if proc.returncode == 0 else None
     path = product_root / rel_path
     return path.read_bytes() if path.is_file() else None
+
+
+CATALOG_REL = "docs/spec/_capabilities.yaml"
+
+
+def _bytes_digest(product_root: Path, rel: str, *, head: str | None = None) -> str:
+    import hashlib
+
+    data = _bytes_at(product_root, posix_relpath(rel), head=head)
+    return hashlib.sha256(data).hexdigest() if data is not None else ""
 
 
 def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str, set[str]]:
@@ -798,6 +810,15 @@ def check_paths(
             if product_root is not None:
                 errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
+        if posix_relpath(raw) == CATALOG_REL and product_root is not None:
+            # The catalog belongs to the human, and no step envelope holds it.
+            # `deltafuse capability propose` adds a draft in Analyze and leaves
+            # the digest of what it wrote; bytes no receipt vouches for are a
+            # hand edit (q8 decision).
+            if _bytes_digest(product_root, raw, head=head) in vouched.get(CATALOG_REL, set()):
+                continue
+            # Not vouched: fall through to the ordinary checks. The catalog is
+            # the human's file and a human edit is not a Worker violation.
         status_reasons = status_writes.get(posix_relpath(raw))
         if status_reasons is not None:
             if not status_reasons:

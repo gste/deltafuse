@@ -257,6 +257,16 @@ def validate_catalog_capability_specs(
         if not isinstance(spec_paths, list) or not spec_paths:
             errors.append(f"Capability '{name}' has no live spec files in the catalog")
             continue
+        if str(cap.get("status") or "").lower() == "draft":
+            # A draft is a claim about what this Change will add: the spec file
+            # is written in Specify, and the human turns the draft active at
+            # that gate. Only the shape of the path is checked here.
+            for sp in spec_paths:
+                if not isinstance(sp, str) or not spec_ref_is_under_docs_spec(sp, repo_root):
+                    errors.append(
+                        f"Capability '{name}' is a draft whose spec path must be under docs/spec/"
+                    )
+            continue
         for sp in spec_paths:
             if not isinstance(sp, str):
                 errors.append(f"Capability '{name}' has a non-string spec path")
