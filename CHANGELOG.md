@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until the supervisor stopped them. The file check now accepts the spec
   paths of drafts (anchor included); it comes back in full at `specified`,
   where the human also has to accept the draft (`draft_spec_files`).
+- **Red refusals say what to do instead of repeating themselves.** In
+  gemma-334-probe M01 the Worker put an option of `deltafuse evidence` after
+  `--`; the Core ran it as a program, recorded exit 127 as a `fixture-error`,
+  and the gate only said the category was wrong. The Worker then edited
+  product code to change a category that was its own typo, was refused seven
+  times with no hint why, and the supervisor stopped the run. Now: an option
+  after `--` is refused before anything runs or is recorded; the `declaring`
+  gate quotes the record's own summary and says product code is not the fix
+  (a test calling an API that does not exist yet fails with `AttributeError` or
+  `TypeError`, and that is a legitimate Red); the write-envelope refusals in
+  declare say that the phase writes tests only.
 
 ## [3.3.4] - 2026-09-24
 

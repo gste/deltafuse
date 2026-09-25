@@ -520,7 +520,7 @@ def validate_change_package(
                             errors.append(
                                 f"{ev_file.relative_to(change_path)}: red expected-failure "
                                 f"must have failure_category 'behavioral-mismatch' "
-                                f"(got '{category}')"
+                                f"(got '{category}')" + _red_category_hint(ev_data)
                             )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
@@ -747,7 +747,7 @@ def _validate_evidence_changed_paths_contract(
             write_globs,
             label=f"Gate {gate} {evidence_phase} changed_paths",
         ):
-            errors.append(msg)
+            errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:
             for rel in rel_paths:
                 if is_product_code_path(rel):
@@ -826,6 +826,29 @@ def _validate_spec_delta_matches_disk(
         elif "Path traversal" in s_err:
             errors.append(f"Gate {gate}: {s_err}")
     return errors
+
+
+_RED_WRITES_HINT = (
+    " (Red writes tests only; product code is written in Implement, after Red is recorded)"
+)
+
+
+def _red_category_hint(ev_data: dict) -> str:
+    """Why a Red record is not a behavioural failure, and what is not the fix.
+
+    Gemma read only the category and edited product code to make a test fail on
+    an assertion (gemma-334-probe M01), when the record's own summary said its
+    command had never run.
+    """
+    summary = str(ev_data.get("summary") or "").strip().splitlines()
+    last = summary[-1].strip()[:160] if summary else ""
+    said = f"; the record says: {last}" if last else ""
+    return (
+        f"{said}. The test did not run to a failure: fix the test or the command and "
+        "record Red again. Do not edit product code in this phase - a test that calls an "
+        "API which does not exist yet fails with AttributeError or TypeError, and that "
+        "is a legitimate Red"
+    )
 
 
 def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> list[str]:

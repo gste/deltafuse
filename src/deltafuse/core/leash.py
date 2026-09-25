@@ -782,6 +782,12 @@ def check_paths(
     errors: list[str] = []
     steps = [str(env.get("step") or "?") for env in env_list]
     step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
+    # Say what the phase is for: a refusal alone sent a Worker into repeating it.
+    phase_hint = (
+        " (declare writes tests only; product code is written in implement)"
+        if step_label == "declare"
+        else ""
+    )
     status_writes = (
         core_status_writes(product_root, base=base, head=head) if product_root is not None else {}
     )
@@ -834,7 +840,7 @@ def check_paths(
                 errors.append(f"leash: '{raw}' is not covered by any Change")
             else:
                 errors.append(
-                    f"leash: '{raw}' is outside the {step_label} write envelope"
+                    f"leash: '{raw}' is outside the {step_label} write envelope{phase_hint}"
                 )
             continue
         if is_change_artifact(raw) and env_list:

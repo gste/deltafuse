@@ -293,6 +293,17 @@ def run_evidence(
         raise EvidenceRunError(f"Unsupported evidence phase '{phase}'")
     if not argv:
         raise EvidenceRunError("Command argv is required after '--'")
+    if str(argv[0]).startswith("-"):
+        # gemma-334-probe M01: `-- --changed-path X -- pytest` ran `--changed-path`
+        # as a program, recorded exit 127 as a `fixture-error`, and the Worker
+        # spent its attempts editing product code to change a category that
+        # was its own typo.
+        raise EvidenceRunError(
+            f"'{argv[0]}' is an option of `deltafuse evidence`, not a command: options go "
+            "before '--', and only the test command after it "
+            "(`deltafuse evidence <change-dir> --phase red --task <id> [--changed-path P] -- pytest tests/...`); "
+            "nothing was run or recorded"
+        )
 
     if phase == "verification":
         if task is not None and task != "null" and task != "":
