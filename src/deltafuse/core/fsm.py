@@ -23,6 +23,7 @@ from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
+    draft_spec_files,
     validate_spec_ref,
     validate_decision_ref,
     find_unresolved_decisions_for_change,
@@ -182,6 +183,7 @@ def validate_change_package(
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
+    draft_specs = draft_spec_files(repo_root)
 
     change_id: str | None = None
     change_status: str | None = None
@@ -291,7 +293,7 @@ def validate_change_package(
                             errors.append(f"{slice_file.name}: Specification root directory 'docs/spec' not found")
                         else:
                             for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root)
+                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                                 if s_err:
                                     errors.append(f"{slice_file.name}: {s_err}")
 
@@ -334,7 +336,7 @@ def validate_change_package(
                             errors.append(f"{task_file.name}: Specification root directory 'docs/spec' not found")
                         else:
                             for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root)
+                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                                 if s_err:
                                     errors.append(f"{task_file.name}: {s_err}")
 
@@ -433,7 +435,7 @@ def validate_change_package(
                                     f"spec-delta.md: '{sref}' must resolve under docs/spec/"
                                 )
                                 continue
-                            s_err = validate_spec_ref(sref, repo_root)
+                            s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                             if s_err:
                                 errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:

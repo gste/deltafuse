@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A draft capability's spec can be cited before Specify writes it.** The
+  `analyzed` gate refused every slice, task and `spec-delta.md` that cited the
+  spec of a capability proposed with `deltafuse capability propose`, because
+  the file does not exist until Specify - a step after that gate. M02 runs 1
+  and 3 of 2026-09-24 proposed both drafts correctly and then stalled on this
+  until the supervisor stopped them. The file check now accepts the spec
+  paths of drafts (anchor included); it comes back in full at `specified`,
+  where the human also has to accept the draft (`draft_spec_files`).
+
 ## [3.3.4] - 2026-09-24
 
 ### Added

@@ -112,9 +112,37 @@ def find_spec_anchors(spec_file_path: Path) -> set[str]:
     return set(html_anchors) | set(header_anchors)
 
 
-def validate_spec_ref(spec_ref: str, repo_root: Path) -> str | None:
+def draft_spec_files(repo_root: Path) -> frozenset[str]:
+    """Spec paths the catalog promises for capabilities that are still drafts.
+
+    `deltafuse capability propose` (q8) registers a capability whose spec file
+    Specify writes later, so until then a reference to that file is a promise
+    and not a dangling link. The strict check comes back at `specified`.
+    """
+    catalog, errors = load_capability_catalog(repo_root)
+    if errors or not isinstance(catalog, dict):
+        return frozenset()
+    out: set[str] = set()
+    domains = catalog.get("domains") or {}
+    for domain in domains.values() if isinstance(domains, dict) else []:
+        caps = domain.get("capabilities") if isinstance(domain, dict) else None
+        for cap in caps.values() if isinstance(caps, dict) else []:
+            if not isinstance(cap, dict) or str(cap.get("status") or "").lower() != "draft":
+                continue
+            for sp in cap.get("spec") or []:
+                if isinstance(sp, str):
+                    out.add(sp.replace("\\", "/").split("#", 1)[0])
+    return frozenset(out)
+
+
+def validate_spec_ref(
+    spec_ref: str, repo_root: Path, *, drafts: frozenset[str] = frozenset()
+) -> str | None:
     """Validates that a spec reference (e.g. 'docs/spec/core.md#REQ-01' or 'docs/spec/core.md')
     points to an existing file and anchor. Returns an error message if invalid, or None if valid.
+
+    `drafts` are spec paths of draft capabilities (`draft_spec_files`): a file
+    that is not written yet is accepted for them, anchor included.
     """
     if not spec_ref:
         return None
@@ -128,6 +156,8 @@ def validate_spec_ref(spec_ref: str, repo_root: Path) -> str | None:
     if not path_is_inside_repo(file_path, repo_root):
         return f"Path traversal forbidden: '{file_part}' is outside repository root"
     if not file_path.is_file():
+        if file_part.replace("\\", "/") in drafts:
+            return None
         return f"Referenced specification file does not exist: '{file_part}'"
 
     if anchor:
