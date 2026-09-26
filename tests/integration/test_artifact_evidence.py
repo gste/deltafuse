@@ -199,3 +199,53 @@ def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
         changed_paths=["src/limiter.py"],
     )
     assert not [e for e in green.errors if "did not turn the Red tests green" in e], green.errors
+
+
+def test_the_recorded_category_follows_the_report_the_gate_reads(tmp_path: Path, repo_root: Path):
+    """The Core judged Red by the report and still wrote `import-error` when a test
+    imported a name that does not exist yet from inside its body: the test ran and
+    failed, the log said `ImportError`, and the `declaring` gate refused a record the
+    Core had accepted (23 of 44 such records on 2026-09-25/26)."""
+    builder = _pytest_product(tmp_path, repo_root, "CHG-142")
+    (tmp_path / "tests" / "test_penalty.py").write_text(
+        "import sys\n"
+        "sys.path.insert(0, 'src')\n"
+        "\n"
+        "def test_the_new_name_exists():\n"
+        "    from limiter import PenaltyPolicy\n",  # ImportError inside the body
+        encoding="utf-8",
+    )
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py", "-q"],
+        changed_paths=["tests/test_penalty.py"],
+    )
+    assert outcome.authentic, outcome.errors
+    assert outcome.payload["tests"]["failed"] and not outcome.payload["tests"]["not_run"]
+    assert outcome.payload["failure_category"] == "behavioral-mismatch"
+
+
+def test_a_log_that_mentions_assert_does_not_make_a_test_that_never_ran_red(tmp_path: Path, repo_root: Path):
+    builder = _pytest_product(tmp_path, repo_root, "CHG-143")
+    (tmp_path / "tests" / "test_broken.py").write_text(
+        "import pytest\n"
+        "\n"
+        "@pytest.fixture\n"
+        "def clock():\n"
+        "    assert False, 'the fixture is broken'\n"
+        "\n"
+        "def test_needs_clock(clock):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_broken.py"],
+        changed_paths=["tests/test_broken.py"],
+    )
+    assert not outcome.authentic
+    assert outcome.payload["failure_category"] == "fixture-error"
