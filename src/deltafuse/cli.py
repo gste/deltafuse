@@ -49,6 +49,55 @@ from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 
 
+class _HintingParser(argparse.ArgumentParser):
+    """argparse, plus a guess when a subcommand is not one.
+
+    Workers call the host's tool name as a command (`deltafuse artifact_write`, 8 times in
+    the runs of 2026-09-25/26) and got the list of every command back, which does not say
+    which one they meant.
+    """
+
+    def error(self, message: str) -> "NoReturn":  # type: ignore[name-defined]
+        import difflib
+        import re
+
+        wrong = re.search(r"invalid choice: '([^']+)' \(choose from ([^)]*)\)", message)
+        if wrong:
+            given = wrong.group(1)
+            choices = [c.strip() for c in wrong.group(2).split(",") if c.strip()]
+            words = re.split(r"[_\s]+", given)
+            guess = None
+            if len(words) > 1 and words[0] in choices:
+                guess = " ".join(words)  # artifact_write -> artifact write
+            else:
+                near = difflib.get_close_matches(given, choices, n=1, cutoff=0.6)
+                guess = near[0] if near else None
+            if guess:
+                message = f"Did you mean: deltafuse {guess} ...?  ({message})"
+        super().error(message)
+
+
+class _Capture:
+    """Writes through to a stream and keeps a copy."""
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+        self.parts: list[str] = []
+
+    def write(self, text: str) -> int:
+        self.parts.append(text)
+        return self._stream.write(text)
+
+    def flush(self) -> None:
+        self._stream.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+    def text(self) -> str:
+        return "".join(self.parts)
+
+
 def _journal(start: Path | str, **event: object) -> None:
     from deltafuse.bench.journal import record_event
 
@@ -290,20 +339,78 @@ def main(argv: list[str] | None = None) -> int:
     from deltafuse.core.assets import AssetError
 
     raw = list(sys.argv[1:] if argv is None else argv)
+    writes = len(raw) > 1 and raw[0] == "artifact" and raw[1] in ("create", "write", "update")
+    out, err = sys.stdout, sys.stderr
+    cap_out = cap_err = None
+    if writes:
+        cap_out, cap_err = _Capture(out), _Capture(err)
+        sys.stdout, sys.stderr = cap_out, cap_err
+    code: int | None = None
     try:
-        return _main(raw)
-    except (ArtifactRegistryError, AssetError) as ex:
-        if not raw or raw[0] != "artifact":
+        try:
+            code = _main(raw)
+        except SystemExit as ex:
+            code = ex.code if isinstance(ex.code, int) else 2
             raise
-        message = str(ex)[:512]
-        if "--json" in raw:
-            print(json.dumps({"ok": False, "error": {
-                "code": "asset_resolution_failed", "stage": "schema",
-                "path": "/", "message": message,
-                "hint": "Reinstall a verified framework bundle; in a source checkout run scripts/sync_assets.py.",
-            }}, ensure_ascii=False, indent=2))
-        print(f"Artifact assets unavailable: {message}", file=sys.stderr)
-        return 5
+        except (ArtifactRegistryError, AssetError) as ex:
+            if not raw or raw[0] != "artifact":
+                raise
+            message = str(ex)[:512]
+            if "--json" in raw:
+                print(json.dumps({"ok": False, "error": {
+                    "code": "asset_resolution_failed", "stage": "schema",
+                    "path": "/", "message": message,
+                    "hint": "Reinstall a verified framework bundle; in a source checkout run scripts/sync_assets.py.",
+                }}, ensure_ascii=False, indent=2))
+            print(f"Artifact assets unavailable: {message}", file=sys.stderr)
+            code = 5
+        return code
+    finally:
+        if writes and cap_out is not None and cap_err is not None:
+            sys.stdout, sys.stderr = out, err
+            _journal_artifact_write(raw, 1 if code is None else code, cap_out.text(), cap_err.text())
+
+
+def _flag(raw: list[str], *names: str) -> str | None:
+    for i, item in enumerate(raw):
+        if item in names and i + 1 < len(raw):
+            return raw[i + 1]
+        for name in names:
+            if item.startswith(name + "="):
+                return item.split("=", 1)[1]
+    return None
+
+
+def _journal_artifact_write(raw: list[str], code: int, out: str, err: str) -> None:
+    """One journal line per Artifact Writer call: what, and why it was refused.
+
+    `artifact write` left no trace in the command journal, so a Worker that fought the
+    Writer for 20 calls and one that never touched it looked the same to every metric.
+    """
+    import re
+
+    errors: list[str] = []
+    if code != 0:
+        text = err.strip() or out.strip()
+        for line in text.splitlines():
+            line = line.strip()
+            if line and not line.startswith("usage:"):
+                errors.append(line[:400])
+        errors = errors[:5] or [f"exit {code}"]
+        found = re.search(r"\[(\w+)\]", " ".join(errors))
+    else:
+        found = None
+    change = _flag(raw, "--change", "-c") or "."
+    _journal(
+        Path(change),
+        cmd="artifact",
+        sub=raw[1],
+        kind=_flag(raw, "--kind", "-k"),
+        identity=_flag(raw, "--identity"),
+        ok=code == 0,
+        refusal=found.group(1) if found else None,
+        errors=errors or None,
+    )
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -314,7 +421,7 @@ def _main(argv: list[str] | None = None) -> int:
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
-    parser = argparse.ArgumentParser(prog="deltafuse", description="DeltaFuse Specification-Driven AI Engineering Tool")
+    parser = _HintingParser(prog="deltafuse", description="DeltaFuse Specification-Driven AI Engineering Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     raw = list(sys.argv[1:] if argv is None else argv)

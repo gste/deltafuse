@@ -726,9 +726,17 @@ def collect_chain_envelopes(
             spec = STEP_CONTRACTS[step]
             items: list[WorkItem] = []
             if step in {"declare", "implement"}:
+                # gemma-31b M01 (2026-09-26): evidence written, the gate advanced and the
+                # step closed in one go, `state` called later - the task file was not
+                # dirty yet, so its own evidence was judged against the step after it.
+                # A task whose evidence for this step is dirty is the step's task too.
+                phases = {"declare": ("red",), "implement": ("green", "regression")}[step]
                 for task_id, _, task_file in _load_tasks(change_dir):
                     task_rel = task_file.relative_to(root).as_posix()
-                    if task_rel in changed:
+                    wrote_evidence = any(
+                        f"{rel_dir}/evidence/{phase}/{task_id}.yaml" in changed for phase in phases
+                    )
+                    if task_rel in changed or wrote_evidence:
                         items.append(
                             WorkItem(
                                 kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],

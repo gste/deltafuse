@@ -228,7 +228,11 @@ def serialize_artifact(
                     "Existing metadata formatting differs from canonical output; explicit canonicalize_metadata=True required",
                     code="format_change_required",
                     preview_hash=preview_hash,
-                    hint="Pass canonicalize_metadata=True in update request to authorize frontmatter formatting change",
+                    hint=(
+                        "Pass canonicalize_metadata=True in the update request to authorize the formatting change: "
+                        "as a key of the input JSON of `deltafuse artifact write --input`, or as the "
+                        "`canonicalize_metadata` argument of the host's artifact_write tool"
+                    ),
                 )
 
     return candidate_output
