@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.5] - 2026-09-26
+
 ### Fixed
 
 - **A draft capability's spec can be cited before Specify writes it.** The
