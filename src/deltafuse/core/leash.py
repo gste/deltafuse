@@ -844,8 +844,17 @@ def check_paths(
                 )
             continue
         if is_change_artifact(raw) and env_list:
+            # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a
+            # `.deltafuse/tmp/` inside the Change directory (224 refusals in two
+            # runs); the exemption is for the one at the product root.
+            scratch = (
+                " (the Writer's input file belongs in `.deltafuse/tmp/` at the product root, "
+                "not inside the Change directory)"
+                if "/.deltafuse/tmp/" in posix_relpath(raw)
+                else ""
+            )
             errors.append(
-                f"leash: '{raw}' is outside the {step_label} write envelope"
+                f"leash: '{raw}' is outside the {step_label} write envelope{scratch}"
             )
     return errors
 

@@ -30,7 +30,7 @@ After routing, read only the spec modules in `spec_refs` for the named capabilit
 
 ## Writing artifacts
 
-Every artifact below is written with `deltafuse artifact write --kind <kind> --change <change-dir> --input <file.json>`, or the host's `artifact_write` tool with the same fields; put the JSON file under `.deltafuse/tmp/`. You write fields and prose; the Core writes `id`, `change`, `status`, the file and the `change.yaml` index. Never write these files by hand - the leash refuses them. A refused field comes back with its reason: fix that field and call again.
+Every artifact below is written with `deltafuse artifact write --kind <kind> --change <change-dir> --input <file.json>`, or the host's `artifact_write` tool with the same fields; put the JSON file under `.deltafuse/tmp/` at the product root (not inside the Change directory). You write fields and prose; the Core writes `id`, `change`, `status`, the file and the `change.yaml` index. Never write these files by hand - the leash refuses them. A refused field comes back with its reason: fix that field and call again.
 
 ## Procedure
 

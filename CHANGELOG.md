@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mentioning an assertion made a test that never ran read `behavioral-mismatch`.
   With a report, an authentic Red is now recorded `behavioral-mismatch` and an
   inauthentic one never is.
+- **The Writer's input file has one place, and a refusal says which.** The
+  skills said "put the JSON file under `.deltafuse/tmp/`"; a Worker read that as
+  inside the Change directory, and the leash, which exempts only the product
+  root's `.deltafuse/`, refused it 224 times in two runs (glm-4.7-flash), about
+  half of that model's refusals. The analyze, decompose and specify skills now
+  say "at the product root (not inside the Change directory)" and the refusal
+  says the same. The leash is not loosened.
 - **Red refusals say what to do instead of repeating themselves.** In
   gemma-334-probe M01 the Worker put an option of `deltafuse evidence` after
   `--`; the Core ran it as a program, recorded exit 127 as a `fixture-error`,
