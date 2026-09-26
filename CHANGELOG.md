@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mentioning an assertion made a test that never ran read `behavioral-mismatch`.
   With a report, an authentic Red is now recorded `behavioral-mismatch` and an
   inauthentic one never is.
+- **A Red test that cannot load says why and what to do.** A test importing a
+  module that does not exist yet at the top of its file (`from ratelimit.stats
+  import StatsStore`) fails at collection, and the refusal said only "tests could
+  not run". gemma-4-31b M02 was refused nine times and answered by creating the
+  module in Declare (25 refusals by the leash for product code). The refusal now
+  names the cause (the import at module level) and the fix (import inside the test
+  function, so it runs and fails there).
 - **`coverage` without routing says what comes first.** glm-4.7-flash ran it
   before writing routing 31 times and was told only "routing.yaml is missing";
   the refusal now names the order (routing, slices, then coverage).

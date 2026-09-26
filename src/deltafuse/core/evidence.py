@@ -64,6 +64,23 @@ def classify_failure(log: str, exit_code: int) -> str | None:
     return "fixture-error"
 
 
+def _missing_import_hint(log: str) -> str:
+    """A test that imports what does not exist yet at module level never gets to run.
+
+    gemma-4-31b M02 (2026-09-26) wrote `from ratelimit.stats import StatsStore` at the top
+    of a Red test, was told nine times that the test "could not run", and answered by
+    creating the module in Declare - 25 refusals by the leash for editing product code.
+    """
+    if not any(marker in log for marker in _IMPORT_MARKERS):
+        return ""
+    return (
+        ". A name the test imports at the top of its module does not exist yet, so the file "
+        "cannot even be loaded, and a test that cannot load is not Red. Import it inside "
+        "the test function instead: the test then runs and fails there. Do not create the "
+        "module in this phase - product code is written in Implement"
+    )
+
+
 def _why_not_behavioral(log: str) -> str:
     """The line the classifier read, so a refusal can be acted on.
 
@@ -457,7 +474,7 @@ def run_evidence(
             red_from_report = True
             ok, why = red_is_authentic(report)
             if not ok:
-                errors.append(f"Red is not authentic: {why}")
+                errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
         elif category != AUTHENTIC_RED_CATEGORY:
             # No machine-readable report from this runner: the old heuristic,
             # marked as such in the record so a weaker verdict is visible.

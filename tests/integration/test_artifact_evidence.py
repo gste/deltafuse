@@ -249,3 +249,29 @@ def test_a_log_that_mentions_assert_does_not_make_a_test_that_never_ran_red(tmp_
     )
     assert not outcome.authentic
     assert outcome.payload["failure_category"] == "fixture-error"
+
+
+def test_a_test_that_imports_a_missing_module_at_the_top_is_told_to_import_inside(tmp_path: Path, repo_root: Path):
+    """gemma-4-31b M02: nine refusals that said only "tests could not run", then a stub
+    module created in Declare. The refusal must name the import and the way out."""
+    builder = _pytest_product(tmp_path, repo_root, "CHG-144")
+    (tmp_path / "tests" / "test_stats.py").write_text(
+        "import sys\n"
+        "sys.path.insert(0, 'src')\n"
+        "from ratelimit_stats import StatsStore\n"  # does not exist yet
+        "\n"
+        "def test_a_new_store_is_empty():\n"
+        "    assert StatsStore().get('u') == {}\n",
+        encoding="utf-8",
+    )
+    outcome = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_stats.py"],
+        changed_paths=["tests/test_stats.py"],
+    )
+    assert not outcome.authentic
+    text = " ".join(outcome.errors)
+    assert "could not run" in text and "Import it inside the test function" in text
+    assert "product code is written in Implement" in text
