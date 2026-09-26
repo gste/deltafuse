@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until the supervisor stopped them. The file check now accepts the spec
   paths of drafts (anchor included); it comes back in full at `specified`,
   where the human also has to accept the draft (`draft_spec_files`).
+- **The recorded Red category follows the runner's report, as the verdict does.**
+  3.3.4 judged Red by the runner's report but still wrote `failure_category` from
+  substrings in the log, and the `declaring` gate reads that field: 23 of 44 Red
+  records whose report said "the tests ran and failed" were recorded
+  `fixture-error` (no `assert ` in the log) or `import-error` (a test importing a
+  name that does not exist yet fails with `ImportError` in its body) and were
+  refused by a gate the Core had just agreed with. The other way round, a log
+  mentioning an assertion made a test that never ran read `behavioral-mismatch`.
+  With a report, an authentic Red is now recorded `behavioral-mismatch` and an
+  inauthentic one never is.
+- **The Writer's input file has one place, and a refusal says which.** The
+  skills said "put the JSON file under `.deltafuse/tmp/`"; a Worker read that as
+  inside the Change directory, and the leash, which exempts only the product
+  root's `.deltafuse/`, refused it 224 times in two runs (glm-4.7-flash), about
+  half of that model's refusals. The analyze, decompose and specify skills now
+  say "at the product root (not inside the Change directory)" and the refusal
+  says the same. The leash is not loosened.
 - **Red refusals say what to do instead of repeating themselves.** In
   gemma-334-probe M01 the Worker put an option of `deltafuse evidence` after
   `--`; the Core ran it as a program, recorded exit 127 as a `fixture-error`,

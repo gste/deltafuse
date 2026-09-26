@@ -558,3 +558,15 @@ def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_r
     assert "docs/changes/*/evidence/red/**" in write
     assert "docs/changes/*/change.yaml" in write
     assert "src/secret.py" not in write
+
+
+def test_a_writer_input_inside_the_change_directory_is_refused_with_the_right_place():
+    """glm47flash-334c: `docs/changes/<id>/.deltafuse/tmp/TASK-001.json` was refused 224
+    times without saying that the scratch directory is the product root's."""
+    from deltafuse.core.leash import check_paths
+
+    envelope = {"step": "decompose", "allowed_write": ["docs/changes/CHG-001/tasks/**"]}
+    inside = check_paths(["docs/changes/CHG-001/.deltafuse/tmp/TASK-001.json"], [envelope], baseline="draft")
+    assert inside and "product root" in inside[0] and "not inside the Change" in inside[0]
+    # The product root's own scratch directory stays exempt.
+    assert check_paths([".deltafuse/tmp/TASK-001.json"], [envelope], baseline="draft") == []

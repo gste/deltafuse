@@ -27,7 +27,7 @@ Read the named slice, its typed delta, `spec_refs` from `next`, accepted related
 
 ## Procedure
 
-1. If `requirement_delta` changes requirements, record this slice in `spec-delta.md` with `deltafuse artifact write --kind spec-delta --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. Name only this slice's entries - every list present even when empty, each entry a spec path with the requirement anchor; the Core merges them with earlier slices and appends your prose:
+1. If `requirement_delta` changes requirements, record this slice in `spec-delta.md` with `deltafuse artifact write --kind spec-delta --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/` at the product root (not inside the Change directory). The Core writes `id`, `change`, `status` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. Name only this slice's entries - every list present even when empty, each entry a spec path with the requirement anchor; the Core merges them with earlier slices and appends your prose:
 
    ```json
    {

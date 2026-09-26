@@ -370,6 +370,18 @@ def run_evidence(
 
     report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
+    if phase == "red" and exit_code != 0 and report is not None:
+        # The gate reads this field, and the Core has just judged Red by the
+        # runner's own report. The two must not disagree: in the runs of
+        # 2026-09-25/26, 23 of 44 Red records whose report said "the tests ran
+        # and failed" were still recorded `fixture-error` (the log had no
+        # `assert `), and the `declaring` gate refused them.
+        if red_is_authentic(report)[0]:
+            category = AUTHENTIC_RED_CATEGORY
+        elif category == AUTHENTIC_RED_CATEGORY:
+            # The log mentioned an assertion but nothing ran, or a test could not
+            # run: not a behavioural failure however the log reads.
+            category = "fixture-error"
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":
