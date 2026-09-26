@@ -373,7 +373,13 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     """Derive coverage.yaml from request claims, routing, and slice frontmatter."""
     path = Path(change_path)
     if not (path / "routing.yaml").is_file():
-        raise CoverageError("routing.yaml is missing")
+        # glm-4.7-flash called `coverage` first 31 times: it is derived from routing
+        # and slices, so it comes last in Analyze.
+        raise CoverageError(
+            "routing.yaml is missing: coverage is derived from routing and the slices, so "
+            "write routing first (`deltafuse artifact write --kind routing`), then the slices, "
+            "and run coverage last"
+        )
     uncovered = uncovered_primary_capabilities(path)
     if uncovered:
         raise CoverageError(

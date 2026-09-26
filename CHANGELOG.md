@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mentioning an assertion made a test that never ran read `behavioral-mismatch`.
   With a report, an authentic Red is now recorded `behavioral-mismatch` and an
   inauthentic one never is.
+- **`coverage` without routing says what comes first.** glm-4.7-flash ran it
+  before writing routing 31 times and was told only "routing.yaml is missing";
+  the refusal now names the order (routing, slices, then coverage).
 - **The Writer's input file has one place, and a refusal says which.** The
   skills said "put the JSON file under `.deltafuse/tmp/`"; a Worker read that as
   inside the Change directory, and the leash, which exempts only the product
