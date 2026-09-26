@@ -1024,6 +1024,61 @@ def check_gate(
     assume_status: str | None = None,
     human: bool = True,
 ) -> list[str]:
+    """Gate errors for a Change, with the cause first when a file was written by hand."""
+    errors = _check_gate(change_dir, gate, registry, assume_status=assume_status, human=human)
+    if not errors:
+        return errors
+    return _hand_written_causes(Path(change_dir), errors) + errors
+
+
+def _hand_written_causes(change_path: Path, errors: list[str]) -> list[str]:
+    """Name the cause once when a hand-written file is what the schema errors are about.
+
+    glm-4.7-flash wrote routing, slices and `change.yaml` by hand: the leash refused them, but
+    the files stayed, and every later gate answered with their schema errors (39 x 3
+    `[deltas -> N] is a required property`, 34 for routing.yaml). A Worker patching those
+    one at a time never learned the file should not exist in that form.
+    """
+    from deltafuse.core.leash import hand_written_errors, structural_kind, vouched_digests
+
+    try:
+        root = find_repo_root(change_path)
+        vouched = vouched_digests(root)
+        rel_dir = change_path.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return []
+    notes: list[str] = []
+    candidates = [change_path / "routing.yaml", change_path / "spec-delta.md"]
+    for folder in ("slices", "tasks"):
+        if (change_path / folder).is_dir():
+            candidates += sorted((change_path / folder).glob("*.md"))
+    for path in candidates:
+        if not path.is_file() or not any(path.name in err for err in errors):
+            continue
+        rel = f"{rel_dir}/{path.relative_to(change_path).as_posix()}"
+        kind = structural_kind(rel)
+        if kind and hand_written_errors(root, rel, head=None, vouched=vouched):
+            notes.append(
+                f"{path.name} was written by hand, not through the Artifact Writer, so the errors "
+                f"about it below are the file's, not yours to patch one by one: delete it and "
+                f"recreate it with `deltafuse artifact write --kind {kind} --change {rel_dir}`"
+            )
+    if sum(1 for err in errors if err.startswith("change.yaml:")) >= 3:
+        notes.append(
+            "change.yaml has several schema errors: its fields are written with "
+            f"`deltafuse artifact write --kind change --change {rel_dir}`, not edited by hand"
+        )
+    return notes
+
+
+def _check_gate(
+    change_dir: Path | str,
+    gate: str,
+    registry: SchemaRegistry | None = None,
+    *,
+    assume_status: str | None = None,
+    human: bool = True,
+) -> list[str]:
     """Gate errors for a Change. ``assume_status`` evaluates the gate as if
     change.yaml held that status, without writing it: the Core asks "would
     this pass once moved?" before it moves anything. ``human=False`` leaves out

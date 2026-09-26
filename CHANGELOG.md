@@ -27,8 +27,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     code on disk rather than a non-empty list, because a proposal may name the
     directory it means to create.
 
+### Changed
+
+- **An Artifact Writer call leaves a line in the command journal**, refused or not
+  (`cmd: artifact`, `sub`, `kind`, `identity`, `ok`, `refusal`, `errors`). `artifact
+  write` was invisible to the journal, so no metric could tell a Worker that fought
+  the Writer for twenty calls from one that never touched it. The outputs the Worker
+  sees are unchanged.
+- **A gate that meets a hand-written structural file names that first.** When the
+  schema errors are about a routing, spec-delta, slice or task file that no writer
+  produced, the first error says so and gives the `artifact write` call that replaces
+  it; a `change.yaml` with several schema errors gets the same kind of note.
+  glm-4.7-flash wrote these by hand: the leash refused them, the files stayed, and
+  every gate answered with their schema errors (39 x 3 `[deltas -> N]`, 34 for routing).
+- **A wrong subcommand says what was probably meant.** `deltafuse artifact_write` (the
+  host's tool name, 8 times in two runs) answers `Did you mean: deltafuse artifact
+  write`; a typo gets the nearest command.
+- **The `format_change_required` hint names both ways** to pass `canonicalize_metadata`
+  (the input JSON, or the host tool's argument).
+
 ### Fixed
 
+- **A task's evidence is judged by its own step when the step moved on.** Green
+  evidence written, the gate advanced and the next step selected in one Worker turn,
+  `state` called only afterwards: the task file was not dirty, so the receipt chain
+  gave the implement step no task, and its evidence was refused as outside the
+  verify envelope (3 refusals per Gemma 31B run). A task whose evidence for the step
+  is dirty is the step's task too.
 - **A draft capability's spec can be cited before Specify writes it.** The
   `analyzed` gate refused every slice, task and `spec-delta.md` that cited the
   spec of a capability proposed with `deltafuse capability propose`, because
