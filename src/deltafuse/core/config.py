@@ -34,6 +34,44 @@ class ConfigError(Exception):
     """Invalid or unknown product config content."""
 
 
+def validate_active_code_roots(product_root: Path | str) -> list[str]:
+    """Rule (a): `code_roots` of `active` capabilities do not overlap.
+
+    The under-routing detector (q4) maps a diff to capabilities through their
+    roots; when two active capabilities share one it cannot tell whose the change
+    is (bench case M02: three capabilities, one `src/ratelimit`). Compared as
+    directory prefixes, the way ownership reads them. Draft, deprecated and
+    removed capabilities are exempt, so a partial adoption is not blocked.
+    """
+    from deltafuse.core.integrity import load_capability_catalog
+    from deltafuse.core.ownership import _root_prefix
+
+    catalog, load_errors = load_capability_catalog(Path(product_root))
+    if load_errors or not isinstance(catalog, dict):
+        return []  # a missing or unreadable catalog is reported by the checks that own it
+    claims: list[tuple[str, str]] = []
+    domains = catalog.get("domains") or {}
+    for domain, dobj in sorted(domains.items()) if isinstance(domains, dict) else []:
+        caps = dobj.get("capabilities") if isinstance(dobj, dict) else None
+        for name, cap in sorted(caps.items()) if isinstance(caps, dict) else []:
+            if not isinstance(cap, dict) or str(cap.get("status") or "active").lower() != "active":
+                continue
+            for raw in cap.get("code_roots") or []:
+                prefix = _root_prefix(raw) if isinstance(raw, str) else ""
+                if prefix:
+                    claims.append((f"{domain}.{name}", prefix))
+    errors: list[str] = []
+    for i, (cap_a, root_a) in enumerate(claims):
+        for cap_b, root_b in claims[i + 1:]:
+            if cap_a != cap_b and (root_a.startswith(root_b) or root_b.startswith(root_a)):
+                errors.append(
+                    f"catalog: active capabilities '{cap_a}' and '{cap_b}' overlap in code_roots "
+                    f"('{root_a}' and '{root_b}'): a change cannot be routed back to one owner; "
+                    "make the roots disjoint or mark one of them draft"
+                )
+    return errors
+
+
 def validate_config(product_root: Path | str) -> list[str]:
     """Return a list of config problems; empty means valid."""
     root = Path(product_root)
@@ -107,4 +145,5 @@ def validate_config(product_root: Path | str) -> list[str]:
                     errors.append(
                         "config.yaml: workflow.code_roots must be a list of glob paths like 'src/**'"
                     )
+    errors.extend(validate_active_code_roots(root))
     return errors

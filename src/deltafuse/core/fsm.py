@@ -851,6 +851,46 @@ def _red_category_hint(ev_data: dict) -> str:
     )
 
 
+def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[str]:
+    """q6 5(b), D7: once the baseline is accepted, a Change does not start on inherited code
+    nobody has characterized.
+
+    A draft whose `code_roots` hold code is that case. A draft whose roots hold nothing is
+    the new capability q8 lets a Worker propose in Analyze - it must not be stopped, and
+    neither must any draft while the baseline is still `draft` (the Bootstrap profile).
+    The test is the code on disk, not only a non-empty list: a proposal may name the
+    directory it means to create.
+    """
+    from deltafuse.core.capability import draft_capabilities
+    from deltafuse.core.leash import load_baseline
+    from deltafuse.core.ownership import capability_code_roots, routed_capabilities
+
+    if load_baseline(repo_root) != "accepted":
+        return []
+    routed = sorted(routed_capabilities(change_path))
+    drafts = draft_capabilities(repo_root, routed)
+    if not drafts:
+        return []
+    roots = capability_code_roots(repo_root)
+    out: list[str] = []
+    for name in drafts:
+        prefixes = roots.get(name) or next(
+            (v for k, v in roots.items() if k.endswith("." + name)), []
+        )
+        for prefix in prefixes:
+            base = repo_root / prefix.rstrip("/")
+            if base.is_dir() and any(
+                p.is_file() and "__pycache__" not in p.parts for p in base.rglob("*")
+            ):
+                out.append(
+                    f"Gate analyzed: capability '{name}' is a draft and its code_roots hold code "
+                    f"({prefix}) that no characterization pins; characterize it first and set it "
+                    "active before routing a Change into it"
+                )
+                break
+    return out
+
+
 def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> list[str]:
     """A capability this Change routes into must be the human's before it closes.
 
@@ -1040,6 +1080,7 @@ def check_gate(
             errors.append(
                 f"Gate analyzed: routing capability '{cap}' has no slice"
             )
+        errors.extend(_uncharacterized_draft_errors(change_path, repo_root))
 
         errors.extend(
             _human_gate_errors(

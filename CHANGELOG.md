@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.3.5] - 2026-09-26
 
+### Added
+
+- **Two catalog rules for a repository adopted with Fuse-Back**
+  (`backlog/roadmap/q6-fuse-back`, decision 5(a) and 5(b)), and neither is specific
+  to it.
+  - `deltafuse validate-config` refuses **active capabilities whose `code_roots`
+    overlap** (compared as directory prefixes, the way ownership reads them).
+    Draft, deprecated and removed capabilities are exempt, so a partial adoption
+    is not blocked. The under-routing detector maps a diff to owners through the
+    roots and is blind where two active capabilities share one.
+  - The `analyzed` gate **stops a Change routed into a draft capability whose
+    `code_roots` hold code**, but only once `project.baseline: accepted`: inherited
+    behaviour nobody has characterized is not a law yet. A draft with no code
+    there is the new capability a Worker proposes in Analyze (q8) and is not
+    stopped, and neither is any draft under the Bootstrap baseline. The test is
+    code on disk rather than a non-empty list, because a proposal may name the
+    directory it means to create.
+
 ### Fixed
 
 - **A draft capability's spec can be cited before Specify writes it.** The
