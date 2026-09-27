@@ -470,6 +470,69 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
     assert check_gate(builder.change_dir, "declaring") == []
 
 
+def test_already_green_red_cannot_carry_the_implemented_gate(
+    tmp_path: Path, repo_root: Path
+):
+    """F2: an already-green Red proves no delta, so there is nothing for Green to
+    have turned green - `green_covers_red` matches Red's `tests.failed`, which is
+    empty here, and the whole lifecycle closed on a product nobody modified."""
+    import sys
+
+    from deltafuse.core.evidence import run_evidence
+    from deltafuse.core.transitions import set_artifact_status
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-101", title="Already green lift")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    # The spec says cooldown() MUST be >= 30; the product returns 0 and the
+    # oracle the Worker wrote asserts >= 0, so it passes on unchanged code.
+    (tests_dir / "test_task-001.py").write_text(
+        "def test_cooldown_window():\n    cooldown = 0\n    assert cooldown >= 0\n",
+        encoding="utf-8",
+    )
+    argv = [sys.executable, "tests/test_task-001.py"]
+
+    red = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    assert red.payload["result"] == "already-green"
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+    # Declare's own gate still accepts the observation - it is a legal Declare
+    # outcome (docs/workflow.md), just a stopping one.
+    assert check_gate(builder.change_dir, "declaring") == []
+
+    run_evidence(
+        builder.change_dir,
+        phase="green",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    run_evidence(
+        builder.change_dir,
+        phase="regression",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+
+    errors = check_gate(builder.change_dir, "implemented")
+    assert any("already-green" in e for e in errors), errors
+
+
 def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
     """TEST-004: ImportError is not authentic Red even if labeled expected-failure."""
     install(target_dir=tmp_path, framework_root=repo_root)

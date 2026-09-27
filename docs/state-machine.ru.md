@@ -89,7 +89,7 @@ Change может быть переведён в терминальное сос
 | `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
 | `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
 | `declared` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
-| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. |
+| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. На `route: code` Green отвечает на Red, который действительно падал: Green поверх `already-green` Red не доказывает дельту и гейт не закрывает. |
 | `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
 | `verifying` | `converged` | Запущен `/verify`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
 | `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |

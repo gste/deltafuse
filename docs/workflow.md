@@ -273,6 +273,7 @@ Author the minimal production code necessary to turn the failing test target gre
 - Test target passes cleanly.
 - Full regression suite passes without failures.
 - `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
+- On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a requirement that is genuinely already met closes the Change on the no-op path (terminal `not-reproduced`) instead.
 - Task status transitioned to `implemented`.
 
 ---

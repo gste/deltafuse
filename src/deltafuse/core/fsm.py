@@ -716,6 +716,30 @@ def _tasks_behind_gate(
     return errors
 
 
+def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
+    """An already-green Red proves no delta, so it cannot carry `implemented`.
+
+    Green is checked against the Red record's own `tests.failed`
+    (green_covers_red), which is empty when the oracle already passed on
+    unchanged product code: the implemented gate closed on a product nobody had
+    modified, and nothing downstream could tell. Declare may still record the
+    observation - it is a legal Declare outcome, and a stopping one.
+    """
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or red.get("result") != "already-green":
+        return []
+    return [
+        f"Gate implemented: green evidence '{label}' answers an already-green Red - the "
+        "declared oracle passed on unchanged product code, so there is no failure for this "
+        "Green to have removed and nothing here proves a delta. Declare a Red that fails for "
+        "the expected public reason, or, if the requirement is genuinely already met, close "
+        "the Change on the no-op path (terminal status 'not-reproduced') instead of Implement"
+    ]
+
+
 def _validate_evidence_changed_paths_contract(
     change_path: Path,
     evidence_phase: str,
@@ -1243,10 +1267,14 @@ def _check_gate(
         # without the task's own Red evidence does not close the gate.
         if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
             for green_file in sorted(green_dir.glob("*.yaml")):
-                if not (change_path / "evidence" / "red" / green_file.name).is_file():
+                red_file = change_path / "evidence" / "red" / green_file.name
+                if not red_file.is_file():
                     errors.append(
                         f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
                     )
+                    continue
+                if route == "code":
+                    errors.extend(_already_green_red_errors(red_file, green_file.name))
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"

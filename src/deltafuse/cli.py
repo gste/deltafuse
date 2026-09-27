@@ -944,6 +944,19 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
+            if (
+                args.phase == "red"
+                and outcome.payload.get("result") == "already-green"
+            ):
+                # The record is an honest observation, but it is a stop, not a
+                # green light: there is no failure for Implement to remove, and
+                # the implemented gate refuses an already-green Red.
+                print(
+                    "Red is already-green: the oracle passed on unchanged product code, so "
+                    "there is nothing to implement against it. Stop and return this outcome "
+                    "upstream - do not proceed to Implement on this Red.",
+                    file=sys.stderr,
+                )
             return 0
         print("Evidence is not authentic:", file=sys.stderr)
         for err in outcome.errors:
