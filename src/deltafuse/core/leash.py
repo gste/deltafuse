@@ -909,6 +909,25 @@ def git_dirty_paths(
     if base:
         diff_args.append(f"{base}..{head or 'HEAD'}")
     else:
+        # A repository with no commits has no HEAD to diff against, and git says
+        # so in its own words ("fatal: ambiguous argument 'HEAD'"). That is the
+        # state of every freshly inited product at the moment run/SKILL.md tells
+        # the Worker to run leash. Diffing the empty tree instead would list the
+        # whole scaffold as the Worker's writes and bury the real answer under it.
+        unborn = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if unborn.returncode != 0:
+            raise LeashError(
+                "leash needs one commit to diff against and this repository has no commit yet, "
+                "so there is no baseline a write envelope can be judged against. Make an initial "
+                "commit of the installed scaffold (`git add -A` then `git commit`), then run "
+                "`deltafuse leash` again"
+            )
         diff_args.append("HEAD")
     tracked = subprocess.run(
         diff_args,

@@ -618,3 +618,33 @@ def test_a_tasks_evidence_is_judged_by_its_own_step_when_the_step_moved_on(tmp_p
     # No evidence dirty and no task file dirty: nothing is claimed for the task.
     quiet = collect_chain_envelopes(tmp_path, base=None, dirty=[])
     assert not any(env.get("step") == "implement" and env.get("task") for env in quiet)
+
+
+def test_leash_in_a_repo_with_no_commits_names_the_missing_commit(
+    tmp_path: Path, repo_root: Path, capsys
+):
+    """F11: this is the state of every freshly inited product and every bench init
+    sandbox at the moment run/SKILL.md tells the Worker to run leash, and the
+    answer was exit 2 with raw git stderr - `fatal: ambiguous argument 'HEAD'` -
+    and no hint that an initial commit is what is missing."""
+    import pytest
+
+    from deltafuse.core.leash import LeashError, git_dirty_paths
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    MockChangeBuilder(tmp_path, change_id="CHG-105", title="Fresh repo").step_intake()
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+
+    with pytest.raises(LeashError) as exc_info:
+        git_dirty_paths(tmp_path)
+    assert "ambiguous argument" not in str(exc_info.value)
+    assert "no commit" in str(exc_info.value)
+
+    assert main(["leash", str(tmp_path)]) == 2
+    _, err = capsys.readouterr()
+    assert "ambiguous argument" not in err
+    assert "git commit" in err
+
+    # An initial commit is the whole fix: the same command then judges the diff.
+    _git_init_commit(tmp_path)
+    assert main(["leash", str(tmp_path)]) in (0, 1)
