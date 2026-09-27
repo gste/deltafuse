@@ -220,6 +220,75 @@ def test_write_coverage_omits_tests_field_by_default(tmp_path: Path, repo_root: 
     assert "tests" not in data["claims"]["CR-001"]
 
 
+def test_claim_trace_warnings_catches_a_claim_on_the_wrong_class(tmp_path: Path, repo_root: Path):
+    """M02 on Gemma 31B, night of 2026-09-26/27: `TokenBucketLimiter` took `reject_threshold`
+    through a `policy=` object instead of directly. `coverage.yaml`'s own `tests` list called
+    the claim covered (the name existed somewhere in `src/`), and six hidden-suite checks
+    still failed - naming a test is not proof the claim's shape held."""
+    from deltafuse.core.analyze import claim_trace_warnings
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("workflow", {})["trace_claims"] = "warn"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-075", title="Wrong class")
+    builder.change_dir.mkdir(parents=True, exist_ok=True)
+    (builder.change_dir / "request.md").write_text(
+        "# Request\n\n"
+        "- CR-006 (Expectation): `TokenBucketLimiter` must accept `reject_threshold`.\n",
+        encoding="utf-8",
+    )
+    _routing(builder.change_dir, builder.change_id, {"CR-006": "system.core"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "system.core", ["CR-006"])
+
+    (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "lim.py").write_text(
+        "class RejectionPolicy:\n"
+        "    def __init__(self, reject_threshold=50):\n"
+        "        self.reject_threshold = reject_threshold\n\n\n"
+        "class TokenBucketLimiter:\n"
+        "    def __init__(self, policy=None):\n"
+        "        self.policy = policy or RejectionPolicy()\n",
+        encoding="utf-8",
+    )
+
+    warnings = claim_trace_warnings(builder.change_dir)
+    assert any("TokenBucketLimiter.reject_threshold" in w for w in warnings)
+
+
+def test_claim_trace_warnings_accepts_a_directly_taken_parameter(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.analyze import claim_trace_warnings
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("workflow", {})["trace_claims"] = "warn"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-076", title="Right class")
+    builder.change_dir.mkdir(parents=True, exist_ok=True)
+    (builder.change_dir / "request.md").write_text(
+        "# Request\n\n"
+        "- CR-001 (Expectation): `TokenBucketLimiter` must accept `penalty_seconds`.\n",
+        encoding="utf-8",
+    )
+    _routing(builder.change_dir, builder.change_id, {"CR-001": "system.core"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "system.core", ["CR-001"])
+
+    (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "lim.py").write_text(
+        "class TokenBucketLimiter:\n"
+        "    def __init__(self, penalty_seconds=0.0):\n"
+        "        self.penalty_seconds = penalty_seconds\n",
+        encoding="utf-8",
+    )
+
+    warnings = claim_trace_warnings(builder.change_dir)
+    assert not any("penalty_seconds" in w for w in warnings)
+
+
 def test_write_coverage_fails_without_slice(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-061", title="No slice").step_intake()

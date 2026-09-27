@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -514,23 +515,94 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     return {"change": _change_id(path), "claims": claims_out}
 
 
+# A claim names a method/parameter and the class it belongs to, in either order:
+# "`get_stats` ... on `Limiter`" or "`Limiter` accepts `get_stats`". M02 on Gemma 31B, night
+# of 2026-09-26/27: `TokenBucketLimiter` took `reject_threshold` through a `policy=` object
+# instead of directly - CR-006 said "`TokenBucketLimiter` must accept `reject_threshold`",
+# the second order, and coverage.yaml's own `tests` list called the claim covered anyway
+# (the name existed somewhere in `src/`, just on the wrong class) while six hidden-suite
+# checks failed. Naming a test is not proof the claim's own shape was honoured; this checks
+# the shape directly instead of trusting a test to have checked it.
+_ON_CLASS = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)[^`]*`[^`.]{0,40}\bon\b[^`.]{0,20}`([A-Z][A-Za-z0-9_]*)`")
+_CLASS_HAS = re.compile(
+    r"`([A-Z][A-Za-z0-9_]*)`[^`.]{0,60}\b(?:accepts?|exposes?|takes?|must have|must include|has)\b"
+    r"[^`.]{0,40}`([a-z_][A-Za-z0-9_]*)`"
+)
+_SKIP_DIRS = {".git", ".deltafuse", "__pycache__", "node_modules", ".venv", "venv"}
+
+
+def _python_class_members(repo_root: Path) -> dict[str, set[str]]:
+    """method, `__init__` parameter, and `self.` attribute names per class, from every
+    `*.py` in the product (excluding VCS/tooling noise). Python-specific; a request naming
+    a class in a different language finds nothing and is silently skipped, same as a name
+    with no backticks at all - this is a heuristic, not a verdict."""
+    classes: dict[str, set[str]] = {}
+    for path in repo_root.rglob("*.py"):
+        if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            members = classes.setdefault(node.name, set())
+            for n in node.body:
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    members.add(n.name)
+                    if n.name == "__init__":
+                        members.update(a.arg for a in n.args.args + n.args.kwonlyargs if a.arg != "self")
+                    for inner in ast.walk(n):
+                        if (
+                            isinstance(inner, ast.Attribute)
+                            and isinstance(inner.ctx, ast.Store)
+                            and isinstance(inner.value, ast.Name)
+                            and inner.value.id == "self"
+                        ):
+                            members.add(inner.attr)
+    return classes
+
+
+def _claim_wrong_class(request_text: str, repo_root: Path) -> list[str]:
+    """(name, class) pairs the request puts on a class that does not define, take, or
+    assign that name anywhere - a method, an `__init__` parameter, or a `self.` attribute."""
+    wanted = _ON_CLASS.findall(request_text) + [
+        (name, cls) for cls, name in _CLASS_HAS.findall(request_text)
+    ]
+    if not wanted:
+        return []
+    classes = _python_class_members(repo_root)
+    return sorted(
+        {f"{cls}.{name}" for name, cls in wanted if name not in classes.get(cls, set())}
+    )
+
+
 def claim_trace_warnings(change_path: Path | str) -> list[str]:
-    """P12 (workflow.trace_claims: warn, default off): Expectation/Constraint claims
-    coverage.yaml has no test for. Advisory only - never a gate error, never blocks
-    `converged`. A marker present but the test unrelated is not detectable here; that
-    stays the judge's job until this has run on enough models to trust promoting it.
+    """P12 (workflow.trace_claims: warn, default off): advisory findings a converged run
+    can otherwise carry silently. Never a gate error, never blocks `converged`.
+
+    - Expectation/Constraint claims `coverage.yaml` has no test naming.
+    - A method/parameter the request puts on a class that does not define it (checked
+      directly against the source; naming a test is not proof the claim's shape held).
+
+    A marker present but the test unrelated, or a class matched by coincidence, is not
+    detectable here; that stays the judge's job until this has run on enough models to
+    trust promoting it.
     """
     from deltafuse.core.config import load_trace_claims_mode
     from deltafuse.core.fsm import find_repo_root
     from deltafuse.core.integrity import extract_claim_kinds_from_request
 
     path = Path(change_path)
-    if load_trace_claims_mode(find_repo_root(path)) != "warn":
+    repo_root = find_repo_root(path)
+    if load_trace_claims_mode(repo_root) != "warn":
         return []
     request = path / "request.md"
     if not request.is_file():
         return []
-    kinds = extract_claim_kinds_from_request(request.read_text(encoding="utf-8"))
+    request_text = request.read_text(encoding="utf-8")
+    kinds = extract_claim_kinds_from_request(request_text)
     try:
         document = build_coverage_document(path)
     except CoverageError:
@@ -544,6 +616,8 @@ def claim_trace_warnings(change_path: Path | str) -> list[str]:
         tests = record.get("tests") if isinstance(record, dict) else None
         if not tests:
             warnings.append(f"claim '{cid}' ({kind}) has no test naming it")
+    for wrong in _claim_wrong_class(request_text, repo_root):
+        warnings.append(f"'{wrong}' is not defined, taken, or assigned by that class")
     return warnings
 
 

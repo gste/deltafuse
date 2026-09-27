@@ -396,6 +396,28 @@ def _refresh_coverage(change_path: Path) -> None:
         pass  # the gate names what is missing (a slice, a claim)
 
 
+def _record_trace_warnings(change_path: Path) -> None:
+    """P12 (workflow.trace_claims: warn, default off): the Core writes its own advisory
+    findings at `converged`, not the Worker - a warning printed to stderr and never
+    written anywhere is one the Verify skill can silently walk past. Written (even as an
+    empty list) every time the gate closes while `warn` is set, so a claim fixed since the
+    last pass does not leave a stale finding on record; not written at all when off."""
+    from deltafuse.core.analyze import claim_trace_warnings
+    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
+    from deltafuse.core.config import load_trace_claims_mode
+
+    if load_trace_claims_mode(find_repo_root(change_path)) != "warn":
+        return
+    warnings = claim_trace_warnings(change_path)
+    dest = change_path / "evidence" / "verification" / "trace_warnings.yaml"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    content = yaml.safe_dump({"warnings": warnings}, sort_keys=False).encode("utf-8")
+    if dest.is_file():
+        atomic_replace(dest, content)
+    else:
+        atomic_create(dest, content)
+
+
 def advance_change(
     start: Path | str,
     gate: str,
@@ -464,6 +486,9 @@ def advance_change(
             raise TransitionError(
                 f"transition table rejects '{current}' -> '{target}'"
             )
+
+        if gate == "converged":
+            _record_trace_warnings(change_path)
 
         entry: dict[str, Any] = {
             "kind": "transition",
