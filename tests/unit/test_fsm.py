@@ -293,8 +293,8 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
         MockChangeBuilder(tmp_path, change_id="CHG-011", title="Live specify")
         .step_intake()
         .step_analyze()
-        .step_specify()
     )
+    builder._core_advance("analyzed")
     _write_ratelimit_spec(tmp_path)
     _write_security_ratelimit_catalog(tmp_path)
     _set_slice_capability(
@@ -305,7 +305,7 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
     spec_delta = (
         "---\n"
         f"change: {builder.change_id}\n"
-        "status: accepted\n"
+        "status: proposed\n"
         "slices: [SLICE-01]\n"
         "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
         "modified: []\n"
@@ -313,6 +313,8 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
         "---\n\n# Spec Delta\n"
     )
     (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    # The Core order: the Worker proposes, then the human answers the gate.
+    builder._update_change_yaml({"status": "specification-proposed"})
     from deltafuse.core.decide import apply_decision
 
     apply_decision(builder.change_dir, status="accepted", spec=True)
@@ -354,9 +356,8 @@ def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Pat
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
+    # step_specify already ran the Human Gate; a second acceptance is not a
+    # second click the Core will record (F6).
     assert check_gate(builder.change_dir, "specified") == []
 
     _set_slice_capability(builder.change_dir, "system.core", spec_refs=["docs/spec/core.md"])
@@ -930,9 +931,6 @@ def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "declaring") == []
@@ -1002,9 +1000,6 @@ def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "declaring") == []

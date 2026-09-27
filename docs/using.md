@@ -110,7 +110,7 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate.
+`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate. `--spec --status accepted` requires the Change to be at `specification-proposed`: proposing is what runs the machine checks on the spec delta, so `decide` refuses an acceptance the Worker never proposed and writes nothing - it names the errors the proposal would be refused for. `--status rejected` is never blocked; a human can always say no.
 
 **Human Gate password (optional).** `deltafuse gate-password set` stores a salted PBKDF2 hash in `.deltafuse/gate-password.yaml` (Core-owned: the leash refuses it in a Worker diff). From then on `decide` asks for the password in the terminal before it writes anything, and refuses when stdin is not a terminal; there is no flag or environment variable for it. Each receipt records `human_check: password` or `none`. `gate-password clear` and a change need the current password; `gate-password status` shows whether it is on. The password guards the `decide` command, not the journal: against a model that forges files by hand, isolate the Worker on the host.
 
