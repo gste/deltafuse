@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.6] - 2026-09-27
+
+### Added
+
+- **`workflow.trace_claims: warn` (P12, experiment, default off).** A converged run can
+  still miss a claim of the request: M02 on Gemma 31B reached `converged` with Verify
+  green at 53.5-56.1, and `CR-006` (`TokenBucketLimiter` must accept `reject_threshold`)
+  was routed, sliced and named in a test, yet the limiter took the parameter through a
+  `policy=` object instead of directly - six hidden-suite checks failed anyway. With the
+  flag set:
+  - `declare` asks a test to name the claim it proves, in its own name (`test_cr013_...`)
+    or a `# covers: CR-013` comment; `deltafuse coverage` records which claim each test
+    proves in `coverage.yaml`'s new `tests` field.
+  - `check-gate --gate converged` also checks a claim's shape directly against the
+    source (a method/parameter the request puts on a class that does not define, take,
+    or assign it, checked by AST against every `*.py` in the product) - naming a test is
+    not proof the claim's shape held.
+  - Both are advisory: printed to stderr, never in `errors`, never affects the exit
+    code. The Core also writes its own findings to
+    `evidence/verification/trace_warnings.yaml` at the `converged` transition, so a
+    warning that only reached a terminal cannot be silently walked past before archive.
+  - `off` (default) costs nothing: no extra read, no extra key, byte-identical
+    `coverage.yaml`. There is no `enforce` yet - promoting the warning to an error waits
+    on running this across enough models to trust it.
+- **Catalog rules for an adopted repository (q6/Fuse-Back, decision 5(a)/5(b)).**
+  `validate-config` refuses active capabilities whose `code_roots` overlap (compared as
+  directory prefixes); the `analyzed` gate stops a Change routed into a draft capability
+  whose `code_roots` already hold code, with the Bootstrap baseline and code-free drafts
+  exempt.
+
+### Changed
+
+- **The Artifact Writer's calls are journaled.** `artifact create|write|update` was
+  invisible to the Core's own command journal; every call now records `kind`, `identity`,
+  `ok`, and the refusal reason, so a run's structural-writing quality (T10) is measured
+  directly instead of inferred.
+- **A gate failure caused by a hand-written file names the cause once**, instead of
+  answering with that file's own schema errors one at a time - a Worker patching a
+  hand-written `routing.yaml` field by field never learned the file should not exist in
+  that form (39 x 3 schema errors from one hand-written file in a single run).
+- **`deltafuse artifact_write` (missing the space) suggests `deltafuse artifact write`**,
+  the nearest valid subcommand, instead of the bare usage line.
+- **A missing top-level import in a Red test names the fix**, instead of the Core
+  answering that the test could not run at all.
+- **`coverage` before `routing`/slices exist says what to write first**, instead of a
+  bare schema error.
+
 ## [3.3.5] - 2026-09-26
 
 ### Added
