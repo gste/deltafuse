@@ -222,3 +222,72 @@ def test_the_writer_accepts_a_slice_citing_the_spec_a_draft_promises(product: Pa
         encoding="utf-8",
     )
     assert not refs("docs/spec/monitoring/usage_stats.md").valid
+
+
+def test_proposing_does_not_wait_on_a_capability_only_the_human_can_accept(
+    tmp_path: Path, repo_root: Path
+):
+    """F10: reaching `specification-proposed` required the whole `specified` gate,
+    `_draft_capability_errors` included - and the only fix for that one is a human
+    hand edit of `docs/spec/_capabilities.yaml`. `decide --spec` in turn requires
+    `specification-proposed`, so neither side could move first, while `next --json`
+    kept reporting selected.kind "ready" with halt null and specify/SKILL.md told
+    the Worker to fix the listed errors and run it again."""
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.fsm import check_gate
+    from deltafuse.core.installer import install
+    from deltafuse.core.transitions import set_artifact_status
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-104", title="Draft capability")
+        .step_intake()
+        .step_analyze()
+    )
+    builder._core_advance("analyzed")
+    propose_capability(
+        tmp_path,
+        "monitoring.usage_stats",
+        summary="Counters of accepted and rejected calls",
+        spec="docs/spec/monitoring/usage_stats.md",
+    )
+
+    # Route the Change into the draft the Worker just proposed, and write the spec
+    # file the draft promised - Specify's job, and the reason it was proposed.
+    routing_file = builder.change_dir / "routing.yaml"
+    routing = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
+    for claim in routing["claims"].values():
+        claim["primary_capability"] = "monitoring.usage_stats"
+    routing_file.write_text(yaml.safe_dump(routing), encoding="utf-8")
+    ref = "docs/spec/monitoring/usage_stats.md#REQ-MON-01"
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
+    meta["primary_capability"] = "monitoring.usage_stats"
+    meta["spec_refs"] = [ref]
+    slice_file.write_text(
+        f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8"
+    )
+    spec_dir = tmp_path / "docs" / "spec" / "monitoring"
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    (spec_dir / "usage_stats.md").write_text(
+        "# monitoring.usage_stats\n\n## REQ-MON-01 Counters\n\nTHE SYSTEM SHALL count.\n",
+        encoding="utf-8",
+    )
+    (builder.change_dir / "spec-delta.md").write_text(
+        f"---\nchange: {builder.change_id}\nstatus: proposed\nslices: [SLICE-01]\n"
+        f"added: [{ref}]\nmodified: []\nremoved: []\n---\n\n# Spec Delta\n",
+        encoding="utf-8",
+    )
+
+    # The Worker can hand the specification to the Human Gate...
+    result = set_artifact_status(
+        builder.change_dir, status="specification-proposed", change_status=True
+    )
+    assert result["to"] == "specification-proposed"
+
+    # ...and the gate the human is being asked to close still refuses while the
+    # capability is a draft. Only the human's catalog edit lifts that, and it is
+    # checked again at `converged`.
+    errs = check_gate(builder.change_dir, "specified")
+    assert any("still a draft" in e for e in errs), errs

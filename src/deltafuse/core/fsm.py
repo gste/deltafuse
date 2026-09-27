@@ -1212,8 +1212,9 @@ def _check_gate(
     """Gate errors for a Change. ``assume_status`` evaluates the gate as if
     change.yaml held that status, without writing it: the Core asks "would
     this pass once moved?" before it moves anything. ``human=False`` leaves out
-    the human verdict a Human Gate waits for - only for checking whether a spec
-    delta is ready to be put in front of the human at all."""
+    everything only the human can supply - the verdict a Human Gate waits for and
+    a capability catalog still in ``draft`` - and is only for checking whether a
+    spec delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
 
@@ -1280,7 +1281,14 @@ def _check_gate(
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
             errors.append("Gate specified: spec-delta.md is missing")
-        errors.extend(_draft_capability_errors("specified", change_path, repo_root))
+        if human:
+            # A capability still in `draft` is the human's to accept, and they
+            # accept it together with the specification - so it cannot be a
+            # precondition of handing that specification to them. Demanding it
+            # here deadlocked specify: `specification-proposed` refused until the
+            # catalog was active, and `decide --spec` refused until the Change was
+            # proposed. Checked again at `converged`, which no proposal skips.
+            errors.extend(_draft_capability_errors("specified", change_path, repo_root))
         errors.extend(
             _human_gate_errors(
                 gate="specified",
