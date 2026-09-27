@@ -459,7 +459,7 @@ def _main(argv: list[str] | None = None) -> int:
     # archive command
     arch_parser = subparsers.add_parser("archive", help="Archive a converged Change package")
     arch_parser.add_argument("change_path", help="Path to Change package directory")
-    arch_parser.add_argument("--force", "-f", action="store_true", help="Force archive without converged check")
+    arch_parser.add_argument("--force", "-f", action="store_true", help="Accepted for compatibility; archive always requires status 'converged' (or a terminal status) and never skips the gate")
 
     # advance command (DF3-004): Core-owned gate validation + transition
     advance_parser = subparsers.add_parser(
