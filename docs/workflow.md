@@ -219,7 +219,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - **Forbidden Read Scope**: Production implementation code under test.
 
 ### Rules
-1. Implement the minimal test case in the file indicated by `test_target`.
+1. Implement the minimal test case in the file indicated by `test_target`. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
@@ -245,6 +245,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 ### Gate
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
+- `changed_paths` stays inside the Declare write scope plus the product paths this task's `allowed_paths` declares (the compiled-language stub); any other `src/**` path is refused.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.

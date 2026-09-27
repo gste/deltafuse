@@ -33,8 +33,8 @@ Do not read implementation internals unless the oracle cannot otherwise be expre
 4. Run that test against unchanged production code by calling the kernel, not by hand-writing YAML:
    `deltafuse evidence <change-dir> --phase red --task <task-id> -- <command>`. The Core records the changed files itself (`--changed-path` is optional).
 5. Require CLI exit 0 (authentic Red): the tests ran and none passed. A test that could not run - compilation, import, collection, fixture, environment, or `_`-prefixed internals - is not Red; it still writes YAML but is not a gate pass.
-   On a compiled language the test cannot reference what does not exist yet: add the signature first (a stub that throws), then take Red against it. The stub is production scope, so declare it in the task.
-6. `changed_paths` must stay inside `PHASE_CONTRACTS` Declare write scope (`tests/**`, Red evidence); do not list production `src/**`.
+   On a compiled language the test cannot reference what does not exist yet: add the signature first (a stub that throws), then take Red against it. The stub is production scope, so it must already be listed in this task's `allowed_paths` - Decompose declares it, Declare cannot (`tasks/**` is outside this step's write scope). If it is not listed, stop and return the task upstream; do not write the stub anyway.
+6. `changed_paths` must stay inside the Declare write scope (`tests/**`, Red evidence) plus the product paths this task's `allowed_paths` declares - on a compiled language that is the stub and nothing else. Every other production `src/**` path is written in Implement, after Red is recorded.
 7. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status declared` (only after valid Red). Never set task or Change status by hand.
 
 If already Green, invalid, environment-blocked, or not reproduced, stop and return that outcome upstream. Record `already-green` when the public oracle already passes. Do not access `_`-prefixed product internals to manufacture Red. Do not weaken assertions to manufacture Red.

@@ -764,7 +764,7 @@ def test_decomposed_rejects_fifty_allowed_paths(tmp_path: Path, repo_root: Path)
 
 
 def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: Path):
-    """RM-002: Red evidence must not write src/** (PHASE_CONTRACTS target)."""
+    """RM-002: Red evidence must not write src/** the task did not declare."""
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-024", title="Red writes src")
@@ -774,12 +774,62 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
         .step_decompose()
         .step_declare()
     )
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = ["tests/test_task-001.py"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["src/core.py"]
     write_stamped_evidence(red_file, red, tmp_path)
     errs = check_gate(builder.change_dir, "declaring")
     assert any("outside the phase contract" in e and "src/core.py" in e for e in errs)
+
+
+def test_declare_may_write_the_stub_its_task_declared(tmp_path: Path, repo_root: Path):
+    """F8: on a compiled language the test cannot reference a symbol that does
+    not exist yet, so Declare has to add the throwing stub - which is what
+    declare/SKILL.md tells the Worker to do and what test_reports.py calls "the
+    canonical Java red". The gate judged Red's changed_paths against
+    phase_write_globs("declare") alone and never read the task declaration, so
+    the stub was structurally impossible: no stub, no compilation, no Surefire
+    report, and read_report's None made the Red a refused fixture-error."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-024-stub", title="Compiled Red stub")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+    )
+    stub = "src/app/penalty.py"
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = [stub, "tests/test_task-001.py"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["changed_paths"] = [stub, "tests/test_task-001.py"]
+    write_stamped_evidence(red_file, red, tmp_path)
+
+    errs = check_gate(builder.change_dir, "declaring")
+    assert not any("outside the phase contract" in e for e in errs), errs
+
+    # The declaration is what widens it: a product path the task did not declare
+    # is still refused, and so is a path it forbids.
+    red["changed_paths"] = [stub, "src/app/other.py"]
+    write_stamped_evidence(red_file, red, tmp_path)
+    errs = check_gate(builder.change_dir, "declaring")
+    assert any("outside the phase contract" in e and "src/app/other.py" in e for e in errs)
+
+    meta["forbidden_paths"] = [stub]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    red["changed_paths"] = [stub]
+    write_stamped_evidence(red_file, red, tmp_path)
+    errs = check_gate(builder.change_dir, "declaring")
+    assert any("forbidden_paths" in e and stub in e for e in errs)
 
 
 def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_root: Path):

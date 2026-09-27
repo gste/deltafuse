@@ -128,8 +128,27 @@ def test_next_json_declare_envelope_keeps_tests_and_task_paths(
     assert envelope["task"] == "TASK-001"
     _assert_valid_envelope(envelope, repo_root)
     assert any(row.startswith("tests") for row in envelope["write"])
-    assert "src/core.py" not in envelope["write"]
+    # F8: Declare may write the product stub its task declared - on a compiled
+    # language the test cannot reference a symbol that does not exist yet, so
+    # without the stub there is no compilation, no report and no Red at all.
+    # Still narrowed to the declaration (never `src/**`) and still bounded by
+    # the task's forbidden_paths.
+    assert "src/core.py" in envelope["write"]
+    assert "src/secret.py" not in envelope["write"]
     assert "src/**" not in envelope["write"]
+
+    from deltafuse.core.leash import check_paths
+
+    assert check_paths(
+        ["src/core.py", "tests/test_task-001.py"],
+        [envelope],
+        baseline="accepted",
+        product_root=tmp_path,
+    ) == []
+    refused = check_paths(
+        ["src/other.py"], [envelope], baseline="accepted", product_root=tmp_path
+    )
+    assert any("outside the declare write envelope" in e for e in refused)
 
 
 def test_next_json_implement_envelope_uses_task_allowed_paths(

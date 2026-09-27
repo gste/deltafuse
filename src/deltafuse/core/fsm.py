@@ -748,7 +748,17 @@ def _validate_evidence_changed_paths_contract(
     gate: str,
     route: str = "code",
 ) -> list[str]:
-    """RM-002: evidence changed_paths must stay inside route write globs."""
+    """RM-002: evidence changed_paths must stay inside route write globs.
+
+    Declare additionally honours the task's own `allowed_paths`: on a compiled
+    language the test cannot reference a symbol that does not exist yet, so the
+    throwing stub has to be written in Declare - which is what
+    declare/SKILL.md tells the Worker to do and why test_reports.py reads a JVM
+    `<error>` as a test that ran and failed. The task cannot use this to widen
+    its envelope in Declare: `allowed_paths` is already bounded by its slice at
+    the `decomposed` gate (task_envelope_errors) and `tasks/**` is outside
+    Declare's write scope.
+    """
     errors: list[str] = []
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
@@ -766,9 +776,22 @@ def _validate_evidence_changed_paths_contract(
         if not isinstance(changed, list):
             continue
         rel_paths = [p for p in changed if isinstance(p, str)]
+        task_id = ev_data.get("task")
+        declared: list[str] = []
+        forbidden: list[str] = []
+        if isinstance(task_id, str) and task_id in tasks:
+            raw_allowed = tasks[task_id].get("allowed_paths") or []
+            if isinstance(raw_allowed, list):
+                declared = [p for p in raw_allowed if isinstance(p, str)]
+            raw = tasks[task_id].get("forbidden_paths") or []
+            if isinstance(raw, list):
+                forbidden = [p for p in raw if isinstance(p, str)]
+        allowed_globs = list(write_globs)
+        if evidence_phase == "red" and route == "code":
+            allowed_globs += declared
         for msg in validate_paths_against_globs(
             rel_paths,
-            write_globs,
+            allowed_globs,
             label=f"Gate {gate} {evidence_phase} changed_paths",
         ):
             errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
@@ -779,12 +802,6 @@ def _validate_evidence_changed_paths_contract(
                         f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
                         f"must not write src/** or tests/** ('{rel}')"
                     )
-        task_id = ev_data.get("task")
-        forbidden = []
-        if isinstance(task_id, str) and task_id in tasks:
-            raw = tasks[task_id].get("forbidden_paths") or []
-            if isinstance(raw, list):
-                forbidden = [p for p in raw if isinstance(p, str)]
         for rel in rel_paths:
             if path_is_listed(rel, forbidden):
                 errors.append(
@@ -853,7 +870,9 @@ def _validate_spec_delta_matches_disk(
 
 
 _RED_WRITES_HINT = (
-    " (Red writes tests only; product code is written in Implement, after Red is recorded)"
+    " (Red writes tests, plus only the product paths this task's allowed_paths declares - a "
+    "compiled-language stub; the rest of the product code is written in Implement, after Red "
+    "is recorded)"
 )
 
 

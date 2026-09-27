@@ -190,9 +190,23 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     allowed_paths, forbidden = _task_path_lists(product_root, item)
     if step in {"declare", "implement"} and allowed_paths:
         phase = phase_write_globs(step, route)
+        # Declare writes tests plus the product stub its task declared: a
+        # compiled language cannot compile a test against a symbol that does not
+        # exist yet, so the throwing stub has to be on disk before Red can be
+        # taken at all (declare/SKILL.md; test_reports.py reads a JVM `<error>`
+        # as a test that ran and failed for exactly that reason). Only the
+        # task's own product paths qualify, and never `docs/changes/**` - that is
+        # where the declaration bounding them lives.
+        product_phase = list(phase)
+        if step == "declare":
+            product_phase = [
+                glob
+                for glob in phase_write_globs("implement", route)
+                if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
+            ]
         change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
         test_side = [glob for glob in phase if glob.replace("\\", "/").startswith("tests")]
-        product_side = [path for path in allowed_paths if matches_contract_globs(path, phase)]
+        product_side = [path for path in allowed_paths if matches_contract_globs(path, product_phase)]
         # A task's forbidden_paths bound its product and test scope. They never
         # remove the Change's own files: evidence is written by `deltafuse
         # evidence`, and a task forbidding `docs/**` made that evidence read as
