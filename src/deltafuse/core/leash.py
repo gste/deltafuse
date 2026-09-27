@@ -73,7 +73,14 @@ CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.jsonl"})
 # gate-password.yaml: a Worker that replaced the hash with its own password, or
 # deleted it, could answer the Human Gate itself.
-CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml"}
+# bench.yaml: the bench's seed-integrity trust root - score.py reads
+# `seed_hashes` from it to judge `code.untouched`, so rewriting those digests
+# erases the Worker's own premature src/ edits (bench mutant M08) and every check
+# downstream still reads green. Written by the bench harness that initializes the
+# product (deltafuse.bench.init_product), never by the Worker.
+CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml", "bench.yaml"}
+# Who legitimately writes a Core-owned file that is not a journal.
+CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this product"}
 # Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
 # `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
 # `capability-draft`: `deltafuse capability propose` adding a draft to the
@@ -829,7 +836,8 @@ def check_paths(
                 )
                 continue
             errors.append(
-                f"leash: '{raw}' is Core-owned; mutate it only through the deltafuse CLI (DF3-007)"
+                f"leash: '{raw}' is Core-owned; mutate it only through "
+                f"{CORE_OWNED_WRITER.get(tail, 'the deltafuse CLI')} (DF3-007)"
             )
             continue
         if raw.startswith(".git/") or is_exempt_path(raw):

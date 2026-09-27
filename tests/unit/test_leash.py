@@ -352,11 +352,24 @@ def test_deltafuse_dir_is_exempt_but_core_journals_stay_guarded():
     journals must still fire, so it runs before the exemptions."""
     from deltafuse.core.leash import check_paths, is_exempt_path
 
-    assert is_exempt_path(".deltafuse/bench.yaml")
-    assert check_paths([".deltafuse/bench.yaml"], [], baseline="draft") == []
+    assert is_exempt_path(".deltafuse/tmp/scratch.json")
+    assert check_paths([".deltafuse/tmp/scratch.json"], [], baseline="draft") == []
     for journal in ("transitions.jsonl", "gate-journal.jsonl", "journal-head", "gate-password.yaml"):
         errors = check_paths([f".deltafuse/{journal}"], [], baseline="draft")
         assert errors and "Core-owned" in errors[0], journal
+
+
+def test_bench_yaml_is_not_the_workers_to_rewrite():
+    """F13: `.deltafuse/bench.yaml` is the bench's seed-integrity trust root -
+    score.py reads `seed_hashes` from it to judge `code.untouched` - and
+    `.deltafuse/**` is exempt as a whole, so rewriting those digests erased the
+    Worker's own premature src/ edits (bench mutant M08) without one violation."""
+    from deltafuse.core.leash import check_paths, is_exempt_path
+
+    assert is_exempt_path(".deltafuse/bench.yaml")  # exempt, and still guarded
+    errors = check_paths([".deltafuse/bench.yaml"], [], baseline="draft")
+    assert errors and "Core-owned" in errors[0], errors
+    assert "bench harness" in errors[0]
 
 
 def _commit_all(root: Path, message: str) -> None:
