@@ -61,15 +61,24 @@ class _HintingParser(argparse.ArgumentParser):
         import difflib
         import re
 
-        wrong = re.search(r"invalid choice: '([^']+)' \(choose from ([^)]*)\)", message)
+        # The "(choose from ...)" wording is argparse's own and has changed across Python
+        # versions (3.10 through 3.14 are all in CI); the choice value itself ("invalid
+        # choice: 'x'") has not. Read the valid choices from the subparsers action itself
+        # instead of the formatted message, so a wording change cannot silently turn this
+        # hint off again.
+        wrong = re.search(r"invalid choice: '([^']+)'", message)
         if wrong:
             given = wrong.group(1)
-            choices = [c.strip() for c in wrong.group(2).split(",") if c.strip()]
+            choices: list[str] = []
+            for action in self._subparsers._group_actions if self._subparsers else []:
+                if isinstance(action, argparse._SubParsersAction):
+                    choices = list(action.choices)
+                    break
             words = re.split(r"[_\s]+", given)
             guess = None
             if len(words) > 1 and words[0] in choices:
                 guess = " ".join(words)  # artifact_write -> artifact write
-            else:
+            elif choices:
                 near = difflib.get_close_matches(given, choices, n=1, cutoff=0.6)
                 guess = near[0] if near else None
             if guess:

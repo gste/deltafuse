@@ -33,6 +33,25 @@ def test_a_tool_name_used_as_a_command_gets_the_command_it_meant(capsys):
     assert "Did you mean: deltafuse artifact write" in text
 
 
+def test_the_hint_survives_either_argparse_quoting_of_choices(capsys):
+    """argparse quotes the choices in `invalid choice: ... (choose from ...)` on some
+    Python versions (3.10/3.11) and does not on others (3.12+, CI runs both): the choice
+    value itself is unquoted-and-quoted the same way regardless, but the list of valid
+    choices in the message text is not - reading it from the parser's own subparsers
+    action instead must not care which wording is in front of it. Reproduced in CI on a
+    matrix Python that quotes: the hint silently stopped firing (2026-09-27), because the
+    old code split the quoted list on commas without stripping the quote characters, so
+    `given in choices` and the difflib match against `"'artifact'"` (with quotes) never hit."""
+    parser = cli._HintingParser(prog="deltafuse")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("artifact")
+    sub.add_parser("check-gate")
+    with pytest.raises(SystemExit):
+        parser.error("argument command: invalid choice: 'artifact_write' (choose from 'artifact', 'check-gate')")
+    text = capsys.readouterr().err
+    assert "Did you mean: deltafuse artifact write" in text
+
+
 def test_a_typo_gets_the_nearest_command_and_nonsense_gets_none(capsys):
     _, text = _run(["chek-gate"], capsys)
     assert "Did you mean: deltafuse check-gate" in text
