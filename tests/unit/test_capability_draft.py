@@ -167,3 +167,58 @@ def test_the_allowance_ends_when_the_human_accepts_the_capability(product: Path)
     drafts = draft_spec_files(product)
     assert drafts == frozenset()
     assert validate_spec_ref("docs/spec/monitoring/usage_stats.md#REQ-MON-01", product, drafts=drafts)
+
+
+def test_the_writer_accepts_a_slice_citing_the_spec_a_draft_promises(product: Path):
+    """F9: the gate side learned about drafts (check_gate passes
+    drafts=draft_spec_files) but the Artifact Writer did not, so Analyze could not
+    write the slice the whole propose flow exists for. The refusal named
+    spec-delta.md as the escape - a Specify artifact that does not exist in
+    Analyze and is outside its write scope - so `analyzed` could never close."""
+    from deltafuse.core.artifact_registry import ArtifactRegistry
+
+    propose_capability(
+        product,
+        "monitoring.usage_stats",
+        summary="Counters of accepted and rejected calls",
+        spec="docs/spec/monitoring/usage_stats.md",
+    )
+    change_dir = product / "docs" / "changes" / "CHG-201"
+    (change_dir / "slices").mkdir(parents=True)
+    registry = ArtifactRegistry()
+
+    def refs(*spec_refs: str):
+        return registry.validate_references(
+            "slice",
+            {
+                "id": "SLICE-01",
+                "change": "CHG-201",
+                "title": "Usage counters",
+                "status": "draft",
+                "primary_capability": "monitoring.usage_stats",
+                "claims": ["CR-001"],
+                "spec_refs": list(spec_refs),
+                "depends_on": [],
+            },
+            product_root=product,
+            change_dir=change_dir,
+            change_id="CHG-201",
+        )
+
+    promised = refs("docs/spec/monitoring/usage_stats.md")
+    assert [d.message for d in promised.diagnostics] == []
+    assert promised.valid
+
+    # The allowance is the draft's own promised file, not any missing spec.
+    other = refs("docs/spec/monitoring/other.md")
+    assert not other.valid
+    assert any("does not exist" in d.message for d in other.diagnostics)
+
+    # An existing spec is still fine, and still required once the draft is gone.
+    assert refs("docs/spec/security/ratelimit.md").valid
+    catalog = product / "docs/spec/_capabilities.yaml"
+    catalog.write_text(
+        catalog.read_text(encoding="utf-8").replace("status: draft", "status: active"),
+        encoding="utf-8",
+    )
+    assert not refs("docs/spec/monitoring/usage_stats.md").valid

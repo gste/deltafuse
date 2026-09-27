@@ -97,7 +97,7 @@ Intake
 ### Инварианты типизированной дельты (Typed Delta Invariants)
 - Если `specification.operation` равен `none`, Change не меняет нормативную спецификацию; он классифицируется как **дефект реализации (Implementation Bug)** или **рефакторинг**, а этап **Specify** фиксирует доказательство того, что существующая спека уже предписывает требуемое поведение.
 - Если `specification.operation` равен `add`, `modify`, `remove` или `mixed`, Change обязан пройти этап **Specify** с обновлением требований в `docs/spec/**`.
-- Если `catalog.operation` равен `add`, `modify` или `remove`, требуется обновление каталога `_capabilities.yaml` через человеческий рубеж (Human Gate: Capability Boundary).
+- Если `catalog.operation` равен `add`, `modify` или `remove`, требуется обновление каталога `_capabilities.yaml` через человеческий рубеж (Human Gate: Capability Boundary). Новую возможность воркер предлагает командой `deltafuse capability propose <domain>.<name> --summary "…" --spec docs/spec/<domain>/<name>.md`; Ядро записывает её как `status: draft`. Routing принимает draft, и срез может сослаться в `spec_refs` на файл спецификации, который этот draft обещает, хотя Specify его ещё не написал, — Artifact Writer и гейт `analyzed` разрешают ровно этот путь, пока возможность в статусе draft. Человек переводит её в `active`, принимая спецификацию; гейты `specified` и `converged` не закрываются, пока возможность из routing остаётся draft.
 - Если `decisions.operation` равен `propose`, формируются черновики решений в `docs/decisions/DEC-*` в статусе `proposed`, а Change блокируется (`blocked-on-decision`) до решения человека.
 
 ### Аналитические исходы (Outcomes)

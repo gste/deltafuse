@@ -91,7 +91,7 @@ For each capability slice:
 ### Analytical Outcomes
 - **Feasible**: all claims mapped, deltas computed, ready for specification or declaring.
 - **Decision Required**: architectural or product uncertainty identified; create `docs/decisions/DEC-NNNN-*.md` in `status: proposed` and transition Change to `blocked-on-decision`.
-- **Capability Gap**: new capability required; draft catalog delta for `_capabilities.yaml` requiring human approval.
+- **Capability Gap**: new capability required; propose it with `deltafuse capability propose <domain>.<name> --summary "…" --spec docs/spec/<domain>/<name>.md`, which the Core records in `_capabilities.yaml` as `status: draft`. Routing accepts a draft, and the slice may cite the spec file the draft promises in `spec_refs` even though Specify has not written it yet - both the Artifact Writer and the `analyzed` gate allow exactly that path while the capability is a draft. The human makes it `active` when accepting the specification; `specified` and `converged` refuse to close while a capability the Change routes into is still a draft.
 - **Duplicate**: Change duplicates an existing active or archived Change; mark `duplicate`.
 - **Rejected**: Request conflicts with core architecture or is unfeasible; mark `rejected`.
 
