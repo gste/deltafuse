@@ -50,6 +50,15 @@ properties:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
     description: Content hash of docs/spec/** and src/** when the evidence was recorded.
+  red_oracle:
+    type: string
+    pattern: '^sha256:[a-fA-F0-9]{64}$'
+    description: >
+      Red only: content hash of the test files this Red declared, as sorted
+      `path:sha256` pairs. The declared oracle is frozen - Implement may add
+      tests but must not change the one Red was taken against. The implemented
+      gate recomputes it and refuses a difference. Absent on records written
+      before the field existed and when Declare listed no test file.
   recorded_by:
     const: deltafuse-evidence
     description: Optional kernel stamp. Gates reject evidence YAML without a matching hash.

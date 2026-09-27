@@ -297,3 +297,75 @@ def test_core_changed_paths_hold_only_the_workers_changes(tmp_path: Path):
         "src/core.py",
         "tests/test_core.py",
     ]
+
+
+def test_rewriting_the_frozen_red_oracle_does_not_produce_green(
+    tmp_path: Path, repo_root: Path
+):
+    """F4: Green was matched to Red by test *name* alone, so weakening the
+    assertion during Implement produced an authentic Green and an authentic
+    regression over a product nobody had changed. Red now freezes the bytes of
+    the test files it declared."""
+    from deltafuse.core.fsm import check_gate
+    from deltafuse.core.transitions import set_artifact_status
+
+    builder = _decomposed(tmp_path, repo_root, "CHG-102")
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src" / "limiter.py").write_text(
+        "def cooldown():\n    return 0\n", encoding="utf-8"
+    )
+    oracle = (
+        "import pathlib, sys\n"
+        "sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src'))\n"
+        "from limiter import cooldown\n\n"
+        "assert cooldown() >= 30\n"
+    )
+    test_file = tmp_path / "tests" / "test_task-001.py"
+    test_file.parent.mkdir(parents=True, exist_ok=True)
+    test_file.write_text(oracle, encoding="utf-8")
+    argv = _run_file_cmd("tests/test_task-001.py")
+
+    red = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    assert red.payload["result"] == "expected-failure"
+    assert str(red.payload["red_oracle"]).startswith("sha256:")
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+    assert check_gate(builder.change_dir, "declaring") == []
+
+    # The attack: rewrite the oracle instead of the product.
+    test_file.write_text(oracle.replace(">= 30", ">= 0"), encoding="utf-8")
+    green = run_evidence(
+        builder.change_dir,
+        phase="green",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    assert not green.authentic
+    assert any("frozen Red oracle" in e for e in green.errors), green.errors
+
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("frozen Red oracle" in e for e in errs), errs
+
+    # Restoring the declared oracle and fixing the product instead closes it.
+    test_file.write_text(oracle, encoding="utf-8")
+    (tmp_path / "src" / "limiter.py").write_text(
+        "def cooldown():\n    return 30\n", encoding="utf-8"
+    )
+    honest = run_evidence(
+        builder.change_dir,
+        phase="green",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py", "src/limiter.py"],
+    )
+    assert not any("frozen Red oracle" in e for e in honest.errors), honest.errors
+    errs = check_gate(builder.change_dir, "implemented")
+    assert not any("frozen Red oracle" in e for e in errs), errs

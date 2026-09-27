@@ -35,6 +35,6 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. CLI exit 0 is required for both Green and regression. Green must pass the very tests the Red record lists as failed; the Core refuses a Green that leaves any of them red.
 6. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status implemented`; retain the task file and its history inside the Change.
 
-If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green.
+If implementation requires a new requirement, Decision, target change, undeclared path, or material scope expansion, stop and return the Change upstream. Never edit a test merely to obtain Green: the Red record froze the bytes of the tests Declare wrote (`red_oracle`), and both `deltafuse evidence --phase green` and the `implemented` gate refuse a Green recorded over a changed copy of one. Adding new tests is fine; if the declared oracle itself is wrong, stop and re-declare it rather than editing it here.
 
 For `route: docs` or `ops`, write only the task `allowed_paths` (spec/changelog or ops/deploy files). Do not patch product `src/**`. Do not weaken Implement for `route: code`.

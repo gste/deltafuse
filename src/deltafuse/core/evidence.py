@@ -15,8 +15,8 @@ from typing import Any
 import yaml
 
 from deltafuse.core.context import load_change_route, posix_relpath
-from deltafuse.core.fsm import find_repo_root
-from deltafuse.core.hasher import compute_product_baseline_revision
+from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors
+from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
@@ -435,6 +435,13 @@ def run_evidence(
         }
     if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
+    if phase == "red":
+        oracle = compute_red_oracle_digest(repo_root, rel_paths)
+        if oracle:
+            # Freezes the declared oracle at the moment Red is taken: the
+            # implemented gate recomputes it and refuses a Green recorded over a
+            # test rewritten during Implement.
+            payload["red_oracle"] = oracle
 
     if phase == "verification":
         # q4 decision D, phase 1: the code the Change touched against the
@@ -489,6 +496,15 @@ def run_evidence(
                 "Green did not turn the Red tests green; still not passing: "
                 f"{missing[:5]}"
             )
+    if phase == "green" and route == "code":
+        # Named here as well as at the implemented gate: the Worker that just
+        # rewrote the oracle should hear it now, not two steps later.
+        red_file = change_path / "evidence" / "red" / f"{task}.yaml"
+        if red_file.is_file():
+            errors.extend(
+                f"evidence: {e}"
+                for e in frozen_oracle_errors(red_file, repo_root, f"this Green ({task})")
+            )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if timed_out:
@@ -507,6 +523,12 @@ def run_evidence(
         authentic = False
     if not authentic and not errors:
         errors.append(f"{phase} evidence is not authentic (result '{result}')")
+    # `errors` is the explanation of a refusal, so the two must agree: printing
+    # "Evidence is authentic." and exiting 0 next to a non-empty list is a green
+    # light the Worker acts on, and the gate two steps later is a much worse
+    # place to hear about it (F4: a Green recorded over an oracle rewritten
+    # during Implement was reported authentic).
+    authentic = authentic and not errors
 
     return EvidenceOutcome(
         payload=payload,

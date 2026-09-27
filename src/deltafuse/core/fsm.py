@@ -769,6 +769,40 @@ def _verification_outcome_errors(ver_file: Path) -> list[str]:
     return []
 
 
+def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[str]:
+    """The oracle Red was taken against is frozen; Implement may add tests, not change it.
+
+    Green was matched to Red by test *name* alone, so rewriting the assertion
+    during Implement produced an authentic Green and an authentic regression
+    over a product nobody had changed. A record with no `red_oracle` was written
+    before the field existed, or declared no test file, and has nothing to
+    compare against.
+    """
+    from deltafuse.core.hasher import compute_red_oracle_digest, oracle_paths
+
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict):
+        return []
+    recorded = red.get("red_oracle")
+    if not isinstance(recorded, str) or not recorded:
+        return []
+    paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
+    if compute_red_oracle_digest(repo_root, paths) == recorded:
+        return []
+    frozen = oracle_paths(paths)
+    return [
+        f"the frozen Red oracle behind {label} no longer matches what Red recorded - "
+        f"{', '.join(frozen) or 'the declared test files'} changed after Declare. "
+        "Implement may add tests but must not edit the one Red was taken against: rewriting the "
+        "oracle so it passes leaves the product unchanged and proves nothing. Restore the "
+        "declared test, or - if the oracle itself was wrong - record Red again with "
+        "`deltafuse evidence --phase red` and take it from there"
+    ]
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -1347,6 +1381,12 @@ def _check_gate(
                     continue
                 if route == "code":
                     errors.extend(_already_green_red_errors(red_file, green_file.name))
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in frozen_oracle_errors(
+                            red_file, repo_root, f"green evidence '{green_file.name}'"
+                        )
+                    )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"

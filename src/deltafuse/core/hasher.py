@@ -1,8 +1,56 @@
 """Content hash calculation for DeltaFuse framework distribution."""
 
 from __future__ import annotations
+import fnmatch
 import hashlib
 from pathlib import Path
+from typing import Iterable
+
+
+# Test roots whose files are the declared oracle. `tests/**` is the framework's
+# own Declare write scope; `src/test/**` is the Maven/Gradle layout the JVM
+# report reader supports (test_reports.py, bench case J01-cooldown-java).
+ORACLE_GLOBS = ("tests/**", "*/tests/**", "src/test/**", "*/src/test/**")
+
+
+def oracle_paths(changed_paths: Iterable[str]) -> list[str]:
+    """The declared test files among a Red record's changed_paths, sorted."""
+    out: set[str] = set()
+    for raw in changed_paths:
+        if not isinstance(raw, str):
+            continue
+        rel = raw.replace("\\", "/").lstrip("/")
+        if not rel:
+            continue
+        if any(fnmatch.fnmatch(rel, pattern) for pattern in ORACLE_GLOBS):
+            out.add(rel)
+    return sorted(out)
+
+
+def compute_red_oracle_digest(repo_root: Path | str, changed_paths: Iterable[str]) -> str | None:
+    """Content hash of the test files a Red record declared.
+
+    The declared oracle is frozen once Red is recorded: Implement may add tests
+    but must not change the one Red was taken against (implement/SKILL.md, and
+    Green must pass "without changing its oracle"). Matching by test *name* alone
+    let a Worker rewrite the assertion during Implement and still record an
+    authentic Green over an untouched product. None when no test file is listed,
+    so there is no oracle of Declare's own to freeze. A file deleted before Green
+    hashes as absent, so deleting the oracle reads as a change too.
+    """
+    root = Path(repo_root)
+    records: list[str] = []
+    for rel in oracle_paths(changed_paths):
+        path = root / rel
+        try:
+            digest = compute_file_sha256(path) if path.is_file() else ""
+        except OSError:
+            digest = ""
+        records.append(f"{rel.lower()}:{digest}")
+    if not records:
+        return None
+    payload = "\n".join(records) + "\n"
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
 
 
 def compute_file_sha256(path: Path) -> str:

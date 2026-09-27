@@ -134,6 +134,7 @@ deltafuse/
   - **T2**: Red evidence с `result: passed` или `exit_code: 0` (кроме `not-reproduced` и `already-green`) отвергается.
   - **F-009 / declaring**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
   - **F2 / implemented**: на `route: code` Green, отвечающий на `already-green` Red, гейт `implemented` не закрывает — сравнивать не с чем, дельта не доказана. Такой Change закрывается по no-op ветви (терминальный `not-reproduced`).
+  - **F4 / implemented**: Red-запись замораживает байты тестов, которые написал Declare (`red_oracle`). Гейт пересчитывает хэш и отвергает расхождение: ослабление ассерта в Implement не даёт Green. Записи без `red_oracle` (старее поля или без тестов в `changed_paths`) сравнивать не с чем.
   - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `declaring` и т.д.). `cancelled` и `superseded` — терминалы (F-005 / RM-005); Verify не снимается.
   - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
   - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.
