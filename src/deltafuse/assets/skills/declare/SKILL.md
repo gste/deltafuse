@@ -29,7 +29,7 @@ Do not read implementation internals unless the oracle cannot otherwise be expre
 
 1. Confirm task dependencies and normative references are ready.
 2. Freeze the declared oracle from the task and specification: what must become true.
-3. Add or modify the smallest automated test that demonstrates the missing behavior or defect.
+3. Add or modify the smallest automated test that demonstrates the missing behavior or defect. Name the claim it proves: put the claim id in the test's own name (`test_cr013_...`), or add a `# covers: CR-013` comment inside it when the name cannot. `deltafuse coverage` reads this to record which claim each test proves; a claim with none is named at `check-gate --gate converged` when `workflow.trace_claims: warn` is set (off by default).
 4. Run that test against unchanged production code by calling the kernel, not by hand-writing YAML:
    `deltafuse evidence <change-dir> --phase red --task <task-id> -- <command>`. The Core records the changed files itself (`--changed-path` is optional).
 5. Require CLI exit 0 (authentic Red): the tests ran and none passed. A test that could not run - compilation, import, collection, fixture, environment, or `_`-prefixed internals - is not Red; it still writes YAML but is not a gate pass.

@@ -95,6 +95,28 @@ def extract_claims_from_request(request_md_content: str) -> list[str]:
     return found
 
 
+# A claim's kind, wherever it is written next to the id: "- CR-001 (Expectation): ..." or
+# "### CR-001 - constraint". P12 (workflow.trace_claims: warn) only asks a test of
+# Expectation/Constraint claims - Observation and Hypothesis describe what is or might be
+# true, not what the change must make true, so a missing test is not itself a gap.
+_CLAIM_KIND = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+|#{2,4}[ \t]+)\**(CR-[0-9]{3,})\**[ \t]*"
+    r"(?:\(([A-Za-z][A-Za-z ]*)\)|[-—–][ \t]*([A-Za-z][A-Za-z ]*))",
+    re.MULTILINE,
+)
+
+
+def extract_claim_kinds_from_request(request_md_content: str) -> dict[str, str]:
+    """{claim id: lowercase kind} for every claim that states one next to its id."""
+    kinds: dict[str, str] = {}
+    for match in _CLAIM_KIND.finditer(request_md_content):
+        cid = match.group(1)
+        label = (match.group(2) or match.group(3) or "").strip().split()[:1]
+        if label and cid not in kinds:
+            kinds[cid] = label[0].lower()
+    return kinds
+
+
 def path_is_inside_repo(path: Path, repo_root: Path) -> bool:
     """True if resolved *path* is the repository root or a descendant of it."""
     repo = repo_root.resolve()

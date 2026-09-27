@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from deltafuse.core.integrity import (
     extract_claims_from_request,
     load_capability_catalog,
     lookup_capability,
+    path_is_inside_repo,
 )
 
 ANALYZE_PASSES = ("routing", "slice", "coverage")
@@ -369,6 +371,62 @@ def _derived_evidence(change_path: Path, task_ids: list[str]) -> dict[str, str]:
     return links
 
 
+_TEST_DEF = re.compile(r"(?m)^def (test_[A-Za-z0-9_]*)\s*\(")
+
+
+def _tests_covering(text: str, cid: str) -> list[str]:
+    """Test function names whose own body (id included) mentions this claim: an explicit
+    `# covers: CR-013` comment, or the id in the test's own name - `-` is not a legal
+    character in a Python identifier, so `test_cr013_...` is read the same as `CR-013`."""
+    bare = cid.replace("-", "").lower()
+    starts = [(m.start(), m.group(1)) for m in _TEST_DEF.finditer(text)]
+    names: list[str] = []
+    for i, (pos, name) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
+        block = text[pos:end]
+        if cid in block or bare in block.lower():
+            names.append(name)
+    return names
+
+
+def _claim_covering_tests(change_path: Path, repo_root: Path, task_ids: list[str], cid: str) -> list[str]:
+    """P12 (workflow.trace_claims: warn): this claim's tests, found through its tasks' Red
+    evidence. Falls back to a task's own declared `allowed_paths` when Red recorded
+    `already-green` with an empty `changed_paths` - the test genuinely existed and passed,
+    but no Declare write named it as changed (M04, night of 2026-09-26/27)."""
+    names: list[str] = []
+    for task_id in task_ids:
+        red_file = change_path / "evidence" / "red" / f"{task_id}.yaml"
+        if not red_file.is_file():
+            continue
+        try:
+            red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(red, dict):
+            continue
+        paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
+        if not paths and red.get("result") == "already-green":
+            task_file = change_path / "tasks" / f"{task_id}.md"
+            try:
+                meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            except Exception:
+                meta = None
+            allowed = meta.get("allowed_paths") if isinstance(meta, dict) else None
+            paths = [p for p in (allowed or []) if isinstance(p, str) and "test" in p]
+        for rel in paths:
+            target = (repo_root / rel).resolve()
+            if not path_is_inside_repo(target, repo_root) or not target.is_file():
+                continue
+            try:
+                text = target.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            names.extend(f"{rel}::{name}" for name in _tests_covering(text, cid))
+    seen: set[str] = set()
+    return [n for n in names if not (n in seen or seen.add(n))]
+
+
 def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     """Derive coverage.yaml from request claims, routing, and slice frontmatter."""
     path = Path(change_path)
@@ -398,6 +456,15 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     existing_claims = existing.get("claims") if isinstance(existing.get("claims"), dict) else {}
     slice_ids = {row.slice_id for row in slices}
     slice_tasks = _slice_tasks(path)
+
+    # P12 (workflow.trace_claims: warn, default off): costs one config read and, only when
+    # asked for, a scan of each claim's own test files. `off` changes nothing below.
+    from deltafuse.core.config import load_trace_claims_mode
+    from deltafuse.core.fsm import find_repo_root
+
+    trace_repo_root: Path | None = None
+    if load_trace_claims_mode(find_repo_root(path)) == "warn":
+        trace_repo_root = find_repo_root(path)
 
     claims_out: dict[str, Any] = {}
     unmapped: list[str] = []
@@ -440,9 +507,44 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             "evidence": evidence,
             "status": status,
         }
+        if trace_repo_root is not None:
+            claims_out[cid]["tests"] = _claim_covering_tests(path, trace_repo_root, tasks, cid)
     if unmapped:
         raise CoverageError("no slice for claims: " + ", ".join(unmapped))
     return {"change": _change_id(path), "claims": claims_out}
+
+
+def claim_trace_warnings(change_path: Path | str) -> list[str]:
+    """P12 (workflow.trace_claims: warn, default off): Expectation/Constraint claims
+    coverage.yaml has no test for. Advisory only - never a gate error, never blocks
+    `converged`. A marker present but the test unrelated is not detectable here; that
+    stays the judge's job until this has run on enough models to trust promoting it.
+    """
+    from deltafuse.core.config import load_trace_claims_mode
+    from deltafuse.core.fsm import find_repo_root
+    from deltafuse.core.integrity import extract_claim_kinds_from_request
+
+    path = Path(change_path)
+    if load_trace_claims_mode(find_repo_root(path)) != "warn":
+        return []
+    request = path / "request.md"
+    if not request.is_file():
+        return []
+    kinds = extract_claim_kinds_from_request(request.read_text(encoding="utf-8"))
+    try:
+        document = build_coverage_document(path)
+    except CoverageError:
+        return []
+    claims = document.get("claims") or {}
+    warnings: list[str] = []
+    for cid, kind in sorted(kinds.items()):
+        if kind not in ("expectation", "constraint"):
+            continue
+        record = claims.get(cid)
+        tests = record.get("tests") if isinstance(record, dict) else None
+        if not tests:
+            warnings.append(f"claim '{cid}' ({kind}) has no test naming it")
+    return warnings
 
 
 def write_coverage(change_path: Path | str) -> Path:

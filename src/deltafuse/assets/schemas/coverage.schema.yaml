@@ -43,3 +43,8 @@ properties:
               type: string
         status:
           enum: [pending, analyzing, analyzed, specified, decomposed, declaring, declared, implementing, implemented, verified, rejected, not-reproduced]
+        tests:
+          description: "P12 (workflow.trace_claims: warn): test names whose source names this claim, found in its tasks' Red evidence. Absent or empty is not itself an error - converged only warns."
+          type: array
+          items:
+            type: string

@@ -168,6 +168,58 @@ def test_write_coverage_maps_claims_and_preserves_tasks(tmp_path: Path, repo_roo
     assert again["claims"]["CR-002"]["status"] == "decomposed"
 
 
+def test_write_coverage_finds_tests_when_trace_claims_is_warn(tmp_path: Path, repo_root: Path):
+    """P12: with workflow.trace_claims: warn, coverage.yaml names the test each claim's own
+    tasks proved it through - including through Red's already-green fallback (M04, night of
+    2026-09-26/27: no Declare write ever named tests/test_x.py as changed, though it existed
+    and passed)."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.setdefault("workflow", {})["trace_claims"] = "warn"
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-070", title="Trace claims").step_intake(
+        claims=["CR-001"]
+    )
+    _routing(builder.change_dir, builder.change_id, {"CR-001": "system.core"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "system.core", ["CR-001"])
+
+    tasks_dir = builder.change_dir / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    (tasks_dir / "TASK-001.md").write_text(
+        "---\nid: TASK-001\nslice: SLICE-01\nallowed_paths: [tests/test_x.py]\n---\nbody",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tests" / "test_x.py").write_text(
+        "def test_cr001_behaviour():\n    assert True\n", encoding="utf-8"
+    )
+    red_dir = builder.change_dir / "evidence" / "red"
+    red_dir.mkdir(parents=True, exist_ok=True)
+    (red_dir / "TASK-001.yaml").write_text(
+        yaml.safe_dump({"result": "already-green", "changed_paths": []}), encoding="utf-8"
+    )
+
+    dest = write_coverage(builder.change_dir)
+    data = yaml.safe_load(dest.read_text(encoding="utf-8"))
+    assert data["claims"]["CR-001"]["tests"] == ["tests/test_x.py::test_cr001_behaviour"]
+
+
+def test_write_coverage_omits_tests_field_by_default(tmp_path: Path, repo_root: Path):
+    """workflow.trace_claims defaults to off: no extra read, no extra key - matches the
+    schema and every fixture that predates P12."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-071", title="No trace").step_intake(
+        claims=["CR-001"]
+    )
+    _routing(builder.change_dir, builder.change_id, {"CR-001": "system.core"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "system.core", ["CR-001"])
+    dest = write_coverage(builder.change_dir)
+    data = yaml.safe_load(dest.read_text(encoding="utf-8"))
+    assert "tests" not in data["claims"]["CR-001"]
+
+
 def test_write_coverage_fails_without_slice(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-061", title="No slice").step_intake()
@@ -202,3 +254,43 @@ def test_coverage_cli_writes_and_does_not_touch_spec(tmp_path: Path, repo_root: 
     assert (tmp_path / "docs" / "spec" / "core.md").read_text(encoding="utf-8") == spec_before
     assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == change_before
     assert check_gate(builder.change_dir, "analyzed") == []
+
+
+def test_check_gate_converged_prints_p12_warnings_but_still_passes(
+    tmp_path: Path, repo_root: Path, capsys, monkeypatch
+):
+    """Advisory only: a claim with no test naming it prints, but never fails the gate or
+    changes the exit code - `workflow.trace_claims: warn` is a warning, not a new gate."""
+    import deltafuse.cli as cli_module
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-072", title="Advisory only").step_intake(
+        claims=["CR-001"]
+    )
+    monkeypatch.setattr(cli_module, "gate_order_errors", lambda *a, **k: [])
+    monkeypatch.setattr(cli_module, "check_gate", lambda *a, **k: [])
+    monkeypatch.setattr(
+        cli_module,
+        "claim_trace_warnings",
+        lambda change_path: ["claim 'CR-001' (expectation) has no test naming it"],
+    )
+    ret = main(["check-gate", str(builder.change_dir), "--gate", "converged"])
+    out, err = capsys.readouterr()
+    assert ret == 0
+    assert "passed" in out
+    assert "(advisory): claim 'CR-001'" in err
+
+
+def test_check_gate_non_converged_gates_never_call_claim_trace_warnings(
+    tmp_path: Path, repo_root: Path, monkeypatch
+):
+    import deltafuse.cli as cli_module
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-073", title="Not converged").step_intake()
+    calls = []
+    monkeypatch.setattr(cli_module, "gate_order_errors", lambda *a, **k: [])
+    monkeypatch.setattr(cli_module, "check_gate", lambda *a, **k: [])
+    monkeypatch.setattr(cli_module, "claim_trace_warnings", lambda change_path: calls.append(1) or [])
+    main(["check-gate", str(builder.change_dir), "--gate", "intake"])
+    assert calls == []

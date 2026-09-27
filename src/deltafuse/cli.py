@@ -14,7 +14,7 @@ from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
 from deltafuse.core.board import BoardError, build_board_snapshot
-from deltafuse.core.analyze import CoverageError, write_coverage
+from deltafuse.core.analyze import CoverageError, claim_trace_warnings, write_coverage
 from deltafuse.core.queue import (
     QueueError,
     build_work_queue,
@@ -774,6 +774,9 @@ def _main(argv: list[str] | None = None) -> int:
         # A gate whose turn has not come must not read as "passed": advance
         # would refuse it a moment later.
         errors = gate_order_errors(target, args.gate) + check_gate(target, args.gate)
+        # P12 (workflow.trace_claims: warn, default off): advisory only - never in
+        # `errors`, never affects the exit code. `off` costs nothing here (empty list).
+        warnings = claim_trace_warnings(target) if args.gate == "converged" else []
         # Q0-2: a gate verdict that rests on a token budget must say how that
         # budget was counted; the configuration is what the campaign pins.
         tokenizer = tokenizer_config()
@@ -784,6 +787,7 @@ def _main(argv: list[str] | None = None) -> int:
             ok=not errors,
             errors=errors,
             n_errors=len(errors),
+            **({"warnings": warnings} if warnings else {}),
             token_endpoint=tokenizer["endpoint"],
             token_required=tokenizer["required"],
             token_heuristic=tokenizer["heuristic"],
@@ -793,6 +797,8 @@ def _main(argv: list[str] | None = None) -> int:
             for err in errors:
                 print(f"  - {err}", file=sys.stderr)
             return 1
+        for warning in warnings:
+            print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
         print(f"Gate {args.gate} passed for {target}.")
         return 0
 

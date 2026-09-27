@@ -25,7 +25,7 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 
 ## Procedure
 
-1. Verify `raw source -> CR claim -> analysis -> slice Delta -> requirement -> task -> test -> result` coverage.
+1. Verify `raw source -> CR claim -> analysis -> slice Delta -> requirement -> task -> test -> result` coverage. When `workflow.trace_claims: warn` is set, `check-gate --gate converged` names every Expectation/Constraint claim `coverage.yaml` has no test for (from Declare's naming, Procedure step 3 there); read that list and check it by hand - it is advisory, not a gate failure.
 2. Check every declared delta projection and unchanged invariant.
 3. Confirm blocking Decisions are terminal and accepted normative consequences exist in spec.
 4. Confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle weakening.

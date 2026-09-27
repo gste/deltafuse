@@ -40,3 +40,14 @@ def test_legacy_schema_version_fails_closed(tmp_path: Path, repo_root: Path):
     config.write_text("schema_version: 2\n", encoding="utf-8")
     errors = validate_config(tmp_path)
     assert errors and "v3" in errors[0]
+
+
+def test_trace_claims_accepts_off_and_warn_rejects_anything_else(tmp_path: Path, repo_root: Path):
+    """P12: workflow.trace_claims is off (default) or warn - never a gate error, so it is
+    validated the same way as workflow.leash."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    config = tmp_path / ".deltafuse" / "config.yaml"
+    for mode, ok in (("off", True), ('"off"', True), ("warn", True), ("enforce", False)):
+        config.write_text(f"schema_version: 3\nworkflow:\n  trace_claims: {mode}\n", encoding="utf-8")
+        errors = validate_config(tmp_path)
+        assert (errors == []) == ok, (mode, errors)

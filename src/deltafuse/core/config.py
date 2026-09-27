@@ -24,8 +24,15 @@ KNOWN_WORKFLOW_KEYS = {
     "code_roots",
     "call_width",
     "auto_accept_decisions",
+    "trace_claims",
 }
 LEASH_MODES = {"off", "advisory", "enforce"}
+# P12 (experiment): `warn` has `converged` name Expectation/Constraint claims coverage.yaml
+# has no test for, as an advisory line - never a gate error. `off` (default) costs nothing:
+# no extra read, no extra line. There is no `enforce` yet - a marker present but the test
+# unrelated is not detectable by the Core; that stays the judge's job until layer 2 has run
+# on enough models to show a low false-positive rate.
+TRACE_CLAIMS_MODES = {"off", "warn"}
 BASELINES = {"draft", "accepted"}
 KNOWN_PROJECT_KEYS = {"baseline", "capability_catalog"}
 
@@ -123,6 +130,15 @@ def validate_config(product_root: Path | str) -> list[str]:
                 errors.append(
                     f"config.yaml: workflow.leash {mode!r} must be one of {sorted(LEASH_MODES)}"
                 )
+            trace_mode = workflow.get("trace_claims")
+            # Unquoted YAML 1.1 `off` loads as boolean False, same as workflow.leash.
+            if trace_mode is False:
+                trace_mode = "off"
+            if trace_mode is not None and trace_mode not in TRACE_CLAIMS_MODES:
+                errors.append(
+                    f"config.yaml: workflow.trace_claims {trace_mode!r} must be one of "
+                    f"{sorted(TRACE_CLAIMS_MODES)}"
+                )
             profile = workflow.get("integrity_profile")
             if profile in REMOVED_PROFILES:
                 errors.append(f"config.yaml: {REMOVED_PROFILES[profile]}")
@@ -147,3 +163,21 @@ def validate_config(product_root: Path | str) -> list[str]:
                     )
     errors.extend(validate_active_code_roots(root))
     return errors
+
+
+def load_trace_claims_mode(product_root: Path | str, *, missing: str = "off") -> str:
+    """`workflow.trace_claims`: off (default) or warn. See TRACE_CLAIMS_MODES."""
+    path = Path(product_root) / ".deltafuse" / "config.yaml"
+    if not path.is_file():
+        return missing
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return missing
+    if not isinstance(data, dict):
+        return missing
+    workflow = data.get("workflow")
+    if not isinstance(workflow, dict):
+        return missing
+    mode = workflow.get("trace_claims")
+    return mode if mode in TRACE_CLAIMS_MODES else missing
