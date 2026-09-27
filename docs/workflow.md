@@ -296,6 +296,7 @@ The Verifier checks that:
 1. Execute full project verification suite.
 2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
+   - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here;
    - Traceability matrix;
    - Evidence audit;
    - Delta verification;

@@ -716,6 +716,59 @@ def _tasks_behind_gate(
     return errors
 
 
+VERIFICATION_OUTCOMES = (
+    "converged",
+    "tasks-missing",
+    "spec-gap",
+    "test-gap",
+    "scope-drift",
+    "decision-gap",
+    "not-reproduced",
+)
+
+_OUTCOME_LINE = re.compile(
+    r"^[ \t]*[-*]?[ \t]*\**Outcome\**[ \t]*:[ \t]*(?P<value>.+?)[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _verification_outcome_errors(ver_file: Path) -> list[str]:
+    """Read the verdict Verify wrote, not merely that it wrote a file.
+
+    verification.md is hand-written prose that structural_kind excludes, so it
+    has no schema and the converged gate asked only `.is_file()`: a file
+    recording "test-gap ... Do not converge" closed the very gate it was telling
+    the Core not to close. The vocabulary and the `- Outcome:` line are the
+    shipped template's and verify/SKILL.md's.
+    """
+    try:
+        text = ver_file.read_text(encoding="utf-8", errors="replace")
+    except OSError as ex:
+        return [f"Gate converged: verification.md cannot be read: {ex}"]
+    match = _OUTCOME_LINE.search(text)
+    if match is None:
+        return [
+            "Gate converged: verification.md records no outcome; add a line "
+            "`- Outcome: <verdict>` where <verdict> is exactly one of "
+            + ", ".join(VERIFICATION_OUTCOMES)
+        ]
+    raw = match.group("value").strip().strip("`").strip()
+    outcome = raw.lower()
+    if outcome not in VERIFICATION_OUTCOMES:
+        return [
+            f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
+            + ", ".join(VERIFICATION_OUTCOMES)
+            + "; the template's placeholder line is not a verdict - replace it"
+        ]
+    if outcome != "converged":
+        return [
+            f"Gate converged: verification.md records the gap '{outcome}', so Verify did not "
+            "converge this Change; a gap stops here and is not repaired silently - fix what "
+            "the gap names, then write the verification again"
+        ]
+    return []
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -1300,6 +1353,8 @@ def _check_gate(
         ver_run = change_path / "evidence" / "verification" / "run.yaml"
         if not ver_file.is_file():
             errors.append("Gate converged: verification.md is missing")
+        else:
+            errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))

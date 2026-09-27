@@ -534,6 +534,48 @@ def test_already_green_red_cannot_carry_the_implemented_gate(
     assert any("already-green" in e for e in errors), errors
 
 
+def test_converged_gate_reads_the_verification_verdict(tmp_path: Path, repo_root: Path):
+    """F3: verification.md is hand-written prose that structural_kind excludes, so
+    the converged gate asked only `.is_file()`. A file recording a gap - the very
+    thing verify/SKILL.md says must stop the Change - closed the gate it was
+    telling the Core not to close."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-103", title="Gap verdict")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+        .step_implement()
+        .step_verify()
+    )
+    ver_file = builder.change_dir / "verification.md"
+    assert check_gate(builder.change_dir, "converged") == []
+
+    ver_file.write_text(
+        "# Change Verification\n\n- Outcome: `test-gap`\n\n"
+        "TASK-001 has no regression evidence. Do not converge.\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("test-gap" in e for e in errs), errs
+
+    # The template's own placeholder line is not a verdict.
+    ver_file.write_text(
+        "# Change Verification\n\n"
+        "- Outcome: `converged | tasks-missing | spec-gap | test-gap`\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("is not one of" in e for e in errs), errs
+
+    # Neither is prose with no outcome line at all.
+    ver_file.write_text("# Verification\nAll claims verified.\n", encoding="utf-8")
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("records no outcome" in e for e in errs), errs
+
+
 def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
     """TEST-004: ImportError is not authentic Red even if labeled expected-failure."""
     install(target_dir=tmp_path, framework_root=repo_root)
