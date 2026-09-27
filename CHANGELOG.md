@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.3.6] - 2026-09-27
+## [3.3.5] - 2026-09-27
 
 ### Added
 
@@ -31,33 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `off` (default) costs nothing: no extra read, no extra key, byte-identical
     `coverage.yaml`. There is no `enforce` yet - promoting the warning to an error waits
     on running this across enough models to trust it.
-- **Catalog rules for an adopted repository (q6/Fuse-Back, decision 5(a)/5(b)).**
-  `validate-config` refuses active capabilities whose `code_roots` overlap (compared as
-  directory prefixes); the `analyzed` gate stops a Change routed into a draft capability
-  whose `code_roots` already hold code, with the Bootstrap baseline and code-free drafts
-  exempt.
-
-### Changed
-
-- **The Artifact Writer's calls are journaled.** `artifact create|write|update` was
-  invisible to the Core's own command journal; every call now records `kind`, `identity`,
-  `ok`, and the refusal reason, so a run's structural-writing quality (T10) is measured
-  directly instead of inferred.
-- **A gate failure caused by a hand-written file names the cause once**, instead of
-  answering with that file's own schema errors one at a time - a Worker patching a
-  hand-written `routing.yaml` field by field never learned the file should not exist in
-  that form (39 x 3 schema errors from one hand-written file in a single run).
-- **`deltafuse artifact_write` (missing the space) suggests `deltafuse artifact write`**,
-  the nearest valid subcommand, instead of the bare usage line.
-- **A missing top-level import in a Red test names the fix**, instead of the Core
-  answering that the test could not run at all.
-- **`coverage` before `routing`/slices exist says what to write first**, instead of a
-  bare schema error.
-
-## [3.3.5] - 2026-09-26
-
-### Added
-
 - **Two catalog rules for a repository adopted with Fuse-Back**
   (`backlog/roadmap/q6-fuse-back`, decision 5(a) and 5(b)), and neither is specific
   to it.
