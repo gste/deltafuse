@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.5] - 2026-09-27
+
+### Added
+
+- **`workflow.trace_claims: warn` (P12, experiment, default off).** A converged run can
+  still miss a claim of the request: M02 on Gemma 31B reached `converged` with Verify
+  green at 53.5-56.1, and `CR-006` (`TokenBucketLimiter` must accept `reject_threshold`)
+  was routed, sliced and named in a test, yet the limiter took the parameter through a
+  `policy=` object instead of directly - six hidden-suite checks failed anyway. With the
+  flag set:
+  - `declare` asks a test to name the claim it proves, in its own name (`test_cr013_...`)
+    or a `# covers: CR-013` comment; `deltafuse coverage` records which claim each test
+    proves in `coverage.yaml`'s new `tests` field.
+  - `check-gate --gate converged` also checks a claim's shape directly against the
+    source (a method/parameter the request puts on a class that does not define, take,
+    or assign it, checked by AST against every `*.py` in the product) - naming a test is
+    not proof the claim's shape held.
+  - Both are advisory: printed to stderr, never in `errors`, never affects the exit
+    code. The Core also writes its own findings to
+    `evidence/verification/trace_warnings.yaml` at the `converged` transition, so a
+    warning that only reached a terminal cannot be silently walked past before archive.
+  - `off` (default) costs nothing: no extra read, no extra key, byte-identical
+    `coverage.yaml`. There is no `enforce` yet - promoting the warning to an error waits
+    on running this across enough models to trust it.
+- **Two catalog rules for a repository adopted with Fuse-Back**
+  (`backlog/roadmap/q6-fuse-back`, decision 5(a) and 5(b)), and neither is specific
+  to it.
+  - `deltafuse validate-config` refuses **active capabilities whose `code_roots`
+    overlap** (compared as directory prefixes, the way ownership reads them).
+    Draft, deprecated and removed capabilities are exempt, so a partial adoption
+    is not blocked. The under-routing detector maps a diff to owners through the
+    roots and is blind where two active capabilities share one.
+  - The `analyzed` gate **stops a Change routed into a draft capability whose
+    `code_roots` hold code**, but only once `project.baseline: accepted`: inherited
+    behaviour nobody has characterized is not a law yet. A draft with no code
+    there is the new capability a Worker proposes in Analyze (q8) and is not
+    stopped, and neither is any draft under the Bootstrap baseline. The test is
+    code on disk rather than a non-empty list, because a proposal may name the
+    directory it means to create.
+
+### Changed
+
+- **An Artifact Writer call leaves a line in the command journal**, refused or not
+  (`cmd: artifact`, `sub`, `kind`, `identity`, `ok`, `refusal`, `errors`). `artifact
+  write` was invisible to the journal, so no metric could tell a Worker that fought
+  the Writer for twenty calls from one that never touched it. The outputs the Worker
+  sees are unchanged.
+- **A gate that meets a hand-written structural file names that first.** When the
+  schema errors are about a routing, spec-delta, slice or task file that no writer
+  produced, the first error says so and gives the `artifact write` call that replaces
+  it; a `change.yaml` with several schema errors gets the same kind of note.
+  glm-4.7-flash wrote these by hand: the leash refused them, the files stayed, and
+  every gate answered with their schema errors (39 x 3 `[deltas -> N]`, 34 for routing).
+- **A wrong subcommand says what was probably meant.** `deltafuse artifact_write` (the
+  host's tool name, 8 times in two runs) answers `Did you mean: deltafuse artifact
+  write`; a typo gets the nearest command.
+- **The `format_change_required` hint names both ways** to pass `canonicalize_metadata`
+  (the input JSON, or the host tool's argument).
+
+### Fixed
+
+- **A task's evidence is judged by its own step when the step moved on.** Green
+  evidence written, the gate advanced and the next step selected in one Worker turn,
+  `state` called only afterwards: the task file was not dirty, so the receipt chain
+  gave the implement step no task, and its evidence was refused as outside the
+  verify envelope (3 refusals per Gemma 31B run). A task whose evidence for the step
+  is dirty is the step's task too.
+- **A draft capability's spec can be cited before Specify writes it.** The
+  `analyzed` gate refused every slice, task and `spec-delta.md` that cited the
+  spec of a capability proposed with `deltafuse capability propose`, because
+  the file does not exist until Specify - a step after that gate. M02 runs 1
+  and 3 of 2026-09-24 proposed both drafts correctly and then stalled on this
+  until the supervisor stopped them. The file check now accepts the spec
+  paths of drafts (anchor included); it comes back in full at `specified`,
+  where the human also has to accept the draft (`draft_spec_files`).
+- **The recorded Red category follows the runner's report, as the verdict does.**
+  3.3.4 judged Red by the runner's report but still wrote `failure_category` from
+  substrings in the log, and the `declaring` gate reads that field: 23 of 44 Red
+  records whose report said "the tests ran and failed" were recorded
+  `fixture-error` (no `assert ` in the log) or `import-error` (a test importing a
+  name that does not exist yet fails with `ImportError` in its body) and were
+  refused by a gate the Core had just agreed with. The other way round, a log
+  mentioning an assertion made a test that never ran read `behavioral-mismatch`.
+  With a report, an authentic Red is now recorded `behavioral-mismatch` and an
+  inauthentic one never is.
+- **A Red test that cannot load says why and what to do.** A test importing a
+  module that does not exist yet at the top of its file (`from ratelimit.stats
+  import StatsStore`) fails at collection, and the refusal said only "tests could
+  not run". gemma-4-31b M02 was refused nine times and answered by creating the
+  module in Declare (25 refusals by the leash for product code). The refusal now
+  names the cause (the import at module level) and the fix (import inside the test
+  function, so it runs and fails there).
+- **`coverage` without routing says what comes first.** glm-4.7-flash ran it
+  before writing routing 31 times and was told only "routing.yaml is missing";
+  the refusal now names the order (routing, slices, then coverage).
+- **The Writer's input file has one place, and a refusal says which.** The
+  skills said "put the JSON file under `.deltafuse/tmp/`"; a Worker read that as
+  inside the Change directory, and the leash, which exempts only the product
+  root's `.deltafuse/`, refused it 224 times in two runs (glm-4.7-flash), about
+  half of that model's refusals. The analyze, decompose and specify skills now
+  say "at the product root (not inside the Change directory)" and the refusal
+  says the same. The leash is not loosened.
+- **Red refusals say what to do instead of repeating themselves.** In
+  gemma-334-probe M01 the Worker put an option of `deltafuse evidence` after
+  `--`; the Core ran it as a program, recorded exit 127 as a `fixture-error`,
+  and the gate only said the category was wrong. The Worker then edited
+  product code to change a category that was its own typo, was refused seven
+  times with no hint why, and the supervisor stopped the run. Now: an option
+  after `--` is refused before anything runs or is recorded; the `declaring`
+  gate quotes the record's own summary and says product code is not the fix
+  (a test calling an API that does not exist yet fails with `AttributeError` or
+  `TypeError`, and that is a legitimate Red); the write-envelope refusals in
+  declare say that the phase writes tests only.
+
 ## [3.3.4] - 2026-09-24
 
 ### Added

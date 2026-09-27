@@ -27,7 +27,7 @@ Do not read all raw intake, the entire spec/codebase, or unrelated Changes/tasks
 
 ## Procedure
 
-1. Create each task with the Artifact Writer, one call per task: `deltafuse artifact write --kind task --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/`. The Core writes `id`, `change`, `status`, `context_budget` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. The Core also adds the task to `change.yaml`.
+1. Create each task with the Artifact Writer, one call per task: `deltafuse artifact write --kind task --change <change-dir> --input <file.json>` (or the host's `artifact_write` tool with the same fields); put the JSON file under `.deltafuse/tmp/` at the product root (not inside the Change directory). The Core writes `id`, `change`, `status`, `context_budget` and the file itself. Never write this file by hand: the leash refuses it. A refused field comes back with its reason - fix that field and call again. The Core also adds the task to `change.yaml`.
 2. Give each task one verifiable outcome that fits one implementation context. The input, with ids `TASK-001`, `TASK-002`, … (digits only):
 
    ```json

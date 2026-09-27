@@ -726,9 +726,17 @@ def collect_chain_envelopes(
             spec = STEP_CONTRACTS[step]
             items: list[WorkItem] = []
             if step in {"declare", "implement"}:
+                # gemma-31b M01 (2026-09-26): evidence written, the gate advanced and the
+                # step closed in one go, `state` called later - the task file was not
+                # dirty yet, so its own evidence was judged against the step after it.
+                # A task whose evidence for this step is dirty is the step's task too.
+                phases = {"declare": ("red",), "implement": ("green", "regression")}[step]
                 for task_id, _, task_file in _load_tasks(change_dir):
                     task_rel = task_file.relative_to(root).as_posix()
-                    if task_rel in changed:
+                    wrote_evidence = any(
+                        f"{rel_dir}/evidence/{phase}/{task_id}.yaml" in changed for phase in phases
+                    )
+                    if task_rel in changed or wrote_evidence:
                         items.append(
                             WorkItem(
                                 kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],
@@ -782,6 +790,12 @@ def check_paths(
     errors: list[str] = []
     steps = [str(env.get("step") or "?") for env in env_list]
     step_label = ", ".join(dict.fromkeys(steps)) if steps else ""
+    # Say what the phase is for: a refusal alone sent a Worker into repeating it.
+    phase_hint = (
+        " (declare writes tests only; product code is written in implement)"
+        if step_label == "declare"
+        else ""
+    )
     status_writes = (
         core_status_writes(product_root, base=base, head=head) if product_root is not None else {}
     )
@@ -834,12 +848,21 @@ def check_paths(
                 errors.append(f"leash: '{raw}' is not covered by any Change")
             else:
                 errors.append(
-                    f"leash: '{raw}' is outside the {step_label} write envelope"
+                    f"leash: '{raw}' is outside the {step_label} write envelope{phase_hint}"
                 )
             continue
         if is_change_artifact(raw) and env_list:
+            # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a
+            # `.deltafuse/tmp/` inside the Change directory (224 refusals in two
+            # runs); the exemption is for the one at the product root.
+            scratch = (
+                " (the Writer's input file belongs in `.deltafuse/tmp/` at the product root, "
+                "not inside the Change directory)"
+                if "/.deltafuse/tmp/" in posix_relpath(raw)
+                else ""
+            )
             errors.append(
-                f"leash: '{raw}' is outside the {step_label} write envelope"
+                f"leash: '{raw}' is outside the {step_label} write envelope{scratch}"
             )
     return errors
 

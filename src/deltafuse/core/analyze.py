@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from deltafuse.core.integrity import (
     extract_claims_from_request,
     load_capability_catalog,
     lookup_capability,
+    path_is_inside_repo,
 )
 
 ANALYZE_PASSES = ("routing", "slice", "coverage")
@@ -369,11 +372,73 @@ def _derived_evidence(change_path: Path, task_ids: list[str]) -> dict[str, str]:
     return links
 
 
+_TEST_DEF = re.compile(r"(?m)^def (test_[A-Za-z0-9_]*)\s*\(")
+
+
+def _tests_covering(text: str, cid: str) -> list[str]:
+    """Test function names whose own body (id included) mentions this claim: an explicit
+    `# covers: CR-013` comment, or the id in the test's own name - `-` is not a legal
+    character in a Python identifier, so `test_cr013_...` is read the same as `CR-013`."""
+    bare = cid.replace("-", "").lower()
+    starts = [(m.start(), m.group(1)) for m in _TEST_DEF.finditer(text)]
+    names: list[str] = []
+    for i, (pos, name) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
+        block = text[pos:end]
+        if cid in block or bare in block.lower():
+            names.append(name)
+    return names
+
+
+def _claim_covering_tests(change_path: Path, repo_root: Path, task_ids: list[str], cid: str) -> list[str]:
+    """P12 (workflow.trace_claims: warn): this claim's tests, found through its tasks' Red
+    evidence. Falls back to a task's own declared `allowed_paths` when Red recorded
+    `already-green` with an empty `changed_paths` - the test genuinely existed and passed,
+    but no Declare write named it as changed (M04, night of 2026-09-26/27)."""
+    names: list[str] = []
+    for task_id in task_ids:
+        red_file = change_path / "evidence" / "red" / f"{task_id}.yaml"
+        if not red_file.is_file():
+            continue
+        try:
+            red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(red, dict):
+            continue
+        paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
+        if not paths and red.get("result") == "already-green":
+            task_file = change_path / "tasks" / f"{task_id}.md"
+            try:
+                meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            except Exception:
+                meta = None
+            allowed = meta.get("allowed_paths") if isinstance(meta, dict) else None
+            paths = [p for p in (allowed or []) if isinstance(p, str) and "test" in p]
+        for rel in paths:
+            target = (repo_root / rel).resolve()
+            if not path_is_inside_repo(target, repo_root) or not target.is_file():
+                continue
+            try:
+                text = target.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            names.extend(f"{rel}::{name}" for name in _tests_covering(text, cid))
+    seen: set[str] = set()
+    return [n for n in names if not (n in seen or seen.add(n))]
+
+
 def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     """Derive coverage.yaml from request claims, routing, and slice frontmatter."""
     path = Path(change_path)
     if not (path / "routing.yaml").is_file():
-        raise CoverageError("routing.yaml is missing")
+        # glm-4.7-flash called `coverage` first 31 times: it is derived from routing
+        # and slices, so it comes last in Analyze.
+        raise CoverageError(
+            "routing.yaml is missing: coverage is derived from routing and the slices, so "
+            "write routing first (`deltafuse artifact write --kind routing`), then the slices, "
+            "and run coverage last"
+        )
     uncovered = uncovered_primary_capabilities(path)
     if uncovered:
         raise CoverageError(
@@ -392,6 +457,15 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     existing_claims = existing.get("claims") if isinstance(existing.get("claims"), dict) else {}
     slice_ids = {row.slice_id for row in slices}
     slice_tasks = _slice_tasks(path)
+
+    # P12 (workflow.trace_claims: warn, default off): costs one config read and, only when
+    # asked for, a scan of each claim's own test files. `off` changes nothing below.
+    from deltafuse.core.config import load_trace_claims_mode
+    from deltafuse.core.fsm import find_repo_root
+
+    trace_repo_root: Path | None = None
+    if load_trace_claims_mode(find_repo_root(path)) == "warn":
+        trace_repo_root = find_repo_root(path)
 
     claims_out: dict[str, Any] = {}
     unmapped: list[str] = []
@@ -434,9 +508,117 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             "evidence": evidence,
             "status": status,
         }
+        if trace_repo_root is not None:
+            claims_out[cid]["tests"] = _claim_covering_tests(path, trace_repo_root, tasks, cid)
     if unmapped:
         raise CoverageError("no slice for claims: " + ", ".join(unmapped))
     return {"change": _change_id(path), "claims": claims_out}
+
+
+# A claim names a method/parameter and the class it belongs to, in either order:
+# "`get_stats` ... on `Limiter`" or "`Limiter` accepts `get_stats`". M02 on Gemma 31B, night
+# of 2026-09-26/27: `TokenBucketLimiter` took `reject_threshold` through a `policy=` object
+# instead of directly - CR-006 said "`TokenBucketLimiter` must accept `reject_threshold`",
+# the second order, and coverage.yaml's own `tests` list called the claim covered anyway
+# (the name existed somewhere in `src/`, just on the wrong class) while six hidden-suite
+# checks failed. Naming a test is not proof the claim's own shape was honoured; this checks
+# the shape directly instead of trusting a test to have checked it.
+_ON_CLASS = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)[^`]*`[^`.]{0,40}\bon\b[^`.]{0,20}`([A-Z][A-Za-z0-9_]*)`")
+_CLASS_HAS = re.compile(
+    r"`([A-Z][A-Za-z0-9_]*)`[^`.]{0,60}\b(?:accepts?|exposes?|takes?|must have|must include|has)\b"
+    r"[^`.]{0,40}`([a-z_][A-Za-z0-9_]*)`"
+)
+_SKIP_DIRS = {".git", ".deltafuse", "__pycache__", "node_modules", ".venv", "venv"}
+
+
+def _python_class_members(repo_root: Path) -> dict[str, set[str]]:
+    """method, `__init__` parameter, and `self.` attribute names per class, from every
+    `*.py` in the product (excluding VCS/tooling noise). Python-specific; a request naming
+    a class in a different language finds nothing and is silently skipped, same as a name
+    with no backticks at all - this is a heuristic, not a verdict."""
+    classes: dict[str, set[str]] = {}
+    for path in repo_root.rglob("*.py"):
+        if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            members = classes.setdefault(node.name, set())
+            for n in node.body:
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    members.add(n.name)
+                    if n.name == "__init__":
+                        members.update(a.arg for a in n.args.args + n.args.kwonlyargs if a.arg != "self")
+                    for inner in ast.walk(n):
+                        if (
+                            isinstance(inner, ast.Attribute)
+                            and isinstance(inner.ctx, ast.Store)
+                            and isinstance(inner.value, ast.Name)
+                            and inner.value.id == "self"
+                        ):
+                            members.add(inner.attr)
+    return classes
+
+
+def _claim_wrong_class(request_text: str, repo_root: Path) -> list[str]:
+    """(name, class) pairs the request puts on a class that does not define, take, or
+    assign that name anywhere - a method, an `__init__` parameter, or a `self.` attribute."""
+    wanted = _ON_CLASS.findall(request_text) + [
+        (name, cls) for cls, name in _CLASS_HAS.findall(request_text)
+    ]
+    if not wanted:
+        return []
+    classes = _python_class_members(repo_root)
+    return sorted(
+        {f"{cls}.{name}" for name, cls in wanted if name not in classes.get(cls, set())}
+    )
+
+
+def claim_trace_warnings(change_path: Path | str) -> list[str]:
+    """P12 (workflow.trace_claims: warn, default off): advisory findings a converged run
+    can otherwise carry silently. Never a gate error, never blocks `converged`.
+
+    - Expectation/Constraint claims `coverage.yaml` has no test naming.
+    - A method/parameter the request puts on a class that does not define it (checked
+      directly against the source; naming a test is not proof the claim's shape held).
+
+    A marker present but the test unrelated, or a class matched by coincidence, is not
+    detectable here; that stays the judge's job until this has run on enough models to
+    trust promoting it.
+    """
+    from deltafuse.core.config import load_trace_claims_mode
+    from deltafuse.core.fsm import find_repo_root
+    from deltafuse.core.integrity import extract_claim_kinds_from_request
+
+    path = Path(change_path)
+    repo_root = find_repo_root(path)
+    if load_trace_claims_mode(repo_root) != "warn":
+        return []
+    request = path / "request.md"
+    if not request.is_file():
+        return []
+    request_text = request.read_text(encoding="utf-8")
+    kinds = extract_claim_kinds_from_request(request_text)
+    try:
+        document = build_coverage_document(path)
+    except CoverageError:
+        return []
+    claims = document.get("claims") or {}
+    warnings: list[str] = []
+    for cid, kind in sorted(kinds.items()):
+        if kind not in ("expectation", "constraint"):
+            continue
+        record = claims.get(cid)
+        tests = record.get("tests") if isinstance(record, dict) else None
+        if not tests:
+            warnings.append(f"claim '{cid}' ({kind}) has no test naming it")
+    for wrong in _claim_wrong_class(request_text, repo_root):
+        warnings.append(f"'{wrong}' is not defined, taken, or assigned by that class")
+    return warnings
 
 
 def write_coverage(change_path: Path | str) -> Path:

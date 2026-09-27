@@ -64,6 +64,23 @@ def classify_failure(log: str, exit_code: int) -> str | None:
     return "fixture-error"
 
 
+def _missing_import_hint(log: str) -> str:
+    """A test that imports what does not exist yet at module level never gets to run.
+
+    gemma-4-31b M02 (2026-09-26) wrote `from ratelimit.stats import StatsStore` at the top
+    of a Red test, was told nine times that the test "could not run", and answered by
+    creating the module in Declare - 25 refusals by the leash for editing product code.
+    """
+    if not any(marker in log for marker in _IMPORT_MARKERS):
+        return ""
+    return (
+        ". A name the test imports at the top of its module does not exist yet, so the file "
+        "cannot even be loaded, and a test that cannot load is not Red. Import it inside "
+        "the test function instead: the test then runs and fails there. Do not create the "
+        "module in this phase - product code is written in Implement"
+    )
+
+
 def _why_not_behavioral(log: str) -> str:
     """The line the classifier read, so a refusal can be acted on.
 
@@ -293,6 +310,17 @@ def run_evidence(
         raise EvidenceRunError(f"Unsupported evidence phase '{phase}'")
     if not argv:
         raise EvidenceRunError("Command argv is required after '--'")
+    if str(argv[0]).startswith("-"):
+        # gemma-334-probe M01: `-- --changed-path X -- pytest` ran `--changed-path`
+        # as a program, recorded exit 127 as a `fixture-error`, and the Worker
+        # spent its attempts editing product code to change a category that
+        # was its own typo.
+        raise EvidenceRunError(
+            f"'{argv[0]}' is an option of `deltafuse evidence`, not a command: options go "
+            "before '--', and only the test command after it "
+            "(`deltafuse evidence <change-dir> --phase red --task <id> [--changed-path P] -- pytest tests/...`); "
+            "nothing was run or recorded"
+        )
 
     if phase == "verification":
         if task is not None and task != "null" and task != "":
@@ -359,6 +387,18 @@ def run_evidence(
 
     report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
+    if phase == "red" and exit_code != 0 and report is not None:
+        # The gate reads this field, and the Core has just judged Red by the
+        # runner's own report. The two must not disagree: in the runs of
+        # 2026-09-25/26, 23 of 44 Red records whose report said "the tests ran
+        # and failed" were still recorded `fixture-error` (the log had no
+        # `assert `), and the `declaring` gate refused them.
+        if red_is_authentic(report)[0]:
+            category = AUTHENTIC_RED_CATEGORY
+        elif category == AUTHENTIC_RED_CATEGORY:
+            # The log mentioned an assertion but nothing ran, or a test could not
+            # run: not a behavioural failure however the log reads.
+            category = "fixture-error"
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":
@@ -434,7 +474,7 @@ def run_evidence(
             red_from_report = True
             ok, why = red_is_authentic(report)
             if not ok:
-                errors.append(f"Red is not authentic: {why}")
+                errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
         elif category != AUTHENTIC_RED_CATEGORY:
             # No machine-readable report from this runner: the old heuristic,
             # marked as such in the record so a weaker verdict is visible.

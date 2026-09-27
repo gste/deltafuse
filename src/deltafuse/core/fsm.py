@@ -23,6 +23,7 @@ from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     validate_coverage_completeness,
+    draft_spec_files,
     validate_spec_ref,
     validate_decision_ref,
     find_unresolved_decisions_for_change,
@@ -182,6 +183,7 @@ def validate_change_package(
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
+    draft_specs = draft_spec_files(repo_root)
 
     change_id: str | None = None
     change_status: str | None = None
@@ -291,7 +293,7 @@ def validate_change_package(
                             errors.append(f"{slice_file.name}: Specification root directory 'docs/spec' not found")
                         else:
                             for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root)
+                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                                 if s_err:
                                     errors.append(f"{slice_file.name}: {s_err}")
 
@@ -334,7 +336,7 @@ def validate_change_package(
                             errors.append(f"{task_file.name}: Specification root directory 'docs/spec' not found")
                         else:
                             for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root)
+                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                                 if s_err:
                                     errors.append(f"{task_file.name}: {s_err}")
 
@@ -433,7 +435,7 @@ def validate_change_package(
                                     f"spec-delta.md: '{sref}' must resolve under docs/spec/"
                                 )
                                 continue
-                            s_err = validate_spec_ref(sref, repo_root)
+                            s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
                             if s_err:
                                 errors.append(f"spec-delta.md: {s_err}")
         except Exception as ex:
@@ -518,7 +520,7 @@ def validate_change_package(
                             errors.append(
                                 f"{ev_file.relative_to(change_path)}: red expected-failure "
                                 f"must have failure_category 'behavioral-mismatch' "
-                                f"(got '{category}')"
+                                f"(got '{category}')" + _red_category_hint(ev_data)
                             )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
@@ -745,7 +747,7 @@ def _validate_evidence_changed_paths_contract(
             write_globs,
             label=f"Gate {gate} {evidence_phase} changed_paths",
         ):
-            errors.append(msg)
+            errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:
             for rel in rel_paths:
                 if is_product_code_path(rel):
@@ -824,6 +826,69 @@ def _validate_spec_delta_matches_disk(
         elif "Path traversal" in s_err:
             errors.append(f"Gate {gate}: {s_err}")
     return errors
+
+
+_RED_WRITES_HINT = (
+    " (Red writes tests only; product code is written in Implement, after Red is recorded)"
+)
+
+
+def _red_category_hint(ev_data: dict) -> str:
+    """Why a Red record is not a behavioural failure, and what is not the fix.
+
+    Gemma read only the category and edited product code to make a test fail on
+    an assertion (gemma-334-probe M01), when the record's own summary said its
+    command had never run.
+    """
+    summary = str(ev_data.get("summary") or "").strip().splitlines()
+    last = summary[-1].strip()[:160] if summary else ""
+    said = f"; the record says: {last}" if last else ""
+    return (
+        f"{said}. The test did not run to a failure: fix the test or the command and "
+        "record Red again. Do not edit product code in this phase - a test that calls an "
+        "API which does not exist yet fails with AttributeError or TypeError, and that "
+        "is a legitimate Red"
+    )
+
+
+def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[str]:
+    """q6 5(b), D7: once the baseline is accepted, a Change does not start on inherited code
+    nobody has characterized.
+
+    A draft whose `code_roots` hold code is that case. A draft whose roots hold nothing is
+    the new capability q8 lets a Worker propose in Analyze - it must not be stopped, and
+    neither must any draft while the baseline is still `draft` (the Bootstrap profile).
+    The test is the code on disk, not only a non-empty list: a proposal may name the
+    directory it means to create.
+    """
+    from deltafuse.core.capability import draft_capabilities
+    from deltafuse.core.leash import load_baseline
+    from deltafuse.core.ownership import capability_code_roots, routed_capabilities
+
+    if load_baseline(repo_root) != "accepted":
+        return []
+    routed = sorted(routed_capabilities(change_path))
+    drafts = draft_capabilities(repo_root, routed)
+    if not drafts:
+        return []
+    roots = capability_code_roots(repo_root)
+    out: list[str] = []
+    for name in drafts:
+        prefixes = roots.get(name) or next(
+            (v for k, v in roots.items() if k.endswith("." + name)), []
+        )
+        for prefix in prefixes:
+            base = repo_root / prefix.rstrip("/")
+            if base.is_dir() and any(
+                p.is_file() and "__pycache__" not in p.parts for p in base.rglob("*")
+            ):
+                out.append(
+                    f"Gate analyzed: capability '{name}' is a draft and its code_roots hold code "
+                    f"({prefix}) that no characterization pins; characterize it first and set it "
+                    "active before routing a Change into it"
+                )
+                break
+    return out
 
 
 def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> list[str]:
@@ -959,6 +1024,61 @@ def check_gate(
     assume_status: str | None = None,
     human: bool = True,
 ) -> list[str]:
+    """Gate errors for a Change, with the cause first when a file was written by hand."""
+    errors = _check_gate(change_dir, gate, registry, assume_status=assume_status, human=human)
+    if not errors:
+        return errors
+    return _hand_written_causes(Path(change_dir), errors) + errors
+
+
+def _hand_written_causes(change_path: Path, errors: list[str]) -> list[str]:
+    """Name the cause once when a hand-written file is what the schema errors are about.
+
+    glm-4.7-flash wrote routing, slices and `change.yaml` by hand: the leash refused them, but
+    the files stayed, and every later gate answered with their schema errors (39 x 3
+    `[deltas -> N] is a required property`, 34 for routing.yaml). A Worker patching those
+    one at a time never learned the file should not exist in that form.
+    """
+    from deltafuse.core.leash import hand_written_errors, structural_kind, vouched_digests
+
+    try:
+        root = find_repo_root(change_path)
+        vouched = vouched_digests(root)
+        rel_dir = change_path.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return []
+    notes: list[str] = []
+    candidates = [change_path / "routing.yaml", change_path / "spec-delta.md"]
+    for folder in ("slices", "tasks"):
+        if (change_path / folder).is_dir():
+            candidates += sorted((change_path / folder).glob("*.md"))
+    for path in candidates:
+        if not path.is_file() or not any(path.name in err for err in errors):
+            continue
+        rel = f"{rel_dir}/{path.relative_to(change_path).as_posix()}"
+        kind = structural_kind(rel)
+        if kind and hand_written_errors(root, rel, head=None, vouched=vouched):
+            notes.append(
+                f"{path.name} was written by hand, not through the Artifact Writer, so the errors "
+                f"about it below are the file's, not yours to patch one by one: delete it and "
+                f"recreate it with `deltafuse artifact write --kind {kind} --change {rel_dir}`"
+            )
+    if sum(1 for err in errors if err.startswith("change.yaml:")) >= 3:
+        notes.append(
+            "change.yaml has several schema errors: its fields are written with "
+            f"`deltafuse artifact write --kind change --change {rel_dir}`, not edited by hand"
+        )
+    return notes
+
+
+def _check_gate(
+    change_dir: Path | str,
+    gate: str,
+    registry: SchemaRegistry | None = None,
+    *,
+    assume_status: str | None = None,
+    human: bool = True,
+) -> list[str]:
     """Gate errors for a Change. ``assume_status`` evaluates the gate as if
     change.yaml held that status, without writing it: the Core asks "would
     this pass once moved?" before it moves anything. ``human=False`` leaves out
@@ -1015,6 +1135,7 @@ def check_gate(
             errors.append(
                 f"Gate analyzed: routing capability '{cap}' has no slice"
             )
+        errors.extend(_uncharacterized_draft_errors(change_path, repo_root))
 
         errors.extend(
             _human_gate_errors(

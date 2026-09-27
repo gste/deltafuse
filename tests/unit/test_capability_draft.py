@@ -132,3 +132,38 @@ def test_the_core_write_leaves_the_digest_that_vouches_for_it(product: Path):
     # The catalog is not a Writer artifact: a human edits it, and that is not
     # a Worker violation.
     assert structural_kind("docs/spec/_capabilities.yaml") is None
+
+
+def test_a_slice_may_cite_the_spec_a_draft_promises(product: Path):
+    """M02 runs 1 and 3 stopped here: the model proposed drafts correctly, then the
+    `analyzed` gate refused every slice for citing a spec Specify has not written."""
+    from deltafuse.core.integrity import draft_spec_files, validate_spec_ref
+
+    propose_capability(
+        product,
+        "monitoring.usage_stats",
+        summary="Counters of accepted and rejected calls",
+        spec="docs/spec/monitoring/usage_stats.md",
+    )
+    drafts = draft_spec_files(product)
+    assert drafts == {"docs/spec/monitoring/usage_stats.md"}
+
+    ref = "docs/spec/monitoring/usage_stats.md#REQ-MON-01"
+    assert "does not exist" in (validate_spec_ref(ref, product) or "")
+    assert validate_spec_ref(ref, product, drafts=drafts) is None
+    # The allowance is for the draft's own file, nothing else that is missing.
+    other = "docs/spec/monitoring/other.md#REQ-X-01"
+    assert "does not exist" in (validate_spec_ref(other, product, drafts=drafts) or "")
+
+
+def test_the_allowance_ends_when_the_human_accepts_the_capability(product: Path):
+    from deltafuse.core.integrity import draft_spec_files, validate_spec_ref
+
+    propose_capability(
+        product, "monitoring.usage_stats", summary="Counters", spec="docs/spec/monitoring/usage_stats.md"
+    )
+    catalog = product / "docs/spec/_capabilities.yaml"
+    catalog.write_text(catalog.read_text(encoding="utf-8").replace("status: draft", "status: active"), encoding="utf-8")
+    drafts = draft_spec_files(product)
+    assert drafts == frozenset()
+    assert validate_spec_ref("docs/spec/monitoring/usage_stats.md#REQ-MON-01", product, drafts=drafts)

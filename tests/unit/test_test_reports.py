@@ -129,3 +129,32 @@ def test_green_must_turn_the_red_tests_green():
     # A Green run of some other test does not close the task.
     other = TestReport("junitxml", {"tests.test_limiter::test_something_else": PASSED})
     assert green_covers_red(red_failed, other) == red_failed
+
+
+def test_an_option_after_the_separator_is_refused_before_anything_runs(tmp_path: Path):
+    """gemma-334-probe M01: `evidence ... -- --changed-path X -- pytest` ran
+    `--changed-path` as a program and recorded exit 127 as a fixture-error."""
+    import pytest
+
+    from deltafuse.core.evidence import EvidenceRunError, run_evidence
+
+    with pytest.raises(EvidenceRunError) as caught:
+        run_evidence(
+            tmp_path,
+            phase="red",
+            task="TASK-001",
+            argv=["--changed-path", "tests/test_limiter.py", "--", "pytest"],
+        )
+    text = str(caught.value)
+    assert "options go before '--'" in text and "nothing was run or recorded" in text
+    assert not any(tmp_path.rglob("*.yaml"))
+
+
+def test_the_gate_repeats_what_the_record_said_and_what_is_not_the_fix():
+    from deltafuse.core.fsm import _red_category_hint
+
+    hint = _red_category_hint({"summary": "[WinError 2] cannot find the file specified"})
+    assert "WinError 2" in hint and "Do not edit product code" in hint
+    assert "AttributeError or TypeError" in hint
+    # A record without a summary still says what to do.
+    assert "Do not edit product code" in _red_category_hint({})

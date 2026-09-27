@@ -558,3 +558,44 @@ def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_r
     assert "docs/changes/*/evidence/red/**" in write
     assert "docs/changes/*/change.yaml" in write
     assert "src/secret.py" not in write
+
+
+def test_a_writer_input_inside_the_change_directory_is_refused_with_the_right_place():
+    """glm47flash-334c: `docs/changes/<id>/.deltafuse/tmp/TASK-001.json` was refused 224
+    times without saying that the scratch directory is the product root's."""
+    from deltafuse.core.leash import check_paths
+
+    envelope = {"step": "decompose", "allowed_write": ["docs/changes/CHG-001/tasks/**"]}
+    inside = check_paths(["docs/changes/CHG-001/.deltafuse/tmp/TASK-001.json"], [envelope], baseline="draft")
+    assert inside and "product root" in inside[0] and "not inside the Change" in inside[0]
+    # The product root's own scratch directory stays exempt.
+    assert check_paths([".deltafuse/tmp/TASK-001.json"], [envelope], baseline="draft") == []
+
+
+def test_a_tasks_evidence_is_judged_by_its_own_step_when_the_step_moved_on(tmp_path: Path, repo_root: Path):
+    """gemma-31b M01 (2026-09-26): green evidence written, the gate advanced and the next step
+    selected inside one Worker turn, `state` called only afterwards. The task file was not
+    dirty, so the receipt chain gave the implement step no task and its evidence was refused
+    as outside the verify envelope."""
+    from deltafuse.core.leash import check_paths, collect_chain_envelopes
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    builder = (
+        MockChangeBuilder(tmp_path, "CHG-501")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+        .step_implement()
+    )
+    evidence = "docs/changes/CHG-501/evidence/green/TASK-001.yaml"
+    assert (tmp_path / evidence).is_file()
+
+    envelopes = collect_chain_envelopes(tmp_path, base=None, dirty=[evidence])
+    assert any(env.get("step") == "implement" for env in envelopes), [e.get("step") for e in envelopes]
+    assert check_paths([evidence], envelopes, baseline="draft", product_root=tmp_path) == []
+
+    # No evidence dirty and no task file dirty: nothing is claimed for the task.
+    quiet = collect_chain_envelopes(tmp_path, base=None, dirty=[])
+    assert not any(env.get("step") == "implement" and env.get("task") for env in quiet)
