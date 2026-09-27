@@ -223,7 +223,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it.
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 3
@@ -305,7 +305,7 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
-After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse archive <change-dir>`. That:
+After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse advance <change-dir> --gate converged` and then `deltafuse archive <change-dir>`. `check-gate` proves content and moves nothing: archive applies only from status `converged`, which `advance` writes. Archiving:
 1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
 2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
 3. Updates `change.yaml` status to `archived`.

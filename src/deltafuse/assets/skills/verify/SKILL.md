@@ -16,7 +16,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 1. If no Change was named, run `deltafuse next --step verify` at the product root and use `path`. Halt if it exits non-zero.
 2. Write only this step's artifacts (see Procedure).
 3. Close with `deltafuse check-gate <change-dir> --gate converged`. Halt if it exits non-zero.
-4. After the gate passes, archive with `deltafuse archive <change-dir>`. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If they chose inspect, or there is no new intake, stop. Merge/push is a Human Gate. Do not git push.
+4. After the gate passes, run `deltafuse advance <change-dir> --gate converged` so the Core stamps the transition; halt if it exits non-zero. `check-gate` proved content and moved nothing - archive with `deltafuse archive <change-dir>` only after that stamp, because it applies only from status `converged`. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If they chose inspect, or there is no new intake, stop. Merge/push is a Human Gate. Do not git push.
 5. Do not auto-accept Decisions or merge.
 
 ## Context
@@ -33,7 +33,7 @@ Read Change/slice summaries, coverage, terminal task states, exact spec referenc
 6. The `converged` gate checks that `spec-delta.md` `added`/`modified` paths still exist under `docs/spec/**` and that `removed` paths are gone; do not treat archive as a spec merge.
 7. Write `verification.md` with a `- Outcome:` line holding exactly one verdict: `converged`, or an exact gap - `tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`. The `converged` gate reads that line, so a gap verdict refuses the gate; the template's placeholder line is not a verdict. Record `deltafuse state <change-dir> --task <task-id> --status verified` for each implemented task. Leave `cancelled` / `superseded` tasks in those terminal statuses; do not fake `implemented`.
 8. For a gap, stop; do not repair it silently.
-9. After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse advance <change-dir> --gate converged`, then archive with `deltafuse archive <change-dir>`. Do not invent a second archive process.
+9. Archive only from status `converged`: `deltafuse check-gate <change-dir> --gate converged` proves the content, the `advance` of Worker step 4 stamps the status, and only then run `deltafuse archive <change-dir>`. Do not invent a second archive process.
 
 Archive is provenance, not default implementation context. Do not delete completed task history.
 
