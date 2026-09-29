@@ -774,11 +774,14 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
 
     Green was matched to Red by test *name* alone, so rewriting the assertion
     during Implement produced an authentic Green and an authentic regression
-    over a product nobody had changed. A record with no `red_oracle` was written
-    before the field existed, or declared no test file, and has nothing to
-    compare against.
+    over a product nobody had changed. A record with `red_oracle_tests` froze
+    the tests Red saw fail (core/oracle.py); one with only `red_oracle` froze
+    the declared files whole and is checked that way. A record with neither was
+    written before the freeze existed, or declared no test file, and has
+    nothing to compare against.
     """
     from deltafuse.core.hasher import compute_red_oracle_digest, oracle_paths
+    from deltafuse.core.oracle import red_oracle_changes
 
     try:
         red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
@@ -786,16 +789,24 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
         return []
     if not isinstance(red, dict):
         return []
-    recorded = red.get("red_oracle")
-    if not isinstance(recorded, str) or not recorded:
-        return []
     paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
-    if compute_red_oracle_digest(repo_root, paths) == recorded:
-        return []
-    frozen = oracle_paths(paths)
+    per_test = red.get("red_oracle_tests")
+    if isinstance(per_test, dict):
+        changes = red_oracle_changes(repo_root, per_test)
+        if not changes:
+            return []
+        what = "; ".join(changes)
+    else:
+        recorded = red.get("red_oracle")
+        if not isinstance(recorded, str) or not recorded:
+            return []
+        if compute_red_oracle_digest(repo_root, paths) == recorded:
+            return []
+        frozen = oracle_paths(paths)
+        what = f"{', '.join(frozen) or 'the declared test files'} changed after Declare"
     return [
         f"the frozen Red oracle behind {label} no longer matches what Red recorded - "
-        f"{', '.join(frozen) or 'the declared test files'} changed after Declare. "
+        f"{what}. "
         "Implement may add tests but must not edit the one Red was taken against: rewriting the "
         "oracle so it passes leaves the product unchanged and proves nothing. Restore the "
         "declared test, or - if the oracle itself was wrong - record Red again with "

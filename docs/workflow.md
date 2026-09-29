@@ -263,7 +263,7 @@ Author the minimal production code necessary to turn the failing test target gre
 - **Forbidden Read Scope**: Unrelated modules and packages.
 
 ### Rules
-1. Author only the production code required to satisfy the test assertions. The oracle Red was taken against is frozen: `evidence/red/<task-id>.yaml` carries `red_oracle`, a content hash of the test files Declare wrote, and a Green recorded over a changed copy of one is refused. Adding new tests is allowed; editing the declared one is not.
+1. Author only the production code required to satisfy the test assertions. The oracle Red was taken against is frozen: `evidence/red/<task-id>.yaml` carries `red_oracle_tests`, and a Green recorded over a changed copy of it is refused. The unit is the test Red saw fail (`tests.failed`), not the file: its definition with decorators, and what it reaches in the declared test files - its class, the fixtures, helpers and imported names it refers to, and the module-level code pytest applies without naming it (`pytestmark`, hooks, autouse fixtures, statements binding no name). Comments, formatting and docstrings do not count. Adding tests, even in the same file, and editing code the frozen test does not reach are allowed. What cannot be split into tests stays frozen whole: a non-Python test file (JVM `src/test/**`, test data) by its bytes, a declared Python module with no tests of its own (`conftest.py`, a helper) by its AST. A Red without a runner report naming failed tests carries the older `red_oracle`, a hash of the declared files, and is checked that way.
 2. Execute the test target and prove it passes via the kernel:
    `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
    Do not hand-write evidence YAML.
@@ -275,7 +275,7 @@ Author the minimal production code necessary to turn the failing test target gre
 - Full regression suite passes without failures.
 - `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
 - On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a requirement that is genuinely already met closes the Change on the no-op path (terminal `not-reproduced`) instead.
-- On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle` from the test files Red declared and refuses a difference, so weakening the assertion during Implement does not produce a Green.
+- On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle_tests` (or, on an older record, `red_oracle`) and refuses a difference, naming the test that moved, so weakening the assertion during Implement does not produce a Green.
 - Task status transitioned to `implemented`.
 
 ---

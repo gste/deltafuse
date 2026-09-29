@@ -17,6 +17,7 @@ import yaml
 from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
+from deltafuse.core.oracle import freeze_red_oracle
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
@@ -436,12 +437,20 @@ def run_evidence(
     if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
     if phase == "red":
-        oracle = compute_red_oracle_digest(repo_root, rel_paths)
-        if oracle:
-            # Freezes the declared oracle at the moment Red is taken: the
-            # implemented gate recomputes it and refuses a Green recorded over a
-            # test rewritten during Implement.
-            payload["red_oracle"] = oracle
+        # Freezes the declared oracle at the moment Red is taken: the
+        # implemented gate recomputes it and refuses a Green recorded over a
+        # test rewritten during Implement. With the runner's report the Core
+        # knows which tests are the oracle and freezes those; without one it
+        # can only freeze the declared files whole, as 3.3.5 first did.
+        red_failed = report.ids(FAILED) if report is not None else []
+        if red_failed:
+            frozen = freeze_red_oracle(repo_root, rel_paths, red_failed)
+            if frozen:
+                payload["red_oracle_tests"] = frozen
+        else:
+            oracle = compute_red_oracle_digest(repo_root, rel_paths)
+            if oracle:
+                payload["red_oracle"] = oracle
 
     if phase == "verification":
         # q4 decision D, phase 1: the code the Change touched against the

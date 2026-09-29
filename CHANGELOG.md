@@ -120,6 +120,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (a test calling an API that does not exist yet fails with `AttributeError` or
   `TypeError`, and that is a legitimate Red); the write-envelope refusals in
   declare say that the phase writes tests only.
+- **The frozen Red oracle is a test, not a file.** The freeze of the declared
+  oracle (`red_oracle`, a hash of whole test files) refused honest edits: a
+  regression test added to the Red file, as Implement is allowed to, the second
+  task's Red written into the same file, a reformat. Red now records
+  `red_oracle_tests`: each test in `tests.failed` with digests of its normalised
+  AST and of what it reaches in the declared test files (class, fixtures, helpers,
+  imported names, `pytestmark`, hooks, autouse fixtures, module-level code). A
+  weakened assertion, a deleted or renamed test, `skip`/`xfail`, a replaced fixture
+  are still refused, and the refusal names the test. Non-Python files and Python
+  modules without tests of their own stay frozen whole; a Red without a runner
+  report, and records written before, keep `red_oracle` and the old check.
 
 ## [3.3.4] - 2026-09-24
 
