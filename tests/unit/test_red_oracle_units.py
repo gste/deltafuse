@@ -11,80 +11,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.core.fsm import frozen_oracle_errors
 from deltafuse.core.hasher import compute_red_oracle_digest
-from deltafuse.core.oracle import freeze_red_oracle
-
-TEST_FILE = "tests/test_limiter.py"
-
-ORACLE = '''"""Limiter oracle."""
-import sys
-
-import pytest
-from limiter import cooldown
-
-
-@pytest.fixture
-def base():
-    return 30
-
-
-def helper():
-    return 1
-
-
-def test_cooldown(base):
-    """Cooldown is at least the base."""
-    assert cooldown() >= base
-
-
-@pytest.mark.parametrize("n", [1, 2])
-def test_cooldown_scales(n):
-    assert cooldown() * n >= 30 * n
-
-
-class TestWindow:
-    limit = 30
-
-    def test_window(self):
-        assert cooldown() >= self.limit
-
-    def test_other(self):
-        assert True
-'''
-
-FAILED = [
-    "tests.test_limiter::test_cooldown",
-    "tests.test_limiter::test_cooldown_scales[1]",
-    "tests.test_limiter::test_cooldown_scales[2]",
-    "tests.test_limiter.TestWindow::test_window",
-]
-
-
-def _freeze(root: Path, files: dict[str, str], failed: list[str], declared: list[str] | None = None) -> Path:
-    for rel, text in files.items():
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-    declared = declared if declared is not None else list(files)
-    record = {"phase": "red", "changed_paths": declared}
-    frozen = freeze_red_oracle(root, declared, failed)
-    assert frozen is not None
-    record["red_oracle_tests"] = frozen
-    red_file = root / "red.yaml"
-    red_file.write_text(yaml.safe_dump(record), encoding="utf-8")
-    return red_file
-
-
-def _errors(root: Path, red_file: Path) -> list[str]:
-    return frozen_oracle_errors(red_file, root, "green evidence 'TASK-001.yaml'")
-
-
-def _edit(root: Path, old: str, new: str, rel: str = TEST_FILE) -> None:
-    path = root / rel
-    text = path.read_text(encoding="utf-8")
-    assert old in text, old
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+from tests.fixtures.oracle_freeze import FAILED, ORACLE, TEST_FILE
+from tests.fixtures.oracle_freeze import edit as _edit
+from tests.fixtures.oracle_freeze import errors as _errors
+from tests.fixtures.oracle_freeze import freeze as _freeze
 
 
 @pytest.fixture
@@ -216,36 +147,21 @@ def test_ids_are_matched_when_pytest_rootdir_is_not_the_product_root(tmp_path: P
 # --- what is frozen whole ------------------------------------------------------
 
 def test_a_file_the_core_cannot_split_keeps_the_file_hash(tmp_path: Path):
-    java = "src/test/java/LimiterTest.java"
-    source = "class LimiterTest {\n  @Test void cooldown() { assertTrue(c() >= 30); }\n}\n"
-    red = _freeze(tmp_path, {java: source}, ["LimiterTest::cooldown"])
+    data = "tests/data/expected.json"
+    red = _freeze(tmp_path, {TEST_FILE: ORACLE, data: '{"cooldown": 30}\n'}, FAILED)
     record = yaml.safe_load(red.read_text(encoding="utf-8"))["red_oracle_tests"]
-    assert record["files"][0]["form"] == "bytes" and record["tests"] == []
+    assert [(f["path"], f["form"]) for f in record["files"]] == [(data, "bytes")]
     assert _errors(tmp_path, red) == []
-    _edit(tmp_path, "}\n}\n", "}\n  @Test void more() {}\n}\n", rel=java)
+    _edit(tmp_path, "30", "0", rel=data)
     errs = _errors(tmp_path, red)
-    assert errs and f"{java} changed" in errs[0], errs
-
-
-def test_a_support_module_without_tests_is_frozen_whole_but_not_its_formatting(tmp_path: Path):
-    conftest = "tests/conftest.py"
-    red = _freeze(
-        tmp_path,
-        {TEST_FILE: ORACLE, conftest: "import pytest\n\n\n@pytest.fixture\ndef window():\n    return 30\n"},
-        FAILED,
-    )
-    _edit(tmp_path, "def window():", "def window():  # seconds", rel=conftest)
-    assert _errors(tmp_path, red) == []
-    _edit(tmp_path, "    return 30\n", "    return 30\n\n\n@pytest.fixture\ndef extra():\n    return 1\n", rel=conftest)
-    errs = _errors(tmp_path, red)
-    assert errs and f"{conftest} changed" in errs[0], errs
+    assert errs and f"{data} changed" in errs[0], errs
 
 
 def test_a_named_test_the_core_cannot_find_freezes_its_module_whole(tmp_path: Path):
     source = "import pytest\n\nfor n in (1, 2):\n    globals()[f'test_{n}'] = lambda: None\n"
     red = _freeze(tmp_path, {TEST_FILE: source}, ["tests.test_limiter::test_1"])
     record = yaml.safe_load(red.read_text(encoding="utf-8"))["red_oracle_tests"]
-    assert record["files"] == [record["files"][0]] and record["files"][0]["form"] == "ast"
+    assert len(record["files"]) == 1 and record["files"][0]["form"] == "ast"
     _edit(tmp_path, "(1, 2)", "(1, 2, 3)")
     assert _errors(tmp_path, red)
 

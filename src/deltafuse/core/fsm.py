@@ -792,7 +792,7 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
     paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
     per_test = red.get("red_oracle_tests")
     if isinstance(per_test, dict):
-        changes = red_oracle_changes(repo_root, per_test)
+        changes = red_oracle_changes(repo_root, per_test, paths)
         if not changes:
             return []
         what = "; ".join(changes)
@@ -811,6 +811,61 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
         "oracle so it passes leaves the product unchanged and proves nothing. Restore the "
         "declared test, or - if the oracle itself was wrong - record Red again with "
         "`deltafuse evidence --phase red` and take it from there"
+    ]
+
+
+def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
+    """The frozen tests must pass on their own, not only inside the Worker's run.
+
+    The freeze holds the oracle's source fixed, but a new test in the same file
+    can still change what it sees at run time - patch the product module, fill
+    a cache - and a command-line option can load a plugin that does. So Green
+    also runs the frozen tests alone (evidence `oracle_isolation`), and a Green
+    whose runner reported tests but carries no isolated run was not recorded
+    by this Core, or skipped it.
+    """
+    from deltafuse.core.oracle import frozen_test_ids
+
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or not isinstance(green, dict):
+        return []
+    frozen = red.get("red_oracle_tests")
+    if not isinstance(frozen, dict) or frozen.get("version") is None:
+        return []
+    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
+    expected = frozen_test_ids(frozen, [str(t) for t in red_tests.get("failed") or []])
+    if not expected:
+        return []
+    isolation = green.get("oracle_isolation")
+    if not isinstance(isolation, dict):
+        if isinstance(green.get("tests"), dict) and green.get("exit_code") == 0:
+            return [
+                f"{label} has no isolated run of the frozen Red tests: record Green again with "
+                "`deltafuse evidence --phase green`, which runs them on their own"
+            ]
+        return []
+    not_passing = [str(t) for t in isolation.get("not_passing") or []]
+    if not not_passing:
+        return []
+    green_tests = green.get("tests") if isinstance(green.get("tests"), dict) else {}
+    passed_in_green = {str(t) for t in green_tests.get("passed") or []}
+    if not passed_in_green & set(not_passing):
+        # Green's own run did not pass them either (it ran other tests), so
+        # nothing "helped" them - they simply do not pass yet.
+        return [
+            f"the frozen Red tests behind {label} do not pass: {not_passing[:5]} - neither "
+            "Green's own run nor the run of those tests alone passed them. Make the product "
+            "pass the tests Red recorded, and record Green over them"
+        ]
+    return [
+        f"the frozen Red tests behind {label} do not pass on their own: {not_passing[:5]}. "
+        "They passed in the full run only because something else in it made them pass - a "
+        "test that patches the product or leaves state behind, or an option on the command "
+        "line. Make the product pass them by itself"
     ]
 
 
@@ -1404,6 +1459,12 @@ def _check_gate(
                         f"Gate implemented: {e}"
                         for e in frozen_oracle_errors(
                             red_file, repo_root, f"green evidence '{green_file.name}'"
+                        )
+                    )
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in isolation_errors(
+                            red_file, green_file, f"green evidence '{green_file.name}'"
                         )
                     )
 

@@ -164,3 +164,113 @@ def test_weakening_the_frozen_test_is_still_refused_and_names_it(tmp_path: Path,
     set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
     errs = _frozen(check_gate(builder.change_dir, "implemented"))
     assert errs and named in errs[0], errs
+
+
+def test_a_green_that_passes_only_because_another_test_patched_the_product_is_refused(
+    tmp_path: Path, repo_root: Path
+):
+    """What the freeze cannot see at rest: a new test in the same file, run
+    first, patches the product module the frozen test calls. The frozen test's
+    source is intact and the full run passes; run alone, it does not."""
+    builder = _product(tmp_path, repo_root, "CHG-163", ["TASK-001"])
+    test_file = tmp_path / "tests" / "test_limiter.py"
+    oracle = (
+        "import sys\nsys.path.insert(0, 'src')\nimport limiter\n"
+        "\n\ndef test_cooldown_is_at_least_thirty():\n    assert limiter.cooldown() >= 30\n"
+    )
+    test_file.write_text(oracle, encoding="utf-8")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"), changed_paths=["tests/test_limiter.py"],
+    )
+    assert red.authentic, red.errors
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    test_file.write_text(
+        oracle.replace(
+            "\n\ndef test_cooldown",
+            "\n\ndef test_a_setup():\n    limiter.cooldown = lambda: 30\n\n\ndef test_cooldown",
+        ),
+        encoding="utf-8",
+    )
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"), changed_paths=["tests/test_limiter.py"],
+    )
+    assert _frozen(green.errors) == []  # the source of the oracle is intact
+    assert green.payload["oracle_isolation"]["not_passing"] == [
+        "tests.test_limiter::test_cooldown_is_at_least_thirty"
+    ]
+    assert not green.authentic
+    assert any("do not pass on their own" in e for e in green.errors), green.errors
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("do not pass on their own" in e for e in errs), errs
+
+    # Fixing the product instead closes it, the extra test may stay.
+    _fix_product(tmp_path)
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"),
+        changed_paths=["tests/test_limiter.py", "src/limiter.py"],
+    )
+    assert green.authentic, green.errors
+    assert green.payload["oracle_isolation"]["not_passing"] == []
+    assert not [e for e in check_gate(builder.change_dir, "implemented") if "on their own" in e]
+
+
+def test_an_option_on_the_green_command_line_does_not_reach_the_isolated_run(
+    tmp_path: Path, repo_root: Path
+):
+    """`-p plugin` on the Worker's command line loads code next to the oracle;
+    the isolated run drops it."""
+    builder = _product(tmp_path, repo_root, "CHG-164", ["TASK-001"])
+    (tmp_path / "tests" / "test_limiter.py").write_text(HEADER + RED_TEST, encoding="utf-8")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"), changed_paths=["tests/test_limiter.py"],
+    )
+    assert red.authentic, red.errors
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    (tmp_path / "cheat.py").write_text(
+        "import sys\nsys.path.insert(0, 'src')\nimport limiter\nlimiter.cooldown = lambda: 30\n",
+        encoding="utf-8",
+    )
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest("-p", "cheat", "tests/test_limiter.py"),
+        changed_paths=["tests/test_limiter.py", "cheat.py"],
+    )
+    assert green.payload["exit_code"] == 0, green.payload.get("summary")
+    assert green.payload["oracle_isolation"]["not_passing"], green.payload["oracle_isolation"]
+    assert not green.authentic
+
+
+def test_a_green_over_other_tests_does_not_close_the_gate(tmp_path: Path, repo_root: Path):
+    """Before the isolated run, the implemented gate accepted a Green recorded
+    over a different test: `green_covers_red` was checked only when the
+    evidence was written, and the record was written anyway. The isolated run
+    re-runs the frozen tests, so the gate now sees they do not pass."""
+    builder = _product(tmp_path, repo_root, "CHG-165", ["TASK-001"])
+    (tmp_path / "tests" / "test_limiter.py").write_text(HEADER + RED_TEST, encoding="utf-8")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"), changed_paths=["tests/test_limiter.py"],
+    )
+    assert red.authentic, red.errors
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    (tmp_path / "tests" / "test_other.py").write_text("def test_other():\n    assert True\n", encoding="utf-8")
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest("tests/test_other.py"),
+        changed_paths=["tests/test_limiter.py", "tests/test_other.py"],
+    )
+    assert not green.authentic
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("neither Green's own run nor the run of those tests alone" in e for e in errs), errs
