@@ -7,9 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.3.5] - 2026-09-27
+## [3.3.6] - 2026-09-30
 
 ### Added
+
+- **`advance` runs the write leash itself (audit F7).** Nothing in the lifecycle asked whether the
+  write envelope had been checked: it was a command the Worker chose to run, or a git hook that
+  fires on commit. `deltafuse advance` now checks the diff against the step's envelope before it
+  writes the receipt, when `workflow.leash` is `advisory` or `enforce`. Advisory reports the
+  violations (in the result, on stderr and in the journal) and the transition still happens;
+  enforce refuses it and writes nothing. A product with no git or no commit is reported
+  `checked: false` with the reason and is not blocked. A fresh `init` now writes `workflow.leash:
+  advisory` (it was `off`); `off` still turns both the check and the hook off. Advisory never blocks a
+  commit, including the first one of a product that has no HEAD yet.
+- **`dir/*` as a capability code root (q6).** A `code_roots` entry `dir/*` owns the files lying
+  directly in `dir`, not its subdirectories, so a directory whose subdirectories belong to another
+  capability can give its own files an owner (`markdown/*` beside `markdown/extensions/`). It was
+  a no-op before. Ownership, the disjoint-roots rule and the draft-with-inherited-code stop all read
+  it; `dir/*` overlaps only the same `dir/*` and a tree root that is `dir` or above it.
 
 - **`next --json` says how the Human Gate is answered.** A decision or spec `halt` now carries
   `human_check` (`none` or `password`). With no Human Gate password the prompt says to show the
@@ -18,6 +33,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands for the human to run in a terminal; the run skill stops there instead of offering buttons.
   A `decide` refused for lack of a terminal prints the command to type. Optional properties of halt
   contract v1, no bump.
+
+- **The frozen Red oracle is a test, not a file.** The freeze of the declared
+  oracle (`red_oracle`, a hash of whole test files) refused honest edits: a
+  regression test added to the Red file, as Implement is allowed to, the second
+  task's Red written into the same file, a reformat. Red now records
+  `red_oracle_tests` (format 2): each test in `tests.failed` with digests of its
+  normalised AST and of what it relies on in its module (class, fixtures,
+  helpers, imported names, `pytestmark`, hooks, autouse fixtures), plus every
+  `conftest.py` on its path and the other declared modules, whole. A weakened
+  assertion, a deleted or renamed test, `skip`/`xfail`, a replaced fixture, an
+  edited or added `conftest.py` on the path are still refused, and the refusal
+  names the test or the file. Green also runs the frozen tests on their own with
+  pytest (`oracle_isolation`), so a new test that patches the product, or `-p
+  plugin` on the command line, no longer carries them. Java is frozen per file,
+  not per method, until per-method freezing is verified on a real Maven/Gradle
+  run. A Red without a runner report keeps `red_oracle` and the old check.
+
+### Fixed
+
+- Audit fixes (F1-F13, F16-F18), one commit each with its root cause: `archive` requires the
+  `converged` transition, not only the gate's content (F1); an already-green Red cannot carry the
+  `implemented` gate (F2); the `converged` gate reads the `Outcome:` verdict of `verification.md` (F3);
+  `decide --spec` validates before it records an acceptance (F6); Declare may write the stub its task
+  declared, which a compiled-language Red needs (F8); the Artifact Writer accepts a slice citing the
+  spec a draft capability promises (F9); proposing a specification no longer waits on a catalog only
+  the human can accept (F10); `leash` in a repo with no commits names the missing commit (F11);
+  `.deltafuse/bench.yaml` is Core-owned (F13); three skill sentences that read as the opposite of the
+  Core's contract are reworded (F16-F18).
+
+## [3.3.5] - 2026-09-27
+
+### Added
 
 - **`workflow.trace_claims: warn` (P12, experiment, default off).** A converged run can
   still miss a claim of the request: M02 on Gemma 31B reached `converged` with Verify
@@ -128,22 +175,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (a test calling an API that does not exist yet fails with `AttributeError` or
   `TypeError`, and that is a legitimate Red); the write-envelope refusals in
   declare say that the phase writes tests only.
-- **The frozen Red oracle is a test, not a file.** The freeze of the declared
-  oracle (`red_oracle`, a hash of whole test files) refused honest edits: a
-  regression test added to the Red file, as Implement is allowed to, the second
-  task's Red written into the same file, a reformat. Red now records
-  `red_oracle_tests` (format 2): each test in `tests.failed` with digests of its
-  normalised AST and of what it relies on in its module (class, fixtures,
-  helpers, imported names, `pytestmark`, hooks, autouse fixtures), plus every
-  `conftest.py` on its path and the other declared modules, whole. A weakened
-  assertion, a deleted or renamed test, `skip`/`xfail`, a replaced fixture, an
-  edited or added `conftest.py` on the path are still refused, and the refusal
-  names the test or the file. Green also runs the frozen tests on their own with
-  pytest (`oracle_isolation`), so a new test that patches the product, or `-p
-  plugin` on the command line, no longer carries them. Java is frozen per file,
-  not per method, until per-method freezing is verified on a real Maven/Gradle
-  run. A Red without a runner report keeps `red_oracle` and the old check.
-
 ## [3.3.4] - 2026-09-24
 
 ### Added
