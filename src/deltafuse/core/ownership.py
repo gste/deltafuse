@@ -26,14 +26,55 @@ from deltafuse.core.context import posix_relpath
 from deltafuse.core.leash import is_exempt_path
 
 
+DIRECT_SUFFIX = "/*"
+
+
+def is_direct_root(root: str) -> bool:
+    """`dir/*`: the files lying directly in `dir`, not the tree below it."""
+    return root.endswith(DIRECT_SUFFIX)
+
+
 def _root_prefix(raw: str) -> str:
-    """`src/ratelimit`, `src/ratelimit/`, `src/ratelimit/**` -> `src/ratelimit/`."""
+    """`src/ratelimit`, `src/ratelimit/`, `src/ratelimit/**` -> `src/ratelimit/`.
+
+    `src/ratelimit/*` stays as it is: a direct root (q6), which owns the files in
+    that one directory and nothing below it. Fuse-Back splits a directory whose
+    subdirectories belong to another capability; its own files need an owner too.
+    """
     text = posix_relpath(str(raw)).rstrip("/")
     if text.endswith("/**"):
         text = text[:-3]
     elif text.endswith("**"):
         text = text[:-2].rstrip("/")
+    elif text.endswith(DIRECT_SUFFIX):
+        head = text[: -len(DIRECT_SUFFIX)].rstrip("/")
+        return head + DIRECT_SUFFIX if head else ""
     return text.rstrip("/") + "/" if text else ""
+
+
+def root_owns(root: str, rel: str) -> bool:
+    """Whether a normalised root (`_root_prefix`) owns the repository-relative path."""
+    if is_direct_root(root):
+        head = root[: -len(DIRECT_SUFFIX)] + "/"
+        return rel.startswith(head) and "/" not in rel[len(head):]
+    return rel.startswith(root)
+
+
+def roots_overlap(a: str, b: str) -> bool:
+    """Whether two normalised roots can own the same path.
+
+    A tree root `P/` contains everything under it; a direct root `D/*` holds only
+    what lies in `D`. Two direct roots meet only on the same directory, and a
+    direct root meets a tree root when the tree is `D` itself or one of its
+    ancestors.
+    """
+    direct_a, direct_b = is_direct_root(a), is_direct_root(b)
+    if direct_a and direct_b:
+        return a == b
+    if direct_a or direct_b:
+        direct, tree = (a, b) if direct_a else (b, a)
+        return (direct[: -len(DIRECT_SUFFIX)] + "/").startswith(tree)
+    return a.startswith(b) or b.startswith(a)
 
 
 def capability_code_roots(product_root: Path | str) -> dict[str, list[str]]:
@@ -56,7 +97,7 @@ def capability_code_roots(product_root: Path | str) -> dict[str, list[str]]:
 
 def owners(path: str, roots: dict[str, list[str]]) -> frozenset[str]:
     rel = posix_relpath(path)
-    return frozenset(cap for cap, prefixes in roots.items() if any(rel.startswith(p) for p in prefixes))
+    return frozenset(cap for cap, prefixes in roots.items() if any(root_owns(p, rel) for p in prefixes))
 
 
 def routed_capabilities(change_path: Path | str) -> set[str]:

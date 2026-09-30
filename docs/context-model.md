@@ -116,6 +116,8 @@ Each capability must strictly specify:
 2. Code roots and test suites implementing it (`code_roots`, `test_roots`);
 3. Dependent capabilities and applicable policies (`depends_on`, `policies`).
 
+A `code_roots` entry is a directory prefix: `src/ratelimit`, `src/ratelimit/` and `src/ratelimit/**` all own the whole tree below it. `dir/*` owns only the files lying directly in `dir`, not its subdirectories, so a directory whose subdirectories belong to another capability can still give its own files an owner (`markdown/*` beside `markdown/extensions/`). Active capabilities' roots must not overlap: `dir/*` overlaps the same `dir/*` and a tree root that is `dir` or one of its ancestors, not `dir/sub/`. A draft whose `dir/*` root holds a file directly in `dir` stops a Change at `analyzed`, as for any inherited code.
+
 ---
 
 ## Change Slicing

@@ -104,3 +104,32 @@ def test_without_code_roots_or_git_nothing_is_measured(tmp_path: Path):
     (bare / "docs" / "spec" / "_capabilities.yaml").write_text("schema_version: 3\ndomains: {}\n", encoding="utf-8")
     record = under_routing(bare, bare / "docs" / "changes" / "CHG-1")
     assert record["measurable"] is False and record["reason"] == "catalog declares no code_roots"
+
+
+def test_a_direct_root_owns_the_files_in_the_directory_and_not_below_it():
+    """q6 `dir/*`: Fuse-Back split markdown/ so its extensions got their own
+    capability, and the 13 files of the core were left with no owner."""
+    roots = {"app.core": ["markdown/*"], "app.ext": ["markdown/extensions/"]}
+    assert _root_prefix("markdown/*") == "markdown/*"
+    assert owners("markdown/core.py", roots) == {"app.core"}
+    assert owners("markdown/extensions/toc.py", roots) == {"app.ext"}
+    assert owners("markdown/sub/deep/x.py", roots) == frozenset()
+    # a root spelled as a directory keeps meaning the whole tree
+    assert owners("markdown/sub/x.py", {"app.all": ["markdown"]}) == {"app.all"}
+
+
+def test_under_routing_names_the_owner_of_a_direct_file_but_not_of_a_subdirectory_file(tmp_path: Path):
+    root = _product(tmp_path, {"app.audit": ["src/audit"]}, {"app.audit": []})
+    caps = {
+        "core": {"summary": "core", "spec": [], "code_roots": ["pkg/*"]},
+        "ext": {"summary": "ext", "spec": [], "code_roots": ["pkg/ext/"]},
+    }
+    (root / "docs" / "spec" / "_capabilities.yaml").write_text(
+        yaml.safe_dump({"schema_version": 3, "domains": {"app": {"summary": "App", "capabilities": caps}}}),
+        encoding="utf-8",
+    )
+    _touch(root, "pkg/util.py")
+    _touch(root, "pkg/other/x.py")
+    record = under_routing(root, root / CHANGE)
+    assert record["unrouted"] == {"app.core": ["pkg/util.py"]}
+    assert record["unowned"] == ["pkg/other/x.py"]

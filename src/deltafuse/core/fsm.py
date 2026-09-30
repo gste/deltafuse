@@ -1059,7 +1059,12 @@ def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[st
     """
     from deltafuse.core.capability import draft_capabilities
     from deltafuse.core.leash import load_baseline
-    from deltafuse.core.ownership import capability_code_roots, routed_capabilities
+    from deltafuse.core.ownership import (
+        DIRECT_SUFFIX,
+        capability_code_roots,
+        is_direct_root,
+        routed_capabilities,
+    )
 
     if load_baseline(repo_root) != "accepted":
         return []
@@ -1074,9 +1079,12 @@ def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[st
             (v for k, v in roots.items() if k.endswith("." + name)), []
         )
         for prefix in prefixes:
-            base = repo_root / prefix.rstrip("/")
+            direct = is_direct_root(prefix)
+            base = repo_root / (prefix[: -len(DIRECT_SUFFIX)] if direct else prefix.rstrip("/"))
+            # A direct root `dir/*` holds only the files lying in `dir`; a tree root, all below.
+            candidates = base.iterdir() if direct and base.is_dir() else base.rglob("*")
             if base.is_dir() and any(
-                p.is_file() and "__pycache__" not in p.parts for p in base.rglob("*")
+                p.is_file() and "__pycache__" not in p.parts for p in candidates
             ):
                 out.append(
                     f"Gate analyzed: capability '{name}' is a draft and its code_roots hold code "

@@ -47,11 +47,12 @@ def validate_active_code_roots(product_root: Path | str) -> list[str]:
     The under-routing detector (q4) maps a diff to capabilities through their
     roots; when two active capabilities share one it cannot tell whose the change
     is (bench case M02: three capabilities, one `src/ratelimit`). Compared as
-    directory prefixes, the way ownership reads them. Draft, deprecated and
+    directory prefixes, the way ownership reads them (`dir/*`, the files lying directly
+    in `dir`, meets only the same `dir/*` and a tree root that is `dir` or above it). Draft, deprecated and
     removed capabilities are exempt, so a partial adoption is not blocked.
     """
     from deltafuse.core.integrity import load_capability_catalog
-    from deltafuse.core.ownership import _root_prefix
+    from deltafuse.core.ownership import _root_prefix, roots_overlap
 
     catalog, load_errors = load_capability_catalog(Path(product_root))
     if load_errors or not isinstance(catalog, dict):
@@ -70,7 +71,7 @@ def validate_active_code_roots(product_root: Path | str) -> list[str]:
     errors: list[str] = []
     for i, (cap_a, root_a) in enumerate(claims):
         for cap_b, root_b in claims[i + 1:]:
-            if cap_a != cap_b and (root_a.startswith(root_b) or root_b.startswith(root_a)):
+            if cap_a != cap_b and roots_overlap(root_a, root_b):
                 errors.append(
                     f"catalog: active capabilities '{cap_a}' and '{cap_b}' overlap in code_roots "
                     f"('{root_a}' and '{root_b}'): a change cannot be routed back to one owner; "
