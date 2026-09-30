@@ -337,7 +337,7 @@ def install(
         except Exception:
             pass
 
-    call_width, auto_accept, workflow_errors = workflow_from_mapping(config_dict)
+    auto_accept, workflow_errors = workflow_from_mapping(config_dict)
     if workflow_errors:
         raise InstallationError("Invalid .deltafuse/config.yaml workflow: " + "; ".join(workflow_errors))
 
@@ -396,7 +396,6 @@ def install(
             version=version,
             source=effective_source,
             content_hash=content_hash,
-            call_width=call_width,
             auto_accept_decisions=auto_accept,
         ),
         encoding="utf-8",
@@ -439,7 +438,6 @@ def install(
                 version=version,
                 source=effective_source,
                 content_hash=content_hash,
-                call_width=call_width,
                 auto_accept_decisions=auto_accept,
             ),
             encoding="utf-8",

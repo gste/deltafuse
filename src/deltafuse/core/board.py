@@ -11,7 +11,6 @@ import yaml
 
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import VALID_CHANGE_STATUSES, find_repo_root
-from deltafuse.core.lock import DEFAULT_CALL_WIDTH, normalize_call_width
 
 BOARD_SCHEMA_VERSION = 1
 
@@ -232,14 +231,8 @@ def _product_block(
     fw = lock.get("framework") if isinstance(lock.get("framework"), dict) else {}
     version = fw.get("version")
     content_hash = fw.get("content_hash")
-    lock_workflow = lock.get("workflow") if isinstance(lock.get("workflow"), dict) else {}
-    cfg_workflow = config.get("workflow") if isinstance(config.get("workflow"), dict) else {}
-    width = normalize_call_width(lock_workflow.get("call_width")) or normalize_call_width(
-        cfg_workflow.get("call_width")
-    )
     product: dict[str, Any] = {
         "baseline": baseline,
-        "call_width": width or DEFAULT_CALL_WIDTH,
         "changes_path": paths["changes"],
         "archive_changes_path": paths["archive"],
     }

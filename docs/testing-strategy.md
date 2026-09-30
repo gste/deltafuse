@@ -145,7 +145,7 @@ deltafuse/
   - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
   - **PP-06 / KI-07 / declaring**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
-  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage), wide не склеивает срезы; routing первым шагом. Specify для feature не снимается.
+  - **Q-001 / analyzed**: гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage); routing первым шагом. `workflow.call_width` убран в 3.3.6. Specify для feature не снимается.
   - **AN-001 / analyzed**: каждый distinct `primary_capability` в `routing.yaml` покрыт slice-файлом с тем же полем; один `SLICE-01` на две capability валит `analyzed`.
   - **AN-002 / analyzed**: `deltafuse coverage` пишет матрицу из routing+slices; unknown top-level keys на `coverage.yaml` не валят гейт; воркер не hand-write YAML.
   - **AN-003 / specified**: `next` один срез Specify; spec-delta added/modified только в slice `spec_refs`; F-010 live spec не снимается.
@@ -169,7 +169,7 @@ deltafuse/
   - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
   - Флаг `--force` обновляет только управляемые фреймворком файлы.
 * **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
-  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.call_width`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
+  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.auto_accept_decisions`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
 

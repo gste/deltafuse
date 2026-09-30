@@ -63,21 +63,17 @@ def test_linked_skill_not_a_symlink_detected(tmp_path: Path, repo_root: Path):
     assert any("Generated skill is not a symlink: .agents/skills/intake" in e for e in errors)
 
 
-def test_invalid_call_width_detected(tmp_path: Path, repo_root: Path):
+def test_a_retired_call_width_is_not_a_layout_error(tmp_path: Path, repo_root: Path):
+    """F14: an older lock or config may still carry `workflow.call_width`, whatever
+    its value or whether the two agree; nothing reads it, so nothing checks it."""
     install(target_dir=tmp_path, framework_root=repo_root)
     lock_file = tmp_path / ".deltafuse" / "lock.yaml"
     lock = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
     lock["workflow"]["call_width"] = "ornith"
     lock_file.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
-    errors = validate_product_layout(tmp_path)
-    assert any("call_width" in e for e in errors)
-
-
-def test_call_width_mismatch_detected(tmp_path: Path, repo_root: Path):
-    install(target_dir=tmp_path, framework_root=repo_root)
     cfg_path = tmp_path / ".deltafuse" / "config.yaml"
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     cfg["workflow"]["call_width"] = "narrow"
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     errors = validate_product_layout(tmp_path)
-    assert any("does not match locked call_width" in e for e in errors)
+    assert not any("call_width" in e for e in errors), errors

@@ -33,12 +33,12 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert (tmp_path / ".deltafuse" / "config.yaml").is_file()
     assert (tmp_path / ".deltafuse" / "lock.yaml").is_file()
     lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "wide"
+    assert "call_width" not in lock["workflow"]
     assert lock["workflow"]["auto_accept_decisions"] is False
     cfg = yaml.safe_load((tmp_path / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["framework"]["version"] == result.version
     assert cfg["framework"]["source"] == f"deltafuse://v{result.version}"
-    assert cfg["workflow"]["call_width"] == "wide"
+    assert "call_width" not in cfg["workflow"]
     assert cfg["workflow"]["leash"] == "advisory"
     assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
     workflow = (tmp_path / ".github" / "workflows" / "deltafuse-leash.yml").read_text(encoding="utf-8")
@@ -147,28 +147,21 @@ def test_force_upgrade_with_modified_lock(tmp_path: Path, repo_root: Path):
     result = install(target_dir=tmp_path, force=True, framework_root=repo_root)
     assert f"content_hash: sha256:{result.content_hash}" in lock_file.read_text(encoding="utf-8")
     lock = yaml.safe_load(lock_file.read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "wide"
+    assert "call_width" not in lock["workflow"]
 
 
-def test_install_pins_narrow_call_width_from_config(tmp_path: Path, repo_root: Path):
+def test_install_ignores_a_retired_call_width_in_config(tmp_path: Path, repo_root: Path):
+    """F14: `workflow.call_width` did nothing; a config that still has it, valid or
+    not, installs, and the lock does not carry it."""
     install(target_dir=tmp_path, framework_root=repo_root)
     cfg_path = tmp_path / ".deltafuse" / "config.yaml"
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    cfg["workflow"]["call_width"] = "narrow"
-    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    install(target_dir=tmp_path, framework_root=repo_root)
-    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "narrow"
-
-
-def test_install_rejects_invalid_call_width(tmp_path: Path, repo_root: Path):
-    install(target_dir=tmp_path, framework_root=repo_root)
-    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
-    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    cfg["workflow"]["call_width"] = "ornith"
-    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    with pytest.raises(InstallationError, match="call_width"):
-        install(target_dir=tmp_path, framework_root=repo_root)
+    for value in ("narrow", "ornith"):
+        cfg["workflow"]["call_width"] = value
+        cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+        install(target_dir=tmp_path, force=True, framework_root=repo_root)
+        lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
+        assert "call_width" not in lock["workflow"]
 
 
 def _nested_product(tmp_path: Path, repo_root: Path) -> tuple[Path, Path]:

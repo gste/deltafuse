@@ -105,7 +105,6 @@ Values under `layout` are producer-owned. The consumer treats them as data.
     "baseline": "accepted",
     "framework_version": "<framework-version>",
     "framework_content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "call_width": "wide",
     "changes_path": "docs/changes",
     "archive_changes_path": "docs/archive/changes"
   },

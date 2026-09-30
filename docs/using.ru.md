@@ -50,7 +50,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 ```
 
-`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`). `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и профиль ширины вызова Analyze. После смены `call_width` перезапустите инсталлятор, чтобы lock совпал с config.
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.leash` и `workflow.auto_accept_decisions`. `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и `auto_accept_decisions`. После смены `auto_accept_decisions` перезапустите инсталлятор, чтобы lock совпал с config. (`workflow.call_width` убран в 3.3.6; старый config или lock с ним принимается и игнорируется.)
 
 Для framework release файл `VERSION` является единственным machine-readable источником версии. Package metadata читает его динамически, а installer templates содержат schema-valid marker `0.0.0`, который каждый installer заменяет значением из `VERSION`. Поэтому version bump меняет `VERSION` и человекочитаемую release-запись в `CHANGELOG.md`; generated assets синхронизируются без встраивания номера релиза.
 

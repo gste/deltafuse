@@ -886,17 +886,9 @@ def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_ro
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
-def test_narrow_analyze_gate_after_full_set(tmp_path: Path, repo_root: Path):
-    """RM-020: narrow may write three times; analyzed still waits for the set."""
+def test_analyze_gate_waits_for_the_full_set(tmp_path: Path, repo_root: Path):
+    """RM-020: analyzed waits for routing, slices and coverage, one write at a time."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    lock_path = tmp_path / ".deltafuse" / "lock.yaml"
-    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
-    lock.setdefault("workflow", {})["call_width"] = "narrow"
-    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
-    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
-    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    cfg.setdefault("workflow", {})["call_width"] = "narrow"
-    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 
     builder = MockChangeBuilder(tmp_path, change_id="CHG-028", title="Narrow analyze")
     builder.step_intake()
@@ -916,11 +908,9 @@ def test_narrow_analyze_gate_after_full_set(tmp_path: Path, repo_root: Path):
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
-def test_wide_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
-    """RM-020: wide default may write the full Analyze set in one step."""
+def test_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
+    """RM-020: the full Analyze set written in one step closes analyzed."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "wide"
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-029", title="Wide analyze")
         .step_intake()
@@ -931,7 +921,7 @@ def test_wide_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
 
 
 def test_feature_analyzed_does_not_skip_specify(tmp_path: Path, repo_root: Path):
-    """RM-020 / BM-01: call_width does not skip Specify for a feature Change."""
+    """RM-020 / BM-01: Analyze does not skip Specify for a feature Change."""
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-030", title="Tiny feature")

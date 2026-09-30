@@ -72,7 +72,7 @@ Intake
    - опциональные связанные capabilities и применимые политики (`policies`).
 4. Результат маршрутизации — карта в `routing.yaml`, не список.
 
-Маршрутизация — первая запись Analyze. `deltafuse next` выбирает один Analyze pass за вызов: `routing`, затем один `slice` на непокрытую primary capability из routing, затем `coverage`. Две capability не попадают в один `next`, в том числе при `call_width: wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, по умолчанию `wide`) пинится в `.deltafuse/lock.yaml` как профиль; он не склеивает pass. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Ширина вызова не снимает Specify и не auto-accept Decisions.
+Маршрутизация — первая запись Analyze. `deltafuse next` выбирает один Analyze pass за вызов: `routing`, затем один `slice` на непокрытую primary capability из routing, затем `coverage`. Две capability не попадают в один `next`. Статус остаётся `analyzing`, пока нет всех трёх артефактов. Analyze не снимает Specify и не auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 1. Связанные claims группируются в изолированные аналитические слайсы (`slices/SLICE-NN.md`). Один файл на primary capability: две capability дают `SLICE-01` и `SLICE-02`, не один `SLICE-01`.
@@ -120,7 +120,7 @@ Analyze — итеративный шаг. Если возникают суще�
 5. Итерация повторяется до тех пор, пока все блокирующие развилки не будут закрыты терминальными решениями.
 
 ### Gate
-Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`, независимо от `workflow.call_width`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` и `coverage.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
+Все claims классифицированы и покрыты слайсами; все блокирующие Decisions переведены в терминальный статус; каждая дельта явно объявляет затронутые и незатронутые слои; для каждого слайса сформирован нормативный базис. Гейт `analyzed` не закрывается, пока на диске нет `routing.yaml`, `slices/` и `coverage.yaml`. У каждой distinct `primary_capability` в `routing.yaml` должен быть хотя бы один slice-файл с той же `primary_capability`. `route` в `change.yaml`/`routing.yaml`: `code` (по умолчанию), `docs` или `ops`. Без поля — `code`. `docs`/`ops` всё равно проходят Specify и не пишут `src/**` / product pytest. Неизвестные ключи верхнего уровня `routing.yaml` и `coverage.yaml` (включая `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live `docs/spec/**` на Specify. `analysis.md` необязателен; `analyzed` = routing + slices + coverage.
 
 ---
 
@@ -289,7 +289,7 @@ Raw intent (docs/intake/...)
 - `not-reproduced`: подтверждённое отсутствие воспроизведения с фиксацией диагностического evidence.
 
 ### Архивация
-После подтверждения сходимости закройте гейт и архивируйте ядром: `deltafuse check-gate <change-dir> --gate converged`, затем `deltafuse advance <change-dir> --gate converged` и только потом `deltafuse archive <change-dir>`. `check-gate` доказывает содержимое и ничего не перемещает: архив возможен только из статуса `converged`, который записывает `advance`.
+После подтверждения сходимости закройте гейт `deltafuse advance <change-dir> --gate converged` (он проверяет гейт и записывает статус за один вызов), затем архивируйте `deltafuse archive <change-dir>`. Архив возможен только из статуса `converged`, который записывает `advance`; `check-gate` — read-only предпросмотр той же проверки, он ничего не перемещает.
 1. Активные задачи переводятся в статус `verified`. `cancelled` и `superseded` остаются терминальными, без фальшивого `implemented`.
 2. Фиксируется итоговый статус в `change.yaml` (`converged` -> `archived`).
 3. При необходимости обновляется `CHANGELOG.md`.

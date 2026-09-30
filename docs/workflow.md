@@ -64,7 +64,7 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
-Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item, including when lock `workflow.call_width` is `wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) remains pinned in `.deltafuse/lock.yaml` as a recorded profile; it does not merge passes. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item. Status stays `analyzing` until all three artifacts exist. Analyze does not skip Specify and does not auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 For each capability slice:
@@ -108,7 +108,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
-- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
 - Unknown top-level keys on `routing.yaml` and `coverage.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 - `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
@@ -305,7 +305,7 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
-After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse advance <change-dir> --gate converged` and then `deltafuse archive <change-dir>`. `check-gate` proves content and moves nothing: archive applies only from status `converged`, which `advance` writes. Archiving:
+Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks the gate and writes the status in one call), then `deltafuse archive <change-dir>`. Archive applies only from status `converged`, which `advance` writes; `check-gate` is the read-only preview of the same check and moves nothing. Archiving:
 1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
 2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
 3. Updates `change.yaml` status to `archived`.

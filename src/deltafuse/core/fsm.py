@@ -1118,8 +1118,7 @@ def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> l
 def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
     """Analyze substeps not yet on disk. `analyzed` requires this list to be empty.
 
-    Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
-    not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    A Change cannot close Analyze without routing.yaml, slices/, and coverage.yaml.
     One slice file does not cover two routing primary capabilities; that is a
     separate `analyzed` error from `uncovered_primary_capabilities`.
     """

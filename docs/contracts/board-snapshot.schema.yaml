@@ -29,8 +29,6 @@ properties:
         type: string
       framework_content_hash:
         type: string
-      call_width:
-        enum: [narrow, medium, wide]
       changes_path:
         type: string
         description: POSIX-relative path from product root (from config paths.changes).

@@ -16,7 +16,6 @@ context:
   max_files: 24
 
 workflow:
-  call_width: wide
   auto_accept_decisions: false
   leash: "advisory"
 
