@@ -38,6 +38,7 @@ from deltafuse.core.leash import (
     load_baseline,
     load_leash_mode,
 )
+from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import (
     token_count_receipt,
@@ -842,6 +843,10 @@ def _main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
+            for finding in (result.get("leash") or {}).get("violations") or []:
+                print(f"advance: leash ({result['leash']['mode']}): {finding}", file=sys.stderr)
+            if (result.get("leash") or {}).get("checked") is False:
+                print(f"advance: leash not checked: {result['leash']['reason']}", file=sys.stderr)
             print(
                 f"advance: gate '{result['gate']}' applied: "
                 f"{result['from']} -> {result['to']} "
@@ -1086,51 +1091,19 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         target = Path(args.path)
         try:
-            only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
-            root = load_product_root(target if only is None else only)
-            queue = build_work_queue(target, only_change=only)
-            selected = select_next(queue)
-            snapshot = queue_snapshot(queue, selected=selected, product_root=root)
-            envelope = snapshot.get("envelope")
-            halt = snapshot.get("halt")
-            if args.files:
-                dirty = list(args.files)
-            else:
-                dirty = git_dirty_paths(root, base=args.base, head=args.head)
-            # Ready envelopes name only the next step; the receipt chain adds the
-            # steps already worked since the base, so a finished step's writes
-            # are not judged against the step after it. A halt stops new work,
-            # not the record of work done, so the chain applies either way.
-            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
-                root, base=args.base, dirty=dirty
-            )
-            errors = check_paths(
-                dirty,
-                covering,
-                baseline=load_baseline(root),
-                product_root=root,
-                base=args.base,
-                head=args.head,
-            )
-            mode = load_leash_mode(root)
-            skipped = envelope is None and not errors
-            ok = not errors
+            payload = run_leash(target, base=args.base, head=args.head, files=args.files)
+            root = load_product_root(target.resolve() if (target.resolve() / "change.yaml").is_file() else target)
+            errors = payload["violations"]
+            mode = payload["mode"]
+            skipped = payload["skipped"]
             _journal(
                 root,
                 cmd="leash",
-                ok=ok,
+                ok=payload["ok"],
                 errors=errors,
                 n_errors=len(errors),
                 skipped=skipped,
             )
-            payload = {
-                "ok": ok,
-                "skipped": skipped,
-                "mode": mode,
-                "envelope": envelope,
-                "paths": dirty,
-                "violations": errors,
-            }
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif skipped:
@@ -1144,14 +1117,16 @@ def _main(argv: list[str] | None = None) -> int:
             if errors and mode != "advisory":
                 return 1
             return 0
-        except QueueError as ex:
+        except (QueueError, LeashError) as ex:
             _journal(target, cmd="leash", ok=False, errors=[str(ex)])
             print(f"Leash failed: {ex}", file=sys.stderr)
-            return 2
-        except LeashError as ex:
-            _journal(target, cmd="leash", ok=False, errors=[str(ex)])
-            print(f"Leash failed: {ex}", file=sys.stderr)
-            return 2
+            # Advisory never stands in the way: the pre-commit hook it installs runs on
+            # the very first commit of a fresh product, where there is no HEAD to diff.
+            try:
+                advisory = load_leash_mode(load_product_root(target.resolve())) == "advisory"
+            except Exception:
+                advisory = False
+            return 0 if advisory else 2
 
     elif args.command == "board":
         target = Path(args.product_path)

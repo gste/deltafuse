@@ -487,6 +487,17 @@ def advance_change(
                 f"transition table rejects '{current}' -> '{target}'"
             )
 
+        # The write envelope is checked here, not left to a command the Worker may
+        # never run (audit F7): advisory reports, enforce refuses before any receipt.
+        from deltafuse.core.leash_run import leash_at_advance
+
+        leash = leash_at_advance(change_path, product_root)
+        if leash is not None and leash["mode"] == "enforce" and leash["violations"]:
+            raise TransitionError(
+                f"gate '{gate}' refused by the write leash (workflow.leash: enforce): "
+                + "; ".join(leash["violations"])
+            )
+
         if gate == "converged":
             _record_trace_warnings(change_path)
 
@@ -502,7 +513,7 @@ def advance_change(
 
         _write_change_status(change_path, data, target)
 
-        return {
+        result = {
             "ok": True,
             "gate": gate,
             "from": current,
@@ -510,6 +521,9 @@ def advance_change(
             "receipt": entry["receipt"],
             "resumed": resumed is not None,
         }
+        if leash is not None:
+            result["leash"] = leash
+        return result
 
 
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core

@@ -71,7 +71,7 @@ Never edit adapter skills (copied snapshots or the canonical files they link to)
 
 The initial capability catalog is proposed by AI and accepted by a human. After acceptance, capability changes require explicit catalog deltas.
 
-Fresh `init` sets `workflow.leash: off` so a pet can brainstorm. After `project.baseline: accepted`, set `workflow.leash: enforce` and re-run the installer (`deltafuse init --force`). That writes a local git `pre-commit` hook that runs `deltafuse leash` even if the Worker never types the command. A GitHub Action template (`.github/workflows/deltafuse-leash.yml`) is copied once and is optional. per-ankh and fuse-map turn `enforce` on themselves. `advisory` still runs the hook; the commit is not blocked. `off` means no hook; invoking `deltafuse leash` still fails on violations.
+Fresh `init` sets `workflow.leash: advisory`: `deltafuse advance` runs the leash itself before it writes each receipt and reports a write outside the step's envelope (in the journal and on stderr) without refusing, so the check does not depend on the Worker running `deltafuse leash`. `off` turns it and the hook off. After `project.baseline: accepted`, set `workflow.leash: enforce` (then `advance` refuses while a path is outside the envelope) and re-run the installer (`deltafuse init --force`). That writes a local git `pre-commit` hook that runs `deltafuse leash` even if the Worker never types the command. A GitHub Action template (`.github/workflows/deltafuse-leash.yml`) is copied once and is optional. per-ankh and fuse-map turn `enforce` on themselves. `advisory` still runs the hook; the commit is not blocked. `off` means no hook; invoking `deltafuse leash` still fails on violations.
 
 ## Kernel evidence
 

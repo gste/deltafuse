@@ -39,7 +39,7 @@ def test_fresh_installation(tmp_path: Path, repo_root: Path):
     assert cfg["framework"]["version"] == result.version
     assert cfg["framework"]["source"] == f"deltafuse://v{result.version}"
     assert cfg["workflow"]["call_width"] == "wide"
-    assert cfg["workflow"]["leash"] == "off"
+    assert cfg["workflow"]["leash"] == "advisory"
     assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
     workflow = (tmp_path / ".github" / "workflows" / "deltafuse-leash.yml").read_text(encoding="utf-8")
     assert "vendor/deltafuse" in workflow
@@ -292,7 +292,9 @@ def test_enforce_hook_blocks_orphan_src_commit(tmp_path: Path, repo_root: Path):
     env = _leash_env(repo_root)
     _git(["init"], cwd=tmp_path, env=env)
     install(target_dir=tmp_path, framework_root=repo_root)
-    assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
+    # Advisory is the default now, so the hook is there from the first install and
+    # must not stand in the way of the very first commit (no HEAD to diff against).
+    assert (tmp_path / ".git" / "hooks" / "pre-commit").is_file()
     _git(["add", "-A"], cwd=tmp_path, env=env)
     first = _commit(tmp_path, "init", env)
     assert first.returncode == 0

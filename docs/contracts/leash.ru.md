@@ -8,7 +8,7 @@
 
 Продюсер: `deltafuse next --json`. Проверка: `deltafuse leash`. `envelope` — объект по схеме или JSON `null`. `null` — нет готового шага воркера. Код/ops/deploy в таком diff — orphan, `leash` падает. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan.
 
-Intake `write` не содержит `src/**`. Declare/Implement оставляют evidence и `tests/**`, код сужается до `allowed_paths`. Свежий `init` пишет `workflow.leash: off` (без hook). `advisory` — те же нарушения, exit 0. `enforce`/`advisory` ставят локальный `pre-commit` на `deltafuse leash`. Hook не делает `git push`.
+Intake `write` не содержит `src/**`. Declare/Implement оставляют evidence и `tests/**`, код сужается до `allowed_paths`. Свежий `init` пишет `workflow.leash: advisory`. `off` — без hook, `advance` не проверяет. `advisory` — те же нарушения, exit 0; `deltafuse advance` сам запускает ту же проверку до записи квитанции и сообщает нарушения, не отказывая. `enforce` — `advance` отказывает в переходе, пока путь вне envelope. Продукт без git или без коммита проверить нельзя: `advance` пишет `checked: false` с причиной и не блокирует. `enforce`/`advisory` ставят локальный `pre-commit` на `deltafuse leash`. Hook не делает `git push`.
 
 При `halt.kind` `decision` или `spec` `envelope` — JSON `null`: product-code write-tools выключены, пока висят кнопки.
 

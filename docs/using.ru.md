@@ -71,7 +71,7 @@ git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 
 Initial capability catalog предлагается ИИ и принимается человеком. После acceptance изменения capabilities требуют explicit catalog deltas.
 
-Свежий `init` ставит `workflow.leash: off`, чтобы pet мог brainstorm. После `project.baseline: accepted` поставить `workflow.leash: enforce` и перезапустить installer (`deltafuse init --force`). Тогда появится локальный git `pre-commit`, который зовёт `deltafuse leash`, даже если воркер команду не набрал. Шаблон GitHub Action (`.github/workflows/deltafuse-leash.yml`) копируется один раз и необязателен. per-ankh и fuse-map включают `enforce` сами. `advisory` — hook отрабатывает, commit не валится. `off` — hook нет; сам `deltafuse leash` при нарушениях всё равно падает.
+Свежий `init` ставит `workflow.leash: advisory`: `deltafuse advance` сам запускает leash до записи каждой квитанции и сообщает о записи вне envelope шага (в журнале и в stderr), не отказывая, так что проверка не зависит от того, запустил ли Worker `deltafuse leash`. `off` выключает её и hook. После `project.baseline: accepted` поставить `workflow.leash: enforce` (тогда `advance` отказывает, пока путь вне envelope) и перезапустить installer (`deltafuse init --force`). Тогда появится локальный git `pre-commit`, который зовёт `deltafuse leash`, даже если воркер команду не набрал. Шаблон GitHub Action (`.github/workflows/deltafuse-leash.yml`) копируется один раз и необязателен. per-ankh и fuse-map включают `enforce` сами. `advisory` — hook отрабатывает, commit не валится. `off` — hook нет; сам `deltafuse leash` при нарушениях всё равно падает.
 
 ## Evidence ядра
 
