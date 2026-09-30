@@ -125,19 +125,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regression test added to the Red file, as Implement is allowed to, the second
   task's Red written into the same file, a reformat. Red now records
   `red_oracle_tests` (format 2): each test in `tests.failed` with digests of its
-  normalised AST - or, for Java, its tokens - and of what it reaches: its class,
-  the fixtures it requests in the declared files and in every `conftest.py` up to
-  the product root (declared or not; a new one counts) and `pytest_plugins`
-  modules, the helpers it imports from local test modules, `pytestmark`, hooks,
-  autouse fixtures, module-level code, and the pytest sections of the config
-  files on its path. A weakened assertion, a deleted or renamed test,
-  `skip`/`xfail`/`@Disabled`, a replaced fixture, a new autouse fixture or hook,
-  an `addopts` change are still refused, and the refusal names the test and the
-  file. Green also runs the frozen tests on their own (`oracle_isolation`), so a
-  new test that patches the product, or `-p plugin` on the command line, no
-  longer carries them. Test data and unparseable files stay frozen whole; a Red
-  without a runner report keeps `red_oracle`, and format-1 records are checked
-  as they were taken.
+  normalised AST and of what it relies on in its module (class, fixtures,
+  helpers, imported names, `pytestmark`, hooks, autouse fixtures), plus every
+  `conftest.py` on its path and the other declared modules, whole. A weakened
+  assertion, a deleted or renamed test, `skip`/`xfail`, a replaced fixture, an
+  edited or added `conftest.py` on the path are still refused, and the refusal
+  names the test or the file. Green also runs the frozen tests on their own with
+  pytest (`oracle_isolation`), so a new test that patches the product, or `-p
+  plugin` on the command line, no longer carries them. Java is frozen per file,
+  not per method, until per-method freezing is verified on a real Maven/Gradle
+  run. A Red without a runner report keeps `red_oracle` and the old check.
 
 ## [3.3.4] - 2026-09-24
 

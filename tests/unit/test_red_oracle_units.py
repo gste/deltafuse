@@ -28,7 +28,11 @@ def test_the_record_names_each_failed_test_once(tmp_path: Path, frozen: Path):
     assert sorted(t["test"] for t in record["tests"]) == [
         "TestWindow::test_window", "test_cooldown", "test_cooldown_scales",
     ]
-    assert record["files"] == []
+    # Only the conftest.py files on the test's path, absent here.
+    assert record["files"] == [
+        {"path": "conftest.py", "form": "ast", "sha256": None},
+        {"path": "tests/conftest.py", "form": "ast", "sha256": None},
+    ]
     assert _errors(tmp_path, frozen) == []
 
 
@@ -150,7 +154,7 @@ def test_a_file_the_core_cannot_split_keeps_the_file_hash(tmp_path: Path):
     data = "tests/data/expected.json"
     red = _freeze(tmp_path, {TEST_FILE: ORACLE, data: '{"cooldown": 30}\n'}, FAILED)
     record = yaml.safe_load(red.read_text(encoding="utf-8"))["red_oracle_tests"]
-    assert [(f["path"], f["form"]) for f in record["files"]] == [(data, "bytes")]
+    assert (data, "bytes") in [(f["path"], f["form"]) for f in record["files"]]
     assert _errors(tmp_path, red) == []
     _edit(tmp_path, "30", "0", rel=data)
     errs = _errors(tmp_path, red)

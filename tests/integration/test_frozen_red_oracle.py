@@ -274,3 +274,32 @@ def test_a_green_over_other_tests_does_not_close_the_gate(tmp_path: Path, repo_r
     set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
     errs = check_gate(builder.change_dir, "implemented")
     assert any("neither Green's own run nor the run of those tests alone" in e for e in errs), errs
+
+
+def test_an_honest_option_the_suite_needs_reaches_the_isolated_run(tmp_path: Path, repo_root: Path):
+    """The isolated run keeps the Worker's configuration options: without
+    `-o python_functions=check_*` pytest does not collect this oracle at all,
+    so dropping it would refuse an honest Green."""
+    builder = _product(tmp_path, repo_root, "CHG-166", ["TASK-001"])
+    (tmp_path / "tests" / "test_limiter.py").write_text(
+        HEADER + "\n\ndef check_cooldown():\n    assert cooldown() >= 30\n", encoding="utf-8"
+    )
+    argv = _pytest("-o", "python_functions=check_*", "tests/test_limiter.py")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001", argv=argv, changed_paths=["tests/test_limiter.py"],
+    )
+    assert red.authentic, red.errors
+    assert red.payload["tests"]["failed"] == ["tests.test_limiter::check_cooldown"]
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    _fix_product(tmp_path)
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001", argv=argv,
+        changed_paths=["tests/test_limiter.py", "src/limiter.py"],
+    )
+    assert green.authentic, green.errors
+    assert "python_functions=check_*" in green.payload["oracle_isolation"]["command"]
+    assert green.payload["oracle_isolation"]["not_passing"] == []
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+    assert not [e for e in check_gate(builder.change_dir, "implemented") if "frozen Red" in e]

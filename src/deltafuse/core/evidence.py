@@ -159,9 +159,9 @@ def _isolated_oracle_run(
 
     The Worker's own command decides what else runs next to the oracle, so it
     cannot be the only evidence that the product passes it (core/oracle.py,
-    `isolation_plan`). The run is the runner Green used, with its selection
-    replaced by the frozen tests and its other options dropped; PYTEST_ADDOPTS
-    and PYTEST_PLUGINS are cleared for the same reason.
+    `isolation_plan`). The run is Green's pytest command with its test
+    selection replaced by the frozen tests and `-p` dropped; PYTEST_ADDOPTS and
+    PYTEST_PLUGINS, which load code the same way, are cleared.
     """
     import os
 
@@ -175,7 +175,7 @@ def _isolated_oracle_run(
     frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
     if not isinstance(frozen, dict) or frozen.get("version") is None:
         return None
-    plan = isolation_plan(argv, frozen, _red_failed_tests(change_path, task))
+    plan = isolation_plan(argv, frozen, _red_failed_tests(change_path, task), repo_root)
     if plan is None:
         return None
     iso_argv, expected = plan

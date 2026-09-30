@@ -792,7 +792,7 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
     paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
     per_test = red.get("red_oracle_tests")
     if isinstance(per_test, dict):
-        changes = red_oracle_changes(repo_root, per_test, paths)
+        changes = red_oracle_changes(repo_root, per_test)
         if not changes:
             return []
         what = "; ".join(changes)
