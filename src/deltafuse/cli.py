@@ -214,19 +214,20 @@ def export_tool_schemas(kind: str | None = None, operation: str | None = None) -
     }
 
 
-def _read_secret(prompt: str) -> str:
+def _read_secret(prompt: str, hint: str = "") -> str:
     """Read a secret from the terminal; refuse when no human is at one."""
     import getpass
 
     if not sys.stdin.isatty():
         raise gate_password.GatePasswordError(
-            "the Human Gate password is read only from an interactive terminal"
+            "the Human Gate password is read only from an interactive terminal" + hint
         )
     return getpass.getpass(prompt)
 
 
-def _gate_password_prompt() -> str:
-    return _read_secret("Human Gate password: ")
+def _gate_password_prompt(command: str = "") -> str:
+    hint = f"; open one at the product root and run: {command}" if command else ""
+    return _read_secret("Human Gate password: ", hint)
 
 
 def _capability_command(args) -> int:
@@ -1036,7 +1037,11 @@ def _main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
-                password_prompt=_gate_password_prompt,
+                password_prompt=lambda: _gate_password_prompt(
+                    f"deltafuse decide {args.path} "
+                    + (f"--decision {args.decision}" if args.decision else "--spec")
+                    + f" --status {args.status}"
+                ),
             )
         except DecideError as ex:
             _journal(target, cmd="decide", ok=False, errors=[str(ex)])

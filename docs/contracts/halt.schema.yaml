@@ -24,6 +24,18 @@ properties:
     items:
       $ref: '#/$defs/choice'
     description: Sole button list. Host MUST render every item and MUST NOT add merge/push.
+  human_check:
+    enum: [none, password]
+    description: >
+      Optional. On a decision or spec halt: `password` when the product guards the
+      Human Gate with a password (`decide` then answers only in an interactive
+      terminal), `none` when a click in the chat is enough.
+  terminal_required:
+    type: boolean
+    description: >
+      Optional, present as true with `human_check: password`. The host MUST NOT run
+      `command` itself: show it to the human, who runs it in a terminal and types
+      the password. The Worker never answers.
 $defs:
   choice:
     type: object
@@ -38,6 +50,9 @@ $defs:
         type: string
         minLength: 1
         description: Button title. Host MUST display this string.
+      interactive_only:
+        type: boolean
+        description: Optional. True when `command` needs a terminal (Human Gate password).
       command:
         description: >
           Shell to run from the product root after a human click.

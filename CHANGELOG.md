@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`next --json` says how the Human Gate is answered.** A decision or spec `halt` now carries
+  `human_check` (`none` or `password`). With no Human Gate password the prompt says to show the
+  choices as buttons in the chat. With one, `decide` answers only in an interactive terminal, so the
+  halt sets `terminal_required` (and `interactive_only` on each choice) and its prompt lists the
+  commands for the human to run in a terminal; the run skill stops there instead of offering buttons.
+  A `decide` refused for lack of a terminal prints the command to type. Optional properties of halt
+  contract v1, no bump.
+
 - **`workflow.trace_claims: warn` (P12, experiment, default off).** A converged run can
   still miss a claim of the request: M02 on Gemma 31B reached `converged` with Verify
   green at 53.5-56.1, and `CR-006` (`TokenBucketLimiter` must accept `reject_threshold`)
