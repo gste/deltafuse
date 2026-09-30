@@ -33,8 +33,10 @@ def test_skills_do_not_instruct_hand_status_writes() -> None:
     assert not offenders, "skills instruct hand-editing status:\n" + "\n".join(offenders)
 
 
-def test_single_step_skills_advance_after_check_gate() -> None:
-    """V3-FIX-011: every single-step skill stamps the transition with advance."""
+def test_single_step_skills_close_their_gate_with_one_advance() -> None:
+    """V3-FIX-011 / F15: every single-step skill closes its gate with one `advance`
+    (the Core checks the gate and stamps the transition in that call), not a
+    `check-gate` whose verdict `advance` then discards and recomputes."""
     gates = {
         "intake": "intake",
         "analyze": "analyzed",
@@ -45,11 +47,9 @@ def test_single_step_skills_advance_after_check_gate() -> None:
     }
     for skill, gate in gates.items():
         text = (SKILLS_DIR / skill / "SKILL.md").read_text(encoding="utf-8")
-        assert f"--gate {gate}`. Halt if it exits non-zero." in text, skill
-        advance_pos = text.find("deltafuse advance")
-        checkgate_pos = text.find(f"check-gate <change-dir> --gate {gate}")
-        assert checkgate_pos != -1, skill
-        assert advance_pos > checkgate_pos, f"{skill}: advance must follow check-gate"
+        assert f"deltafuse advance <change-dir> --gate {gate}`" in text, skill
+        assert "Halt if it exits non-zero" in text, skill
+        assert "deltafuse check-gate" not in text, f"{skill}: a second call for the same decision"
 
 
 # Step 3 of the completion plan: exact Core-command contract per skill.
@@ -66,7 +66,7 @@ SKILL_CORE_CONTRACT = {
 
 
 def test_skill_core_command_contract(repo_root: Path):
-    """Exactly one advance per skill, ordered after its check-gate; artifact
+    """Exactly one advance per skill and no separate check-gate call; artifact
     state changes go only through `deltafuse state`."""
     for skill, (gate, state_calls) in SKILL_CORE_CONTRACT.items():
         text = (repo_root / "process" / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
@@ -77,8 +77,7 @@ def test_skill_core_command_contract(repo_root: Path):
         assert gates[0].rstrip("`.,") == gate, f"{skill}: wrong gate {gates[0]}"
         states = re.findall(r"deltafuse state <change-dir>", text)
         assert len(states) == state_calls, f"{skill}: expected {state_calls} state calls, got {len(states)}"
-        checkgate = text.find(f"check-gate <change-dir> --gate {gate}")
-        assert checkgate != -1 and checkgate < advances[0], f"{skill}: advance must follow check-gate"
+        assert "deltafuse check-gate" not in text, f"{skill}: advance already checks the gate"
         # run-mode duplication: a through-mode skill may not repeat single-step gates
         assert text.count("deltafuse advance") == 1, skill
 

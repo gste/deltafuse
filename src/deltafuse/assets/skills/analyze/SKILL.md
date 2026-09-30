@@ -18,7 +18,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
    - `routing`: `routing.yaml` from `request.md` and `docs/spec/_capabilities.yaml`. Do not load spec module bodies.
    - `slice`: one `slices/<slice_id>.md` for `capability`. Read only `spec_refs` from `next`. Do not collapse two capabilities into one file.
    - `coverage`: run `deltafuse coverage <change-dir>`. Do not hand-write `coverage.yaml`.
-3. If `analyze_pass` is `coverage`, close with `deltafuse check-gate <change-dir> --gate analyzed`. Halt if it exits non-zero. Then run `deltafuse advance <change-dir> --gate analyzed` so the Core stamps the transition; halt if that exits non-zero. For `routing` or `slice`, do not call `check-gate --gate analyzed`.
+3. If `analyze_pass` is `coverage`, close with `deltafuse advance <change-dir> --gate analyzed`: the Core checks the gate and stamps the transition in one call. Halt if it exits non-zero and show the errors it prints. For `routing` or `slice`, do not run `advance`.
 4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
@@ -101,7 +101,7 @@ Exit only when all claims are routed, every routing primary capability has a sli
 
 Write `routing.yaml`, `slices/**` and any Decision or catalog proposal through the Writer. The Core writes `coverage.yaml` and the `change.yaml` index. `analysis.md` is optional.
 
-`deltafuse next` always selects one Analyze pass (`routing` | one `slice` | `coverage`), including when lock `workflow.call_width` is `wide`. Leave status `analyzing` until routing, slices, and coverage are on disk — call width does not close the gate. Do not skip Specify. Do not auto-accept Decisions.
+`deltafuse next` always selects one Analyze pass (`routing` | one `slice` | `coverage`). Leave status `analyzing` until routing, slices, and coverage are on disk. Do not skip Specify. Do not auto-accept Decisions.
 
 Set `route` in `routing.yaml` to `code` (default), `docs`, or `ops`; if the Change was scaffolded with another route, correct it with `deltafuse artifact write --kind change` (`{"target": "change.yaml", "fields": {"route": "docs"}}`). `docs`/`ops` do not skip Specify.
 

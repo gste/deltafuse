@@ -41,7 +41,7 @@ def test_analyze_skill_follows_next_pass(repo_root: Path):
         encoding="utf-8"
     )
     assert "analyze_pass" in text
-    assert "do not call `check-gate --gate analyzed`" in text
+    assert "For `routing` or `slice`, do not run `advance`" in text
     assert "deltafuse coverage" in text
     assert "primary_capability" in text
     assert "CR-001" in text
@@ -52,7 +52,7 @@ def test_specify_skill_follows_next_pass(repo_root: Path):
         encoding="utf-8"
     )
     assert "specify_pass" in text
-    assert "do not call `check-gate --gate specified`" in text
+    assert "For `slice`, do not run `advance`" in text
     assert "spec_refs" in text
     assert "Never set `specified` or any other status by hand" in text
     assert "status: accepted" not in text

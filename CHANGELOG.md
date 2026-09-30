@@ -50,6 +50,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not per method, until per-method freezing is verified on a real Maven/Gradle
   run. A Red without a runner report keeps `red_oracle` and the old check.
 
+### Changed
+
+- **`workflow.call_width` is retired (audit F14).** Nothing but the board snapshot ever read it, yet
+  the Analyze skill and a code comment each spent a sentence saying it changes nothing. It is gone from
+  the shipped config, the lock the installer writes, the board snapshot (`product.call_width`), the
+  init scripts and the docs. A config or lock that still has it is accepted and ignored, whatever it
+  holds: it is no longer validated and the two files are no longer compared on it.
+- **A step closes its gate with one call (audit F15).** Skills told the Worker to run `check-gate` and then
+  `advance`, but `advance` checks the gate again itself and drops the first verdict, so every step was
+  two decisions for one. The skills now say `deltafuse advance <change-dir> --gate <gate>`, which checks
+  and stamps in one call and prints the errors on a refusal. `check-gate` stays as the read-only preview.
+  The advisory claim-to-test findings of `workflow.trace_claims: warn` are printed by `advance --gate
+  converged` now (the Core still records them in `evidence/verification/trace_warnings.yaml`).
+
 ### Fixed
 
 - Audit fixes (F1-F13, F16-F18), one commit each with its root cause: `archive` requires the

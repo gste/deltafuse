@@ -839,7 +839,14 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         receipt = dict(result)
         receipt.pop("ok", None)
+        # P12: `advance --gate converged` is the one call a Worker makes now, so the
+        # advisory claim-to-test findings that `check-gate` printed are printed here.
+        warnings = claim_trace_warnings(target) if args.gate == "converged" else []
+        if warnings:
+            receipt["warnings"] = warnings
         _journal(target, cmd="advance", ok=True, errors=[], n_errors=0, **receipt)
+        for warning in warnings:
+            print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
