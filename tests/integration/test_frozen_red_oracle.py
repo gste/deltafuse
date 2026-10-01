@@ -303,3 +303,30 @@ def test_an_honest_option_the_suite_needs_reaches_the_isolated_run(tmp_path: Pat
     assert green.payload["oracle_isolation"]["not_passing"] == []
     set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
     assert not [e for e in check_gate(builder.change_dir, "implemented") if "frozen Red" in e]
+
+
+def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Path, repo_root: Path):
+    """A Red whose tests lie outside the oracle roots (`test/`, not `tests/`)
+    gets no per-test freeze and so no isolated run. The gate itself has to see
+    that a Green recorded over a different test did not pass the Red ones."""
+    builder = _product(tmp_path, repo_root, "CHG-167", ["TASK-001"])
+    (tmp_path / "test").mkdir()
+    (tmp_path / "test" / "test_limiter.py").write_text(HEADER + RED_TEST, encoding="utf-8")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=_pytest("test/test_limiter.py"), changed_paths=["test/test_limiter.py"],
+    )
+    assert red.payload["result"] == "expected-failure"
+    assert "red_oracle_tests" not in red.payload
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    (tmp_path / "test" / "test_other.py").write_text("def test_other():\n    assert True\n", encoding="utf-8")
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest("test/test_other.py"), changed_paths=["test/test_limiter.py", "test/test_other.py"],
+    )
+    assert "oracle_isolation" not in green.payload
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+    errs = check_gate(builder.change_dir, "implemented")
+    assert any("did not pass the tests Red recorded as failing" in e for e in errs), errs

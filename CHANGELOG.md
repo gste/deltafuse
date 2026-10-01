@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The implemented gate checks that Green passed the Red tests.** `green_covers_red` ran
+  only when the Green evidence was recorded, and the record was written even when it
+  failed, so a Green recorded over a different test closed the gate. 3.3.5's isolated run
+  hid this for pytest Reds frozen per test; a JVM Red (frozen per file, no isolated run)
+  had nothing else. The gate now reads the Green record's runner report and refuses a
+  Green that did not pass every test in its Red's `tests.failed`, or that has no report.
+
 ## [3.3.6] - 2026-09-30
 
 ### Added

@@ -869,6 +869,41 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     ]
 
 
+def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
+    """Green must have passed the tests Red saw fail - checked here, not only when recorded.
+
+    `green_covers_red` ran when the Green evidence was written, and the record
+    is written even when that check fails, so a Green over a different test
+    closed this gate. The isolated run covers Reds frozen per test; a JVM Red
+    (frozen per file, no isolated run) had nothing else.
+    """
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or not isinstance(green, dict) or red.get("result") != "expected-failure":
+        return []
+    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
+    failed = [str(t) for t in red_tests.get("failed") or []]
+    if not failed:
+        return []
+    green_tests = green.get("tests")
+    if not isinstance(green_tests, dict):
+        return [
+            f"{label} has no runner report, so it does not show the tests Red recorded as failing "
+            f"now passing ({failed[:5]}); record Green with the runner Red used"
+        ]
+    passed = {str(t) for t in green_tests.get("passed") or []}
+    missing = [t for t in failed if t not in passed]
+    if not missing:
+        return []
+    return [
+        f"{label} did not pass the tests Red recorded as failing: {missing[:5]}. Run the "
+        "Red tests in Green and make the product pass them"
+    ]
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -1466,6 +1501,12 @@ def _check_gate(
                         f"Gate implemented: {e}"
                         for e in frozen_oracle_errors(
                             red_file, repo_root, f"green evidence '{green_file.name}'"
+                        )
+                    )
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in green_coverage_errors(
+                            red_file, green_file, f"green evidence '{green_file.name}'"
                         )
                     )
                     errors.extend(

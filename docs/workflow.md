@@ -276,6 +276,7 @@ Author the minimal production code necessary to turn the failing test target gre
 - `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
 - On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a requirement that is genuinely already met closes the Change on the no-op path (terminal `not-reproduced`) instead.
 - On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle_tests` (or, on an older record, `red_oracle`) and refuses a difference, naming the test or the file that moved, so weakening the assertion during Implement does not produce a Green; and with pytest the frozen tests must have passed on their own in the Green's isolated run (`oracle_isolation`).
+- On `route: code`, each Green must have passed the tests its Red recorded as failing (`tests.failed`): the gate reads the Green record's own runner report and refuses a Green over other tests, or one with no report, whatever its exit code.
 - Task status transitioned to `implemented`.
 
 ---
