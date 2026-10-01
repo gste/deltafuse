@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A requirement id that starts a heading is an anchor, whatever its prefix.** Only
+  `REQ-`, `SC-` and `POL-` ids counted, and nothing said so: in run c336f-m23
+  (qwen3.8-27b, M02) the Worker numbered two new capabilities' requirements
+  `## US-001 ...` and `## RP-001 ...`, every `spec-delta.md` reference was refused 14
+  times with "Anchor not found", and the run stalled in Specify after $1.2. Any
+  `## ABC-001 ...` heading is now an anchor, and a refused anchor is reported with the
+  anchors the file has.
 - **The implemented gate checks that Green passed the Red tests.** `green_covers_red` ran
   only when the Green evidence was recorded, and the record was written even when it
   failed, so a Green recorded over a different test closed the gate. 3.3.5's isolated run

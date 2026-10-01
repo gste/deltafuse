@@ -134,7 +134,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 - `spec-delta.md` validates against `spec-delta.schema.yaml` (`added`, `modified`, and `removed` required).
 - Added or modified paths exist under `docs/spec/**` with their anchors.
 - `docs/spec/_capabilities.yaml` validates against the capability schema and lists each slice `primary_capability` with live spec files.
-- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing `#REQ-*` / `#SC-*` anchor.
+- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing anchor. An anchor is the id a heading of the spec file starts with (`## REQ-01 Title` -> `#REQ-01`, `## US-001 ...` -> `#US-001`; any uppercase prefix), a `REQ-*` / `SC-*` / `POL-*` id anywhere in the file, or an explicit `<a id>`. A refused anchor is reported with the anchors the file has.
 - Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
 - `change.yaml` status is `specified` or `specification-proposed`.
 - Product source code is not required at this gate.
