@@ -158,6 +158,7 @@ def _spec_halt_product(tmp_path: Path, repo_root: Path):
     builder = MockChangeBuilder(tmp_path, change_id="CHG-082", title="Halt human check").step_intake().step_analyze()
     builder._core_advance("analyzed")
     builder._update_change_yaml({"status": "specification-proposed"})
+    return builder
 
 
 def test_halt_without_a_password_offers_buttons(tmp_path: Path, repo_root: Path, capsys):
@@ -196,9 +197,11 @@ def test_halt_with_a_password_says_to_run_decide_in_a_terminal(tmp_path: Path, r
 def test_decide_without_a_terminal_names_the_command_to_type(tmp_path: Path, repo_root: Path, capsys):
     from deltafuse.core import gate_password
 
-    _spec_halt_product(tmp_path, repo_root)
+    builder = _spec_halt_product(tmp_path, repo_root)
     gate_password.set_password(tmp_path, "correct horse battery")
-    change = next((tmp_path / "docs" / "changes").iterdir())
+    # the builder's own directory: docs/changes also holds a README, and which entry
+    # iterdir() yields first depends on the filesystem (CI on Linux took the README)
+    change = builder.change_dir
     code = main(["decide", str(change), "--spec", "--status", "accepted"])
     err = capsys.readouterr().err
     assert code == 1
