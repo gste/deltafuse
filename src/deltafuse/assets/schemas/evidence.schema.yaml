@@ -75,9 +75,10 @@ properties:
       module, its class, the definitions, assignments and imported names it
       refers to (transitively), and what pytest applies without a name
       (pytestmark, pytest_plugins, hooks, autouse fixtures, module-level code
-      binding no name). `files` is frozen whole: every conftest.py from the
-      test's directory up to the product root, present or not (null), and
-      every other declared Python module without tests, by normalised AST
+      binding no name). `files` is frozen whole: every existing conftest.py
+      from the test's directory up to the product root (absent ones are not
+      listed - the candidates follow from the test's path, and one that
+      appears later is refused as added), and every other declared Python module without tests, by normalised AST
       (`ast`); Java, data and files that do not parse by bytes (`bytes`) -
       Java is frozen per file, not per method, until per-method freezing is
       verified on a real Maven/Gradle run. `config` digests the bytes of the

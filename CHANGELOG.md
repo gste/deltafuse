@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hid this for pytest Reds frozen per test; a JVM Red (frozen per file, no isolated run)
   had nothing else. The gate now reads the Green record's runner report and refuses a
   Green that did not pass every test in its Red's `tests.failed`, or that has no report.
+- **The Red record no longer names conftest files that do not exist.** It listed every
+  `conftest.py` candidate on the frozen test's path, absent ones with `sha256: null`, and
+  the Worker went looking for them: run c336b-m01 (qwen3.8-27b, M01) failed T6 on
+  `git ls-files conftest.py tests/conftest.py`, correctness 100. The candidates follow
+  from the test's path, so only existing ones are recorded; one that appears later is
+  still refused as added.
 
 ## [3.3.6] - 2026-09-30
 

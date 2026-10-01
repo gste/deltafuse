@@ -28,11 +28,8 @@ def test_the_record_names_each_failed_test_once(tmp_path: Path, frozen: Path):
     assert sorted(t["test"] for t in record["tests"]) == [
         "TestWindow::test_window", "test_cooldown", "test_cooldown_scales",
     ]
-    # Only the conftest.py files on the test's path, absent here.
-    assert record["files"] == [
-        {"path": "conftest.py", "form": "ast", "sha256": None},
-        {"path": "tests/conftest.py", "form": "ast", "sha256": None},
-    ]
+    # No conftest.py exists on the path, so none is listed.
+    assert record["files"] == []
     assert _errors(tmp_path, frozen) == []
 
 
