@@ -88,3 +88,22 @@ def test_only_writes_are_journaled(tmp_path: Path, journal, capsys):
     _run(["artifact", "describe", "--kind", "task"], capsys)
     _run(["validate-config", str(tmp_path)], capsys)
     assert [e for e in journal if e.get("cmd") == "artifact"] == []
+
+
+def test_advance_converged_prints_the_p12_advisory_findings(tmp_path: Path, monkeypatch, capsys):
+    """F15: the Worker makes one call to close a gate now, `advance`, so the advisory
+    claim-to-test findings that `check-gate` printed come out of `advance`. They are
+    advice, never a refusal: the transition still happens and the exit code is 0."""
+    monkeypatch.setattr(cli, "_journal", lambda start, **event: None)
+    monkeypatch.setattr(
+        cli, "advance_change",
+        lambda target, gate: {"ok": True, "gate": gate, "from": "verifying", "to": "converged", "receipt": "a" * 64},
+    )
+    monkeypatch.setattr(cli, "claim_trace_warnings", lambda target: ["CR-013 names no test"])
+    code = cli.main(["advance", str(tmp_path), "--gate", "converged"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Gate converged (advisory): CR-013 names no test" in captured.err
+    # another gate prints none
+    assert cli.main(["advance", str(tmp_path), "--gate", "analyzed"]) == 0
+    assert "advisory" not in capsys.readouterr().err

@@ -293,8 +293,8 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
         MockChangeBuilder(tmp_path, change_id="CHG-011", title="Live specify")
         .step_intake()
         .step_analyze()
-        .step_specify()
     )
+    builder._core_advance("analyzed")
     _write_ratelimit_spec(tmp_path)
     _write_security_ratelimit_catalog(tmp_path)
     _set_slice_capability(
@@ -305,7 +305,7 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
     spec_delta = (
         "---\n"
         f"change: {builder.change_id}\n"
-        "status: accepted\n"
+        "status: proposed\n"
         "slices: [SLICE-01]\n"
         "added: [docs/spec/security/ratelimit.md#REQ-RL-01]\n"
         "modified: []\n"
@@ -313,6 +313,8 @@ def test_specified_accepts_live_spec_and_catalog_without_code(tmp_path: Path, re
         "---\n\n# Spec Delta\n"
     )
     (builder.change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    # The Core order: the Worker proposes, then the human answers the gate.
+    builder._update_change_yaml({"status": "specification-proposed"})
     from deltafuse.core.decide import apply_decision
 
     apply_decision(builder.change_dir, status="accepted", spec=True)
@@ -354,9 +356,8 @@ def test_specified_none_requires_existing_anchors(tmp_path: Path, repo_root: Pat
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
+    # step_specify already ran the Human Gate; a second acceptance is not a
+    # second click the Core will record (F6).
     assert check_gate(builder.change_dir, "specified") == []
 
     _set_slice_capability(builder.change_dir, "system.core", spec_refs=["docs/spec/core.md"])
@@ -468,6 +469,111 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
         tmp_path,
     )
     assert check_gate(builder.change_dir, "declaring") == []
+
+
+def test_already_green_red_cannot_carry_the_implemented_gate(
+    tmp_path: Path, repo_root: Path
+):
+    """F2: an already-green Red proves no delta, so there is nothing for Green to
+    have turned green - `green_covers_red` matches Red's `tests.failed`, which is
+    empty here, and the whole lifecycle closed on a product nobody modified."""
+    import sys
+
+    from deltafuse.core.evidence import run_evidence
+    from deltafuse.core.transitions import set_artifact_status
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-101", title="Already green lift")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    # The spec says cooldown() MUST be >= 30; the product returns 0 and the
+    # oracle the Worker wrote asserts >= 0, so it passes on unchanged code.
+    (tests_dir / "test_task-001.py").write_text(
+        "def test_cooldown_window():\n    cooldown = 0\n    assert cooldown >= 0\n",
+        encoding="utf-8",
+    )
+    argv = [sys.executable, "tests/test_task-001.py"]
+
+    red = run_evidence(
+        builder.change_dir,
+        phase="red",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    assert red.payload["result"] == "already-green"
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+    # Declare's own gate still accepts the observation - it is a legal Declare
+    # outcome (docs/workflow.md), just a stopping one.
+    assert check_gate(builder.change_dir, "declaring") == []
+
+    run_evidence(
+        builder.change_dir,
+        phase="green",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    run_evidence(
+        builder.change_dir,
+        phase="regression",
+        task="TASK-001",
+        argv=argv,
+        changed_paths=["tests/test_task-001.py"],
+    )
+    set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
+
+    errors = check_gate(builder.change_dir, "implemented")
+    assert any("already-green" in e for e in errors), errors
+
+
+def test_converged_gate_reads_the_verification_verdict(tmp_path: Path, repo_root: Path):
+    """F3: verification.md is hand-written prose that structural_kind excludes, so
+    the converged gate asked only `.is_file()`. A file recording a gap - the very
+    thing verify/SKILL.md says must stop the Change - closed the gate it was
+    telling the Core not to close."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-103", title="Gap verdict")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+        .step_implement()
+        .step_verify()
+    )
+    ver_file = builder.change_dir / "verification.md"
+    assert check_gate(builder.change_dir, "converged") == []
+
+    ver_file.write_text(
+        "# Change Verification\n\n- Outcome: `test-gap`\n\n"
+        "TASK-001 has no regression evidence. Do not converge.\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("test-gap" in e for e in errs), errs
+
+    # The template's own placeholder line is not a verdict.
+    ver_file.write_text(
+        "# Change Verification\n\n"
+        "- Outcome: `converged | tasks-missing | spec-gap | test-gap`\n",
+        encoding="utf-8",
+    )
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("is not one of" in e for e in errs), errs
+
+    # Neither is prose with no outcome line at all.
+    ver_file.write_text("# Verification\nAll claims verified.\n", encoding="utf-8")
+    errs = check_gate(builder.change_dir, "converged")
+    assert any("records no outcome" in e for e in errs), errs
 
 
 def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
@@ -700,7 +806,7 @@ def test_decomposed_rejects_fifty_allowed_paths(tmp_path: Path, repo_root: Path)
 
 
 def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: Path):
-    """RM-002: Red evidence must not write src/** (PHASE_CONTRACTS target)."""
+    """RM-002: Red evidence must not write src/** the task did not declare."""
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-024", title="Red writes src")
@@ -710,12 +816,62 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
         .step_decompose()
         .step_declare()
     )
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = ["tests/test_task-001.py"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
     red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
     red["changed_paths"] = ["src/core.py"]
     write_stamped_evidence(red_file, red, tmp_path)
     errs = check_gate(builder.change_dir, "declaring")
     assert any("outside the phase contract" in e and "src/core.py" in e for e in errs)
+
+
+def test_declare_may_write_the_stub_its_task_declared(tmp_path: Path, repo_root: Path):
+    """F8: on a compiled language the test cannot reference a symbol that does
+    not exist yet, so Declare has to add the throwing stub - which is what
+    declare/SKILL.md tells the Worker to do and what test_reports.py calls "the
+    canonical Java red". The gate judged Red's changed_paths against
+    phase_write_globs("declare") alone and never read the task declaration, so
+    the stub was structurally impossible: no stub, no compilation, no Surefire
+    report, and read_report's None made the Red a refused fixture-error."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-024-stub", title="Compiled Red stub")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+    )
+    stub = "src/app/penalty.py"
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    meta["allowed_paths"] = [stub, "tests/test_task-001.py"]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+
+    red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    red["changed_paths"] = [stub, "tests/test_task-001.py"]
+    write_stamped_evidence(red_file, red, tmp_path)
+
+    errs = check_gate(builder.change_dir, "declaring")
+    assert not any("outside the phase contract" in e for e in errs), errs
+
+    # The declaration is what widens it: a product path the task did not declare
+    # is still refused, and so is a path it forbids.
+    red["changed_paths"] = [stub, "src/app/other.py"]
+    write_stamped_evidence(red_file, red, tmp_path)
+    errs = check_gate(builder.change_dir, "declaring")
+    assert any("outside the phase contract" in e and "src/app/other.py" in e for e in errs)
+
+    meta["forbidden_paths"] = [stub]
+    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    red["changed_paths"] = [stub]
+    write_stamped_evidence(red_file, red, tmp_path)
+    errs = check_gate(builder.change_dir, "declaring")
+    assert any("forbidden_paths" in e and stub in e for e in errs)
 
 
 def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_root: Path):
@@ -730,17 +886,9 @@ def test_analyzed_still_requires_routing_slices_coverage(tmp_path: Path, repo_ro
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
-def test_narrow_analyze_gate_after_full_set(tmp_path: Path, repo_root: Path):
-    """RM-020: narrow may write three times; analyzed still waits for the set."""
+def test_analyze_gate_waits_for_the_full_set(tmp_path: Path, repo_root: Path):
+    """RM-020: analyzed waits for routing, slices and coverage, one write at a time."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    lock_path = tmp_path / ".deltafuse" / "lock.yaml"
-    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
-    lock.setdefault("workflow", {})["call_width"] = "narrow"
-    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
-    cfg_path = tmp_path / ".deltafuse" / "config.yaml"
-    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    cfg.setdefault("workflow", {})["call_width"] = "narrow"
-    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 
     builder = MockChangeBuilder(tmp_path, change_id="CHG-028", title="Narrow analyze")
     builder.step_intake()
@@ -760,11 +908,9 @@ def test_narrow_analyze_gate_after_full_set(tmp_path: Path, repo_root: Path):
     assert check_gate(builder.change_dir, "analyzed") == []
 
 
-def test_wide_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
-    """RM-020: wide default may write the full Analyze set in one step."""
+def test_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
+    """RM-020: the full Analyze set written in one step closes analyzed."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "wide"
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-029", title="Wide analyze")
         .step_intake()
@@ -775,7 +921,7 @@ def test_wide_analyze_one_step_closes_analyzed(tmp_path: Path, repo_root: Path):
 
 
 def test_feature_analyzed_does_not_skip_specify(tmp_path: Path, repo_root: Path):
-    """RM-020 / BM-01: call_width does not skip Specify for a feature Change."""
+    """RM-020 / BM-01: Analyze does not skip Specify for a feature Change."""
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-030", title="Tiny feature")
@@ -867,9 +1013,6 @@ def test_docs_route_targets_spec_without_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "declaring") == []
@@ -939,9 +1082,6 @@ def test_ops_route_writes_ops_files_not_src(tmp_path: Path, repo_root: Path):
         .step_analyze()
         .step_specify()
     )
-    from deltafuse.core.decide import apply_decision
-
-    apply_decision(builder.change_dir, status="accepted", spec=True)
     assert check_gate(builder.change_dir, "specified") == []
     builder.step_decompose().step_declare()
     assert check_gate(builder.change_dir, "declaring") == []

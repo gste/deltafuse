@@ -176,6 +176,35 @@ def apply_decision(
             delta = change_dir / "spec-delta.md"
             if not delta.is_file():
                 raise DecideError(f"spec-delta.md is missing in {change_dir.as_posix()}")
+            change_file = change_dir / "change.yaml"
+            proposed = _load_yaml_mapping(change_file).get("status") == "specification-proposed"
+            if not proposed and status == "accepted":
+                # Proposing is what runs the machine checks on a spec delta
+                # (transitions.set_artifact_status). A Change that never proposed
+                # has had nothing checked, and recording the verdict first while
+                # reporting the errors afterwards wrote an `accepted` receipt and
+                # exited 0 - the same case that check was added for: a format
+                # error in front of the human, who can neither accept it nor fix
+                # it. Rejection is deliberately not guarded: a human must always
+                # be able to say no.
+                pre_errors = check_gate(
+                    change_dir,
+                    "specified",
+                    assume_status="specification-proposed",
+                    human=False,
+                )
+                raise DecideError(
+                    "this Change never reached 'specification-proposed', so there is no "
+                    "proposal for the Human Gate to answer; nothing was written - the Worker "
+                    "proposes with `deltafuse state <change-dir> --change --status "
+                    "specification-proposed`"
+                    + (
+                        "; the proposal will be refused until these are fixed: "
+                        + "; ".join(pre_errors)
+                        if pre_errors
+                        else ""
+                    )
+                )
             try:
                 text = replace_frontmatter(delta.read_text(encoding="utf-8"), {"status": status})
             except FrontmatterParseError as ex:
@@ -195,8 +224,6 @@ def apply_decision(
                 human_check=human_check,
             )
             change_status = None
-            change_file = change_dir / "change.yaml"
-            proposed = _load_yaml_mapping(change_file).get("status") == "specification-proposed"
             if status == "rejected" and proposed:
                 from deltafuse.core.transitions import record_change_status
 

@@ -116,6 +116,8 @@ Each capability must strictly specify:
 2. Code roots and test suites implementing it (`code_roots`, `test_roots`);
 3. Dependent capabilities and applicable policies (`depends_on`, `policies`).
 
+A `code_roots` entry is a directory prefix: `src/ratelimit`, `src/ratelimit/` and `src/ratelimit/**` all own the whole tree below it. `dir/*` owns only the files lying directly in `dir`, not its subdirectories, so a directory whose subdirectories belong to another capability can still give its own files an owner (`markdown/*` beside `markdown/extensions/`). Active capabilities' roots must not overlap: `dir/*` overlaps the same `dir/*` and a tree root that is `dir` or one of its ancestors, not `dir/sub/`. A draft whose `dir/*` root holds a file directly in `dir` stops a Change at `analyzed`, as for any inherited code.
+
 ---
 
 ## Change Slicing
@@ -156,6 +158,6 @@ Each lifecycle step operates under a strict Context Contract defining what an ag
 - **The counting mode is recorded, never assumed.** `count_tokens` returns the mode (`endpoint` / `heuristic`) alongside the number, `lint-context` and `check-gate` journal it, and a run that counted nothing reports `unknown` rather than the configured mode. Setting `DELTAFUSE_TOKENIZER_REQUIRED` makes a measured count mandatory: an absent or unresponsive endpoint raises `TokenizerUnavailableError` instead of falling back to the heuristic. A qualification campaign sets it, because two machines that silently disagree on the counting mode produce budget verdicts that cannot be compared.
 - `PHASE_CONTRACTS` in `src/deltafuse/core/context.py` is enforced structurally: task `allowed_paths` must match Declare/Implement write globs; Red `changed_paths` must match Declare write; Green/regression `changed_paths` must match Implement write. Runtime tool sandboxing of agent reads remains the host IDE/CLI; the FSM does not intercept live file opens.
 - Exceeding the context budget is treated as a design defect requiring finer decomposition.
-- `workflow.call_width` (`narrow` | `medium` | `wide`) is a recorded Analyze profile. `deltafuse next` still selects one pass (routing, then one capability slice, then coverage). It is not a second token budget and does not close `analyzed` without routing.yaml, slices covering every routing primary capability, and coverage.yaml.
+- `deltafuse next` selects one Analyze pass at a time (routing, then one capability slice, then coverage), and `analyzed` does not close without routing.yaml, slices covering every routing primary capability, and coverage.yaml. (`workflow.call_width` was retired in 3.3.6: nothing read it. An older config or lock that still carries it is accepted and ignored.)
 - Change `route` (`code` default, `docs`, `ops`) selects Declare/Implement write globs. `docs`/`ops` stay outside `src/**` and `tests/**`; they do not skip Specify.
 - Violating the context contract (e.g., an Implementer modifying specification, or Red evidence listing `src/**`) renders the resulting artifacts invalid and halts the lifecycle gate.

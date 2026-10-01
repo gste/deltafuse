@@ -125,6 +125,13 @@ def test_cli_write_reports_create_and_a_precise_refusal(tmp_path: Path, repo_roo
 
 def test_leash_diff_flags_a_hand_written_task_in_the_envelope(tmp_path: Path, repo_root: Path, capsys):
     builder = _specified(tmp_path, repo_root, "CHG-605")
+    # this test is about what the guard refuses: `enforce` (a fresh install is advisory, exit 0)
+    import yaml
+
+    config = tmp_path / ".deltafuse" / "config.yaml"
+    settings = yaml.safe_load(config.read_text(encoding="utf-8"))
+    settings["workflow"]["leash"] = "enforce"
+    config.write_text(yaml.safe_dump(settings, sort_keys=False), encoding="utf-8")
     ret, data = _leash_diff(tmp_path, capsys)
     assert data["violations"] == [], data["violations"]
     write_artifact(builder.change_dir, "task", identity="TASK-009", fields=dict(TASK), body="Prose.\n")

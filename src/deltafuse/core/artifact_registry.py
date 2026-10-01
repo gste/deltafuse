@@ -597,6 +597,7 @@ class ArtifactRegistry:
                         )
 
             spec_refs = payload.get("spec_refs") or []
+            draft_specs: frozenset[str] | None = None
             if isinstance(spec_refs, list):
                 for ref in spec_refs:
                     if not isinstance(ref, str):
@@ -639,12 +640,33 @@ class ArtifactRegistry:
                                 is_declared = True
 
                         if not is_declared:
+                            # A capability proposed in Analyze (`deltafuse capability
+                            # propose`, q8) promises a spec file that Specify writes
+                            # later. The gate side already allows the reference
+                            # (check_gate passes drafts=draft_spec_files); without it
+                            # here the Writer refused the slice the propose flow exists
+                            # for and named spec-delta.md as the way out - a Specify
+                            # artifact that does not exist in Analyze and is outside its
+                            # write scope, so `analyzed` could never close.
+                            if draft_specs is None:
+                                from deltafuse.core.integrity import draft_spec_files
+
+                                draft_specs = (
+                                    draft_spec_files(repo_root) if repo_root else frozenset()
+                                )
+                            is_declared = ref_path_str in draft_specs
+
+                        if not is_declared:
                             diagnostics.append(
                                 ValidationDiagnostic(
                                     code="missing_reference",
                                     stage="reference",
                                     path="/spec_refs",
-                                    message=f"Referenced spec path '{ref_path_str}' does not exist and is not declared in spec-delta",
+                                    message=(
+                                        f"Referenced spec path '{ref_path_str}' does not exist, is not "
+                                        "declared in spec-delta, and is not a spec file a draft "
+                                        "capability promises"
+                                    ),
                                 )
                             )
 

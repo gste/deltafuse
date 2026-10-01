@@ -75,6 +75,16 @@ def _git(root: Path, *args: str) -> str:
     return proc.stdout.strip()
 
 
+def _enforce(root: Path) -> None:
+    """These tests are about what the leash refuses: `enforce` (a fresh install is advisory)."""
+    import yaml
+
+    config = root / ".deltafuse" / "config.yaml"
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["workflow"]["leash"] = "enforce"
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
 def _init_repo(root: Path) -> str:
     (root / ".gitignore").write_text("", encoding="utf-8")
     _git(root, "init")
@@ -89,6 +99,7 @@ def test_clean_checkout_with_out_of_envelope_commit_fails_ci(
     """SEC-01: on a clean PR checkout the local diff is empty; the committed
     base..head range is what CI must judge."""
     install(target_dir=tmp_path, framework_root=repo_root)
+    _enforce(tmp_path)
     base = _init_repo(tmp_path)
 
     # The Worker commits an out-of-envelope product file and the checkout is clean.

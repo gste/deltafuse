@@ -33,9 +33,9 @@ def archive_change(
 ) -> Path:
     """Safely archives a Change package after convergence or terminal status.
     
-    1. Always re-verifies the converged gate unless the Change is in an
-       explicit non-converged terminal status (DF3-002); `force` no longer
-       bypasses gate verification.
+    1. Requires the Change to be *at* `converged` - the receipted transition,
+       not merely the gate's content - unless it holds an explicit non-converged
+       terminal status (DF3-002); `force` never bypasses either check.
     2. Enforces archive immutability: fails if target archive destination already exists.
     3. Updates status in change.yaml to 'archived'.
     4. Moves package to docs/archive/changes/YYYY-MM-DD-<change_id>/.
@@ -72,6 +72,22 @@ def archive_change(
 
     bypass_gate = {"rejected", "duplicate", "not-reproduced", "superseded"}
     if current_status not in bypass_gate:
+        # `check_gate` proves a gate's content, not its turn: a Change whose
+        # journal stops at `declaring` can still hold every artifact the
+        # converged gate reads, and `archived` sits outside VALID_CHAIN_STATUSES,
+        # so once the package moved nothing could ever detect the skip.
+        from deltafuse.core.transitions import gate_order_errors as _order_errors
+
+        if current_status != "converged":
+            order_errs = _order_errors(cpath, "converged") or [
+                f"Gate converged: not this Change's turn - status is '{current_status}', "
+                "and archive applies only from 'converged' (run deltafuse advance "
+                f"<change-dir> --gate converged) or an explicit terminal status "
+                f"{sorted(bypass_gate)}"
+            ]
+            raise ArchivalError(
+                f"Cannot archive Change '{cid}': {'; '.join(order_errs)}"
+            )
         gate_errs = check_gate(cpath, "converged")
         if gate_errs:
             raise ArchivalError(

@@ -50,6 +50,89 @@ properties:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
     description: Content hash of docs/spec/** and src/** when the evidence was recorded.
+  red_oracle:
+    type: string
+    pattern: '^sha256:[a-fA-F0-9]{64}$'
+    description: >
+      Red only: content hash of the test files this Red declared, as sorted
+      `path:sha256` pairs. The declared oracle is frozen - Implement may add
+      tests but must not change the one Red was taken against. The implemented
+      gate recomputes it and refuses a difference. Absent on records written
+      before the field existed and when Declare listed no test file. Since the
+      per-test freeze (`red_oracle_tests`) the Core writes it only for a Red
+      without a runner report naming failed tests, where it cannot tell which
+      tests are the oracle; a record carries one of the two, never both.
+  red_oracle_tests:
+    type: object
+    additionalProperties: false
+    required: [version, tests, files]
+    description: >
+      Red only, when the runner's report names failed tests: the declared
+      oracle frozen per test instead of per file (core/oracle.py). `tests`
+      holds each Python test Red saw fail, with two digests over its
+      normalised AST (no positions, comments or docstrings): `body` - the
+      definition with its decorators; `context` - within the test's own
+      module, its class, the definitions, assignments and imported names it
+      refers to (transitively), and what pytest applies without a name
+      (pytestmark, pytest_plugins, hooks, autouse fixtures, module-level code
+      binding no name). `files` is frozen whole: every conftest.py from the
+      test's directory up to the product root, present or not (null), and
+      every other declared Python module without tests, by normalised AST
+      (`ast`); Java, data and files that do not parse by bytes (`bytes`) -
+      Java is frozen per file, not per method, until per-method freezing is
+      verified on a real Maven/Gradle run. `config` digests the bytes of the
+      pytest configuration files (pytest.ini, .pytest.ini, pytest.toml,
+      .pytest.toml, pyproject.toml, tox.ini, setup.cfg) on the same path.
+      Names are not followed into other modules. New tests and code the test
+      does not refer to are not frozen. The Green evidence call and the
+      implemented gate recompute every entry and name the one that moved; a
+      record without `version` was written by a pre-release build and is
+      refused with a request to record Red again.
+    properties:
+      version: {const: 2}
+      config: {type: string, pattern: '^sha256:[a-fA-F0-9]{64}$'}
+      tests:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [path, test, body, context]
+          properties:
+            path: {type: string}
+            test: {type: string, description: "Name inside the file, `Class::method` for a method."}
+            body: {type: string, pattern: '^sha256:[a-fA-F0-9]{64}$'}
+            context: {type: string, pattern: '^sha256:[a-fA-F0-9]{64}$'}
+      files:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [path, form, sha256]
+          properties:
+            path: {type: string}
+            form: {enum: [bytes, ast]}
+            sha256:
+              type: [string, 'null']
+              pattern: '^sha256:[a-fA-F0-9]{64}$'
+              description: Null when the file did not exist at Red.
+  oracle_isolation:
+    type: object
+    additionalProperties: false
+    required: [command, exit_code, not_passing]
+    description: >
+      Green only, when Red froze tests per test and Green ran pytest: the
+      frozen Red tests run on their own - Green's command with its test
+      selection (paths, node ids, -k, -m, --deselect, --ignore, --lf) replaced
+      by those tests and `-p` dropped, its configuration options (-c, -o,
+      --rootdir, --import-mode, a plugin's own options) kept, PYTEST_ADDOPTS and
+      PYTEST_PLUGINS cleared. `not_passing` lists the Red ids that did not pass
+      there; the Green evidence call and the implemented gate refuse a Green
+      where it is not empty, or where the runner reported tests and this field
+      is missing.
+    properties:
+      command: {type: string}
+      exit_code: {type: integer}
+      not_passing: {type: array, items: {type: string}}
   recorded_by:
     const: deltafuse-evidence
     description: Optional kernel stamp. Gates reject evidence YAML without a matching hash.

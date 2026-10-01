@@ -95,7 +95,9 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
 
     # Add verification artifacts
-    (builder.change_dir / "verification.md").write_text("# Verification", encoding="utf-8")
+    (builder.change_dir / "verification.md").write_text(
+        "# Change Verification\n\n- Outcome: `converged`\n", encoding="utf-8"
+    )
     ver_dir = builder.change_dir / "evidence" / "verification"
     ver_dir.mkdir(parents=True, exist_ok=True)
     write_stamped_evidence(ver_dir / "run.yaml", {

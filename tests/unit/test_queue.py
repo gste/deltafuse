@@ -223,8 +223,6 @@ def test_next_analyze_json_names_routing_pass(tmp_path: Path, repo_root: Path, c
 
 def test_next_analyze_wide_still_one_slice(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    lock = yaml.safe_load((tmp_path / ".deltafuse" / "lock.yaml").read_text(encoding="utf-8"))
-    assert lock["workflow"]["call_width"] == "wide"
     builder = MockChangeBuilder(
         tmp_path, change_id="CHG-056", title="Wide serial"
     ).step_intake(claims=["CR-001", "CR-002"])

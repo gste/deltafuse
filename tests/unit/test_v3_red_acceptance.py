@@ -59,6 +59,48 @@ def test_f01_archive_cannot_skip_gate_by_hand_set_converged(
         archive_change(builder.change_dir, repo_root=tmp_path)
 
 
+def test_f01b_archive_refuses_a_change_that_never_reached_converged(
+    tmp_path: Path, repo_root: Path
+):
+    """adversarial_worker: a Change whose journal stops at `declaring` but whose
+    converged *content* is all on disk archived cleanly - `check_gate` is
+    content-only and `archived` is outside VALID_CHAIN_STATUSES, so afterwards
+    nothing could ever detect that implemented and converged never closed."""
+    install = pytest.importorskip("deltafuse.core.installer").install
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-902", title="Never converged")
+        .step_intake()
+        .step_analyze()
+        .step_specify()
+        .step_decompose()
+        .step_declare()
+        .step_implement()
+        .step_verify()
+    )
+    # Rewind the journal and the status to the audit's state: the Worker wrote
+    # every artifact the converged gate reads, but never asked the Core to
+    # close implemented or converged. The chain replay stays valid because
+    # `declared` is a legitimately receipted status.
+    from deltafuse.core.transitions import receipt_chain_errors, transitions_path
+
+    journal = transitions_path(tmp_path)
+    kept = [
+        line
+        for line in journal.read_text(encoding="utf-8").splitlines()
+        if json.loads(line).get("to") not in {"implemented", "converged"}
+    ]
+    journal.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    builder._update_change_yaml({"status": "declared"})
+
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []
+    assert check_gate(builder.change_dir, "converged") == []
+
+    with pytest.raises(ArchivalError, match="converged"):
+        archive_change(builder.change_dir, repo_root=tmp_path)
+    assert builder.change_dir.is_dir()  # nothing was moved
+
+
 # ---------------------------------------------------------------- F-02 (P0)
 
 

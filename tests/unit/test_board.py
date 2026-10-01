@@ -69,7 +69,7 @@ def test_board_empty_product_still_has_layout(tmp_path: Path, repo_root: Path):
     assert snapshot["product"]["baseline"] == "draft"
     assert snapshot["product"]["changes_path"] == "docs/changes"
     assert snapshot["product"]["archive_changes_path"] == "docs/archive/changes"
-    assert snapshot["product"]["call_width"] == "wide"
+    assert "call_width" not in snapshot["product"]
     assert "framework_version" in snapshot["product"]
 
 

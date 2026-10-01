@@ -73,7 +73,14 @@ CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.jsonl"})
 # gate-password.yaml: a Worker that replaced the hash with its own password, or
 # deleted it, could answer the Human Gate itself.
-CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml"}
+# bench.yaml: the bench's seed-integrity trust root - score.py reads
+# `seed_hashes` from it to judge `code.untouched`, so rewriting those digests
+# erases the Worker's own premature src/ edits (bench mutant M08) and every check
+# downstream still reads green. Written by the bench harness that initializes the
+# product (deltafuse.bench.init_product), never by the Worker.
+CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml", "bench.yaml"}
+# Who legitimately writes a Core-owned file that is not a journal.
+CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this product"}
 # Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
 # `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
 # `capability-draft`: `deltafuse capability propose` adding a draft to the
@@ -190,9 +197,23 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     allowed_paths, forbidden = _task_path_lists(product_root, item)
     if step in {"declare", "implement"} and allowed_paths:
         phase = phase_write_globs(step, route)
+        # Declare writes tests plus the product stub its task declared: a
+        # compiled language cannot compile a test against a symbol that does not
+        # exist yet, so the throwing stub has to be on disk before Red can be
+        # taken at all (declare/SKILL.md; test_reports.py reads a JVM `<error>`
+        # as a test that ran and failed for exactly that reason). Only the
+        # task's own product paths qualify, and never `docs/changes/**` - that is
+        # where the declaration bounding them lives.
+        product_phase = list(phase)
+        if step == "declare":
+            product_phase = [
+                glob
+                for glob in phase_write_globs("implement", route)
+                if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
+            ]
         change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
         test_side = [glob for glob in phase if glob.replace("\\", "/").startswith("tests")]
-        product_side = [path for path in allowed_paths if matches_contract_globs(path, phase)]
+        product_side = [path for path in allowed_paths if matches_contract_globs(path, product_phase)]
         # A task's forbidden_paths bound its product and test scope. They never
         # remove the Change's own files: evidence is written by `deltafuse
         # evidence`, and a task forbidding `docs/**` made that evidence read as
@@ -815,7 +836,8 @@ def check_paths(
                 )
                 continue
             errors.append(
-                f"leash: '{raw}' is Core-owned; mutate it only through the deltafuse CLI (DF3-007)"
+                f"leash: '{raw}' is Core-owned; mutate it only through "
+                f"{CORE_OWNED_WRITER.get(tail, 'the deltafuse CLI')} (DF3-007)"
             )
             continue
         if raw.startswith(".git/") or is_exempt_path(raw):
@@ -895,6 +917,25 @@ def git_dirty_paths(
     if base:
         diff_args.append(f"{base}..{head or 'HEAD'}")
     else:
+        # A repository with no commits has no HEAD to diff against, and git says
+        # so in its own words ("fatal: ambiguous argument 'HEAD'"). That is the
+        # state of every freshly inited product at the moment run/SKILL.md tells
+        # the Worker to run leash. Diffing the empty tree instead would list the
+        # whole scaffold as the Worker's writes and bury the real answer under it.
+        unborn = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if unborn.returncode != 0:
+            raise LeashError(
+                "leash needs one commit to diff against and this repository has no commit yet, "
+                "so there is no baseline a write envelope can be judged against. Make an initial "
+                "commit of the installed scaffold (`git add -A` then `git commit`), then run "
+                "`deltafuse leash` again"
+            )
         diff_args.append("HEAD")
     tracked = subprocess.run(
         diff_args,

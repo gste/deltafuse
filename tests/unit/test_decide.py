@@ -194,6 +194,41 @@ def test_proposing_a_self_accepted_spec_delta_is_refused(tmp_path: Path, repo_ro
     assert "without deltafuse decide" in err
 
 
+def test_decide_spec_checks_before_it_records_an_acceptance(
+    tmp_path: Path, repo_root: Path, capsys
+):
+    """F6: decide wrote the verdict and its receipt before any status check, so a
+    Change that never reached specification-proposed got `status: accepted` plus
+    a spec receipt and exit 0 - in the same run that printed the specified gate's
+    errors. That is exactly what the propose-side check exists to prevent: a
+    format error in front of the human, who can neither accept it nor fix it."""
+    from deltafuse.core.gate_receipts import load_receipts
+
+    builder = _analyzed_with_delta(
+        tmp_path, repo_root, "CHG-083",
+        "---\nchange: CHG-083\nstatus: proposed\nslices: [SLICE-01]\n"
+        "modified: []\nremoved: []\n---\n\n# Spec\n",  # 'added' is missing
+    )
+    assert _change_status(builder) == "analyzed"  # the Worker never proposed
+
+    assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 1
+    _, err = capsys.readouterr()
+    assert "'added' is a required property" in err
+
+    text = (builder.change_dir / "spec-delta.md").read_text(encoding="utf-8")
+    assert "status: proposed" in text
+    assert "status: accepted" not in text
+    assert [r for r in load_receipts(tmp_path) if r.get("kind") == "spec"] == []
+    assert _change_status(builder) == "analyzed"
+
+    # Saying no is always available: a human must be able to reject a spec delta
+    # the machine checks reject, so the pre-write check guards acceptance only.
+    assert main(["decide", str(builder.change_dir), "--spec", "--status", "rejected"]) == 0
+    assert "status: rejected" in (
+        builder.change_dir / "spec-delta.md"
+    ).read_text(encoding="utf-8")
+
+
 def test_decide_spec_reports_a_transition_that_did_not_land(tmp_path: Path, repo_root: Path, capsys):
     """If the spec delta breaks after the proposal, accepting it records the
     click but cannot move the Change. decide used to exit 0 with the errors on

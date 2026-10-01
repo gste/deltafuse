@@ -137,3 +137,49 @@ def test_an_active_capability_with_code_is_not_stopped(tmp_path: Path):
     (product / "src" / "legacy" / "mod.py").write_text("x = 1\n", encoding="utf-8")
     change = _routed_to(product, "core.legacy")
     assert _uncharacterized_draft_errors(change, product) == []
+
+
+def test_a_direct_root_and_the_directory_below_it_do_not_overlap(tmp_path: Path):
+    """q6 `dir/*`: markdown/* (the core) beside markdown/extensions/ (the extensions)."""
+    product = _product(
+        tmp_path,
+        {"core": _cap("active", "markdown/*"), "extensions": _cap("active", "markdown/extensions/")},
+    )
+    assert validate_active_code_roots(product) == []
+    assert not any("code_roots" in e for e in validate_config(product))
+
+
+def test_a_direct_root_still_overlaps_its_own_directory_and_itself(tmp_path: Path):
+    for i, (first, second) in enumerate((("markdown/*", "markdown/"), ("markdown/*", "markdown/*"))):
+        sub = tmp_path / f"pair{i}"
+        sub.mkdir()
+        product = _product(sub, {"a": _cap("active", first), "b": _cap("active", second)})
+        assert len(validate_active_code_roots(product)) == 1, (first, second)
+    # a direct root of a parent directory owns nothing in the child: no overlap
+    other = tmp_path / "other"
+    other.mkdir()
+    product = _product(other, {"a": _cap("active", "pkg/*"), "b": _cap("active", "pkg/sub/*")})
+    assert validate_active_code_roots(product) == []
+    # while a recursive root above a direct one does contain it
+    third = tmp_path / "third"
+    third.mkdir()
+    product = _product(third, {"a": _cap("active", "pkg/"), "b": _cap("active", "pkg/sub/*")})
+    assert len(validate_active_code_roots(product)) == 1
+
+
+def test_a_draft_with_a_direct_root_over_files_halts_and_over_nothing_does_not(tmp_path: Path):
+    product = _product(tmp_path, {"legacy": _cap("draft", "src/legacy/*")})
+    (product / "src" / "legacy" / "sub").mkdir(parents=True)
+    # only a file in a subdirectory: the direct root owns none of it
+    (product / "src" / "legacy" / "sub" / "deep.py").write_text("x = 1\n", encoding="utf-8")
+    change = _routed_to(product, "core.legacy")
+    assert _uncharacterized_draft_errors(change, product) == []
+    (product / "src" / "legacy" / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    errors = _uncharacterized_draft_errors(change, product)
+    assert len(errors) == 1 and "src/legacy/*" in errors[0]
+    # an empty directory (the q8 proposal) is not stopped
+    second = tmp_path / "second"
+    second.mkdir()
+    product2 = _product(second, {"stats": _cap("draft", "src/monitoring/*")})
+    (product2 / "src" / "monitoring").mkdir(parents=True)
+    assert _uncharacterized_draft_errors(_routed_to(product2, "core.stats"), product2) == []

@@ -1,5 +1,4 @@
 from deltafuse.core.lock import (
-    DEFAULT_CALL_WIDTH,
     LOCK_SCHEMA_VERSION,
     format_lock_yaml,
     lock_schema_version_errors,
@@ -10,28 +9,26 @@ from deltafuse.core.lock import (
 
 
 def test_workflow_defaults_when_absent():
-    width, auto, errors = workflow_from_mapping({})
-    assert width == DEFAULT_CALL_WIDTH == "wide"
+    auto, errors = workflow_from_mapping({})
     assert auto is False
     assert errors == []
 
 
-def test_workflow_rejects_invalid_call_width():
-    width, auto, errors = workflow_from_mapping({"workflow": {"call_width": "ornith"}})
-    assert width == "wide"
+def test_a_retired_call_width_is_ignored_whatever_it_holds():
+    """F14: nothing read `workflow.call_width`; an older file that has it is not wrong."""
+    auto, errors = workflow_from_mapping({"workflow": {"call_width": "ornith"}})
     assert auto is False
-    assert any("call_width" in e for e in errors)
+    assert errors == []
 
 
 def test_workflow_rejects_invalid_leash():
-    width, auto, errors = workflow_from_mapping({"workflow": {"leash": "banana"}})
-    assert width == DEFAULT_CALL_WIDTH
+    auto, errors = workflow_from_mapping({"workflow": {"leash": "banana"}})
     assert auto is False
     assert any("leash" in e for e in errors)
 
 
 def test_workflow_accepts_yaml11_off_boolean():
-    _, _, errors = workflow_from_mapping({"workflow": {"leash": False}})
+    _, errors = workflow_from_mapping({"workflow": {"leash": False}})
     assert errors == []
     mode = normalize_leash_mode(False)
     assert mode == "off"
@@ -42,27 +39,18 @@ def test_format_lock_yaml_pins_profile():
         version="2.0.0",
         source="deltafuse://v2.0.0",
         content_hash="abc",
-        call_width="narrow",
         auto_accept_decisions=False,
     )
-    assert "call_width: narrow" in text
+    assert "call_width" not in text
     assert "auto_accept_decisions: false" in text
     assert "content_hash: sha256:abc" in text
     assert f"schema_version: {LOCK_SCHEMA_VERSION}\n" in text
 
 
-def test_layout_mismatch_call_width():
-    errors = workflow_alignment_errors(
-        {"workflow": {"call_width": "narrow"}},
-        {"workflow": {"call_width": "wide"}},
-    )
-    assert any("does not match locked call_width" in e for e in errors)
-
-
-def test_layout_accepts_aligned_narrow():
+def test_layout_ignores_a_call_width_that_differs():
     assert workflow_alignment_errors(
         {"workflow": {"call_width": "narrow", "auto_accept_decisions": False}},
-        {"workflow": {"call_width": "narrow", "auto_accept_decisions": False}},
+        {"workflow": {"call_width": "wide", "auto_accept_decisions": False}},
     ) == []
 
 

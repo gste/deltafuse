@@ -151,3 +151,59 @@ def test_installer_adapters_do_not_vendor_oracle(tmp_path: Path, repo_root: Path
             text = path.read_text(encoding="utf-8").lower()
             assert "oracle.yaml" not in text
             assert "hidden_suite" not in text
+
+
+def _spec_halt_product(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-082", title="Halt human check").step_intake().step_analyze()
+    builder._core_advance("analyzed")
+    builder._update_change_yaml({"status": "specification-proposed"})
+    return builder
+
+
+def test_halt_without_a_password_offers_buttons(tmp_path: Path, repo_root: Path, capsys):
+    """No Human Gate password: the click in the chat runs `decide`, so the halt says
+    it is buttons and marks no choice as terminal-only."""
+    _spec_halt_product(tmp_path, repo_root)
+    ret, data = _next_json(tmp_path, capsys)
+    halt = data["halt"]
+    _assert_valid_halt(halt, repo_root)
+    assert halt["human_check"] == "none"
+    assert "terminal_required" not in halt
+    assert not any(row.get("interactive_only") for row in halt["choices"])
+    assert "buttons" in halt["prompt"]
+
+
+def test_halt_with_a_password_says_to_run_decide_in_a_terminal(tmp_path: Path, repo_root: Path, capsys):
+    """With a password `decide` refuses a non-terminal, so a button would fail:
+    the halt says so, marks the choices, and the prompt names what the human types."""
+    from deltafuse.core import gate_password
+
+    _spec_halt_product(tmp_path, repo_root)
+    gate_password.set_password(tmp_path, "correct horse battery")
+    ret, data = _next_json(tmp_path, capsys)
+    halt = data["halt"]
+    _assert_valid_halt(halt, repo_root)
+    assert halt["human_check"] == "password"
+    assert halt["terminal_required"] is True
+    runnable = [row for row in halt["choices"] if row["command"]]
+    assert runnable and all(row["interactive_only"] is True for row in runnable)
+    assert "terminal" in halt["prompt"] and "password" in halt["prompt"]
+    assert "Do not run" in halt["prompt"]
+    # the command a human types is in the prompt, ready to copy
+    assert runnable[0]["command"] in halt["prompt"]
+
+
+def test_decide_without_a_terminal_names_the_command_to_type(tmp_path: Path, repo_root: Path, capsys):
+    from deltafuse.core import gate_password
+
+    builder = _spec_halt_product(tmp_path, repo_root)
+    gate_password.set_password(tmp_path, "correct horse battery")
+    # the builder's own directory: docs/changes also holds a README, and which entry
+    # iterdir() yields first depends on the filesystem (CI on Linux took the README)
+    change = builder.change_dir
+    code = main(["decide", str(change), "--spec", "--status", "accepted"])
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "interactive terminal" in err
+    assert f"deltafuse decide {change} --spec --status accepted" in err

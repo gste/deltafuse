@@ -26,6 +26,7 @@ Producer command: `deltafuse next --json`. Python: `deltafuse.core.queue.build_h
 | Whether to show buttons | `halt` | Object → show buttons. `null` → run `selected`, no buttons. |
 | Button list and labels | `halt.choices[].label` | Render every choice. Do not add Merge / Push / Accept-all. |
 | What to run on click | `halt.choices[].command` | Non-null: run that string as-is from the product root. `null` (`id: inspect`): stop. Do not call `decide`. |
+| How the human answers | `halt.human_check`, `halt.terminal_required` | Optional, on `decision` and `spec`. `none`: a click runs `command`. `password`: `terminal_required` is true and each runnable choice has `interactive_only`; the host MUST NOT run `command`, it shows it to the human, who runs it in a terminal and types the password (`decide` refuses a non-terminal). The Worker never answers. |
 | Who may click | Human | Wait. Do not let the Worker select a choice from chat. `decide` records the click; it is not auto-accept. |
 | Bench pack | Judge host / `--pack` / `DELTAFUSE_BENCH_PACK` | Keep oracle and hidden suite off the Worker sandbox and off generated adapter skills. |
 | Board UI | Other repository | Read `deltafuse board --json` ([board-snapshot](board-snapshot.md)). Do not draw a board in this repo. Fuse-map UI and Cursor buttons live outside `src/deltafuse/**`. |

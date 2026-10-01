@@ -487,6 +487,17 @@ def advance_change(
                 f"transition table rejects '{current}' -> '{target}'"
             )
 
+        # The write envelope is checked here, not left to a command the Worker may
+        # never run (audit F7): advisory reports, enforce refuses before any receipt.
+        from deltafuse.core.leash_run import leash_at_advance
+
+        leash = leash_at_advance(change_path, product_root)
+        if leash is not None and leash["mode"] == "enforce" and leash["violations"]:
+            raise TransitionError(
+                f"gate '{gate}' refused by the write leash (workflow.leash: enforce): "
+                + "; ".join(leash["violations"])
+            )
+
         if gate == "converged":
             _record_trace_warnings(change_path)
 
@@ -502,7 +513,7 @@ def advance_change(
 
         _write_change_status(change_path, data, target)
 
-        return {
+        result = {
             "ok": True,
             "gate": gate,
             "from": current,
@@ -510,6 +521,9 @@ def advance_change(
             "receipt": entry["receipt"],
             "resumed": resumed is not None,
         }
+        if leash is not None:
+            result["leash"] = leash
+        return result
 
 
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
@@ -640,8 +654,11 @@ def set_artifact_status(
                 # fails the machine checks is the Worker's to fix: letting it
                 # through put a format error in front of the human, who can
                 # neither accept it (the gate still fails) nor fix it, and the
-                # run died on specify. Everything but the human receipt must
-                # pass first; the errors go back to the Worker.
+                # run died on specify. Everything the Worker can fix must pass
+                # first; the errors go back to the Worker. `human=False` also
+                # leaves out a capability still in `draft`, which is the human's
+                # to accept together with the specification - requiring it here
+                # deadlocked specify, because `decide --spec` needs this status.
                 from deltafuse.core.fsm import check_gate
 
                 gate_errors = check_gate(

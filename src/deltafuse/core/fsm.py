@@ -716,6 +716,183 @@ def _tasks_behind_gate(
     return errors
 
 
+VERIFICATION_OUTCOMES = (
+    "converged",
+    "tasks-missing",
+    "spec-gap",
+    "test-gap",
+    "scope-drift",
+    "decision-gap",
+    "not-reproduced",
+)
+
+_OUTCOME_LINE = re.compile(
+    r"^[ \t]*[-*]?[ \t]*\**Outcome\**[ \t]*:[ \t]*(?P<value>.+?)[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _verification_outcome_errors(ver_file: Path) -> list[str]:
+    """Read the verdict Verify wrote, not merely that it wrote a file.
+
+    verification.md is hand-written prose that structural_kind excludes, so it
+    has no schema and the converged gate asked only `.is_file()`: a file
+    recording "test-gap ... Do not converge" closed the very gate it was telling
+    the Core not to close. The vocabulary and the `- Outcome:` line are the
+    shipped template's and verify/SKILL.md's.
+    """
+    try:
+        text = ver_file.read_text(encoding="utf-8", errors="replace")
+    except OSError as ex:
+        return [f"Gate converged: verification.md cannot be read: {ex}"]
+    match = _OUTCOME_LINE.search(text)
+    if match is None:
+        return [
+            "Gate converged: verification.md records no outcome; add a line "
+            "`- Outcome: <verdict>` where <verdict> is exactly one of "
+            + ", ".join(VERIFICATION_OUTCOMES)
+        ]
+    raw = match.group("value").strip().strip("`").strip()
+    outcome = raw.lower()
+    if outcome not in VERIFICATION_OUTCOMES:
+        return [
+            f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
+            + ", ".join(VERIFICATION_OUTCOMES)
+            + "; the template's placeholder line is not a verdict - replace it"
+        ]
+    if outcome != "converged":
+        return [
+            f"Gate converged: verification.md records the gap '{outcome}', so Verify did not "
+            "converge this Change; a gap stops here and is not repaired silently - fix what "
+            "the gap names, then write the verification again"
+        ]
+    return []
+
+
+def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[str]:
+    """The oracle Red was taken against is frozen; Implement may add tests, not change it.
+
+    Green was matched to Red by test *name* alone, so rewriting the assertion
+    during Implement produced an authentic Green and an authentic regression
+    over a product nobody had changed. A record with `red_oracle_tests` froze
+    the tests Red saw fail (core/oracle.py); one with only `red_oracle` froze
+    the declared files whole and is checked that way. A record with neither was
+    written before the freeze existed, or declared no test file, and has
+    nothing to compare against.
+    """
+    from deltafuse.core.hasher import compute_red_oracle_digest, oracle_paths
+    from deltafuse.core.oracle import red_oracle_changes
+
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict):
+        return []
+    paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
+    per_test = red.get("red_oracle_tests")
+    if isinstance(per_test, dict):
+        changes = red_oracle_changes(repo_root, per_test)
+        if not changes:
+            return []
+        what = "; ".join(changes)
+    else:
+        recorded = red.get("red_oracle")
+        if not isinstance(recorded, str) or not recorded:
+            return []
+        if compute_red_oracle_digest(repo_root, paths) == recorded:
+            return []
+        frozen = oracle_paths(paths)
+        what = f"{', '.join(frozen) or 'the declared test files'} changed after Declare"
+    return [
+        f"the frozen Red oracle behind {label} no longer matches what Red recorded - "
+        f"{what}. "
+        "Implement may add tests but must not edit the one Red was taken against: rewriting the "
+        "oracle so it passes leaves the product unchanged and proves nothing. Restore the "
+        "declared test, or - if the oracle itself was wrong - record Red again with "
+        "`deltafuse evidence --phase red` and take it from there"
+    ]
+
+
+def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
+    """The frozen tests must pass on their own, not only inside the Worker's run.
+
+    The freeze holds the oracle's source fixed, but a new test in the same file
+    can still change what it sees at run time - patch the product module, fill
+    a cache - and a command-line option can load a plugin that does. So Green
+    also runs the frozen tests alone (evidence `oracle_isolation`), and a Green
+    whose runner reported tests but carries no isolated run was not recorded
+    by this Core, or skipped it.
+    """
+    from deltafuse.core.oracle import frozen_test_ids
+
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or not isinstance(green, dict):
+        return []
+    frozen = red.get("red_oracle_tests")
+    if not isinstance(frozen, dict) or frozen.get("version") is None:
+        return []
+    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
+    expected = frozen_test_ids(frozen, [str(t) for t in red_tests.get("failed") or []])
+    if not expected:
+        return []
+    isolation = green.get("oracle_isolation")
+    if not isinstance(isolation, dict):
+        if isinstance(green.get("tests"), dict) and green.get("exit_code") == 0:
+            return [
+                f"{label} has no isolated run of the frozen Red tests: record Green again with "
+                "`deltafuse evidence --phase green`, which runs them on their own"
+            ]
+        return []
+    not_passing = [str(t) for t in isolation.get("not_passing") or []]
+    if not not_passing:
+        return []
+    green_tests = green.get("tests") if isinstance(green.get("tests"), dict) else {}
+    passed_in_green = {str(t) for t in green_tests.get("passed") or []}
+    if not passed_in_green & set(not_passing):
+        # Green's own run did not pass them either (it ran other tests), so
+        # nothing "helped" them - they simply do not pass yet.
+        return [
+            f"the frozen Red tests behind {label} do not pass: {not_passing[:5]} - neither "
+            "Green's own run nor the run of those tests alone passed them. Make the product "
+            "pass the tests Red recorded, and record Green over them"
+        ]
+    return [
+        f"the frozen Red tests behind {label} do not pass on their own: {not_passing[:5]}. "
+        "They passed in the full run only because something else in it made them pass - a "
+        "test that patches the product or leaves state behind, or an option on the command "
+        "line. Make the product pass them by itself"
+    ]
+
+
+def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
+    """An already-green Red proves no delta, so it cannot carry `implemented`.
+
+    Green is checked against the Red record's own `tests.failed`
+    (green_covers_red), which is empty when the oracle already passed on
+    unchanged product code: the implemented gate closed on a product nobody had
+    modified, and nothing downstream could tell. Declare may still record the
+    observation - it is a legal Declare outcome, and a stopping one.
+    """
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or red.get("result") != "already-green":
+        return []
+    return [
+        f"Gate implemented: green evidence '{label}' answers an already-green Red - the "
+        "declared oracle passed on unchanged product code, so there is no failure for this "
+        "Green to have removed and nothing here proves a delta. Declare a Red that fails for "
+        "the expected public reason, or, if the requirement is genuinely already met, close "
+        "the Change on the no-op path (terminal status 'not-reproduced') instead of Implement"
+    ]
+
+
 def _validate_evidence_changed_paths_contract(
     change_path: Path,
     evidence_phase: str,
@@ -724,7 +901,17 @@ def _validate_evidence_changed_paths_contract(
     gate: str,
     route: str = "code",
 ) -> list[str]:
-    """RM-002: evidence changed_paths must stay inside route write globs."""
+    """RM-002: evidence changed_paths must stay inside route write globs.
+
+    Declare additionally honours the task's own `allowed_paths`: on a compiled
+    language the test cannot reference a symbol that does not exist yet, so the
+    throwing stub has to be written in Declare - which is what
+    declare/SKILL.md tells the Worker to do and why test_reports.py reads a JVM
+    `<error>` as a test that ran and failed. The task cannot use this to widen
+    its envelope in Declare: `allowed_paths` is already bounded by its slice at
+    the `decomposed` gate (task_envelope_errors) and `tasks/**` is outside
+    Declare's write scope.
+    """
     errors: list[str] = []
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
@@ -742,9 +929,22 @@ def _validate_evidence_changed_paths_contract(
         if not isinstance(changed, list):
             continue
         rel_paths = [p for p in changed if isinstance(p, str)]
+        task_id = ev_data.get("task")
+        declared: list[str] = []
+        forbidden: list[str] = []
+        if isinstance(task_id, str) and task_id in tasks:
+            raw_allowed = tasks[task_id].get("allowed_paths") or []
+            if isinstance(raw_allowed, list):
+                declared = [p for p in raw_allowed if isinstance(p, str)]
+            raw = tasks[task_id].get("forbidden_paths") or []
+            if isinstance(raw, list):
+                forbidden = [p for p in raw if isinstance(p, str)]
+        allowed_globs = list(write_globs)
+        if evidence_phase == "red" and route == "code":
+            allowed_globs += declared
         for msg in validate_paths_against_globs(
             rel_paths,
-            write_globs,
+            allowed_globs,
             label=f"Gate {gate} {evidence_phase} changed_paths",
         ):
             errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
@@ -755,12 +955,6 @@ def _validate_evidence_changed_paths_contract(
                         f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
                         f"must not write src/** or tests/** ('{rel}')"
                     )
-        task_id = ev_data.get("task")
-        forbidden = []
-        if isinstance(task_id, str) and task_id in tasks:
-            raw = tasks[task_id].get("forbidden_paths") or []
-            if isinstance(raw, list):
-                forbidden = [p for p in raw if isinstance(p, str)]
         for rel in rel_paths:
             if path_is_listed(rel, forbidden):
                 errors.append(
@@ -829,7 +1023,9 @@ def _validate_spec_delta_matches_disk(
 
 
 _RED_WRITES_HINT = (
-    " (Red writes tests only; product code is written in Implement, after Red is recorded)"
+    " (Red writes tests, plus only the product paths this task's allowed_paths declares - a "
+    "compiled-language stub; the rest of the product code is written in Implement, after Red "
+    "is recorded)"
 )
 
 
@@ -863,7 +1059,12 @@ def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[st
     """
     from deltafuse.core.capability import draft_capabilities
     from deltafuse.core.leash import load_baseline
-    from deltafuse.core.ownership import capability_code_roots, routed_capabilities
+    from deltafuse.core.ownership import (
+        DIRECT_SUFFIX,
+        capability_code_roots,
+        is_direct_root,
+        routed_capabilities,
+    )
 
     if load_baseline(repo_root) != "accepted":
         return []
@@ -878,9 +1079,12 @@ def _uncharacterized_draft_errors(change_path: Path, repo_root: Path) -> list[st
             (v for k, v in roots.items() if k.endswith("." + name)), []
         )
         for prefix in prefixes:
-            base = repo_root / prefix.rstrip("/")
+            direct = is_direct_root(prefix)
+            base = repo_root / (prefix[: -len(DIRECT_SUFFIX)] if direct else prefix.rstrip("/"))
+            # A direct root `dir/*` holds only the files lying in `dir`; a tree root, all below.
+            candidates = base.iterdir() if direct and base.is_dir() else base.rglob("*")
             if base.is_dir() and any(
-                p.is_file() and "__pycache__" not in p.parts for p in base.rglob("*")
+                p.is_file() and "__pycache__" not in p.parts for p in candidates
             ):
                 out.append(
                     f"Gate analyzed: capability '{name}' is a draft and its code_roots hold code "
@@ -914,8 +1118,7 @@ def _draft_capability_errors(gate: str, change_path: Path, repo_root: Path) -> l
 def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
     """Analyze substeps not yet on disk. `analyzed` requires this list to be empty.
 
-    Lock `workflow.call_width` only batches writes (narrow/medium/wide). It does
-    not let a Change close Analyze without routing.yaml, slices/, and coverage.yaml.
+    A Change cannot close Analyze without routing.yaml, slices/, and coverage.yaml.
     One slice file does not cover two routing primary capabilities; that is a
     separate `analyzed` error from `uncovered_primary_capabilities`.
     """
@@ -1082,8 +1285,9 @@ def _check_gate(
     """Gate errors for a Change. ``assume_status`` evaluates the gate as if
     change.yaml held that status, without writing it: the Core asks "would
     this pass once moved?" before it moves anything. ``human=False`` leaves out
-    the human verdict a Human Gate waits for - only for checking whether a spec
-    delta is ready to be put in front of the human at all."""
+    everything only the human can supply - the verdict a Human Gate waits for and
+    a capability catalog still in ``draft`` - and is only for checking whether a
+    spec delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
     errors = validate_change_package(change_path, registry=registry)
 
@@ -1150,7 +1354,14 @@ def _check_gate(
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
             errors.append("Gate specified: spec-delta.md is missing")
-        errors.extend(_draft_capability_errors("specified", change_path, repo_root))
+        if human:
+            # A capability still in `draft` is the human's to accept, and they
+            # accept it together with the specification - so it cannot be a
+            # precondition of handing that specification to them. Demanding it
+            # here deadlocked specify: `specification-proposed` refused until the
+            # catalog was active, and `decide --spec` refused until the Change was
+            # proposed. Checked again at `converged`, which no proposal skips.
+            errors.extend(_draft_capability_errors("specified", change_path, repo_root))
         errors.extend(
             _human_gate_errors(
                 gate="specified",
@@ -1243,9 +1454,25 @@ def _check_gate(
         # without the task's own Red evidence does not close the gate.
         if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
             for green_file in sorted(green_dir.glob("*.yaml")):
-                if not (change_path / "evidence" / "red" / green_file.name).is_file():
+                red_file = change_path / "evidence" / "red" / green_file.name
+                if not red_file.is_file():
                     errors.append(
                         f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+                    )
+                    continue
+                if route == "code":
+                    errors.extend(_already_green_red_errors(red_file, green_file.name))
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in frozen_oracle_errors(
+                            red_file, repo_root, f"green evidence '{green_file.name}'"
+                        )
+                    )
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in isolation_errors(
+                            red_file, green_file, f"green evidence '{green_file.name}'"
+                        )
                     )
 
     elif gate_lower == "converged":
@@ -1253,6 +1480,8 @@ def _check_gate(
         ver_run = change_path / "evidence" / "verification" / "run.yaml"
         if not ver_file.is_file():
             errors.append("Gate converged: verification.md is missing")
+        else:
+            errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))

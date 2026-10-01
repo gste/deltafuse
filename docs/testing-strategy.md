@@ -133,6 +133,8 @@ deltafuse/
   - **T1**: Зелёный отчет `phase: green` в папке `evidence/red/` строго отвергается.
   - **T2**: Red evidence с `result: passed` или `exit_code: 0` (кроме `not-reproduced` и `already-green`) отвергается.
   - **F-009 / declaring**: `already-green` допускается, если публичный оракул уже зелёный; Red-тест с доступом к `._` / `_private` отвергается.
+  - **F2 / implemented**: на `route: code` Green, отвечающий на `already-green` Red, гейт `implemented` не закрывает — сравнивать не с чем, дельта не доказана. Такой Change закрывается по no-op ветви (терминальный `not-reproduced`).
+  - **F4 / implemented**: Red-запись замораживает тесты, которые Red зафиксировал упавшими (`red_oracle_tests`, формат 2), по нормализованному AST: тело с декораторами и, внутри модуля теста, его класс, то, на что он ссылается по имени (транзитивно), `pytestmark`, хуки, autouse-фикстуры, код модуля. Целиком: каждый `conftest.py` на пути до корня (включая отсутствующие), другие объявленные Python-модули без тестов, конфиги pytest на пути (байты), Java и данные (байты). Гейт и `evidence --phase green` отвергают расхождение, называя тест или файл: ослабление ассерта, удаление, переименование, `skip`/`xfail`, подмена фикстуры в модуле, любая правка или добавление `conftest.py` на пути, правка конфига не дают Green. Green также прогоняет замороженные тесты отдельно через pytest - без выбора тестов Worker'а, без `-p`, `PYTEST_ADDOPTS`, `PYTEST_PLUGINS`, с его опциями конфигурации (`oracle_isolation`): новый тест, патчащий продукт, или `-p plugin` дают отказ, честный Green с `-o ...` проходит; гейт отвергает Green без этого прогона, если раннер дал отчёт. Не отвергаются: новые тесты в том же файле, несвязанные функции модуля, комментарии, форматирование, новые импорты (`tests/unit/test_red_oracle_units.py`, `test_red_oracle_scope.py`, `tests/integration/test_frozen_red_oracle.py`). Red без отчёта раннера несёт прежний `red_oracle`; запись `red_oracle_tests` без `version` (предрелизная) отвергается с просьбой снять Red заново. Не ловится: Java по методам (заморожена по файлу; по методам - после проверки на реальном Maven/Gradle), изоляция для Maven/Gradle, транзитивные хелперы в модулях, не объявленных в Red, плагины из entry points (в изолированном прогоне загружаются). Ложный отказ возможен при правке несвязанной фикстуры в `conftest.py` на пути - он заморожен целиком.
   - **T3**: Гейт `converged` падает, если хотя бы одна задача осталась в незавершённом статусе (`pending`, `declaring` и т.д.). `cancelled` и `superseded` — терминалы (F-005 / RM-005); Verify не снимается.
   - **T4**: Evidence, ссылающееся на несуществующую задачу (в том числе при пустом каталоге `tasks/`), отклоняется.
   - **T5**: Несоответствие статуса `change.yaml` наличию артефактов (например, статус `normalized` при наличии задач или evidence) отклоняется.
@@ -143,7 +145,7 @@ deltafuse/
   - **PP-04 / SPEC-003**: EARS WHEN/SHALL рядом с RFC 2119; стиль, не гейт и не `.kiro`.
   - **PP-06 / KI-07 / declaring**: optional PBT (Hypothesis-класс); skip без локального runner; не замена hidden suite; не Cucumber.
   - **F-008 / analyzed**: экстрактор и slice claims принимают стабильные ID из `request.md` (`CR-*` и ярлыки `O1`/`E1`); coverage по-прежнему 100% mapped.
-  - **Q-001 / analyzed**: `workflow.call_width` `narrow|medium|wide` в config/lock; гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage), wide не склеивает срезы; routing первым шагом. Specify для feature не снимается.
+  - **Q-001 / analyzed**: гейт `analyzed` только при routing+slices+coverage на диске; `next` всегда один Analyze pass (routing | один slice | coverage); routing первым шагом. `workflow.call_width` убран в 3.3.6. Specify для feature не снимается.
   - **AN-001 / analyzed**: каждый distinct `primary_capability` в `routing.yaml` покрыт slice-файлом с тем же полем; один `SLICE-01` на две capability валит `analyzed`.
   - **AN-002 / analyzed**: `deltafuse coverage` пишет матрицу из routing+slices; unknown top-level keys на `coverage.yaml` не валят гейт; воркер не hand-write YAML.
   - **AN-003 / specified**: `next` один срез Specify; spec-delta added/modified только в slice `spec_refs`; F-010 live spec не снимается.
@@ -167,7 +169,7 @@ deltafuse/
   - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
   - Флаг `--force` обновляет только управляемые фреймворком файлы.
 * **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
-  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.call_width`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
+  - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.auto_accept_decisions`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
 

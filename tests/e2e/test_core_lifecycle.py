@@ -126,7 +126,10 @@ def test_change_reaches_converged_through_core_commands_only(tmp_path: Path, rep
 
     # Verify: the Worker writes the report and maps the evidence, the Core closes.
     assert _next(tmp_path).skill == "verify"
-    (change / "verification.md").write_text("# Verification\nBoth claims verified.\n", encoding="utf-8")
+    (change / "verification.md").write_text(
+        "# Change Verification\n\n- Outcome: `converged`\n\nBoth claims verified.\n",
+        encoding="utf-8",
+    )
     run_evidence(change, phase="verification", task=None, argv=[sys.executable, oracles["TASK-002"]])
     # The Core maps claims to their tasks and evidence; the Worker does not
     # write that structure by hand.
@@ -200,7 +203,9 @@ def test_ops_route_change_is_routed_by_the_queue_to_converged(tmp_path: Path, re
     advance_change(change, "implemented")
 
     assert _next(tmp_path).skill == "verify"
-    (change / "verification.md").write_text("# Verification\nok\n", encoding="utf-8")
+    (change / "verification.md").write_text(
+        "# Change Verification\n\n- Outcome: `converged`\n", encoding="utf-8"
+    )
     run_evidence(change, phase="verification", task=None, argv=oracle)
     write_coverage(change)
     assert check_gate(change, "converged") == []

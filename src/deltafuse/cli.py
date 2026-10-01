@@ -38,6 +38,7 @@ from deltafuse.core.leash import (
     load_baseline,
     load_leash_mode,
 )
+from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import (
     token_count_receipt,
@@ -214,19 +215,20 @@ def export_tool_schemas(kind: str | None = None, operation: str | None = None) -
     }
 
 
-def _read_secret(prompt: str) -> str:
+def _read_secret(prompt: str, hint: str = "") -> str:
     """Read a secret from the terminal; refuse when no human is at one."""
     import getpass
 
     if not sys.stdin.isatty():
         raise gate_password.GatePasswordError(
-            "the Human Gate password is read only from an interactive terminal"
+            "the Human Gate password is read only from an interactive terminal" + hint
         )
     return getpass.getpass(prompt)
 
 
-def _gate_password_prompt() -> str:
-    return _read_secret("Human Gate password: ")
+def _gate_password_prompt(command: str = "") -> str:
+    hint = f"; open one at the product root and run: {command}" if command else ""
+    return _read_secret("Human Gate password: ", hint)
 
 
 def _capability_command(args) -> int:
@@ -459,7 +461,7 @@ def _main(argv: list[str] | None = None) -> int:
     # archive command
     arch_parser = subparsers.add_parser("archive", help="Archive a converged Change package")
     arch_parser.add_argument("change_path", help="Path to Change package directory")
-    arch_parser.add_argument("--force", "-f", action="store_true", help="Force archive without converged check")
+    arch_parser.add_argument("--force", "-f", action="store_true", help="Accepted for compatibility; archive always requires status 'converged' (or a terminal status) and never skips the gate")
 
     # advance command (DF3-004): Core-owned gate validation + transition
     advance_parser = subparsers.add_parser(
@@ -837,10 +839,21 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         receipt = dict(result)
         receipt.pop("ok", None)
+        # P12: `advance --gate converged` is the one call a Worker makes now, so the
+        # advisory claim-to-test findings that `check-gate` printed are printed here.
+        warnings = claim_trace_warnings(target) if args.gate == "converged" else []
+        if warnings:
+            receipt["warnings"] = warnings
         _journal(target, cmd="advance", ok=True, errors=[], n_errors=0, **receipt)
+        for warning in warnings:
+            print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
+            for finding in (result.get("leash") or {}).get("violations") or []:
+                print(f"advance: leash ({result['leash']['mode']}): {finding}", file=sys.stderr)
+            if (result.get("leash") or {}).get("checked") is False:
+                print(f"advance: leash not checked: {result['leash']['reason']}", file=sys.stderr)
             print(
                 f"advance: gate '{result['gate']}' applied: "
                 f"{result['from']} -> {result['to']} "
@@ -944,6 +957,19 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
+            if (
+                args.phase == "red"
+                and outcome.payload.get("result") == "already-green"
+            ):
+                # The record is an honest observation, but it is a stop, not a
+                # green light: there is no failure for Implement to remove, and
+                # the implemented gate refuses an already-green Red.
+                print(
+                    "Red is already-green: the oracle passed on unchanged product code, so "
+                    "there is nothing to implement against it. Stop and return this outcome "
+                    "upstream - do not proceed to Implement on this Red.",
+                    file=sys.stderr,
+                )
             return 0
         print("Evidence is not authentic:", file=sys.stderr)
         for err in outcome.errors:
@@ -1023,7 +1049,11 @@ def _main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
-                password_prompt=_gate_password_prompt,
+                password_prompt=lambda: _gate_password_prompt(
+                    f"deltafuse decide {args.path} "
+                    + (f"--decision {args.decision}" if args.decision else "--spec")
+                    + f" --status {args.status}"
+                ),
             )
         except DecideError as ex:
             _journal(target, cmd="decide", ok=False, errors=[str(ex)])
@@ -1068,51 +1098,19 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         target = Path(args.path)
         try:
-            only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
-            root = load_product_root(target if only is None else only)
-            queue = build_work_queue(target, only_change=only)
-            selected = select_next(queue)
-            snapshot = queue_snapshot(queue, selected=selected, product_root=root)
-            envelope = snapshot.get("envelope")
-            halt = snapshot.get("halt")
-            if args.files:
-                dirty = list(args.files)
-            else:
-                dirty = git_dirty_paths(root, base=args.base, head=args.head)
-            # Ready envelopes name only the next step; the receipt chain adds the
-            # steps already worked since the base, so a finished step's writes
-            # are not judged against the step after it. A halt stops new work,
-            # not the record of work done, so the chain applies either way.
-            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
-                root, base=args.base, dirty=dirty
-            )
-            errors = check_paths(
-                dirty,
-                covering,
-                baseline=load_baseline(root),
-                product_root=root,
-                base=args.base,
-                head=args.head,
-            )
-            mode = load_leash_mode(root)
-            skipped = envelope is None and not errors
-            ok = not errors
+            payload = run_leash(target, base=args.base, head=args.head, files=args.files)
+            root = load_product_root(target.resolve() if (target.resolve() / "change.yaml").is_file() else target)
+            errors = payload["violations"]
+            mode = payload["mode"]
+            skipped = payload["skipped"]
             _journal(
                 root,
                 cmd="leash",
-                ok=ok,
+                ok=payload["ok"],
                 errors=errors,
                 n_errors=len(errors),
                 skipped=skipped,
             )
-            payload = {
-                "ok": ok,
-                "skipped": skipped,
-                "mode": mode,
-                "envelope": envelope,
-                "paths": dirty,
-                "violations": errors,
-            }
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif skipped:
@@ -1126,14 +1124,16 @@ def _main(argv: list[str] | None = None) -> int:
             if errors and mode != "advisory":
                 return 1
             return 0
-        except QueueError as ex:
+        except (QueueError, LeashError) as ex:
             _journal(target, cmd="leash", ok=False, errors=[str(ex)])
             print(f"Leash failed: {ex}", file=sys.stderr)
-            return 2
-        except LeashError as ex:
-            _journal(target, cmd="leash", ok=False, errors=[str(ex)])
-            print(f"Leash failed: {ex}", file=sys.stderr)
-            return 2
+            # Advisory never stands in the way: the pre-commit hook it installs runs on
+            # the very first commit of a fresh product, where there is no HEAD to diff.
+            try:
+                advisory = load_leash_mode(load_product_root(target.resolve())) == "advisory"
+            except Exception:
+                advisory = False
+            return 0 if advisory else 2
 
     elif args.command == "board":
         target = Path(args.product_path)

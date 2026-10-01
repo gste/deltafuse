@@ -164,7 +164,9 @@ def test_the_writer_path_reaches_converged_with_a_clean_leash(tmp_path: Path, re
 
     # Verify: the report, the Change-level run; coverage is the Core's.
     assert _selected(root).skill == "verify"
-    (change / "verification.md").write_text("# Verification\n\nconverged\n", encoding="utf-8")
+    (change / "verification.md").write_text(
+        "# Change Verification\n\n- Outcome: `converged`\n", encoding="utf-8"
+    )
     _cli(capsys, "evidence", str(change), "--phase", "verification", "--", *run)
     ownership = yaml.safe_load((change / "evidence" / "verification" / "run.yaml").read_text(encoding="utf-8"))["ownership"]
     assert ownership["measurable"] is True and ownership["unrouted"] == {}, ownership

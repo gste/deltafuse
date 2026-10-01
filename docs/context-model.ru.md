@@ -103,6 +103,8 @@ policies:
       - identity.*
 ```
 
+Запись `code_roots` — префикс каталога: `src/ratelimit`, `src/ratelimit/` и `src/ratelimit/**` владеют всем деревом под ним. `dir/*` владеет только файлами, лежащими прямо в `dir`, без подкаталогов: так каталог, чьи подкаталоги нужны другой capability, всё же отдаёт свои файлы владельцу (`markdown/*` рядом с `markdown/extensions/`). Корни `active` capability не пересекаются: `dir/*` пересекается с таким же `dir/*` и с корневым деревом, которое есть сам `dir` или его предок, но не с `dir/sub/`. Черновик с корнем `dir/*`, в котором есть файл прямо в `dir`, останавливает Change на `analyzed`, как и любой унаследованный код.
+
 ### Controlled Open-World Assumption
 Каталог считается полным относительно **текущей принятой спецификации**, но не считается полным относительно всех будущих требований:
 - Если входящий запрос укладывается в границы существующей capability, он маршрутизируется в неё (`matched`).
@@ -166,7 +168,7 @@ context:
 ### Политики эскалации
 - **On missing context**: если агенту не хватает данных или спецификация неоднозначна — **Stop-and-Ask** (остановка и оформление вопроса/Decision вместо додумывания).
 - **On budget exceeded**: если контекст слайса превышает установленный лимит — **Split-Slice** (деление слайса на более мелкие изолированные части).
-- `workflow.call_width` (`narrow` | `medium` | `wide`) — записанный профиль Analyze. `deltafuse next` всё равно выбирает один pass (routing, затем один срез capability, затем coverage). Это не второй токен-бюджет и не закрывает `analyzed` без `routing.yaml`, срезов на каждую routing primary capability и `coverage.yaml`.
+- `deltafuse next` выбирает один Analyze pass за раз (routing, затем один срез capability, затем coverage), и `analyzed` не закрывается без `routing.yaml`, срезов на каждую routing primary capability и `coverage.yaml`. (`workflow.call_width` убран в 3.3.6: его никто не читал. Старый config или lock с ним принимается и игнорируется.)
 - `route` Change (`code` по умолчанию, `docs`, `ops`) выбирает write-глобы Declare/Implement. `docs`/`ops` вне `src/**` и `tests/**`; Specify не снимается.
 
 ---

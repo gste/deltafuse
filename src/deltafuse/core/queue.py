@@ -666,6 +666,40 @@ def _choice(choice_id: str, label: str, command: str | None) -> dict[str, Any]:
     return {"id": choice_id, "label": label, "command": command}
 
 
+def _human_gate_halt(
+    kind: str, prompt: str, choices: list[dict[str, Any]], product_root: Path
+) -> dict[str, Any]:
+    """A Human Gate halt that says how the human answers it.
+
+    Without a Human Gate password a click in the chat runs `decide`, so the halt
+    is buttons. With one, `decide` reads the password only from an interactive
+    terminal and refuses anything else (core/gate_password.py): a button would
+    fail, so the halt says the human types the command in a terminal, marks the
+    choices, and puts the commands in the prompt to copy. Optional properties of
+    contract v1: a host that ignores them still runs `command` as-is and gets
+    `decide`'s own refusal, which names the same thing.
+    """
+    from deltafuse.core import gate_password
+
+    halt: dict[str, Any] = {"kind": kind, "prompt": prompt, "choices": choices}
+    if not gate_password.is_enabled(product_root):
+        halt["human_check"] = "none"
+        halt["prompt"] = f"{prompt} Show them as buttons in the chat; a click runs the command."
+        return halt
+    runnable = [row for row in choices if row["command"]]
+    for row in runnable:
+        row["interactive_only"] = True
+    halt["human_check"] = "password"
+    halt["terminal_required"] = True
+    commands = "\n".join(f"  {row['label']}: {row['command']}" for row in runnable)
+    halt["prompt"] = (
+        f"{prompt} This product guards the Human Gate with a password, so a button cannot answer it. "
+        "Do not run these commands and do not pick one: tell the human to open a terminal at the "
+        "product root, run the command of their choice and type the password there.\n" + commands
+    )
+    return halt
+
+
 def build_halt(
     queue: WorkQueue,
     selected: WorkItem | None,
@@ -714,11 +748,12 @@ def build_halt(
                     )
                 )
         choices.append(_choice("inspect", "Stop and inspect", None))
-        return {
-            "kind": "decision",
-            "prompt": "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
-            "choices": choices,
-        }
+        return _human_gate_halt(
+            "decision",
+            "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
+            choices,
+            product_root,
+        )
     if "spec" in kinds:
         choices = []
         for item in queue.blocked:
@@ -739,11 +774,12 @@ def build_halt(
                 )
             )
         choices.append(_choice("inspect", "Stop and inspect", None))
-        return {
-            "kind": "spec",
-            "prompt": "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
-            "choices": choices,
-        }
+        return _human_gate_halt(
+            "spec",
+            "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
+            choices,
+            product_root,
+        )
     if queue.blocked:
         return {
             "kind": "blocked",

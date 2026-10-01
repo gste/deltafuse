@@ -521,7 +521,10 @@ class MockChangeBuilder:
         return self
 
     def step_verify(self) -> MockChangeBuilder:
-        (self.change_dir / "verification.md").write_text("# Verification\nAll claims verified.", encoding="utf-8")
+        (self.change_dir / "verification.md").write_text(
+            "# Change Verification\n\n- Outcome: `converged`\n\nAll claims verified.\n",
+            encoding="utf-8",
+        )
         ver_dir = self.change_dir / "evidence" / "verification"
         ver_dir.mkdir(parents=True, exist_ok=True)
         ev_ver = {

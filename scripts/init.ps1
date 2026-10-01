@@ -413,18 +413,10 @@ if (Test-Path -LiteralPath $configPath) {
     }
 }
 
-$callWidth = "wide"
 $autoAccept = "false"
 $leashMode = "off"
 if (Test-Path -LiteralPath $configPath) {
     $cfgText = Get-Content -LiteralPath $configPath -Raw
-    if ($cfgText -match '(?m)^\s+call_width:\s+(\S+)\s*$') {
-        $extractedWidth = $Matches[1].Trim()
-        if ($extractedWidth -notin @("narrow", "medium", "wide")) {
-            throw "Invalid .deltafuse/config.yaml workflow.call_width: $extractedWidth"
-        }
-        $callWidth = $extractedWidth
-    }
     if ($cfgText -match '(?m)^\s+auto_accept_decisions:\s+(true|false)\s*$') {
         $autoAccept = $Matches[1]
     }
@@ -444,7 +436,6 @@ framework:
   source: $effectiveSource
   content_hash: sha256:$FrameworkHash
 workflow:
-  call_width: $callWidth
   auto_accept_decisions: $autoAccept
 "@ | Set-Content -LiteralPath $lockPath -Encoding utf8 -NoNewline
 
@@ -495,7 +486,6 @@ framework:
   source: $effectiveSource
   content_hash: sha256:$FrameworkHash
 workflow:
-  call_width: $callWidth
   auto_accept_decisions: $autoAccept
 "@ | Set-Content -LiteralPath $lockPath -Encoding utf8 -NoNewline
 }

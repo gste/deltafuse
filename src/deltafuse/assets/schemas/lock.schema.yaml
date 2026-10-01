@@ -27,6 +27,6 @@ properties:
     type: object
     additionalProperties: false
     properties:
-      call_width: {enum: [narrow, medium, wide]}
+      call_width: {}  # retired (F14): accepted from an older lock, ignored
       auto_accept_decisions: {type: boolean}
       leash: {enum: [off, advisory, enforce]}

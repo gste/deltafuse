@@ -15,8 +15,9 @@ from typing import Any
 import yaml
 
 from deltafuse.core.context import load_change_route, posix_relpath
-from deltafuse.core.fsm import find_repo_root
-from deltafuse.core.hasher import compute_product_baseline_revision
+from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors, isolation_errors
+from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
+from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
@@ -149,6 +150,68 @@ def _red_failed_tests(change_path: Path, task: str | None) -> list[str]:
     tests = data.get("tests") if isinstance(data, dict) else None
     failed = tests.get("failed") if isinstance(tests, dict) else None
     return [str(name) for name in failed or [] if str(name).strip()]
+
+
+def _isolated_oracle_run(
+    change_path: Path, task: str | None, argv: list[str], repo_root: Path, timeout: int
+) -> dict[str, Any] | None:
+    """Run the frozen Red tests alone and say which of them did not pass.
+
+    The Worker's own command decides what else runs next to the oracle, so it
+    cannot be the only evidence that the product passes it (core/oracle.py,
+    `isolation_plan`). The run is Green's pytest command with its test
+    selection replaced by the frozen tests and `-p` dropped; PYTEST_ADDOPTS and
+    PYTEST_PLUGINS, which load code the same way, are cleared.
+    """
+    import os
+
+    if not task:
+        return None
+    record = change_path / "evidence" / "red" / f"{task}.yaml"
+    try:
+        red = yaml.safe_load(record.read_text(encoding="utf-8")) if record.is_file() else None
+    except (OSError, yaml.YAMLError):
+        return None
+    frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
+    if not isinstance(frozen, dict) or frozen.get("version") is None:
+        return None
+    plan = isolation_plan(argv, frozen, _red_failed_tests(change_path, task), repo_root)
+    if plan is None:
+        return None
+    iso_argv, expected = plan
+    junit_path: Path | None = None
+    run_argv = list(iso_argv)
+    if wants_junit_flag(iso_argv):
+        report_dir = repo_root / ".deltafuse" / "tmp"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        junit_path = report_dir / f"junit-green-isolated-{task}.xml"
+        junit_path.unlink(missing_ok=True)
+        run_argv.append(f"--junitxml={junit_path}")
+    env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_ADDOPTS", "PYTEST_PLUGINS"}}
+    started_at = time.time()
+    try:
+        proc = subprocess.run(
+            run_argv,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            env=env,
+        )
+        exit_code = int(proc.returncode)
+    except FileNotFoundError:
+        exit_code = 127
+    except subprocess.TimeoutExpired:
+        exit_code = 124
+    report = read_report(iso_argv, repo_root, junit_path=junit_path, newer_than=started_at)
+    not_passing = green_covers_red(expected, report) if report is not None else list(expected)
+    return {
+        "command": _sanitize_command(iso_argv),
+        "exit_code": exit_code,
+        "not_passing": not_passing,
+    }
 
 
 def _is_authentic(
@@ -433,8 +496,28 @@ def run_evidence(
             "not_run": report.ids(NOT_RUN),
             "skipped": report.ids(SKIPPED),
         }
+    isolation = None
+    if phase == "green" and route == "code" and exit_code == 0 and not timed_out:
+        isolation = _isolated_oracle_run(change_path, task, argv, repo_root, timeout)
+        if isolation is not None:
+            payload["oracle_isolation"] = isolation
     if phase in {"green", "regression", "verification"}:
         payload["base_revision"] = compute_product_baseline_revision(repo_root)
+    if phase == "red":
+        # Freezes the declared oracle at the moment Red is taken: the
+        # implemented gate recomputes it and refuses a Green recorded over a
+        # test rewritten during Implement. With the runner's report the Core
+        # knows which tests are the oracle and freezes those; without one it
+        # can only freeze the declared files whole, as 3.3.5 first did.
+        red_failed = report.ids(FAILED) if report is not None else []
+        if red_failed:
+            frozen = freeze_red_oracle(repo_root, rel_paths, red_failed)
+            if frozen:
+                payload["red_oracle_tests"] = frozen
+        else:
+            oracle = compute_red_oracle_digest(repo_root, rel_paths)
+            if oracle:
+                payload["red_oracle"] = oracle
 
     if phase == "verification":
         # q4 decision D, phase 1: the code the Change touched against the
@@ -489,6 +572,19 @@ def run_evidence(
                 "Green did not turn the Red tests green; still not passing: "
                 f"{missing[:5]}"
             )
+    if phase == "green" and route == "code":
+        # Named here as well as at the implemented gate: the Worker that just
+        # rewrote the oracle should hear it now, not two steps later.
+        red_file = change_path / "evidence" / "red" / f"{task}.yaml"
+        if red_file.is_file():
+            errors.extend(
+                f"evidence: {e}"
+                for e in frozen_oracle_errors(red_file, repo_root, f"this Green ({task})")
+            )
+            errors.extend(
+                f"evidence: {e}"
+                for e in isolation_errors(red_file, dest, f"this Green ({task})")
+            )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if timed_out:
@@ -507,6 +603,12 @@ def run_evidence(
         authentic = False
     if not authentic and not errors:
         errors.append(f"{phase} evidence is not authentic (result '{result}')")
+    # `errors` is the explanation of a refusal, so the two must agree: printing
+    # "Evidence is authentic." and exiting 0 next to a non-empty list is a green
+    # light the Worker acts on, and the gate two steps later is a much worse
+    # place to hear about it (F4: a Green recorded over an oracle rewritten
+    # during Implement was reported authentic).
+    authentic = authentic and not errors
 
     return EvidenceOutcome(
         payload=payload,

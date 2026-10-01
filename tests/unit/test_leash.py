@@ -10,8 +10,18 @@ import yaml
 from jsonschema.validators import validator_for
 
 from deltafuse.cli import main
-from deltafuse.core.installer import install
+from deltafuse.core.installer import install as _install
 from tests.fixtures.change_builder import MockChangeBuilder
+
+
+def install(*args, **kwargs):
+    """A product that judges the leash as it did before F7: a violation exits non-zero.
+
+    A fresh install now runs the leash in advisory (exit 0); these tests are about
+    what the guard refuses, so they ask for enforce. Tests about the mode set it after."""
+    out = _install(*args, **kwargs)
+    _set_leash(kwargs["target_dir"], "enforce")
+    return out
 
 
 def _envelope_schema(repo_root: Path) -> dict:
@@ -128,8 +138,27 @@ def test_next_json_declare_envelope_keeps_tests_and_task_paths(
     assert envelope["task"] == "TASK-001"
     _assert_valid_envelope(envelope, repo_root)
     assert any(row.startswith("tests") for row in envelope["write"])
-    assert "src/core.py" not in envelope["write"]
+    # F8: Declare may write the product stub its task declared - on a compiled
+    # language the test cannot reference a symbol that does not exist yet, so
+    # without the stub there is no compilation, no report and no Red at all.
+    # Still narrowed to the declaration (never `src/**`) and still bounded by
+    # the task's forbidden_paths.
+    assert "src/core.py" in envelope["write"]
+    assert "src/secret.py" not in envelope["write"]
     assert "src/**" not in envelope["write"]
+
+    from deltafuse.core.leash import check_paths
+
+    assert check_paths(
+        ["src/core.py", "tests/test_task-001.py"],
+        [envelope],
+        baseline="accepted",
+        product_root=tmp_path,
+    ) == []
+    refused = check_paths(
+        ["src/other.py"], [envelope], baseline="accepted", product_root=tmp_path
+    )
+    assert any("outside the declare write envelope" in e for e in refused)
 
 
 def test_next_json_implement_envelope_uses_task_allowed_paths(
@@ -333,11 +362,24 @@ def test_deltafuse_dir_is_exempt_but_core_journals_stay_guarded():
     journals must still fire, so it runs before the exemptions."""
     from deltafuse.core.leash import check_paths, is_exempt_path
 
-    assert is_exempt_path(".deltafuse/bench.yaml")
-    assert check_paths([".deltafuse/bench.yaml"], [], baseline="draft") == []
+    assert is_exempt_path(".deltafuse/tmp/scratch.json")
+    assert check_paths([".deltafuse/tmp/scratch.json"], [], baseline="draft") == []
     for journal in ("transitions.jsonl", "gate-journal.jsonl", "journal-head", "gate-password.yaml"):
         errors = check_paths([f".deltafuse/{journal}"], [], baseline="draft")
         assert errors and "Core-owned" in errors[0], journal
+
+
+def test_bench_yaml_is_not_the_workers_to_rewrite():
+    """F13: `.deltafuse/bench.yaml` is the bench's seed-integrity trust root -
+    score.py reads `seed_hashes` from it to judge `code.untouched` - and
+    `.deltafuse/**` is exempt as a whole, so rewriting those digests erased the
+    Worker's own premature src/ edits (bench mutant M08) without one violation."""
+    from deltafuse.core.leash import check_paths, is_exempt_path
+
+    assert is_exempt_path(".deltafuse/bench.yaml")  # exempt, and still guarded
+    errors = check_paths([".deltafuse/bench.yaml"], [], baseline="draft")
+    assert errors and "Core-owned" in errors[0], errors
+    assert "bench harness" in errors[0]
 
 
 def _commit_all(root: Path, message: str) -> None:
@@ -416,6 +458,7 @@ def test_leash_accepts_decide_spec_and_rejects_a_legacy_click(tmp_path: Path, re
     from tests.unit.test_decide import _spec_proposed
 
     builder = _spec_proposed(tmp_path, repo_root, "CHG-504", "proposed")
+    _set_leash(tmp_path, "enforce")
     _git_init_commit(tmp_path)
     assert main(["decide", str(builder.change_dir), "--spec", "--status", "accepted"]) == 0
     capsys.readouterr()
@@ -599,3 +642,128 @@ def test_a_tasks_evidence_is_judged_by_its_own_step_when_the_step_moved_on(tmp_p
     # No evidence dirty and no task file dirty: nothing is claimed for the task.
     quiet = collect_chain_envelopes(tmp_path, base=None, dirty=[])
     assert not any(env.get("step") == "implement" and env.get("task") for env in quiet)
+
+
+def test_leash_in_a_repo_with_no_commits_names_the_missing_commit(
+    tmp_path: Path, repo_root: Path, capsys
+):
+    """F11: this is the state of every freshly inited product and every bench init
+    sandbox at the moment run/SKILL.md tells the Worker to run leash, and the
+    answer was exit 2 with raw git stderr - `fatal: ambiguous argument 'HEAD'` -
+    and no hint that an initial commit is what is missing."""
+    import pytest
+
+    from deltafuse.core.leash import LeashError, git_dirty_paths
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    MockChangeBuilder(tmp_path, change_id="CHG-105", title="Fresh repo").step_intake()
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+
+    with pytest.raises(LeashError) as exc_info:
+        git_dirty_paths(tmp_path)
+    assert "ambiguous argument" not in str(exc_info.value)
+    assert "no commit" in str(exc_info.value)
+
+    assert main(["leash", str(tmp_path)]) == 2
+    _, err = capsys.readouterr()
+    assert "ambiguous argument" not in err
+    assert "git commit" in err
+
+    # An initial commit is the whole fix: the same command then judges the diff.
+    _git_init_commit(tmp_path)
+    assert main(["leash", str(tmp_path)]) in (0, 1)
+
+
+def _set_leash(product: Path, mode: str) -> None:
+    config = product / ".deltafuse" / "config.yaml"
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["workflow"]["leash"] = mode
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _intake_ready(tmp_path: Path, repo_root: Path, mode: str, *, git: bool = True):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_leash(tmp_path, mode)
+    if git:
+        _git_init_commit(tmp_path)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-701", title="Advance leash").step_intake()
+    return builder
+
+
+def _write_orphan_src(product: Path) -> None:
+    src = product / "src" / "app.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text("print(1)\n", encoding="utf-8")
+
+
+def test_a_fresh_install_runs_the_leash_in_advisory_mode(tmp_path: Path, repo_root: Path):
+    """F7: `off` meant nothing checked the write envelope unless the Worker chose to."""
+    _install(target_dir=tmp_path, framework_root=repo_root)
+    config = yaml.safe_load((tmp_path / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    assert config["workflow"]["leash"] == "advisory"
+
+
+def test_advance_checks_the_envelope_itself_and_reports_in_advisory(tmp_path: Path, repo_root: Path):
+    """F7: no gate consulted the leash. `advance` now runs it, so a write outside the
+    step's envelope is on the record without the Worker having to ask; advisory
+    reports and the transition still happens."""
+    from deltafuse.core.transitions import advance_change
+
+    builder = _intake_ready(tmp_path, repo_root, "advisory")
+    _write_orphan_src(tmp_path)
+    result = advance_change(builder.change_dir, "intake")
+    assert result["to"] and result["leash"]["mode"] == "advisory"
+    assert result["leash"]["checked"] is True
+    assert any("src/app.py" in row for row in result["leash"]["violations"]), result["leash"]
+
+
+def test_advance_in_enforce_refuses_a_write_outside_the_envelope(tmp_path: Path, repo_root: Path):
+    import pytest
+
+    from deltafuse.core.transitions import TransitionError, advance_change
+
+    builder = _intake_ready(tmp_path, repo_root, "enforce")
+    _write_orphan_src(tmp_path)
+    before = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
+    journal = tmp_path / ".deltafuse" / "transitions.jsonl"
+    lines_before = journal.read_text(encoding="utf-8") if journal.is_file() else ""
+    with pytest.raises(TransitionError) as exc_info:
+        advance_change(builder.change_dir, "intake")
+    assert "leash" in str(exc_info.value) and "src/app.py" in str(exc_info.value)
+    # nothing moved: no status change, no receipt
+    assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
+    assert (journal.read_text(encoding="utf-8") if journal.is_file() else "") == lines_before
+
+
+def test_advance_with_a_clean_diff_reports_no_violations(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.transitions import advance_change
+
+    builder = _intake_ready(tmp_path, repo_root, "enforce")
+    result = advance_change(builder.change_dir, "intake")
+    assert result["leash"]["checked"] is True and result["leash"]["violations"] == []
+
+
+def test_advance_with_the_leash_off_does_not_run_it(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.transitions import advance_change
+
+    builder = _intake_ready(tmp_path, repo_root, "off")
+    _write_orphan_src(tmp_path)
+    assert "leash" not in advance_change(builder.change_dir, "intake")
+
+
+def test_advance_says_when_the_envelope_could_not_be_checked(tmp_path: Path, repo_root: Path):
+    """No git (or no commit) is the F11 state: the transition is not blocked for
+    what the Core cannot see, but the result says it was not checked and why."""
+    from deltafuse.core.transitions import advance_change
+
+    builder = _intake_ready(tmp_path, repo_root, "enforce", git=False)
+    result = advance_change(builder.change_dir, "intake")
+    assert result["leash"]["checked"] is False and result["leash"]["reason"]
+
+
+def test_advance_cli_prints_an_advisory_leash_finding(tmp_path: Path, repo_root: Path, capsys):
+    builder = _intake_ready(tmp_path, repo_root, "advisory")
+    _write_orphan_src(tmp_path)
+    assert main(["advance", str(builder.change_dir), "--gate", "intake"]) == 0
+    _, err = capsys.readouterr()
+    assert "leash (advisory)" in err and "src/app.py" in err

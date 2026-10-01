@@ -64,7 +64,7 @@ Route normalized claims to capabilities from `docs/spec/_capabilities.yaml`, com
    - **Capability-Gap**: claim requires behavior not covered by any existing capability.
 3. Record mapping and confidence scores in `routing.yaml`.
 
-Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item, including when lock `workflow.call_width` is `wide`. `.deltafuse/config.yaml` `workflow.call_width` (`narrow` | `medium` | `wide`, default `wide`) remains pinned in `.deltafuse/lock.yaml` as a recorded profile; it does not merge passes. Status stays `analyzing` until all three artifacts exist. Call width does not skip Specify and does not auto-accept Decisions.
+Routing is always the first Analyze write. `deltafuse next` selects one Analyze pass per invocation: `routing`, then one `slice` per uncovered routing primary capability, then `coverage`. Two capabilities never share one `next` item. Status stays `analyzing` until all three artifacts exist. Analyze does not skip Specify and does not auto-accept Decisions.
 
 ### Pass B: Slice Analysis
 For each capability slice:
@@ -91,7 +91,7 @@ For each capability slice:
 ### Analytical Outcomes
 - **Feasible**: all claims mapped, deltas computed, ready for specification or declaring.
 - **Decision Required**: architectural or product uncertainty identified; create `docs/decisions/DEC-NNNN-*.md` in `status: proposed` and transition Change to `blocked-on-decision`.
-- **Capability Gap**: new capability required; draft catalog delta for `_capabilities.yaml` requiring human approval.
+- **Capability Gap**: new capability required; propose it with `deltafuse capability propose <domain>.<name> --summary "…" --spec docs/spec/<domain>/<name>.md`, which the Core records in `_capabilities.yaml` as `status: draft`. Routing accepts a draft, and the slice may cite the spec file the draft promises in `spec_refs` even though Specify has not written it yet - both the Artifact Writer and the `analyzed` gate allow exactly that path while the capability is a draft. The human makes it `active` when accepting the specification; `specified` and `converged` refuse to close while a capability the Change routes into is still a draft.
 - **Duplicate**: Change duplicates an existing active or archived Change; mark `duplicate`.
 - **Rejected**: Request conflicts with core architecture or is unfeasible; mark `rejected`.
 
@@ -108,7 +108,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
-- The `analyzed` gate does not close until routing, slices, and coverage are on disk, regardless of `workflow.call_width`. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
+- The `analyzed` gate does not close until routing, slices, and coverage are on disk. Every distinct `primary_capability` in `routing.yaml` must have at least one slice file with that `primary_capability`.
 - Set `route` on `change.yaml` and `routing.yaml` to `code` (default), `docs`, or `ops`. Missing `route` is `code` (S02/S03). `docs`/`ops` still pass Specify; they do not take product pytest or `src/**` writes.
 - Unknown top-level keys on `routing.yaml` and `coverage.yaml` (including `schema_version`) do not fail `analyzed`. Two slice files do not satisfy Specify without live `docs/spec/**`.
 - `analysis.md` is optional. `analyzed` requires routing, slices, and coverage, not a summary file.
@@ -219,11 +219,11 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - **Forbidden Read Scope**: Production implementation code under test.
 
 ### Rules
-1. Implement the minimal test case in the file indicated by `test_target`.
+1. Implement the minimal test case in the file indicated by `test_target`. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is CLI exit 0 (`failure_category: behavioral-mismatch`).
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it.
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 3
@@ -245,6 +245,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 ### Gate
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
+- `changed_paths` stays inside the Declare write scope plus the product paths this task's `allowed_paths` declares (the compiled-language stub); any other `src/**` path is refused.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.
@@ -262,7 +263,7 @@ Author the minimal production code necessary to turn the failing test target gre
 - **Forbidden Read Scope**: Unrelated modules and packages.
 
 ### Rules
-1. Author only the production code required to satisfy the test assertions.
+1. Author only the production code required to satisfy the test assertions. The oracle Red was taken against is frozen: `evidence/red/<task-id>.yaml` carries `red_oracle_tests`, and a Green recorded over a changed oracle is refused. The unit is the test Red saw fail (`tests.failed`), not the file: its definition with decorators, and within its own module its class, the fixtures, helpers and imported names it refers to, and what pytest applies without naming it (`pytestmark`, hooks, autouse fixtures, module-level code). Frozen whole: every `conftest.py` from the test's directory up to the product root (declared or not, present or not - adding one counts), every other declared Python module without tests, and the pytest configuration files on that path. Comments, formatting and docstrings do not count. Adding tests, even in the same file, and editing code the frozen test does not refer to are allowed. Names are not followed into other modules: a helper module is frozen only if Red declared it. Java is frozen per file, not per method; per-method is deferred until verified on a real Maven/Gradle run. Green also runs the frozen tests on their own with pytest (`oracle_isolation`) - the Green command with its test selection replaced and `-p` dropped, its configuration options kept - and they must pass there as well, so a new test that patches the product, or a plugin on the command line, does not carry them. A Red without a runner report naming failed tests carries the older `red_oracle`, a hash of the declared files, and is checked that way.
 2. Execute the test target and prove it passes via the kernel:
    `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
    Do not hand-write evidence YAML.
@@ -273,6 +274,8 @@ Author the minimal production code necessary to turn the failing test target gre
 - Test target passes cleanly.
 - Full regression suite passes without failures.
 - `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
+- On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a requirement that is genuinely already met closes the Change on the no-op path (terminal `not-reproduced`) instead.
+- On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle_tests` (or, on an older record, `red_oracle`) and refuses a difference, naming the test or the file that moved, so weakening the assertion during Implement does not produce a Green; and with pytest the frozen tests must have passed on their own in the Green's isolated run (`oracle_isolation`).
 - Task status transitioned to `implemented`.
 
 ---
@@ -294,6 +297,7 @@ The Verifier checks that:
 1. Execute full project verification suite.
 2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
+   - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here;
    - Traceability matrix;
    - Evidence audit;
    - Delta verification;
@@ -301,7 +305,7 @@ The Verifier checks that:
 4. Transition `change.yaml` status to `converged`. The gate fails if `spec-delta.md` `added`/`modified` files or anchors are missing from `docs/spec/**`, or if `removed` entries are still present. Archive does not merge specification.
 
 ### Archiving
-After `deltafuse check-gate <change-dir> --gate converged` passes, run `deltafuse archive <change-dir>`. That:
+Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks the gate and writes the status in one call), then `deltafuse archive <change-dir>`. Archive applies only from status `converged`, which `advance` writes; `check-gate` is the read-only preview of the same check and moves nothing. Archiving:
 1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
 2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
 3. Updates `change.yaml` status to `archived`.
