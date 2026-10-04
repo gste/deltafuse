@@ -380,7 +380,11 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     path=rel,
                     task=tid,
                     task_path=_rel(product_root, tfile),
-                    reason=f"Task {tid} is blocked",
+                    reason=(
+                        f"Task {tid} is blocked: it waits for the human (the Worker's reply "
+                        "that blocked it says why - for example a declared oracle it showed "
+                        "no code can pass)"
+                    ),
                     halt_kind="blocked",
                 )
             ]

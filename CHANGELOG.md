@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `deltafuse next` names the command in its reason, `deltafuse evidence` names it in its
   advice, and the declare skill, `docs/state-machine.md` and `docs/workflow.md` say the same.
 
+- **A declared oracle no code can pass stops the task for the human.** In the reference
+  run ref-m02-338 (M02, 2026-10-04) the Worker proved during Implement that two of its own
+  Red tests for TASK-004 contradicted the accepted spec; the implement skill said to
+  "stop and re-declare it", there is no way back from `declared` to Declare (and a
+  re-declared Red could not fail on code Implement already changed), and the queue selected
+  implement five times until the runner stopped the run. The skill now says to mark the
+  task `blocked` (`deltafuse state <change-dir> --task <id> --status blocked`) and say
+  why; the blocked halt's reason says the task waits for the human. Owner decision
+  2026-10-04.
+
 ### Changed
 
 - `docs/small-llm-contract.md`: the reference is `qwen/qwen3.8-27b` in bf16 at one named

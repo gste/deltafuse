@@ -100,3 +100,14 @@ def test_the_evidence_command_names_the_way_out(tmp_path: Path, repo_root: Path)
     task.write_text(task.read_text(encoding="utf-8").replace("requirement_delta: none", "requirement_delta: added"),
                     encoding="utf-8")
     assert "for the human to settle" in already_green_advice(builder.change_dir, "TASK-001")
+
+
+def test_a_blocked_task_halts_the_queue_and_says_why(tmp_path: Path, repo_root: Path):
+    """ref-m02-338 (2026-10-04): the reference proved its own declared oracle for TASK-004
+    unsatisfiable, and with no way back to declare the queue selected implement five times.
+    Owner decision: the Worker marks such a task blocked and the human settles it."""
+    builder = _decomposed(tmp_path, repo_root, delta="added")
+    set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
+    queue = build_work_queue(tmp_path)
+    assert not queue.ready
+    assert queue.blocked and "waits for the human" in queue.blocked[0].reason
