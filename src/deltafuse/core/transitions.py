@@ -529,12 +529,81 @@ def advance_change(
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
 # (`deltafuse state`) instead of hand-editing task/slice/Change frontmatter.
 TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"declaring", "declared", "blocked", "cancelled"},
-    "declaring": {"declared", "blocked"},
-    "declared": {"implementing", "implemented", "blocked", "cancelled"},
+    "pending": {"declaring", "declared", "blocked", "cancelled", "superseded"},
+    "declaring": {"declared", "blocked", "superseded"},
+    "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
     "implementing": {"implemented", "blocked"},
     "implemented": {"verified", "blocked"},
 }
+
+
+def red_result(change_path: Path, task_id: str) -> str | None:
+    """The `result` of a task's Red record, or None when it has none."""
+    red = Path(change_path) / "evidence" / "red" / f"{task_id}.yaml"
+    try:
+        data = yaml.safe_load(red.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    result = data.get("result") if isinstance(data, dict) else None
+    return str(result) if result else None
+
+
+def supersede_errors(change_path: Path, task_id: str, meta: dict[str, Any]) -> list[str]:
+    """Why a task may not become `superseded`, or nothing when it may.
+
+    An already-green Red proves there is nothing to implement against the task's oracle:
+    the implemented gate refuses it, and declare selected the task again and again (Gemma
+    31B shakedown cls-g31g-m02b, 2026-10-04: a "verify the constraints" task whose
+    constraints earlier tasks had already met, seven declare steps in a row, then the
+    Worker hand-edited other tasks' Red records). Closing the whole Change as a no-op would
+    have thrown away six tasks' work. A task that changes no requirement and whose oracle
+    already passes is superseded by the work around it, and its test stays as regression
+    (owner decision 2026-10-04). A task that promises a requirement delta is not: its
+    oracle passing on unchanged code is a contradiction the human settles.
+    """
+    result = red_result(change_path, task_id)
+    if result != "already-green":
+        return [
+            f"task {task_id} can be superseded only when its Red record is already-green "
+            f"(found: {result or 'no Red record'}); declare it first"
+        ]
+    delta = str(meta.get("requirement_delta") or "").strip().lower()
+    if delta != "none":
+        return [
+            f"task {task_id} promises requirement_delta '{delta or 'unset'}', yet its Red "
+            "already passes on unchanged code: that is the human's to settle - cancel the "
+            "task if the behavior already exists, or delete its Red record and declare it again"
+        ]
+    return []
+
+
+def already_green_advice(change_path: Path | str, task_id: str) -> str:
+    """What `deltafuse evidence` tells the Worker after recording an already-green Red.
+
+    "Return this outcome upstream" named no command (cls-g31g-m02b, 2026-10-04).
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    change_dir = Path(change_path)
+    try:
+        meta, _ = parse_frontmatter((change_dir / "tasks" / f"{task_id}.md").read_text(encoding="utf-8"))
+    except Exception:  # an unreadable task file only loses the specific advice
+        meta = {}
+    if not supersede_errors(change_dir, task_id, meta if isinstance(meta, dict) else {}):
+        advice = (
+            "The task changes no requirement, so earlier work already meets it: close it with "
+            f"`deltafuse state {change_path} --task {task_id} --status superseded`; its test "
+            "stays as regression."
+        )
+    else:
+        advice = (
+            "The task promises a requirement delta, so a passing oracle on unchanged code is "
+            "for the human to settle: stop and report it."
+        )
+    return (
+        "Red is already-green: the oracle passed on unchanged product code, so there is "
+        f"nothing to implement against it. {advice} Do not proceed to Implement on this Red."
+    )
 SLICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"specified"},
 }
@@ -693,6 +762,10 @@ def set_artifact_status(
                 raise TransitionError(
                     f"cannot set status '{status}' from '{current}' for {file.name}"
                 )
+            if task_id and status == "superseded":
+                refusals = supersede_errors(change_path, task_id, meta)
+                if refusals:
+                    raise TransitionError("; ".join(refusals))
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")

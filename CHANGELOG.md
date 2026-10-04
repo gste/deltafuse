@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A task whose Red is already-green is closed, not declared forever.** In the Gemma 31B
+  shakedown cls-g31g-m02b (M02, 2026-10-04) a "verify the architectural constraints" task
+  wrote a test that the earlier tasks had already made pass. `deltafuse evidence` recorded
+  `already-green` and said to "return this outcome upstream", which named no command;
+  `deltafuse state --status already-green` was refused; the queue selected declare for the
+  task again, and a new step's conversation no longer had the advice: seven declare steps in
+  a row, after which the Worker hand-edited other tasks' Red records. The documented exit
+  (close the whole Change as a no-op) would have thrown away six tasks' work. Owner decision
+  2026-10-04: a task with `requirement_delta: none` and an already-green Red becomes
+  `superseded` (`deltafuse state <change-dir> --task <id> --status superseded`, allowed from
+  pending, declaring or declared and only then; its test stays as regression); a task that
+  promises a requirement delta halts for the human, who cancels it or has it declared again.
+  `deltafuse next` names the command in its reason, `deltafuse evidence` names it in its
+  advice, and the declare skill, `docs/state-machine.md` and `docs/workflow.md` say the same.
+
+### Changed
+
+- `docs/small-llm-contract.md`: the reference is `qwen/qwen3.8-27b` in bf16 at one named
+  provider; the route is fixed in the judge's `qualify/thresholds.md` (`reference.route`).
+
 ## [3.3.7] - 2026-10-03
 
 ### Fixed

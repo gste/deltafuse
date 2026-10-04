@@ -963,13 +963,12 @@ def _main(argv: list[str] | None = None) -> int:
             ):
                 # The record is an honest observation, but it is a stop, not a
                 # green light: there is no failure for Implement to remove, and
-                # the implemented gate refuses an already-green Red.
-                print(
-                    "Red is already-green: the oracle passed on unchanged product code, so "
-                    "there is nothing to implement against it. Stop and return this outcome "
-                    "upstream - do not proceed to Implement on this Red.",
-                    file=sys.stderr,
-                )
+                # the implemented gate refuses an already-green Red. "Return it
+                # upstream" named no command, and the Worker declared the task seven
+                # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
+                from deltafuse.core.transitions import already_green_advice
+
+                print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
         print("Evidence is not authentic:", file=sys.stderr)
         for err in outcome.errors:

@@ -14,7 +14,7 @@ from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
-from deltafuse.core.transitions import receipt_mismatch
+from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -397,6 +397,49 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason="; ".join(faults),
+                    halt_kind="blocked",
+                )
+            ]
+        if tstatus in TASK_DECLARE | TASK_IMPLEMENT and red_result(change_path, tid) == "already-green":
+            # The oracle passed on unchanged code: nothing to implement, and the
+            # implemented gate refuses such a Red. Without this the task was selected
+            # for declare again and again, and a new step's conversation no longer
+            # had the evidence command's advice (cls-g31g-m02b, 2026-10-04).
+            meta, _ = parse_frontmatter(tfile.read_text(encoding="utf-8"))
+            red_rel = f"{rel}/evidence/red/{tid}.yaml"
+            if not supersede_errors(change_path, tid, meta if isinstance(meta, dict) else {}):
+                return [
+                    _item_for_step(
+                        "declare",
+                        change_id=change_id,
+                        path=rel,
+                        task=tid,
+                        task_path=_rel(product_root, tfile),
+                        reason=(
+                            f"Task {tid}: its Red is already-green and it changes no "
+                            "requirement, so earlier work already meets it; close it with "
+                            f"deltafuse state {rel} --task {tid} --status superseded "
+                            "(its test stays as regression)"
+                        ),
+                    )
+                ], []
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason=(
+                        f"Task {tid}: its Red is already-green, yet it promises "
+                        f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
+                        "The human decides: cancel it (deltafuse state "
+                        f"{rel} --task {tid} --status cancelled) if the behavior already "
+                        f"exists, or delete {red_rel} and have it declared again"
+                    ),
                     halt_kind="blocked",
                 )
             ]
