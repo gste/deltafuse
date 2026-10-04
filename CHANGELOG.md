@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   why; the blocked halt's reason says the task waits for the human. Owner decision
   2026-10-04.
 
+- **A design_ref written as the string "null" is refused with the fix.** In the Gemma 31B
+  shakedown cls-g31p3-m02 (M02, 2026-10-04) the Worker sent `design_ref: "null"` four
+  decompose steps running; the refusal said only that the file 'null' does not exist, and
+  each new step had lost the previous one's guess at the cause. The value is still refused;
+  the message now says a task without a design has `design_ref: null` or none.
+
 ### Changed
 
 - `docs/small-llm-contract.md`: the reference is `qwen/qwen3.8-27b` in bf16 at one named
