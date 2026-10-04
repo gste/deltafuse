@@ -7,7 +7,7 @@
 
 - **К1 принят**: пробный прогон на `google/gemma-4-31b-it` обязателен перед каждым прогоном
   эталона; режим `--diagnostic`; платный маршрут — Crusoe bf16 (пресет
-  `deltafuse-bench/qualify/routes/gemma-4-31b-crusoe-bf16.json`).
+  `deltafuse-bench/qualify/routes/gemma-4-31b.json`).
 - **К2 принят**: кейсы можно отправлять бесплатным эндпоинтам. На деле бесплатный вариант
   OpenRouter `google/gemma-4-31b-it:free` ответил «rate-limited upstream, shared pool» на
   первый же вызов (2026-10-04, 6 попыток, $0), как `qwen/qwen3.8-27b:free` 22.09. Рабочий
