@@ -296,10 +296,52 @@ def _stale_task_evidence(
     return out
 
 
+def _unreadable_change(change_path: Path) -> str | None:
+    """Why change.yaml cannot be read as one mapping, or None when it can.
+
+    Gemma 31B shakedown cls-g31s-m02 (2026-10-04): the Worker rewrote change.yaml
+    with write_file (front-matter delimiters, no `id`). The queue skipped the
+    unreadable package, `deltafuse next` answered "No ready work" with nothing
+    blocked, and the run ended as if the Change were done.
+    """
+    change_file = change_path / "change.yaml"
+    if not change_file.is_file():
+        return None
+    try:
+        data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - any parse failure is the same halt
+        first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        return f"it is not valid YAML ({first})"
+    if not isinstance(data, dict):
+        return "it is not a YAML mapping"
+    return None
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data = _load_change(change_path)
     if not data:
-        return [], []
+        problem = _unreadable_change(change_path)
+        if problem is None:
+            return [], []
+        rel = _rel(product_root, change_path)
+        return [], [
+            WorkItem(
+                kind="blocked",
+                step=None,
+                skill=None,
+                gate=None,
+                change_id=change_path.name,
+                path=rel,
+                task=None,
+                task_path=None,
+                reason=(
+                    f"{rel}/change.yaml cannot be read: {problem}. Only the Core writes "
+                    "change.yaml; it was written by hand. The human restores it from "
+                    "version control, then `deltafuse next` resumes."
+                ),
+                halt_kind="blocked",
+            )
+        ]
     change_id = data.get("id")
     if not isinstance(change_id, str):
         change_id = change_path.name

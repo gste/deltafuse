@@ -34,18 +34,32 @@ DECISION_ID = re.compile(r"^DEC-([0-9]{4,})")
 CHANGE_ID = re.compile(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$")
 
 
+# Gemma 31B shakedown cls-g31s-m02 (2026-10-04): told only "no valid Change id", the Worker
+# rewrote change.yaml by hand six times, each write making the next refusal certain.
+HAND_WRITTEN_CHANGE = (
+    " Only the Core writes change.yaml; do not write it with a file tool. If it was written "
+    "by hand, stop and report it: the human restores it from version control."
+)
+
+
 def _change_id(change_dir: Path) -> str:
     change_file = change_dir / "change.yaml"
     try:
         data = yaml.safe_load(change_file.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as ex:
+    except OSError as ex:
         raise ArtifactServiceError(
             f"{change_file.as_posix()} cannot be read: {ex}", code="missing_change_authority"
+        ) from ex
+    except yaml.YAMLError as ex:
+        raise ArtifactServiceError(
+            f"{change_file.as_posix()} cannot be read: {ex}.{HAND_WRITTEN_CHANGE}",
+            code="missing_change_authority",
         ) from ex
     cid = data.get("id") if isinstance(data, dict) else None
     if not isinstance(cid, str) or not CHANGE_ID.match(cid):
         raise ArtifactServiceError(
-            f"change.yaml has no valid Change id: {cid!r}", code="missing_change_authority"
+            f"change.yaml has no valid Change id: {cid!r}.{HAND_WRITTEN_CHANGE}",
+            code="missing_change_authority",
         )
     return cid
 

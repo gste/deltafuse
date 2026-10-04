@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A hand-broken `change.yaml` halts the Change instead of reading as "no work".** In the
+  Gemma 31B shakedown cls-g31s-m02 (M02, 2026-10-04) the Worker rewrote `change.yaml` with a
+  file tool (front-matter delimiters, no `id`). The queue skipped the unreadable package, so
+  `deltafuse next` answered "No ready work" with nothing blocked and the run ended as if the
+  Change were done. The queue now reports the package as blocked, says why the file cannot be
+  read and that the human restores it. `deltafuse artifact write`, refusing for want of a
+  Change id, now also says that only the Core writes `change.yaml`: told only "no valid
+  Change id", the Worker had rewritten the file by hand six times. In the same run a refusal
+  for a field the artifact kind does not take (`Field 'kind' is not an allowed semantic
+  field`) was repeated nine times by the Worker; the refusal now lists the allowed fields.
+
 - **A task whose Red is already-green is closed, not declared forever.** In the Gemma 31B
   shakedown cls-g31g-m02b (M02, 2026-10-04) a "verify the architectural constraints" task
   wrote a test that the earlier tasks had already made pass. `deltafuse evidence` recorded
