@@ -361,6 +361,37 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
         out.append(raw)
     return out
 
+# Statuses past Declare: their Red is taken and its oracle frozen.
+RED_TAKEN_STATUSES = frozenset({"declared", "implementing", "implemented", "verified"})
+
+
+def _refuse_red_after_declare(change_path: Path, task: str) -> None:
+    """Red belongs to Declare; past it, retaking Red would re-freeze the oracle.
+
+    Gemma 31B shakedown cls-g31s5-m02 (2026-10-05): during Implement, with its Green refused
+    ("Green did not turn the Red tests green"), the Worker recorded Red for TASK-001 again,
+    three times, each accepted as authentic. A Red retaken there freezes whatever the tests
+    are at that moment, so the frozen-oracle check no longer guards the declared one.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unknown or unreadable task is refused where it always was
+        return
+    status = meta.get("status") if isinstance(meta, dict) else None
+    if status in RED_TAKEN_STATUSES:
+        raise EvidenceRunError(
+            f"{task_id} is '{status}': its Red was recorded in Declare and froze the declared "
+            "oracle, so Red is not taken again - that would freeze the tests as they are now. "
+            "In Implement record green and regression; if the declared oracle itself is wrong, "
+            f"mark the task blocked (`deltafuse state <change-dir> --task {task_id} --status "
+            "blocked`), say why, and stop. Nothing was run or recorded"
+        )
+
+
 def run_evidence(
     change_dir: Path | str,
     *,
@@ -398,6 +429,9 @@ def run_evidence(
     change_path = Path(change_dir).resolve()
     if not change_path.is_dir():
         raise EvidenceRunError(f"Change package directory not found: {change_path}")
+
+    if phase == "red":
+        _refuse_red_after_declare(change_path, str(task))
 
     repo_root = find_repo_root(change_path)
     change_id = _load_change_id(change_path)

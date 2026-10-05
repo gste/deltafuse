@@ -111,3 +111,23 @@ def test_a_blocked_task_halts_the_queue_and_says_why(tmp_path: Path, repo_root: 
     queue = build_work_queue(tmp_path)
     assert not queue.ready
     assert queue.blocked and "waits for the human" in queue.blocked[0].reason
+
+
+def test_red_is_not_taken_again_after_declare(tmp_path: Path, repo_root: Path):
+    """cls-g31s5-m02 (2026-10-05): with its Green refused in Implement, the Worker recorded
+    Red for the task again three times, each accepted - re-freezing the declared oracle."""
+    from deltafuse.core.evidence import EvidenceRunError
+
+    builder = _decomposed(tmp_path, repo_root, delta="added")
+    red = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
+    red.parent.mkdir(parents=True, exist_ok=True)
+    red.write_text("frozen: true\n", encoding="utf-8")
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(task.read_text(encoding="utf-8").replace("status: pending", "status: implemented"), encoding="utf-8")
+
+    with pytest.raises(EvidenceRunError, match="Red is not taken again"):
+        run_evidence(
+            builder.change_dir, phase="red", task="TASK-001",
+            argv=[sys.executable, "-c", "raise SystemExit(1)"],
+        )
+    assert red.read_text(encoding="utf-8") == "frozen: true\n"

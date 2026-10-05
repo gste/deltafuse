@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Red is not taken again after Declare.** In the Gemma 31B shakedown cls-g31s5-m02 (M02,
+  2026-10-05), with its Green refused in Implement ("Green did not turn the Red tests green"),
+  the Worker recorded Red for the task again, three times, and each was accepted as authentic:
+  a Red retaken there freezes the tests as they are at that moment, so the frozen-oracle check
+  no longer guarded the declared oracle. `deltafuse evidence --phase red` now refuses, before
+  running anything, a task that is `declared`, `implementing`, `implemented` or `verified`, and
+  names the way out (green and regression, or `blocked` when the declared oracle is wrong); the
+  implement skill says the same.
+
 - **`deltafuse artifact write --change` takes the Change id as well as its directory.** In
   the Gemma 31B shakedowns cls-g31s-m02 and cls-g31s3-m02 (M02, 2026-10-04/05) the Worker
   passed `CHG-001-ratelimit-stats-policy` instead of `docs/changes/CHG-001-ratelimit-stats-policy`.
