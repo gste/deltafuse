@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Verify reads the Core's trace instead of every evidence record.** In the reference run
+  ref-m02-341 (qwen3.8-27b, M02, 2026-10-05) the verify step held 30 files in one call - 15 of
+  them Red/Green/regression records, 5 task files - because the verify skill asked the Worker
+  to "confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle
+  weakening" by hand: checks the Core had already made at the `implemented` gate and makes again
+  at `converged`. The step's context grew with the number of tasks and broke the bench's
+  bounded-reads threshold (24 files). The skill now reads the trace from `coverage.yaml` and
+  opens an evidence record, task file or source artifact only when a gate error names it or for
+  a gap it found; `docs/workflow(.ru).md` say the same. No check moved or weakened.
+
 - **Red is not taken again after Declare.** In the Gemma 31B shakedown cls-g31s5-m02 (M02,
   2026-10-05), with its Green refused in Implement ("Green did not turn the Red tests green"),
   the Worker recorded Red for the task again, three times, and each was accepted as authentic:
