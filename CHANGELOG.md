@@ -14,9 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Worker recorded Red for the task again, three times, and each was accepted as authentic:
   a Red retaken there freezes the tests as they are at that moment, so the frozen-oracle check
   no longer guarded the declared oracle. `deltafuse evidence --phase red` now refuses, before
-  running anything, a task that is `declared`, `implementing`, `implemented` or `verified`, and
-  names the way out (green and regression, or `blocked` when the declared oracle is wrong); the
-  implement skill says the same.
+  running anything, a task that is `implementing`, `implemented` or `verified`, or `declared`
+  once the Change has left Declare, and names the way out (green and regression, or `blocked`
+  when the declared oracle is wrong); the implement skill says the same. While the Change is
+  still in Declare a `declared` task may retake Red: the first version of this guard covered
+  that too and left the reference run ref-m02-340 no way out of the next defect.
+
+- **A sibling task's Declare stub does not fail another task's Red.** Nothing commits between
+  tasks, so the Core-computed `changed_paths` of every later Red carries the stubs earlier
+  tasks wrote in their own Declare. In ref-m02-340 (qwen3.8-27b, M02, 2026-10-05) TASK-002's
+  stub `src/ratelimit/policy.py` failed the `declaring` gate for TASK-001 and TASK-003 - and,
+  told only the path, the reference hand-edited the wrong Red records. A Red's product paths
+  may now be any path a task of the Change (not cancelled) declares in `allowed_paths`, and
+  the refusal names the record.
 
 - **`deltafuse artifact write --change` takes the Change id as well as its directory.** In
   the Gemma 31B shakedowns cls-g31s-m02 and cls-g31s3-m02 (M02, 2026-10-04/05) the Worker

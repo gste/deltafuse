@@ -361,8 +361,11 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
         out.append(raw)
     return out
 
-# Statuses past Declare: their Red is taken and its oracle frozen.
+# Statuses whose Red is taken and its oracle frozen. A `declared` task may still retake Red
+# while the Change is in Declare: ref-m02-340 (2026-10-05) needed to, once this guard also
+# covered that phase - nothing has consumed the oracle yet.
 RED_TAKEN_STATUSES = frozenset({"declared", "implementing", "implemented", "verified"})
+DECLARE_CHANGE_STATUSES = frozenset({"decomposed", "declaring"})
 
 
 def _refuse_red_after_declare(change_path: Path, task: str) -> None:
@@ -382,6 +385,13 @@ def _refuse_red_after_declare(change_path: Path, task: str) -> None:
     except Exception:  # noqa: BLE001 - an unknown or unreadable task is refused where it always was
         return
     status = meta.get("status") if isinstance(meta, dict) else None
+    if status == "declared":
+        try:
+            change = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - a broken change.yaml is reported elsewhere
+            change = None
+        if isinstance(change, dict) and change.get("status") in DECLARE_CHANGE_STATUSES:
+            return
     if status in RED_TAKEN_STATUSES:
         raise EvidenceRunError(
             f"{task_id} is '{status}': its Red was recorded in Declare and froze the declared "

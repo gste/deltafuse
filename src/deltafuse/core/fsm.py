@@ -1021,6 +1021,13 @@ def _validate_evidence_changed_paths_contract(
         return errors
     write_globs = phase_write_globs(contract_phase, route)
     tasks = _task_frontmatter_by_id(change_path)
+    sibling_declared = [
+        p
+        for meta in tasks.values()
+        if meta.get("status") != "cancelled" and isinstance(meta.get("allowed_paths"), list)
+        for p in meta["allowed_paths"]
+        if isinstance(p, str)
+    ]
     for ev_file in ev_dir.glob("*.yaml"):
         try:
             ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
@@ -1045,10 +1052,15 @@ def _validate_evidence_changed_paths_contract(
         allowed_globs = list(write_globs)
         if evidence_phase == "red" and route == "code":
             allowed_globs += declared
+            # A sibling's stub, written in its own Declare, is in every later Red's
+            # Core-computed changed_paths: nothing commits between tasks. ref-m02-340
+            # (2026-10-05): TASK-002's stub src/ratelimit/policy.py failed the gate for
+            # TASK-001 and TASK-003, and no retaken Red could drop it.
+            allowed_globs += sibling_declared
         for msg in validate_paths_against_globs(
             rel_paths,
             allowed_globs,
-            label=f"Gate {gate} {evidence_phase} changed_paths",
+            label=f"Gate {gate} {evidence_phase} changed_paths of {ev_file.name}",
         ):
             errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:

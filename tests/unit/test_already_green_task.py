@@ -131,3 +131,51 @@ def test_red_is_not_taken_again_after_declare(tmp_path: Path, repo_root: Path):
             argv=[sys.executable, "-c", "raise SystemExit(1)"],
         )
     assert red.read_text(encoding="utf-8") == "frozen: true\n"
+
+
+def test_red_may_be_retaken_while_the_change_is_in_declare(tmp_path: Path, repo_root: Path):
+    """ref-m02-340 (2026-10-05): the guard above also covered Declare, where retaking Red is
+    legitimate - nothing has consumed the oracle yet - and left the reference no way out."""
+    from deltafuse.core.evidence import _refuse_red_after_declare
+
+    builder = _decomposed(tmp_path, repo_root, delta="added")
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.write_text(task.read_text(encoding="utf-8").replace("status: pending", "status: declared"), encoding="utf-8")
+    change = builder.change_dir / "change.yaml"
+    text = change.read_text(encoding="utf-8")
+    import re as _re
+
+    change.write_text(_re.sub(r"(?m)^status: .*$", "status: declaring", text), encoding="utf-8")
+    _refuse_red_after_declare(builder.change_dir, "TASK-001")  # allowed: no raise
+
+    change.write_text(_re.sub(r"(?m)^status: .*$", "status: implementing", text), encoding="utf-8")
+    from deltafuse.core.evidence import EvidenceRunError
+
+    with pytest.raises(EvidenceRunError, match="Red is not taken again"):
+        _refuse_red_after_declare(builder.change_dir, "TASK-001")
+
+
+def test_a_sibling_stub_in_a_red_record_is_inside_the_contract(tmp_path: Path, repo_root: Path):
+    """ref-m02-340: TASK-002's Declare stub src/ratelimit/policy.py sat in TASK-001's and
+    TASK-003's Core-computed Red changed_paths (nothing commits between tasks) and the
+    declaring gate refused them; no retaken Red could drop it."""
+    import yaml as _yaml
+    from deltafuse.core.fsm import _validate_evidence_changed_paths_contract
+
+    change = tmp_path / "CHG-001"
+    (change / "tasks").mkdir(parents=True)
+    (change / "tasks" / "TASK-001.md").write_text(
+        "---\nid: TASK-001\nstatus: declared\nallowed_paths: [tests/test_a.py]\n---\n", encoding="utf-8")
+    (change / "tasks" / "TASK-002.md").write_text(
+        "---\nid: TASK-002\nstatus: declared\nallowed_paths: [src/shop/policy.py]\n---\n", encoding="utf-8")
+    red = change / "evidence" / "red"
+    red.mkdir(parents=True)
+    (red / "TASK-001.yaml").write_text(
+        _yaml.safe_dump({"task": "TASK-001", "changed_paths": ["tests/test_a.py", "src/shop/policy.py"]}),
+        encoding="utf-8")
+    assert _validate_evidence_changed_paths_contract(change, "red", "declare", gate="declaring") == []
+
+    (red / "TASK-001.yaml").write_text(
+        _yaml.safe_dump({"task": "TASK-001", "changed_paths": ["src/shop/core.py"]}), encoding="utf-8")
+    errors = _validate_evidence_changed_paths_contract(change, "red", "declare", gate="declaring")
+    assert errors and "TASK-001.yaml" in errors[0] and "src/shop/core.py" in errors[0]
