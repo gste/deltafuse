@@ -190,6 +190,16 @@ implement TASK-004 пять раз подряд (≈ $0.4), пока ранне�
 does not match running framework asset identity»). Прогон испорчен и этим, не только Gemma.
 Правило: пока идёт прогон бенча, во фреймворке ничего не правится и тесты не запускаются.
 
+**cls-g31s4-m02 (Gemma, после всех исправлений выше, $0.12, 284 вызова):** intake → analyze
+(5 коротких шагов, 3 среза) → specify → decompose → declare ×4 → implement всех задач → verify.
+Без единого ручного `change.yaml` и без тупиков ядра. На verify Gemma 20 раз подряд передала всю
+команду одной строкой (`argv: ["deltafuse advance … --gate converged"]`) и слышала «allowed
+commands are deltafuse, pytest and read-only git» — правда о команде, которую она имела в
+виду, поэтому исправить было нечего. Прогон остановлен мной (иначе дожёг бы потолок),
+исправлен отказ раннера (бенч `8f260f3`: «argv is one string with spaces; pass each argument as
+its own list item» с примером). Судья по песочнице: correctness 52.5 (все стадии до declare —
+pass, implement — fail): обычный уровень Gemma на M02 (53–57 %).
+
 Не исправлялось (не дефект, а цена): одна правка `src/` обесценивает regression-доказательства
 всех задач, и ядро перепроверяет их по шагу на задачу (cls-g31s2-m02).
 
