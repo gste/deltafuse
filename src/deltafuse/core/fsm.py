@@ -1071,6 +1071,13 @@ def _red_category_hint(ev_data: dict) -> str:
     an assertion (gemma-334-probe M01), when the record's own summary said its
     command had never run.
     """
+    if ev_data.get("failure_category") == "test-own-error":
+        # ref-m02-339: `set & tuple` in the test body itself (core/red_cause.py).
+        return (
+            ". A test failed on an error in its own code that no product code can change, "
+            "so it would never pass; `deltafuse evidence` named the test and the line. Fix "
+            "the test so it fails only because the behaviour is missing, and record Red again"
+        )
     summary = str(ev_data.get("summary") or "").strip().splitlines()
     last = summary[-1].strip()[:160] if summary else ""
     said = f"; the record says: {last}" if last else ""

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Red test that fails on an error in its own code is not Red.** In the reference run
+  ref-m02-339 (qwen3.8-27b, M02, 2026-10-05) Declare wrote `assert not (new & NETWORKY_MODULES)`
+  with `new` a set and `NETWORKY_MODULES` a tuple: `set & tuple` raises TypeError whatever the
+  product does. Red was recorded as `behavioral-mismatch` next to five honest failures, the
+  oracle was frozen, and Implement could only prove that no code passes it and halt for the
+  human. `deltafuse evidence` now reads each failure from the runner's report (pytest) and
+  refuses, as `failure_category: test-own-error`, a test whose failure was raised in the test
+  file itself and is a NameError/UnboundLocalError, or a TypeError between built-in types on
+  a line that names nothing from the product (no product import, nothing assigned from one,
+  no fixture argument, no helper of the test module). The refusal names the test and line;
+  the declare skill and `docs/workflow.md` say the same. Over every Red report of the bench
+  runs to date (628 failed tests) the rule flags exactly this test.
+
 - **A hand-broken `change.yaml` halts the Change instead of reading as "no work".** In the
   Gemma 31B shakedown cls-g31s-m02 (M02, 2026-10-04) the Worker rewrote `change.yaml` with a
   file tool (front-matter delimiters, no `id`). The queue skipped the unreadable package, so

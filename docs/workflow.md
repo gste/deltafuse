@@ -223,7 +223,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it.
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it. Neither is a test that fails on an error in its own code which no product code can change - a name it never bound, or an operator between built-in values on a line that uses nothing from the product (`set & tuple`): `deltafuse evidence` records it as `test-own-error`, names the test and line, and exits non-zero.
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 3

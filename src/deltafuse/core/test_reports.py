@@ -50,6 +50,8 @@ class TestReport:
 
     source: str  # "junitxml" (we asked pytest for it) or "surefire" (found on disk)
     outcomes: dict[str, str] = field(default_factory=dict)
+    # Failed test -> (message, traceback text) as the runner wrote them; pytest only.
+    failures: dict[str, tuple[str, str]] = field(default_factory=dict)
 
     def ids(self, outcome: str) -> list[str]:
         return sorted(name for name, got in self.outcomes.items() if got == outcome)
@@ -115,6 +117,21 @@ def read_junit_xml(path: Path, *, error_means: str) -> dict[str, str]:
     return outcomes
 
 
+def read_junit_failures(path: Path) -> dict[str, tuple[str, str]]:
+    """Each `<failure>` of one JUnit XML file as (message, traceback text)."""
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError):
+        return {}
+    found: dict[str, tuple[str, str]] = {}
+    for case in root.iter("testcase"):
+        failure = case.find("failure")
+        name = _case_id(case)
+        if name and failure is not None:
+            found[name] = ((failure.get("message") or "").strip(), failure.text or "")
+    return found
+
+
 def read_report(
     argv: list[str],
     repo_root: Path,
@@ -133,7 +150,11 @@ def read_report(
             return None
         # A test that raises inside its body is a `<failure>` for pytest; an
         # `<error>` is a fixture or collection problem, so the test never ran.
-        return TestReport("junitxml", read_junit_xml(junit_path, error_means=NOT_RUN))
+        return TestReport(
+            "junitxml",
+            read_junit_xml(junit_path, error_means=NOT_RUN),
+            read_junit_failures(junit_path),
+        )
     if family == "jvm":
         outcomes: dict[str, str] = {}
         found = False

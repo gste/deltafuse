@@ -19,6 +19,7 @@ from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors, isolation_e
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
+from deltafuse.core.red_cause import own_code_error
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
     FAILED,
@@ -33,6 +34,7 @@ from deltafuse.core.test_reports import (
 from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
+OWN_CODE_RED_CATEGORY = "test-own-error"
 RECORDED_BY = "deltafuse-evidence"
 STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
@@ -462,6 +464,13 @@ def run_evidence(
             # The log mentioned an assertion but nothing ran, or a test could not
             # run: not a behavioural failure however the log reads.
             category = "fixture-error"
+    own_code = None
+    if phase == "red" and exit_code != 0 and report is not None and category == AUTHENTIC_RED_CATEGORY:
+        # The gate reads the category, so a test no product code can pass is not
+        # recorded as a behavioural failure (ref-m02-339, core/red_cause.py).
+        own_code = own_code_error(report, repo_root)
+        if own_code:
+            category = OWN_CODE_RED_CATEGORY
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":
@@ -558,6 +567,8 @@ def run_evidence(
             ok, why = red_is_authentic(report)
             if not ok:
                 errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
+            elif own_code:
+                errors.append(own_code)
         elif category != AUTHENTIC_RED_CATEGORY:
             # No machine-readable report from this runner: the old heuristic,
             # marked as such in the record so a weaker verdict is visible.
