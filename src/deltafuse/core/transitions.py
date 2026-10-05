@@ -534,7 +534,25 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
     "implementing": {"implemented", "blocked"},
     "implemented": {"verified", "blocked"},
+    # Only the human leaves `blocked`, and only by cancelling (decide --task).
+    "blocked": {"cancelled"},
 }
+
+# Cancelling drops what a task promised, so it is the human's call: `deltafuse decide
+# <change-dir> --task <id> --status cancelled`, behind the Human Gate password when the
+# product has one. ref-m02-338 observation (2026-10-04): `deltafuse state` let the Worker
+# cancel a pending task with no condition - a hard task could simply be dropped, and only
+# the bench's hidden suite would notice.
+HUMAN_TASK_STATUSES = frozenset({"cancelled"})
+
+
+def human_cancel_hint(change_path: Path | str, task_id: str) -> str:
+    return (
+        f"cancelling a task drops what it promised, which is the human's decision: "
+        f"`deltafuse decide {Path(change_path).as_posix()} --task {task_id} --status cancelled`. "
+        "If the task cannot be done, mark it blocked with `deltafuse state <change-dir> --task "
+        f"{task_id} --status blocked`, say why, and stop"
+    )
 
 
 def red_result(change_path: Path, task_id: str) -> str | None:
@@ -674,12 +692,14 @@ def set_artifact_status(
     task_id: str | None = None,
     slice_id: str | None = None,
     change_status: bool = False,
+    human: bool = False,
 ) -> dict[str, Any]:
     """Core-owned write of one artifact status (V3-FIX-010).
 
     Exactly one of task_id / slice_id / change_status selects the artifact.
     The transition must be allowed, the Change receipt chain must be intact,
-    and the write is journaled like every other Core status write.
+    and the write is journaled like every other Core status write. `human` is set
+    only by `deltafuse decide`, after the Human Gate check: it alone may cancel a task.
     """
     if sum(bool(x) for x in (task_id, slice_id, change_status)) != 1:
         raise TransitionError("choose exactly one of --task, --slice, or --change")
@@ -758,6 +778,8 @@ def set_artifact_status(
                     "receipt": None,
                     "unchanged": True,
                 }
+            if task_id and status in HUMAN_TASK_STATUSES and not human:
+                raise TransitionError(human_cancel_hint(change_path, task_id))
             if current not in allowed or status not in allowed[current]:
                 raise TransitionError(
                     f"cannot set status '{status}' from '{current}' for {file.name}"

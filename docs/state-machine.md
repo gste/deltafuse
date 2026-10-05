@@ -125,8 +125,8 @@ stateDiagram-v2
     implemented --> verified: verify
     
     pending --> blocked: external dependency
-    blocked --> pending: unblocked
-    pending --> cancelled: task cancelled
+    blocked --> cancelled: the human cancels
+    pending --> cancelled: the human cancels
     pending --> superseded: task replaced
     
     verified --> [*]
@@ -144,8 +144,8 @@ stateDiagram-v2
 | `implementing` | Implementation code being authored. | `implemented` | Tests pass; regression suite passes. |
 | `implemented` | Green & regression evidence recorded. | `verified` | Evidence in `evidence/green/` & `regression/`. |
 | `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
-| `blocked` | Implementation blocked by dependency or issue. | `pending` | Blocking reason documented. |
-| `cancelled` | Task cancelled during Change lifecycle. | *Terminal* | Cancellation rationale documented. |
+| `blocked` | Implementation blocked by dependency or issue; the run halts for the human. | `cancelled` (the human only) | Blocking reason documented. |
+| `cancelled` | Task cancelled during Change lifecycle - the human's decision, never the Worker's: `deltafuse decide <change-dir> --task <id> --status cancelled` (Human Gate password when set; journaled as a `task` gate receipt). `deltafuse state` refuses it. | *Terminal* | Cancellation rationale documented. |
 | `superseded` | Task replaced by finer-grained tasks. | *Terminal* | Superseding task IDs documented. |
 
 ---

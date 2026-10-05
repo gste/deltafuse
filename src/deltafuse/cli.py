@@ -573,10 +573,15 @@ def _main(argv: list[str] | None = None) -> int:
         help="Apply the specification Human Gate (spec-delta.md on the Change path)",
     )
     decide_parser.add_argument(
+        "--task",
+        default=None,
+        help="Cancel this task of the Change on the path (with --status cancelled)",
+    )
+    decide_parser.add_argument(
         "--status",
         required=True,
-        choices=["accepted", "rejected"],
-        help="Recorded human choice",
+        choices=["accepted", "rejected", "cancelled"],
+        help="Recorded human choice (cancelled: only with --task)",
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
@@ -1048,9 +1053,14 @@ def _main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
+                task=args.task,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} "
-                    + (f"--decision {args.decision}" if args.decision else "--spec")
+                    + (
+                        f"--decision {args.decision}"
+                        if args.decision
+                        else (f"--task {args.task}" if args.task else "--spec")
+                    )
                     + f" --status {args.status}"
                 ),
             )

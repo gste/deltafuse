@@ -16,7 +16,7 @@ from deltafuse.core import gate_password, gate_receipts
 from deltafuse.core.gate_receipts import ReceiptError, TERMINAL_STATUSES
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
-from deltafuse.core.transitions import TransitionError, advance_change
+from deltafuse.core.transitions import TransitionError, _artifact_file, advance_change, set_artifact_status
 
 DECIDE_STATUSES = ("accepted", "rejected")
 
@@ -147,12 +147,62 @@ def _write_with_receipt(
         raise DecideError(f"Human Gate receipt was not recorded, verdict undone: {ex}") from ex
 
 
+def cancel_task(
+    change_dir: Path,
+    task: str,
+    *,
+    password_prompt: Callable[[], str] | None = None,
+) -> dict[str, Any]:
+    """The human cancels a task: what it promised is dropped from the Change.
+
+    The Worker cannot (`deltafuse state` refuses `cancelled`); a task it cannot do it marks
+    `blocked`, and this is one of the human's answers to that halt.
+    """
+    if not (change_dir / "change.yaml").is_file():
+        raise DecideError("--task requires a Change directory (path to change.yaml)")
+    product_root = find_repo_root(change_dir)
+    human_check = _check_password(product_root, password_prompt)
+    try:
+        moved = set_artifact_status(change_dir, status="cancelled", task_id=task, human=True)
+    except TransitionError as ex:
+        raise DecideError(str(ex)) from ex
+    task_file, task_id = _artifact_file(change_dir / "tasks", task, "task")
+    rel = _rel(product_root, task_file)
+    if not moved.get("unchanged"):
+        with ProductMutationLock(product_root):
+            try:
+                gate_receipts.record_receipt(
+                    product_root,
+                    kind="task",
+                    status="cancelled",
+                    rel_path=rel,
+                    artifact_id=task_id,
+                    change=_change_id_from_dir(change_dir),
+                    artifact=task_file,
+                    human_check=human_check,
+                )
+            except (ReceiptError, OSError) as ex:
+                raise DecideError(f"task cancelled, but its Human Gate receipt was not recorded: {ex}") from ex
+    return {
+        "ok": True,
+        "gate": "task",
+        "status": "cancelled",
+        "human_check": human_check,
+        "task": task_id,
+        "from": moved.get("from"),
+        "written": [rel],
+        "change_status": None,
+        "gate_errors": [],
+    }
+
+
 def apply_decision(
     start: Path | str,
     *,
     status: str,
     decision: str | None = None,
     spec: bool = False,
+    task: str | None = None,
     password_prompt: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Write the human's recorded choice. Does not run from `next`.
@@ -160,6 +210,12 @@ def apply_decision(
     `password_prompt` is called only when the product has a Human Gate password;
     it is asked before the mutation lock, so a human typing holds nothing.
     """
+    if task:
+        if decision or spec:
+            raise DecideError("Pass exactly one of --decision, --spec or --task")
+        if status != "cancelled":
+            raise DecideError(f"--task takes only --status cancelled, got {status!r}")
+        return cancel_task(Path(start).resolve(), task, password_prompt=password_prompt)
     if status not in DECIDE_STATUSES:
         raise DecideError(f"status must be accepted or rejected, got {status!r}")
     if bool(decision) == bool(spec):

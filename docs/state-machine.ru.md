@@ -146,7 +146,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 - `implemented`: тест и регрессии прошли успешно (Green evidence);
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
 - `blocked`: обнаружено внешнее препятствие или ошибка в контракте;
-- `cancelled`: задача отменена по решению архитектора/разработчика;
+- `cancelled`: задача отменена — только решением человека, не воркера: `deltafuse decide <change-dir> --task <id> --status cancelled` (пароль Human Gate, если задан; квитанция вида `task` в журнале). `deltafuse state` такой переход отказывает; из `blocked` выходят только так;
 - `superseded`: заменена другой задачей.
 
 Задачи не удаляются после выполнения. Они сохраняются в пакете Change для сохранения полной истории и трассируемости.

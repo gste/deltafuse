@@ -425,7 +425,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     reason=(
                         f"Task {tid} is blocked: it waits for the human (the Worker's reply "
                         "that blocked it says why - for example a declared oracle it showed "
-                        "no code can pass)"
+                        "no code can pass). The human cancels it with `deltafuse decide "
+                        f"{rel} --task {tid} --status cancelled`"
                     ),
                     halt_kind="blocked",
                 )
@@ -482,7 +483,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     reason=(
                         f"Task {tid}: its Red is already-green, yet it promises "
                         f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
-                        "The human decides: cancel it (deltafuse state "
+                        "The human decides: cancel it (deltafuse decide "
                         f"{rel} --task {tid} --status cancelled) if the behavior already "
                         f"exists, or delete {red_rel} and have it declared again"
                     ),

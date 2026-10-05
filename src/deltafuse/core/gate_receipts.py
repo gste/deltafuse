@@ -121,9 +121,12 @@ def record_receipt(
     `human_check` records how the Core knew a human answered: "password" when
     the Human Gate password was verified, "none" when the product has none.
     """
-    if kind not in {"decision", "spec"}:
+    if kind not in {"decision", "spec", "task"}:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
-    if status not in {"accepted", "rejected"}:
+    # A task's only Human Gate verdict is its cancellation: dropping what a task promised
+    # is the human's call, not the Worker's (ref-m02-338 observation, 2026-10-04).
+    verdicts = {"cancelled"} if kind == "task" else {"accepted", "rejected"}
+    if status not in verdicts:
         raise ReceiptError(f"unknown gate verdict: {status!r}")
 
     root = Path(product_root)

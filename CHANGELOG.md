@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cancelling a task is the human's decision.** `deltafuse state --task <id> --status
+  cancelled` let the Worker drop a pending or declared task with no condition (observation
+  from the reference run ref-m02-338, 2026-10-04): a hard task could simply be cancelled, and
+  only an independent hidden suite would notice. `deltafuse state` now refuses `cancelled`
+  and names both ways out: the Worker marks a task it cannot do `blocked` and stops; the human
+  cancels with `deltafuse decide <change-dir> --task <id> --status cancelled`, behind the
+  Human Gate password when the product has one, journaled as a `task` gate receipt. A
+  `blocked` task can now be cancelled (by the human only); the halts for a blocked task and
+  for an already-green Red that promised a delta name the command.
+
 - **Verification runs the whole suite.** In the Gemma 31B shakedown cls-g31p2-m02 (M02,
   2026-10-04) `tests/test_stats.py` still failed, the Worker left it out of the verification
   command, the run exited 0 and the `converged` gate closed: the gate checked only that a
