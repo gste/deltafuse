@@ -904,6 +904,74 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
     ]
 
 
+def _load_record(path: Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
+    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
+    return {str(t) for t in tests.get(outcome) or []}
+
+
+def change_test_ids(change_path: Path) -> set[str]:
+    """The tests a Change's own records name: what its verification must pass.
+
+    Red's failing tests of every task not cancelled, the already-passing tests of a
+    superseded task (its test stays as regression), and every regression run's passing
+    tests.
+    """
+    ids: set[str] = set()
+    tasks_dir = change_path / "tasks"
+    for task_file in sorted(tasks_dir.glob("*.md")) if tasks_dir.is_dir() else []:
+        try:
+            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - an unreadable task is the status check's finding
+            continue
+        if not isinstance(meta, dict) or meta.get("status") == "cancelled":
+            continue
+        tid = str(meta.get("id") or task_file.stem)
+        red = _load_record(change_path / "evidence" / "red" / f"{tid}.yaml")
+        ids |= _record_tests(red, "failed")
+        if meta.get("status") == "superseded":
+            ids |= _record_tests(red, "passed")
+        ids |= _record_tests(_load_record(change_path / "evidence" / "regression" / f"{tid}.yaml"), "passed")
+    return ids
+
+
+def verification_coverage_errors(change_path: Path) -> list[str]:
+    """Verification must run and pass every test the Change's records name.
+
+    Gemma 31B shakedown cls-g31p2-m02 (2026-10-04): with `tests/test_stats.py` still
+    failing, the Worker left that file out of the verification command, the run exited 0,
+    and the converged gate closed. The gate checked only that a run existed and passed.
+    """
+    expected = change_test_ids(change_path)
+    if not expected:
+        return []
+    run = _load_record(change_path / "evidence" / "verification" / "run.yaml")
+    if not run:
+        return []  # a missing or unreadable run is reported on its own
+    if not isinstance(run.get("tests"), dict):
+        return [
+            "Gate converged: the verification run has no runner report, so it does not show "
+            f"which tests it ran; the Change's records name {len(expected)} (for example "
+            f"{sorted(expected)[:3]}). Record verification with the runner the tasks used"
+        ]
+    passed = _record_tests(run, "passed")
+    missing = sorted(expected - passed)
+    if not missing:
+        return []
+    return [
+        f"Gate converged: the verification run did not pass {len(missing)} of the "
+        f"{len(expected)} tests this Change's Red and regression records name: {missing[:5]}. "
+        "Verification runs the whole suite; make those tests pass and record verification again"
+    ]
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -1532,6 +1600,8 @@ def _check_gate(
             errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
+        elif load_change_route(change_path)[0] == "code":
+            errors.extend(verification_coverage_errors(change_path))
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))
 
         # Check all tasks frontmatter status (P1 / T3 / RM-005)

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Verification runs the whole suite.** In the Gemma 31B shakedown cls-g31p2-m02 (M02,
+  2026-10-04) `tests/test_stats.py` still failed, the Worker left it out of the verification
+  command, the run exited 0 and the `converged` gate closed: the gate checked only that a
+  verification run existed and passed. It now refuses a run that did not pass every test the
+  Change's own records name - the Red tests of every task not cancelled, a superseded task's
+  passing tests, each regression run's tests - and a run with no runner report. Over the 26
+  verification runs of the bench to date it flags that run and one more (a Red test deleted
+  before verification, gemma31-335-rep, 2026-09-26) and no other. The verify skill and
+  `docs/workflow(.ru).md` say the same.
+
 - **A Red test that fails on an error in its own code is not Red.** In the reference run
   ref-m02-339 (qwen3.8-27b, M02, 2026-10-05) Declare wrote `assert not (new & NETWORKY_MODULES)`
   with `new` a set and `NETWORKY_MODULES` a tuple: `set & tuple` raises TypeError whatever the

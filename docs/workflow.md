@@ -296,7 +296,7 @@ The Verifier checks that:
 
 ### Convergence Analysis
 1. Execute full project verification suite.
-2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`). The `converged` gate refuses a run that did not pass every test the Change's Red and regression records name (the Red tests of every task not cancelled, a superseded task's passing tests, each regression run's tests): a failing test is fixed, never left out of the command.
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
    - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here;
    - Traceability matrix;
