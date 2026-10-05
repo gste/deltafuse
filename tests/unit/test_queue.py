@@ -438,6 +438,8 @@ def test_next_names_the_skill_file_so_the_worker_does_not_guess(tmp_path: Path, 
     [
         ("---\nchange: CHG-001\nstatus: analyzing\n---\n", "not valid YAML"),
         ("- just\n- a list\n", "not a YAML mapping"),
+        # cls-g31s3-m02: valid YAML rewritten by hand, `change:` in place of `id:`.
+        ("change: CHG-001\nstatus: analyzing\nroute: code\n", "no valid Change id"),
     ],
 )
 def test_a_hand_broken_change_yaml_halts_instead_of_reading_as_done(
@@ -453,5 +455,5 @@ def test_a_hand_broken_change_yaml_halts_instead_of_reading_as_done(
     assert not queue.ready
     assert len(queue.blocked) == 1
     reason = queue.blocked[0].reason
-    assert "change.yaml cannot be read" in reason and problem in reason
+    assert "change.yaml is broken" in reason and problem in reason
     assert "restores it from version control" in reason

@@ -787,3 +787,18 @@ def test_an_unexposed_field_refusal_names_the_allowed_fields(product_root: Path,
     assert exc_info.value.code == "unexposed_field"
     message = str(exc_info.value)
     assert "'colour'" in message and "Allowed fields:" in message and "title" in message
+
+
+def test_a_change_named_by_its_id_is_found_where_changes_live(tmp_path, repo_root, monkeypatch):
+    """cls-g31s-m02 / cls-g31s3-m02: `--change CHG-001-...` (the id, not the directory) was
+    answered "change.yaml cannot be read", and the Worker rewrote change.yaml by hand."""
+    from deltafuse.core.artifact_write import named_change_dir
+    from deltafuse.core.installer import install
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-001", title="Named").step_intake()
+    monkeypatch.chdir(tmp_path)
+    assert named_change_dir(Path(builder.change_dir.name)) == builder.change_dir.resolve()
+    assert named_change_dir(Path("CHG-001")) == builder.change_dir.resolve()
+    assert named_change_dir(Path("CHG-999")) == (tmp_path / "CHG-999").resolve()

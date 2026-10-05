@@ -314,13 +314,20 @@ def _unreadable_change(change_path: Path) -> str | None:
         return f"it is not valid YAML ({first})"
     if not isinstance(data, dict):
         return "it is not a YAML mapping"
+    # cls-g31s3-m02: rewritten by hand as `change: <id>` with no `id` - valid YAML, so
+    # the queue went on selecting analyze while every artifact write was refused.
+    from deltafuse.core.artifact_write import CHANGE_ID
+
+    cid = data.get("id")
+    if not isinstance(cid, str) or not CHANGE_ID.match(cid):
+        return f"it has no valid Change id (id: {cid!r})"
     return None
 
 
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data = _load_change(change_path)
-    if not data:
-        problem = _unreadable_change(change_path)
+    problem = _unreadable_change(change_path)
+    if not data or problem:
         if problem is None:
             return [], []
         rel = _rel(product_root, change_path)
@@ -335,7 +342,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 task=None,
                 task_path=None,
                 reason=(
-                    f"{rel}/change.yaml cannot be read: {problem}. Only the Core writes "
+                    f"{rel}/change.yaml is broken: {problem}. Only the Core writes "
                     "change.yaml; it was written by hand. The human restores it from "
                     "version control, then `deltafuse next` resumes."
                 ),

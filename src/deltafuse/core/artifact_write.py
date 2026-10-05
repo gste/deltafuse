@@ -102,6 +102,36 @@ def split_envelope(raw: dict[str, Any]) -> tuple[str | None, str | None, dict[st
     )
 
 
+def named_change_dir(change_dir: Path) -> Path:
+    """The Change directory `--change` means, also when it was given as the Change id.
+
+    Gemma 31B shakedowns cls-g31s-m02 and cls-g31s3-m02 (2026-10-04/05) passed
+    `CHG-001-ratelimit-stats-policy` instead of `docs/changes/CHG-001-ratelimit-stats-policy`.
+    The writer looked for `<product>/CHG-001-.../change.yaml`, answered that change.yaml
+    "cannot be read", and the Worker - reading that its Change was broken - rewrote the
+    Core-owned file by hand until the run stalled. The Core knows where Changes live.
+    """
+    path = change_dir.resolve()
+    if (path / "change.yaml").is_file():
+        return path
+    name = change_dir.name
+    if len(change_dir.parts) != 1 or not CHANGE_ID.match(name):
+        return path
+    from deltafuse.core.artifact_lock import resolve_product_root
+    from deltafuse.core.queue import changes_dir
+
+    try:
+        root = resolve_product_root(path)
+    except Exception:  # noqa: BLE001 - not inside a product: the caller's error stands
+        return path
+    changes = changes_dir(root)
+    exact = changes / name
+    if (exact / "change.yaml").is_file():
+        return exact
+    found = [p.parent for p in changes.glob(f"{name}-*/change.yaml")]
+    return found[0] if len(found) == 1 else path
+
+
 def write_artifact(
     change_dir: Path | str,
     kind: str,
@@ -118,7 +148,7 @@ def write_artifact(
     """
     from deltafuse.core.artifact_lock import resolve_product_root
 
-    change_path = Path(change_dir).resolve()
+    change_path = named_change_dir(Path(change_dir))
     if not identity and not target and kind != "decision":
         raise ArtifactServiceError(
             "name the artifact: 'identity' (e.g. TASK-001, SLICE-01) or 'target' (a path in the Change)",

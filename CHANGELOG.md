@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`deltafuse artifact write --change` takes the Change id as well as its directory.** In
+  the Gemma 31B shakedowns cls-g31s-m02 and cls-g31s3-m02 (M02, 2026-10-04/05) the Worker
+  passed `CHG-001-ratelimit-stats-policy` instead of `docs/changes/CHG-001-ratelimit-stats-policy`.
+  The writer looked for `<product>/CHG-001-.../change.yaml`, answered that `change.yaml`
+  "cannot be read", and the Worker - told its Change was broken - rewrote the Core-owned file
+  by hand until the run stalled. A bare Change id (or its unique `CHG-NNN` prefix) now resolves
+  to the Change directory under the product's changes path. The queue also halts, as for an
+  unreadable file, on a `change.yaml` that parses but has no valid Change `id` (the second
+  run's hand-written `change: <id>`), instead of selecting analyze while every write is refused.
+
 - **Cancelling a task is the human's decision.** `deltafuse state --task <id> --status
   cancelled` let the Worker drop a pending or declared task with no condition (observation
   from the reference run ref-m02-338, 2026-10-04): a hard task could simply be cancelled, and
