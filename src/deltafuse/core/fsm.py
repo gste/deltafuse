@@ -1510,9 +1510,10 @@ def _check_gate(
 
         # DF3-006 / SEC-04: a task cannot widen its write envelope by
         # editing YAML; allowed_paths must stay inside slice target_paths.
-        from deltafuse.core.leash import task_envelope_errors
+        from deltafuse.core.leash import task_envelope_errors, unreachable_green_errors
 
         errors.extend(task_envelope_errors(change_path))
+        errors.extend(f"Gate decomposed: {e}" for e in unreachable_green_errors(change_path))
 
     elif gate_lower == "declaring":
         route, route_errs = load_change_route(change_path)

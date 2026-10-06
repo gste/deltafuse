@@ -494,6 +494,72 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     return errors
 
 
+def unreachable_green_errors(change_path: Path) -> list[str]:
+    """A task that promises a requirement delta must be able to turn its Red green.
+
+    Reference run ref-m03-345 (qwen3.8-27b, M03, 2026-10-07): Decompose split "write the
+    tests" (TASK-001, allowed_paths tests/ only, src/** forbidden) from "implement" (TASK-002,
+    depending on TASK-001). TASK-001's Red could never pass inside its own envelope, and it ran
+    first: the reference proved it and halted. An older run (c336b-m01) closed the same split
+    only by writing src/ outside the task's allowed_paths. A delta task that may change no
+    product file is fine only after a task that may - so it must depend on one.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    route, _ = load_change_route(change_path)
+    if (route or DEFAULT_CHANGE_ROUTE) != "code":
+        return []
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return []
+    declare = set(phase_write_globs("declare", "code"))
+    product_globs = [
+        g for g in phase_write_globs("implement", "code")
+        if g not in declare and not g.replace("\\", "/").startswith("docs/")
+    ]
+    tasks: dict[str, dict] = {}
+    for tf in sorted(tasks_dir.glob("*.md")):
+        try:
+            meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict):
+            tasks[str(meta.get("id") or tf.stem)] = meta
+
+    def owns_product(tid: str) -> bool:
+        paths = [str(p) for p in tasks.get(tid, {}).get("allowed_paths") or []]
+        return any(_glob_covers(p, g) for p in paths for g in product_globs)
+
+    def depends_on_product(tid: str) -> bool:
+        seen: set[str] = set()
+        todo = [str(d) for d in tasks.get(tid, {}).get("depends_on") or []]
+        while todo:
+            dep = todo.pop()
+            if dep in seen or dep not in tasks:
+                continue
+            seen.add(dep)
+            if owns_product(dep):
+                return True
+            todo.extend(str(d) for d in tasks[dep].get("depends_on") or [])
+        return False
+
+    errors: list[str] = []
+    for tid, meta in tasks.items():
+        delta = str(meta.get("requirement_delta") or "").strip().lower()
+        if delta in {"", "none"} or meta.get("status") in {"cancelled", "superseded"}:
+            continue
+        if owns_product(tid) or depends_on_product(tid):
+            continue
+        paths = [str(p) for p in meta.get("allowed_paths") or []]
+        errors.append(
+            f"Task {tid} promises requirement_delta '{delta}' but may change no product file "
+            f"(allowed_paths {paths}) and depends on no task that may: its Red tests could never "
+            "turn Green. Give it the product paths its tests need, merge it with the task that "
+            "changes the product, or make it depend on that task"
+        )
+    return errors
+
+
 def _git_show(product_root: Path, ref: str, rel_path: str) -> str | None:
     """File content at a revision; None when the file (or the revision) is absent."""
     proc = subprocess.run(

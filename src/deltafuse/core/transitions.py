@@ -788,6 +788,22 @@ def set_artifact_status(
                 refusals = supersede_errors(change_path, task_id, meta)
                 if refusals:
                     raise TransitionError("; ".join(refusals))
+            if task_id and status == "blocked":
+                # Gemma 31B shakedown cls-g31-m03 (2026-10-06): the Worker rewrote a frozen
+                # test, Green was refused for it, and the task was then marked blocked as an
+                # "oracle mismatch" - the halt read to the human as a declared oracle no code
+                # can pass. Blocked is judged on the oracle as declared.
+                red_file = change_path / "evidence" / "red" / f"{task_id}.yaml"
+                if red_file.is_file():
+                    from deltafuse.core.fsm import frozen_oracle_errors
+
+                    changed = frozen_oracle_errors(red_file, product_root, f"Red of {task_id}")
+                    if changed:
+                        raise TransitionError(
+                            f"task {task_id} cannot be marked blocked while its declared oracle is "
+                            f"changed ({'; '.join(changed)}): restore the tests as Red froze them, "
+                            "then block only if that declared oracle itself is wrong"
+                        )
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")

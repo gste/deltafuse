@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A delta task must be able to turn its own Red green.** In the reference run ref-m03-345
+  (qwen3.8-27b, M03, 2026-10-07) Decompose split "write the tests" (TASK-001: `allowed_paths`
+  tests only, `src/**` forbidden) from "implement" (TASK-002, depending on TASK-001). TASK-001
+  ran first and its Red could never pass inside its own envelope; the reference proved it and
+  halted. An older run (c336b-m01) closed the same split only by writing `src/` outside the
+  task's `allowed_paths`. The `decomposed` gate now refuses, on the `code` route, a task with a
+  requirement delta that may change no product file and depends on no task that may; the
+  decompose skill says so. Over the 107 Changes of the bench runs to date it flags 5, each such
+  a split or a delta task with no paths at all.
+
+- **Blocked is judged on the oracle as declared.** In the Gemma 31B shakedown cls-g31-m03
+  (M03, 2026-10-06) the Worker rewrote a frozen test, Green was refused for it, and the task was
+  then marked `blocked` as an "oracle mismatch" - a halt that read to the human as a declared
+  oracle no code can pass. `deltafuse state --status blocked` is now refused while the task's
+  frozen oracle is changed, naming the change; the implement skill says so.
+
 - **Verify reads the Core's trace instead of every evidence record.** In the reference run
   ref-m02-341 (qwen3.8-27b, M02, 2026-10-05) the verify step held 30 files in one call - 15 of
   them Red/Green/regression records, 5 task files - because the verify skill asked the Worker
