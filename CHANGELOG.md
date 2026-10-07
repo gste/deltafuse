@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`deltafuse next` names no ready step when no intake is waiting.** After the archive in the
+  reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07), `next --json` returned a ready
+  `intake` step (`intake_pending: false`) next to a `done` halt. The verify skill says to execute
+  the ready step `next` names, and the reference opened CHG-002 from the request CHG-001 had just
+  delivered. With no intake file waiting and no step asked for, `selected` is now `null` and the
+  `done` halt says not to start a Change the human has not stated; `next --step intake` still
+  names it, and the exit code is unchanged.
+
 - **A superseded task has no Green, and a stray one does not block the `implemented` gate.** In
   the reference run ref-m03-346 (qwen3.8-27b, M03, 2026-10-07) a task correctly superseded on
   an already-green Red later got a Green record anyway; `deltafuse evidence` accepted it, and the

@@ -81,9 +81,11 @@ def test_next_json_empty_product_has_done_halt(tmp_path: Path, repo_root: Path, 
     out, _ = capsys.readouterr()
     assert ret == 0
     data = json.loads(out)
-    assert data["selected"]["skill"] == "intake"
-    assert data["selected"]["intake_pending"] is False
+    # ref-m03-347 (2026-10-07): a ready intake step next to a "done" halt was read as work,
+    # and the Worker opened a second Change from a request already delivered.
+    assert data["selected"] is None
     assert data["halt"]["kind"] == "done"
+    assert "Do not start a Change unless the human" in data["halt"]["prompt"]
     assert data.get("envelope") is None
 
 

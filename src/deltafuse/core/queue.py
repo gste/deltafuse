@@ -885,7 +885,10 @@ def build_halt(
         }
     return {
         "kind": "done",
-        "prompt": "No ready work. Merge/push is a Human Gate. Do not git push.",
+        "prompt": (
+            "No ready work and no new intake file is waiting. Do not start a Change unless the "
+            "human already stated one in this chat. Merge/push is a Human Gate. Do not git push."
+        ),
         "choices": [_choice("inspect", "Stop", None)],
     }
 

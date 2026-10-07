@@ -22,6 +22,7 @@ from deltafuse.core.queue import (
     format_human_guide,
     format_item,
     format_queue,
+    intake_sources_pending,
     load_product_root,
     queue_snapshot,
     select_next,
@@ -1006,6 +1007,22 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Next failed: {ex}", file=sys.stderr)
             return 2
         selected = select_next(queue, step=args.step)
+        had_item = selected is not None
+        if (
+            args.step is None
+            and selected is not None
+            and selected.step == "intake"
+            and not (
+                selected.intake_pending
+                if selected.intake_pending is not None
+                else intake_sources_pending(load_product_root(target))
+            )
+        ):
+            # ref-m03-347 (2026-10-07): after the archive, `next` named a ready intake step
+            # (intake_pending false) next to a "done" halt; the verify skill says to execute a
+            # ready step, and the reference opened CHG-002 from the request CHG-001 had just
+            # delivered. With no intake waiting there is no ready step to name.
+            selected = None
         _journal(
             target if only is None else only,
             cmd="next",
@@ -1043,7 +1060,7 @@ def _main(argv: list[str] | None = None) -> int:
             print("No ready work.", file=sys.stderr)
             print(format_queue(queue), file=sys.stderr)
             print("To start a new Change: /intake", file=sys.stderr)
-        return 0 if selected is not None else 1
+        return 0 if had_item else 1
 
     elif args.command == "decide":
         target = Path(args.path)
