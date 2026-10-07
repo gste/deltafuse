@@ -512,7 +512,12 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             claims_out[cid]["tests"] = _claim_covering_tests(path, trace_repo_root, tasks, cid)
     if unmapped:
         raise CoverageError("no slice for claims: " + ", ".join(unmapped))
-    return {"change": _change_id(path), "claims": claims_out}
+    document: dict[str, Any] = {"change": _change_id(path), "claims": claims_out}
+    if (path / "evidence").is_dir():
+        from deltafuse.core.fsm import task_evidence_summary
+
+        document["task_evidence"] = task_evidence_summary(path, find_repo_root(path))
+    return document
 
 
 # A claim names a method/parameter and the class it belongs to, in either order:

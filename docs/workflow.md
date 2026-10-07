@@ -291,7 +291,7 @@ The Verifier checks that:
 1. Every normalized claim in `request.md` (`CR-*` or stable labels such as `O1`/`E1`) traces to a slice in `routing.yaml`.
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
-4. Every task has verified `red`, `green`, and `regression` evidence artifacts. The Core checks these records at the `implemented` gate and again at `converged`, and names any record at fault; the Verifier reads the trace from `coverage.yaml` and opens a record only when a gate error names it, so this step's context does not grow with the number of tasks.
+4. Every task has verified `red`, `green`, and `regression` evidence artifacts. The Core checks these records at the `implemented` gate and again at `converged`, and names any record at fault; the Verifier reads the trace from `coverage.yaml` - including `task_evidence`, the Core's per-task summary of those records, refreshed at the `implemented` gate - and opens a record only when that summary or a gate error names it, so this step's context does not grow with the number of tasks.
 5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses.
 
 ### Convergence Analysis

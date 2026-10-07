@@ -382,7 +382,8 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
 # tasks and evidence, so it refreshes it itself before judging: a missing or
 # stale mapping was a gate the Worker could only fix by running a Core command
 # it had to remember (roadmap item 4: box B -> box A).
-COVERAGE_GATES = frozenset({"analyzed", "converged"})
+# `implemented` too: coverage.yaml carries the per-task evidence summary Verify reads.
+COVERAGE_GATES = frozenset({"analyzed", "implemented", "converged"})
 
 
 def _refresh_coverage(change_path: Path) -> None:

@@ -972,6 +972,57 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     ]
 
 
+def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[str, Any]]:
+    """Per task, what its Red, Green and regression records say, as the Core judges them.
+
+    Reference run ref-m03-347 (2026-10-07): told by the verify skill that the Core had already
+    checked the evidence, the reference still opened every Red/Green/regression record to see for
+    itself - 25 files in one call. The Core writes what it knows into coverage.yaml instead, with
+    the same checks the implemented gate makes, so Verify reads one file.
+    """
+    current = compute_product_baseline_revision(repo_root)
+    evidence = change_path / "evidence"
+    summary: dict[str, dict[str, Any]] = {}
+    for tid, meta in sorted(_task_frontmatter_by_id(change_path).items()):
+        row: dict[str, Any] = {"status": str(meta.get("status") or "unknown")}
+        problems: list[str] = []
+        red_file = evidence / "red" / f"{tid}.yaml"
+        green_file = evidence / "green" / f"{tid}.yaml"
+        reg_file = evidence / "regression" / f"{tid}.yaml"
+        red = _load_record(red_file)
+        if red:
+            failed = len(_record_tests(red, "failed"))
+            row["red"] = f"{red.get('result')} ({red.get('failure_category') or '-'}), {failed} failing test(s)"
+        else:
+            row["red"] = "none"
+        if row["status"] in {"superseded", "cancelled"}:
+            row["green"] = row["regression"] = f"not owed ({row['status']})"
+        else:
+            green = _load_record(green_file)
+            if green:
+                row["green"] = str(green.get("result"))
+                if red_file.is_file():
+                    label = f"green of {tid}"
+                    problems += green_coverage_errors(red_file, green_file, label)
+                    problems += frozen_oracle_errors(red_file, repo_root, label)
+                    problems += isolation_errors(red_file, green_file, label)
+                if green.get("base_revision") and green.get("base_revision") != current:
+                    problems.append(f"green of {tid} predates later changes to docs/spec/** or src/**")
+            else:
+                row["green"] = "none"
+            reg = _load_record(reg_file)
+            if reg:
+                fresh = reg.get("base_revision") == current
+                row["regression"] = f"{reg.get('result')}, {'current tree' if fresh else 'STALE'}"
+                if not fresh:
+                    problems.append(f"regression of {tid} predates later changes to docs/spec/** or src/**")
+            else:
+                row["regression"] = "none"
+        row["problems"] = problems
+        summary[tid] = row
+    return summary
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 

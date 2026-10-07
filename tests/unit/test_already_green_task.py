@@ -200,3 +200,19 @@ def test_a_superseded_task_has_no_green_and_its_green_does_not_block_the_gate(tm
     stray.write_text("result: passed\nexit_code: 0\n", encoding="utf-8")
     errors = check_gate(builder.change_dir, "implemented")
     assert not any("already-green Red" in e for e in errors)
+
+
+def test_coverage_carries_the_cores_evidence_summary_per_task(tmp_path: Path, repo_root: Path):
+    """ref-m03-347 (2026-10-07): Verify opened every Red/Green/regression record to check what
+    the Core had already checked - 25 files in one call. coverage.yaml now says it per task."""
+    import yaml as _yaml
+    from deltafuse.core.analyze import write_coverage
+
+    builder = _decomposed(tmp_path, repo_root, delta="none")
+    _already_green_red(tmp_path, builder)
+    set_artifact_status(builder.change_dir, status="superseded", task_id="TASK-001")
+    write_coverage(builder.change_dir)
+    doc = _yaml.safe_load((builder.change_dir / "coverage.yaml").read_text(encoding="utf-8"))
+    row = doc["task_evidence"]["TASK-001"]
+    assert row["status"] == "superseded" and row["red"].startswith("already-green")
+    assert row["green"] == "not owed (superseded)" and row["problems"] == []

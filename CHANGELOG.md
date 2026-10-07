@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`coverage.yaml` carries the Core's evidence summary per task, and Verify reads it.** In the
+  reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07) the verify skill already said the Core
+  had checked the evidence, and the reference still opened every Red/Green/regression record and
+  task file to see for itself: 25 files in one call, against the bench's bounded-reads threshold
+  of 24, growing with the number of tasks. The Core now writes `task_evidence` into
+  `coverage.yaml` - per task its status, Red result, Green result, whether regression is on the
+  current tree, and `problems` from the same checks the `implemented` gate makes - and refreshes
+  it at the `implemented` gate as well as `analyzed` and `converged`. The verify skill takes the
+  evidence from there and opens a record only when its `problems` or a gate error names it;
+  `coverage.schema.yaml` and `docs/workflow(.ru).md` describe the field. No check moved.
+
 - **`deltafuse next` names no ready step when no intake is waiting.** After the archive in the
   reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07), `next --json` returned a ready
   `intake` step (`intake_pending: false`) next to a `done` halt. The verify skill says to execute
