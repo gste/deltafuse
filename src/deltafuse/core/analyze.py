@@ -516,7 +516,12 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     if (path / "evidence").is_dir():
         from deltafuse.core.fsm import task_evidence_summary
 
-        document["task_evidence"] = task_evidence_summary(path, find_repo_root(path))
+        # A summary for Verify to read, never a reason for coverage (or the gate that
+        # refreshes it) to fail: the gates make the same checks themselves.
+        try:
+            document["task_evidence"] = task_evidence_summary(path, find_repo_root(path))
+        except Exception:  # noqa: BLE001
+            pass
     return document
 
 
