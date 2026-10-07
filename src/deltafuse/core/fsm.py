@@ -1576,7 +1576,17 @@ def _check_gate(
         # DF3-006: Red and Green are bound to one test oracle — a Green stamp
         # without the task's own Red evidence does not close the gate.
         if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
+            # A superseded or cancelled task is not implemented, so a Green recorded for it
+            # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
+            # Green for a task superseded on an already-green Red, and this gate refused it as
+            # "answers an already-green Red" with every task done - no step could clear it.
+            closed = {
+                tid for tid, meta in _task_frontmatter_by_id(change_path).items()
+                if meta.get("status") in {"superseded", "cancelled"}
+            }
             for green_file in sorted(green_dir.glob("*.yaml")):
+                if green_file.stem in closed:
+                    continue
                 red_file = change_path / "evidence" / "red" / green_file.name
                 if not red_file.is_file():
                     errors.append(

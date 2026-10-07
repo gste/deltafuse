@@ -402,6 +402,29 @@ def _refuse_red_after_declare(change_path: Path, task: str) -> None:
         )
 
 
+def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
+    """A superseded or cancelled task has no Green: it is not implemented.
+
+    ref-m03-346 (2026-10-07): a Green recorded for a task superseded on an already-green Red
+    was accepted here and then refused by the implemented gate, with no step left to clear it.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unknown task is refused where it always was
+        return
+    status = meta.get("status") if isinstance(meta, dict) else None
+    if status in {"superseded", "cancelled"}:
+        raise EvidenceRunError(
+            f"{task_id} is '{status}': it is not implemented, so it has no Green - "
+            + ("its Red already passed and its test stays as regression. " if status == "superseded" else "")
+            + "Nothing was run or recorded; go on with the next task `deltafuse next` names"
+        )
+
+
 def run_evidence(
     change_dir: Path | str,
     *,
@@ -442,6 +465,8 @@ def run_evidence(
 
     if phase == "red":
         _refuse_red_after_declare(change_path, str(task))
+    if phase == "green":
+        _refuse_green_for_a_closed_task(change_path, str(task))
 
     repo_root = find_repo_root(change_path)
     change_id = _load_change_id(change_path)

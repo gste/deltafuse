@@ -179,3 +179,24 @@ def test_a_sibling_stub_in_a_red_record_is_inside_the_contract(tmp_path: Path, r
         _yaml.safe_dump({"task": "TASK-001", "changed_paths": ["src/shop/core.py"]}), encoding="utf-8")
     errors = _validate_evidence_changed_paths_contract(change, "red", "declare", gate="declaring")
     assert errors and "TASK-001.yaml" in errors[0] and "src/shop/core.py" in errors[0]
+
+
+def test_a_superseded_task_has_no_green_and_its_green_does_not_block_the_gate(tmp_path: Path, repo_root: Path):
+    """ref-m03-346 (2026-10-07): a Green recorded for a task superseded on an already-green Red
+    was accepted, then the implemented gate refused it with every task done."""
+    from deltafuse.core.evidence import EvidenceRunError
+    from deltafuse.core.fsm import check_gate
+
+    builder = _decomposed(tmp_path, repo_root, delta="none")
+    _already_green_red(tmp_path, builder)
+    set_artifact_status(builder.change_dir, status="superseded", task_id="TASK-001")
+
+    with pytest.raises(EvidenceRunError, match="has no Green"):
+        run_evidence(builder.change_dir, phase="green", task="TASK-001",
+                     argv=[sys.executable, "tests/test_task-001.py"])
+
+    stray = builder.change_dir / "evidence" / "green" / "TASK-001.yaml"
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_text("result: passed\nexit_code: 0\n", encoding="utf-8")
+    errors = check_gate(builder.change_dir, "implemented")
+    assert not any("already-green Red" in e for e in errors)
