@@ -535,8 +535,9 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
     "implementing": {"implemented", "blocked"},
     "implemented": {"verified", "blocked"},
-    # Only the human leaves `blocked`, and only by cancelling (decide --task).
-    "blocked": {"cancelled"},
+    # Only the human leaves `blocked` (decide --task): cancelling drops the task,
+    # reopening (`pending`) sends it back to Declare with its old evidence archived.
+    "blocked": {"cancelled", "pending"},
 }
 
 # Cancelling drops what a task promised, so it is the human's call: `deltafuse decide
@@ -554,6 +555,21 @@ def human_cancel_hint(change_path: Path | str, task_id: str) -> str:
         "If the task cannot be done, mark it blocked with `deltafuse state <change-dir> --task "
         f"{task_id} --status blocked`, say why, and stop"
     )
+
+
+def human_unblock_hint(change_path: Path | str, task_id: str) -> str:
+    where = Path(change_path).as_posix()
+    return (
+        f"task {task_id} is blocked, and only the human answers that halt: "
+        f"`deltafuse decide {where} --task {task_id} --status cancelled` drops it, "
+        f"`deltafuse decide {where} --task {task_id} --status reopened` sends it back to "
+        "Declare. Stop and report why it is blocked"
+    )
+
+
+# Statuses of Declare that a reopened task takes again after its Change has left Declare.
+REOPENED_DECLARE_STATUSES = frozenset({"declaring", "declared"})
+REOPENED_CHANGE_STATUSES = frozenset({"declared", "implementing"})
 
 
 def red_result(change_path: Path, task_id: str) -> str | None:
@@ -779,6 +795,8 @@ def set_artifact_status(
                     "receipt": None,
                     "unchanged": True,
                 }
+            if task_id and current == "blocked" and not human:
+                raise TransitionError(human_unblock_hint(change_path, task_id))
             if task_id and status in HUMAN_TASK_STATUSES and not human:
                 raise TransitionError(human_cancel_hint(change_path, task_id))
             if current not in allowed or status not in allowed[current]:
@@ -808,6 +826,16 @@ def set_artifact_status(
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")
+                from deltafuse.core import gate_receipts
+
+                if (
+                    status in REOPENED_DECLARE_STATUSES
+                    and change_status_now in REOPENED_CHANGE_STATUSES
+                    and gate_receipts.task_reopened(product_root, change=data.get("id"), task=task_id)
+                ):
+                    # The human reopened this task after its oracle proved wrong
+                    # (ref-m01-352): it is declared again while its siblings implement.
+                    owners = owners | REOPENED_CHANGE_STATUSES
                 if change_status_now not in owners:
                     raise TransitionError(
                         f"task {task_id} cannot become '{status}' while the Change is "

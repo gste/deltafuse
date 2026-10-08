@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The human can reopen a blocked task for Declare.** In the reference run ref-m01-352
+  (qwen3.8-27b, M01, 2026-10-08) the Worker declared a Red test no code could pass (a 10 s penalty
+  still asserted at t=100), found it in Implement and marked the task blocked, as the skill says.
+  The human's only answer was `--status cancelled`, which dropped the task's whole promise - the
+  Change then closed with nothing implemented. `deltafuse decide <change-dir> --task <id> --status
+  reopened [--note "<why>"]` now moves the task's Red/Green/regression records to
+  `reopened/<task>.<n>/` (outside `evidence/`, with the note in `reopen.yaml`), returns it to
+  `pending` and journals a `task` gate receipt `reopened`. That task alone may then be declared
+  again while its Change is `declared` or `implementing`; a new Red freezes the corrected oracle,
+  and Red is still refused once it is declared. Leaving `blocked` is the human's in both ways:
+  `deltafuse state` refuses it and names both commands, as does the `blocked` halt. The declare
+  skill says how to take a reopened task; docs/workflow and docs/state-machine (en, ru) describe it.
+
 - **`coverage.yaml` carries the Core's evidence summary per task, and Verify reads it.** In the
   reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07) the verify skill already said the Core
   had checked the evidence, and the reference still opened every Red/Green/regression record and

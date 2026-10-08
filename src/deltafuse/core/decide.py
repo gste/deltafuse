@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -196,6 +197,121 @@ def cancel_task(
     }
 
 
+REOPEN_NOTE_MAX = 4000
+EVIDENCE_PHASES = ("red", "green", "regression")
+
+
+def reopened_dir(change_dir: Path) -> Path:
+    """Where reopening archives a task's evidence: outside `evidence/`, which holds live records."""
+    return change_dir / "reopened"
+
+
+def latest_reopen(change_dir: Path, task_id: str) -> dict[str, Any] | None:
+    """The newest archive of a reopened task, with its `path` relative to the Change, or None."""
+    root = reopened_dir(change_dir)
+    if not root.is_dir():
+        return None
+    runs = []
+    for entry in root.glob(f"{task_id}.*"):
+        suffix = entry.name[len(task_id) + 1 :]
+        if entry.is_dir() and suffix.isdigit():
+            runs.append((int(suffix), entry))
+    if not runs:
+        return None
+    _, newest = max(runs)
+    try:
+        data = yaml.safe_load((newest / "reopen.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        data = None
+    info = dict(data) if isinstance(data, dict) else {}
+    info["path"] = newest.relative_to(change_dir).as_posix()
+    return info
+
+
+def reopen_task(
+    change_dir: Path,
+    task: str,
+    *,
+    note: str | None = None,
+    password_prompt: Callable[[], str] | None = None,
+) -> dict[str, Any]:
+    """The human reopens a blocked task: its declared oracle was wrong, Declare runs again.
+
+    ref-m01-352 (2026-10-08): the Worker declared a Red test no code could pass, found it in
+    Implement and marked the task blocked, as the skill says. Cancelling was the only answer,
+    and it dropped the task's whole promise. Reopening archives the task's evidence under
+    `reopened/<task>.<n>/` (the frozen oracle goes with its Red record), returns the task to
+    `pending`, and records a `reopened` receipt; the Core then lets that task, and only it,
+    be declared again while its Change is past Declare. `note` is what the human passes on.
+    """
+    if not (change_dir / "change.yaml").is_file():
+        raise DecideError("--task requires a Change directory (path to change.yaml)")
+    if note is not None and len(note) > REOPEN_NOTE_MAX:
+        raise DecideError(f"--note is longer than {REOPEN_NOTE_MAX} characters")
+    product_root = find_repo_root(change_dir)
+    task_file, task_id = _artifact_file(change_dir / "tasks", task, "task")
+    meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    if not isinstance(meta, dict) or meta.get("status") != "blocked":
+        raise DecideError(
+            f"only a blocked task is reopened; {task_id} is "
+            f"'{meta.get('status') if isinstance(meta, dict) else None}'"
+        )
+    human_check = _check_password(product_root, password_prompt)
+    try:
+        moved = set_artifact_status(change_dir, status="pending", task_id=task_id, human=True)
+    except TransitionError as ex:
+        raise DecideError(str(ex)) from ex
+    rel = _rel(product_root, task_file)
+    with ProductMutationLock(product_root):
+        previous = latest_reopen(change_dir, task_id)
+        number = 1
+        if previous is not None:
+            number = int(str(previous["path"]).rsplit(".", 1)[-1]) + 1
+        archive = reopened_dir(change_dir) / f"{task_id}.{number}"
+        archive.mkdir(parents=True, exist_ok=False)
+        archived: list[str] = []
+        for phase in EVIDENCE_PHASES:
+            record = change_dir / "evidence" / phase / f"{task_id}.yaml"
+            if record.is_file():
+                record.replace(archive / f"{phase}.yaml")
+                archived.append(f"{phase}.yaml")
+        info = {
+            "task": task_id,
+            "change": _change_id_from_dir(change_dir),
+            "reopened": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "archived": archived,
+            "note": note or None,
+        }
+        atomic_create(
+            archive / "reopen.yaml",
+            yaml.safe_dump(info, sort_keys=False, allow_unicode=True).encode("utf-8"),
+        )
+        try:
+            gate_receipts.record_receipt(
+                product_root,
+                kind="task",
+                status="reopened",
+                rel_path=rel,
+                artifact_id=task_id,
+                change=info["change"],
+                artifact=task_file,
+                human_check=human_check,
+            )
+        except (ReceiptError, OSError) as ex:
+            raise DecideError(f"task reopened, but its Human Gate receipt was not recorded: {ex}") from ex
+    return {
+        "ok": True,
+        "gate": "task",
+        "status": "reopened",
+        "human_check": human_check,
+        "task": task_id,
+        "from": moved.get("from"),
+        "written": [rel, _rel(product_root, archive)],
+        "change_status": None,
+        "gate_errors": [],
+    }
+
+
 def apply_decision(
     start: Path | str,
     *,
@@ -203,6 +319,7 @@ def apply_decision(
     decision: str | None = None,
     spec: bool = False,
     task: str | None = None,
+    note: str | None = None,
     password_prompt: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Write the human's recorded choice. Does not run from `next`.
@@ -213,9 +330,15 @@ def apply_decision(
     if task:
         if decision or spec:
             raise DecideError("Pass exactly one of --decision, --spec or --task")
+        if status == "reopened":
+            return reopen_task(Path(start).resolve(), task, note=note, password_prompt=password_prompt)
+        if note is not None:
+            raise DecideError("--note goes only with --status reopened")
         if status != "cancelled":
-            raise DecideError(f"--task takes only --status cancelled, got {status!r}")
+            raise DecideError(f"--task takes only --status cancelled or reopened, got {status!r}")
         return cancel_task(Path(start).resolve(), task, password_prompt=password_prompt)
+    if note is not None:
+        raise DecideError("--note goes only with --task and --status reopened")
     if status not in DECIDE_STATUSES:
         raise DecideError(f"status must be accepted or rejected, got {status!r}")
     if bool(decision) == bool(spec):

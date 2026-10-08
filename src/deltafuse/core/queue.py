@@ -31,6 +31,23 @@ TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
 # Change statuses that own the declare / implement phase of their tasks.
 DECLARE_PHASE = frozenset({"decomposed", "declaring"})
+
+
+def _declare_reason(change_path: Path, rel: str, tid: str, tstatus: str) -> str:
+    """Why declare is next; for a task the human reopened, what was wrong with its last oracle."""
+    from deltafuse.core.decide import latest_reopen
+
+    reopen = latest_reopen(change_path, tid)
+    if reopen is None or tstatus != "pending":
+        return f"Task {tid} status '{tstatus}'"
+    note = str(reopen.get("note") or "").strip()
+    return (
+        f"Task {tid} was blocked and the human reopened it: its declared oracle was wrong. "
+        f"Its earlier evidence is archived in {rel}/{reopen['path']}/ (red.yaml names the "
+        "tests Red froze). Declare it again: fix the oracle so the accepted specification can "
+        "pass it, record Red, then set it declared"
+        + (f". The human's note: {note}" if note else "")
+    )
 IMPLEMENT_PHASE = frozenset({"declared", "implementing"})
 # Change statuses before the decomposed gate: task files may already be on
 # disk, but they are Decompose's output and do not pick the step yet.
@@ -433,7 +450,9 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                         f"Task {tid} is blocked: it waits for the human (the Worker's reply "
                         "that blocked it says why - for example a declared oracle it showed "
                         "no code can pass). The human cancels it with `deltafuse decide "
-                        f"{rel} --task {tid} --status cancelled`"
+                        f"{rel} --task {tid} --status cancelled`, or reopens it for Declare "
+                        f"with `deltafuse decide {rel} --task {tid} --status reopened --note "
+                        '"<why>"`'
                     ),
                     halt_kind="blocked",
                 )
@@ -505,7 +524,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     path=rel,
                     task=tid,
                     task_path=_rel(product_root, tfile),
-                    reason=f"Task {tid} status '{tstatus}'",
+                    reason=_declare_reason(change_path, rel, tid, tstatus),
                 )
             ], []
         if tstatus in TASK_IMPLEMENT and status not in DECLARE_PHASE:

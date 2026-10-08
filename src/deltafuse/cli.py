@@ -576,13 +576,18 @@ def _main(argv: list[str] | None = None) -> int:
     decide_parser.add_argument(
         "--task",
         default=None,
-        help="Cancel this task of the Change on the path (with --status cancelled)",
+        help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
     )
     decide_parser.add_argument(
         "--status",
         required=True,
-        choices=["accepted", "rejected", "cancelled"],
-        help="Recorded human choice (cancelled: only with --task)",
+        choices=["accepted", "rejected", "cancelled", "reopened"],
+        help="Recorded human choice (cancelled, reopened: only with --task)",
+    )
+    decide_parser.add_argument(
+        "--note",
+        default=None,
+        help="With --status reopened: what the human passes on to the next Declare",
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
@@ -1071,6 +1076,7 @@ def _main(argv: list[str] | None = None) -> int:
                 decision=args.decision,
                 spec=args.spec,
                 task=args.task,
+                note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} "
                     + (

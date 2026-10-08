@@ -126,6 +126,7 @@ stateDiagram-v2
     
     pending --> blocked: external dependency
     blocked --> cancelled: the human cancels
+    blocked --> pending: the human reopens
     pending --> cancelled: the human cancels
     pending --> superseded: task replaced
     
@@ -144,7 +145,7 @@ stateDiagram-v2
 | `implementing` | Implementation code being authored. | `implemented` | Tests pass; regression suite passes. |
 | `implemented` | Green & regression evidence recorded. | `verified` | Evidence in `evidence/green/` & `regression/`. |
 | `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
-| `blocked` | Implementation blocked by dependency or issue; the run halts for the human. | `cancelled` (the human only) | Blocking reason documented. |
+| `blocked` | Implementation blocked by dependency or issue; the run halts for the human. | `cancelled`, `pending` (the human only) | Blocking reason documented. The human reopens with `deltafuse decide <change-dir> --task <id> --status reopened [--note "<why>"]`: the task's evidence moves to `reopened/<task>.<n>/`, a `task` gate receipt `reopened` is journaled, and that task alone may be declared again while its Change is `declared` or `implementing`. |
 | `cancelled` | Task cancelled during Change lifecycle - the human's decision, never the Worker's: `deltafuse decide <change-dir> --task <id> --status cancelled` (Human Gate password when set; journaled as a `task` gate receipt). `deltafuse state` refuses it. | *Terminal* | Cancellation rationale documented. |
 | `superseded` | Task replaced by finer-grained tasks. | *Terminal* | Superseding task IDs documented. |
 
