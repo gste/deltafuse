@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
+  the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
+  `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference
+  labeled it `none`, the Core closed it as `superseded` and the run passed; in ref-m03-356 it labeled
+  the same task `added`, and the already-green Red of a task promising a delta halted the run for the
+  human (owner rule 2026-10-04). The decompose skill now says the field names a change in behavior: a
+  task that only guards behavior the product already has is `none`, even when the Change writes that
+  requirement down for the first time. No Core rule changed.
+
 - **The human can reopen a blocked task for Declare.** In the reference run ref-m01-352
   (qwen3.8-27b, M01, 2026-10-08) the Worker declared a Red test no code could pass (a 10 s penalty
   still asserted at t=100), found it in Implement and marked the task blocked, as the skill says.
