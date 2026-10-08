@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -257,6 +258,37 @@ def is_exempt_path(rel_path: str) -> bool:
     if matches_contract_globs(rel, EXEMPT_GLOBS):
         return True
     return False
+
+
+REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
+_REOPEN_ARCHIVE = re.compile(r"^docs/changes/[^/]+/reopened/(?P<task>[^/]+)\.\d+/(?P<name>[^/]+)$")
+
+
+def reopen_archive_path(product_root: Path, rel_path: str) -> bool:
+    """A file `deltafuse decide --status reopened` writes, for a task the journal says was reopened.
+
+    The archive lies outside every step's envelope because the human, not the Worker, writes
+    it (ref-m01-352 dry run, 2026-10-08: the implemented gate's leash named reopen.yaml).
+    """
+    match = _REOPEN_ARCHIVE.match(posix_relpath(rel_path))
+    if not match or match["name"] not in REOPEN_ARCHIVE_FILES:
+        return False
+    from deltafuse.core.gate_receipts import has_click
+
+    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+
+
+_RED_RECORD = re.compile(r"^docs/changes/[^/]+/evidence/red/(?P<task>[^/]+)\.yaml$")
+
+
+def reopened_red_path(product_root: Path, rel_path: str) -> bool:
+    """The Red record of a task the human reopened: Declare writes it after the Change left Declare."""
+    match = _RED_RECORD.match(posix_relpath(rel_path))
+    if not match:
+        return False
+    from deltafuse.core.gate_receipts import has_click
+
+    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
 
 
 def is_product_path(rel_path: str, *, baseline: str = "draft") -> bool:
@@ -938,6 +970,12 @@ def check_paths(
                 errors.append(
                     f"leash: '{raw}' is outside the {step_label} write envelope{phase_hint}"
                 )
+            continue
+        if product_root is not None and reopen_archive_path(product_root, raw):
+            continue  # written by the human's `deltafuse decide --status reopened`
+        if product_root is not None and reopened_red_path(product_root, raw):
+            # a reopened task is declared again past Declare; its Red is still the Core's
+            errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
         if is_change_artifact(raw) and env_list:
             # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a

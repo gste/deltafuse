@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and Red is still refused once it is declared. Leaving `blocked` is the human's in both ways:
   `deltafuse state` refuses it and names both commands, as does the `blocked` halt. The declare
   skill says how to take a reopened task; docs/workflow and docs/state-machine (en, ru) describe it.
+  The leash takes the archive (for a task the journal says was reopened) as the human's write,
+  and the reopened task's new Red record as the Core's, so the `implemented` gate names neither.
 
 - **`coverage.yaml` carries the Core's evidence summary per task, and Verify reads it.** In the
   reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07) the verify skill already said the Core

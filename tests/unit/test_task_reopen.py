@@ -132,3 +132,20 @@ def test_reopen_needs_a_blocked_task_and_a_note_needs_reopen(tmp_path: Path, rep
     assert _status(builder) == "pending"
     change_yaml = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     assert re.search(r"(?m)^status: decomposed$", change_yaml)
+
+
+def test_the_leash_takes_the_archive_as_the_humans_write(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.leash import reopen_archive_path
+
+    builder = _blocked_in_implement(tmp_path, repo_root)
+    archive = "docs/changes/CHG-180/reopened/TASK-001.1/reopen.yaml"
+    assert not reopen_archive_path(tmp_path, archive)  # no reopened receipt yet
+    apply_decision(builder.change_dir, status="reopened", task="TASK-001")
+    assert reopen_archive_path(tmp_path, archive)
+    assert not reopen_archive_path(tmp_path, "docs/changes/CHG-180/reopened/TASK-001.1/notes.md")
+    assert not reopen_archive_path(tmp_path, "docs/changes/CHG-180/reopened/TASK-002.1/red.yaml")
+    from deltafuse.core.leash import reopened_red_path
+
+    assert reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/red/TASK-001.yaml")
+    assert not reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/red/TASK-002.yaml")
+    assert not reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/green/TASK-001.yaml")
