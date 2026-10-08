@@ -15,6 +15,8 @@ from deltafuse.core.context import (
     task_write_globs,
     load_change_route,
     is_product_code_path,
+    code_write_globs,
+    product_root_of,
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
@@ -356,16 +358,17 @@ def validate_change_package(
                         f"{task_file.name}: {e}"
                         for e in validate_paths_against_globs(
                             [p for p in allowed if isinstance(p, str)],
-                            task_write_globs(route),
+                            task_write_globs(route, repo_root),
                             label="allowed_paths",
                         )
                     )
                     if route in {"docs", "ops"}:
                         for apath in allowed:
-                            if isinstance(apath, str) and is_product_code_path(apath):
+                            if isinstance(apath, str) and is_product_code_path(apath, repo_root):
                                 errors.append(
                                     f"{task_file.name}: {route} route must not list "
-                                    f"src/** or tests/** in allowed_paths ('{apath}')"
+                                    f"{' or '.join(code_write_globs(repo_root))} in allowed_paths "
+                                    f"('{apath}')"
                                 )
                     for apath in allowed:
                         if isinstance(apath, str) and path_is_listed(apath, forbidden):
@@ -1070,7 +1073,7 @@ def _validate_evidence_changed_paths_contract(
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
         return errors
-    write_globs = phase_write_globs(contract_phase, route)
+    write_globs = phase_write_globs(contract_phase, route, product_root_of(change_path))
     tasks = _task_frontmatter_by_id(change_path)
     sibling_declared = [
         p
@@ -1116,10 +1119,11 @@ def _validate_evidence_changed_paths_contract(
             errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:
             for rel in rel_paths:
-                if is_product_code_path(rel):
+                if is_product_code_path(rel, product_root_of(change_path)):
                     errors.append(
                         f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
-                        f"must not write src/** or tests/** ('{rel}')"
+                        f"must not write {' or '.join(code_write_globs(product_root_of(change_path)))} "
+                        f"('{rel}')"
                     )
         for rel in rel_paths:
             if path_is_listed(rel, forbidden):

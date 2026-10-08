@@ -121,7 +121,12 @@ PHASE_CONTRACTS: dict[str, dict[str, list[str]]] = {
 
 CHANGE_ROUTES = frozenset({"code", "docs", "ops"})
 DEFAULT_CHANGE_ROUTE = "code"
-_PRODUCT_CODE_GLOBS = ("src/**", "tests/**")
+# Where a `code`-route Change keeps its code and tests when the product does not say
+# (`workflow.code_roots` in .deltafuse/config.yaml). See code_write_globs.
+DEFAULT_CODE_WRITE_GLOBS = ("src/**", "tests/**")
+_PRODUCT_CODE_GLOBS = DEFAULT_CODE_WRITE_GLOBS
+# Phases whose contracts name the code roots; the others work on docs/ only.
+_CODE_ROOT_PHASES = frozenset({"declare", "implement", "verify"})
 _ROUTE_TARGET_EVIDENCE = [
     "docs/changes/*/evidence/red/**",
     "docs/changes/*/coverage.yaml",
@@ -186,8 +191,59 @@ def load_change_route(change_path: Path | str) -> tuple[str, list[str]]:
     return change_route or routing_route or DEFAULT_CHANGE_ROUTE, errors
 
 
-def is_product_code_path(rel_path: str) -> bool:
-    return matches_contract_globs(rel_path, _PRODUCT_CODE_GLOBS)
+def product_root_of(path: Path | str) -> Path | None:
+    """The product a path belongs to: the nearest directory holding `.deltafuse/`."""
+    cur = Path(path).resolve()
+    for candidate in (cur, *cur.parents):
+        if (candidate / ".deltafuse").is_dir():
+            return candidate
+    return None
+
+
+def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | None:
+    """`workflow.code_roots` from the product's config, or None when it sets none."""
+    if product_root is None:
+        return None
+    try:
+        data = yaml.safe_load(
+            (Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, yaml.YAMLError):
+        return None
+    workflow = data.get("workflow") if isinstance(data, dict) else None
+    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
+    if not isinstance(roots, list):
+        return None
+    clean = [posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()]
+    return tuple(dict.fromkeys(clean)) or None
+
+
+def code_write_globs(product_root: Path | str | None = None) -> tuple[str, ...]:
+    """Where a `code`-route Change reads and writes code and tests.
+
+    `workflow.code_roots` when the product sets it, else `src/**` and `tests/**`. Fuse-Back on
+    J03 (2026-10-08): a multi-module Maven repository keeps code and tests in
+    `<module>/src/main/java` and `<module>/src/test/java`, so with the root globs alone no Change
+    there passed `decomposed`; the key was accepted by validate-config and read by nothing.
+    A module's code and tests sit under one glob (`svc/src/**`): Declare and Implement differ by
+    tasks and `allowed_paths`, not by globs.
+    """
+    return configured_code_roots(product_root) or DEFAULT_CODE_WRITE_GLOBS
+
+
+def _with_code_roots(globs: Sequence[str], phase: str, product_root: Path | str | None) -> list[str]:
+    """The phase's globs with `src/**` and `tests/**` replaced by the product's code roots."""
+    roots = configured_code_roots(product_root)
+    if not roots or phase not in _CODE_ROOT_PHASES:
+        return list(globs)
+    out: list[str] = []
+    for glob in globs:
+        out.extend(roots if glob in DEFAULT_CODE_WRITE_GLOBS else [glob])
+    return list(dict.fromkeys(out))
+
+
+def is_product_code_path(rel_path: str, product_root: Path | str | None = None) -> bool:
+    return matches_contract_globs(rel_path, code_write_globs(product_root))
 
 
 # A04-01: without a tokenizer the Core estimates tokens from UTF-8 bytes with
@@ -463,15 +519,19 @@ def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:
     return False
 
 
-def phase_allowed_paths(phase: str, kind: str) -> list[str]:
+def phase_allowed_paths(phase: str, kind: str, product_root: Path | str | None = None) -> list[str]:
     contract = PHASE_CONTRACTS.get(phase)
     if not contract:
         return []
     key = "allowed_read" if kind == "read" else "allowed_write"
-    return list(contract.get(key) or [])
+    return _with_code_roots(contract.get(key) or [], phase, product_root)
 
 
-def phase_write_globs(phase: str, route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
+def phase_write_globs(
+    phase: str,
+    route: str = DEFAULT_CHANGE_ROUTE,
+    product_root: Path | str | None = None,
+) -> list[str]:
     """Write globs for Declare/Implement evidence and task allowed_paths (RM-021)."""
     resolved = normalize_change_route(route) or DEFAULT_CHANGE_ROUTE
     if phase == "declare":
@@ -479,19 +539,23 @@ def phase_write_globs(phase: str, route: str = DEFAULT_CHANGE_ROUTE) -> list[str
             return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
         if resolved == "ops":
             return list(_OPS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
-        return phase_allowed_paths("declare", "write")
+        return phase_allowed_paths("declare", "write", product_root)
     if phase == "implement":
         if resolved == "docs":
             return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
         if resolved == "ops":
             return list(_OPS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
-        return phase_allowed_paths("implement", "write")
-    return phase_allowed_paths(phase, "write")
+        return phase_allowed_paths("implement", "write", product_root)
+    return phase_allowed_paths(phase, "write", product_root)
 
 
-def task_write_globs(route: str = DEFAULT_CHANGE_ROUTE) -> list[str]:
+def task_write_globs(
+    route: str = DEFAULT_CHANGE_ROUTE, product_root: Path | str | None = None
+) -> list[str]:
     """Declared task allowed_paths follow the Change route (code default)."""
-    return phase_write_globs("declare", route) + phase_write_globs("implement", route)
+    return phase_write_globs("declare", route, product_root) + phase_write_globs(
+        "implement", route, product_root
+    )
 
 
 def validate_paths_against_globs(
