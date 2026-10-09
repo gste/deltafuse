@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Red no longer takes Specify's uncommitted output for its own change.** Fuse-Back, shopkit
+  (2026-10-08): Specify changed `docs/spec/shared/general_utilities.md` and nobody committed
+  between steps; Red's Core-computed `changed_paths` (the git dirty set) took the spec file along
+  with the test, `deltafuse evidence` said "authentic", and the `declaring` gate refused the record
+  a step later, when only the human could undo it. The bench never saw it: its runner commits
+  after every step. The `specified` gate now records, in its transition receipt (`spec_snapshot`),
+  the digest of every uncommitted `docs/spec/**` file it accepts; evidence leaves such a file out
+  of Red's, Green's and regression's `changed_paths` while its bytes still match
+  (`core/spec_baseline.py`). A file changed after acceptance still counts. And `deltafuse
+  evidence` now runs the gate's own `changed_paths` check on the record it writes, so a path
+  outside the phase contract is named at once (for a spec file: "changed after the `specified`
+  gate accepted it"), not at the gate. docs/workflow (en, ru) describe it.
+
 - **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
   the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
   `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference
