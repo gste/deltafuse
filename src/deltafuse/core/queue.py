@@ -41,10 +41,17 @@ def _declare_reason(change_path: Path, rel: str, tid: str, tstatus: str) -> str:
     if reopen is None or tstatus != "pending":
         return f"Task {tid} status '{tstatus}'"
     note = str(reopen.get("note") or "").strip()
+    restored = [str(p) for p in reopen.get("restored") or []]
     return (
         f"Task {tid} was blocked and the human reopened it: its declared oracle was wrong. "
         f"Its earlier evidence is archived in {rel}/{reopen['path']}/ (red.yaml names the "
-        "tests Red froze). Declare it again: fix the oracle so the accepted specification can "
+        "tests Red froze)"
+        + (
+            f"; its product files are back as the declaring gate found them ({', '.join(restored)})"
+            if restored
+            else ""
+        )
+        + ". Declare it again: fix the oracle so the accepted specification can "
         "pass it, record Red, then set it declared"
         + (f". The human's note: {note}" if note else "")
     )

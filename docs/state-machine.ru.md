@@ -147,7 +147,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
 - `blocked`: обнаружено внешнее препятствие или ошибка в контракте;
 - `cancelled`: задача отменена — только решением человека, не воркера: `deltafuse decide <change-dir> --task <id> --status cancelled` (пароль Human Gate, если задан; квитанция вида `task` в журнале). `deltafuse state` такой переход отказывает;
-- из `blocked` выходит только человек: отменой (выше) или переоткрытием `deltafuse decide <change-dir> --task <id> --status reopened [--note "<почему>"]` — доказательства задачи переносятся в `reopened/<task>.<n>/`, в журнал пишется квитанция `task`/`reopened`, задача возвращается в `pending`, и только её можно объявить заново, когда Change уже `declared` или `implementing`;
+- из `blocked` выходит только человек: отменой (выше) или переоткрытием `deltafuse decide <change-dir> --task <id> --status reopened [--note "<почему>"]` — доказательства задачи переносятся в `reopened/<task>.<n>/`, её продуктовые файлы возвращаются к копиям, снятым гейтом `declaring`, в журнал пишется квитанция `task`/`reopened`, задача возвращается в `pending`, и только её можно объявить заново, когда Change уже `declared` или `implementing`;
 - `superseded`: заменена другой задачей.
 
 Задачи не удаляются после выполнения. Они сохраняются в пакете Change для сохранения полной истории и трассируемости.

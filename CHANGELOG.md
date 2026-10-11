@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Reopening a task puts its product files back as the `declaring` gate found them.** In the
+  reference run ref-m04-363-2 (qwen3.8-27b, M04, 2026-10-11) the Worker wrote TASK-002 to the
+  accepted spec in Implement, proved four of its own frozen tests contradictory and blocked the
+  task, leaving the code in place. Reopening archived the Red but not the code, so the corrected
+  oracle passed on it: Red `already-green` for a task promising a delta, a second halt on the same
+  task, and the run ended - the Worker had done right. The `declaring` gate (every Red taken, no
+  task implemented) now copies each live task's product files (its listed `allowed_paths` outside
+  Declare's test globs, stubs included) to `.deltafuse/snapshots/<change>/` and records their
+  digests in its transition receipt (`product_snapshot`); `decide --status reopened` restores the
+  task's files to those copies, refuses when a copy no longer matches its digest, and names the
+  restored files in `reopen.yaml` and the next declare step. A sibling that changed the same file
+  loses that change too; its evidence goes stale and the queue sends it back to Implement (owner
+  decision 2026-10-11). docs/workflow and docs/state-machine (en, ru) and the declare skill say so.
+
 - **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
   the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
   `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference

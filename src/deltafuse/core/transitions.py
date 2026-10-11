@@ -510,6 +510,14 @@ def advance_change(
             "to": target,
             "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+        if gate == "declaring":
+            # The tasks' product files before Implement: a reopened task is declared again
+            # against them (core/task_snapshot.py, ref-m04-363-2).
+            from deltafuse.core.task_snapshot import record_declaring_snapshot
+
+            snapshot = record_declaring_snapshot(product_root, change_path, change_id)
+            if snapshot:
+                entry["product_snapshot"] = snapshot
         entry = append_receipt(product_root, entry)
 
         _write_change_status(change_path, data, target)

@@ -149,3 +149,47 @@ def test_the_leash_takes_the_archive_as_the_humans_write(tmp_path: Path, repo_ro
     assert reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/red/TASK-001.yaml")
     assert not reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/red/TASK-002.yaml")
     assert not reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/green/TASK-001.yaml")
+
+
+def test_reopening_restores_the_tasks_product_files_as_declaring_found_them(tmp_path: Path, repo_root: Path):
+    """ref-m04-363-2 (2026-10-11): the code written in the blocked Implement stayed, the corrected
+    oracle passed on it - Red already-green for a task promising a delta - and the run ended."""
+    from deltafuse.core.task_snapshot import declaring_snapshot
+    from deltafuse.core.transitions import advance_change
+
+    builder = _decomposed(tmp_path, repo_root)
+    product = tmp_path / "src" / "core.py"
+    product.parent.mkdir(parents=True, exist_ok=True)
+    product.write_text("VALUE = 0\n", encoding="utf-8")
+    assert _red(tmp_path, builder, WRONG_ORACLE).payload["result"] == "expected-failure"
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    advance_change(builder.change_dir, "declaring")
+    assert declaring_snapshot(tmp_path, "CHG-180") == {
+        "src/core.py": __import__("hashlib").sha256(product.read_bytes()).hexdigest()
+    }
+
+    product.write_text("VALUE = 42  # Implement's attempt\n", encoding="utf-8")
+    set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
+    result = apply_decision(builder.change_dir, status="reopened", task="TASK-001")
+    assert product.read_text(encoding="utf-8") == "VALUE = 0\n"
+    assert "src/core.py" in result["written"]
+    info = yaml.safe_load((builder.change_dir / "reopened" / "TASK-001.1" / "reopen.yaml").read_text(encoding="utf-8"))
+    assert info["restored"] == ["src/core.py"]
+    assert "back as the declaring gate found them (src/core.py)" in build_work_queue(tmp_path).ready[0].reason
+
+
+def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.task_snapshot import snapshot_dir
+    from deltafuse.core.transitions import advance_change
+
+    builder = _decomposed(tmp_path, repo_root)
+    (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "src" / "core.py").write_text("VALUE = 0\n", encoding="utf-8")
+    _red(tmp_path, builder, WRONG_ORACLE)
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    advance_change(builder.change_dir, "declaring")
+    (snapshot_dir(tmp_path, "CHG-180") / "src" / "core.py").write_text("VALUE = 99\n", encoding="utf-8")
+    set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
+    with pytest.raises(DecideError, match="missing or altered"):
+        apply_decision(builder.change_dir, status="reopened", task="TASK-001")
+    assert _status(builder) == "blocked"

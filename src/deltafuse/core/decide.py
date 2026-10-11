@@ -256,6 +256,12 @@ def reopen_task(
             f"only a blocked task is reopened; {task_id} is "
             f"'{meta.get('status') if isinstance(meta, dict) else None}'"
         )
+    from deltafuse.core.task_snapshot import apply_restore, restore_plan
+
+    change_id = _change_id_from_dir(change_dir) or change_dir.name
+    plan, problems = restore_plan(product_root, change_id, meta)
+    if problems:
+        raise DecideError("cannot reopen: " + "; ".join(problems) + "; nothing was written")
     human_check = _check_password(product_root, password_prompt)
     try:
         moved = set_artifact_status(change_dir, status="pending", task_id=task_id, human=True)
@@ -275,11 +281,15 @@ def reopen_task(
             if record.is_file():
                 record.replace(archive / f"{phase}.yaml")
                 archived.append(f"{phase}.yaml")
+        # The task's product files go back to the declaring gate's copies: the corrected oracle
+        # must fail on code this task has not yet changed (ref-m04-363-2).
+        restored = apply_restore(product_root, plan)
         info = {
             "task": task_id,
             "change": _change_id_from_dir(change_dir),
             "reopened": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "archived": archived,
+            "restored": restored,
             "note": note or None,
         }
         atomic_create(
@@ -306,7 +316,7 @@ def reopen_task(
         "human_check": human_check,
         "task": task_id,
         "from": moved.get("from"),
-        "written": [rel, _rel(product_root, archive)],
+        "written": [rel, _rel(product_root, archive), *restored],
         "change_status": None,
         "gate_errors": [],
     }
