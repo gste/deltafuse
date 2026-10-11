@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Verify `spec-gap` has a way back: the human reopens the Change for Analyze.** In the
+  reference run ref-m04-365-2 (qwen3.8-27b, M04, 2026-10-11), and in Fuse-Back on J03 (2026-10-09),
+  Verify recorded `spec-gap` honestly - Specify had left out a catalogue row, in a spec file no slice
+  named - the `converged` gate refused it, and no command led back: the queue chose Verify seven times
+  and the run was stopped as stalled. Now `deltafuse next` halts for the human on a recorded gap, and
+  `deltafuse decide <change-dir> --gap spec-gap --status reopened [--note]` archives verification.md,
+  the verification run and the tasks' Green and regression under `reopened/verify.<n>/`, returns the
+  slices to `draft`, the tasks to `declared` and spec-delta.md to `proposed` (each rewrite vouched by a
+  gate receipt), and rewinds the Change to `analyzing` with a `gap-reopen` receipt the transition chain
+  replays. Analyze gets a `gap` pass that may widen the slices' bounds; once the human accepts the
+  specification again, the Core walks `decomposed` and `declaring`, and Implement re-records Green and
+  regression on the code already there. Other gaps still halt, now saying there is no route back. The
+  leash takes the verify archive as the human's write. Docs (workflow, state-machine) and the verify
+  and analyze skills describe it.
+
 - **Reopening a task puts its product files back as the `declaring` gate found them.** In the
   reference run ref-m04-363-2 (qwen3.8-27b, M04, 2026-10-11) the Worker wrote TASK-002 to the
   accepted spec in Implement, proved four of its own frozen tests contradictory and blocked the

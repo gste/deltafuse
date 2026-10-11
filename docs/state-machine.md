@@ -34,6 +34,7 @@ stateDiagram-v2
     converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
     verifying --> analyzing: gap / drift detected
+    implemented --> analyzing: the human reopens a spec-gap
     
     normalized --> rejected: invalid / out of scope
     analyzing --> rejected: unfeasible

@@ -270,12 +270,42 @@ def reopen_archive_path(product_root: Path, rel_path: str) -> bool:
     The archive lies outside every step's envelope because the human, not the Worker, writes
     it (ref-m01-352 dry run, 2026-10-08: the implemented gate's leash named reopen.yaml).
     """
-    match = _REOPEN_ARCHIVE.match(posix_relpath(rel_path))
+    rel = posix_relpath(rel_path)
+    gap = _GAP_ARCHIVE.match(rel)
+    if gap is not None:
+        # `decide --gap` archives the verification here; its gap-reopen receipt names the folder.
+        name = gap["name"]
+        allowed = name in GAP_ARCHIVE_FILES or name.startswith("evidence/")
+        return allowed and _gap_archive_receipted(product_root, gap["dir"])
+    match = _REOPEN_ARCHIVE.match(rel)
     if not match or match["name"] not in REOPEN_ARCHIVE_FILES:
         return False
     from deltafuse.core.gate_receipts import has_click
 
     return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+
+
+GAP_ARCHIVE_FILES = frozenset({"reopen.yaml", "verification.md", "run.yaml"})
+_GAP_ARCHIVE = re.compile(
+    r"^(?P<dir>docs/changes/[^/]+/reopened/verify\.\d+)/"
+    r"(?P<name>[^/]+|evidence/(?:green|regression)/[^/]+\.yaml)$"
+)
+
+
+def _gap_archive_receipted(product_root: Path, archive: str) -> bool:
+    journal = Path(product_root) / ".deltafuse" / "transitions.jsonl"
+    try:
+        lines = journal.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("kind") == "gap-reopen" and row.get("archive") == archive:
+            return True
+    return False
 
 
 _RED_RECORD = re.compile(r"^docs/changes/[^/]+/evidence/red/(?P<task>[^/]+)\.yaml$")

@@ -732,6 +732,21 @@ _OUTCOME_LINE = re.compile(
 )
 
 
+def verification_gap(change_path: Path) -> str | None:
+    """The gap verification.md records (any outcome but `converged`), or None."""
+    try:
+        text = (Path(change_path) / "verification.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    match = _OUTCOME_LINE.search(text)
+    if match is None:
+        return None
+    outcome = match.group("value").strip().strip("`").strip().lower()
+    if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
+        return outcome
+    return None
+
+
 def _verification_outcome_errors(ver_file: Path) -> list[str]:
     """Read the verdict Verify wrote, not merely that it wrote a file.
 

@@ -122,12 +122,14 @@ def record_receipt(
     `human_check` records how the Core knew a human answered: "password" when
     the Human Gate password was verified, "none" when the product has none.
     """
-    if kind not in {"decision", "spec", "task"}:
+    if kind not in {"decision", "spec", "task", "gap"}:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
     # A task's Human Gate verdicts answer its `blocked` halt: cancelling drops what it
     # promised (ref-m02-338 observation, 2026-10-04); reopening sends it back to Declare
     # because its declared oracle was wrong (ref-m01-352, 2026-10-08).
-    verdicts = TASK_VERDICTS if kind == "task" else {"accepted", "rejected"}
+    verdicts = (
+        TASK_VERDICTS if kind == "task" else {"reopened"} if kind == "gap" else {"accepted", "rejected"}
+    )
     if status not in verdicts:
         raise ReceiptError(f"unknown gate verdict: {status!r}")
 

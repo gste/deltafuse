@@ -623,6 +623,37 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
 
+    if status in {"implemented", "verifying"}:
+        from deltafuse.core.fsm import verification_gap
+
+        gap = verification_gap(change_path)
+        if gap is not None:
+            # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2
+            # chose Verify seven times). The human answers it.
+            route = (
+                f"The human reopens it for Analyze with `deltafuse decide {rel} --gap {gap} "
+                '--status reopened --note "<what the gap names>"`'
+                if gap == "spec-gap"
+                else "The Core has no route back for this gap yet; the human settles it"
+            )
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=None,
+                    task_path=None,
+                    reason=(
+                        f"Change {change_id}: Verify recorded the gap '{gap}' in verification.md, "
+                        f"so it does not converge and is not repaired silently. {route}"
+                    ),
+                    halt_kind="blocked",
+                )
+            ]
+
     if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
     ):

@@ -322,6 +322,195 @@ def reopen_task(
     }
 
 
+# Gaps a human can send back today, and where to: spec-gap needs the slice bounds Analyze
+# writes (ref-m04-365-2: the missing catalogue row sat in a spec file no slice named).
+GAP_ROUTES = {"spec-gap": "analyzing"}
+
+
+def _numbered_runs(root: Path, prefix: str) -> list[tuple[int, Path]]:
+    if not root.is_dir():
+        return []
+    out = []
+    for p in root.glob(f"{prefix}.*"):
+        suffix = p.name[len(prefix) + 1 :]
+        if p.is_dir() and suffix.isdigit():
+            out.append((int(suffix), p))
+    return out
+
+
+def reopen_gap(
+    change_dir: Path,
+    gap: str,
+    *,
+    note: str | None = None,
+    password_prompt: Callable[[], str] | None = None,
+) -> dict[str, Any]:
+    """The human sends a Change whose Verify recorded a gap back to Analyze.
+
+    ref-m04-365-2 (2026-10-11) and Fuse-Back J03 (2026-10-09): Verify recorded `spec-gap`
+    honestly, the `converged` gate refused it, and no command led back - the queue chose Verify
+    again and again. Reopening archives verification.md and the verification run under
+    `reopened/verify.<n>/`, returns every slice to `draft` (so Specify passes over them again),
+    and rewinds the Change to `analyzing` with a `gap-reopen` receipt the chain replays. Analyze
+    then gets a pass that names the gap; once the specification is accepted again the Core walks
+    the gates the tasks had already passed.
+    """
+    from deltafuse.core.fsm import verification_gap
+    from deltafuse.core.transitions import GAP_REOPEN_FROM, GAP_REOPEN_KIND, record_change_status
+
+    if gap not in GAP_ROUTES:
+        raise DecideError(
+            f"--gap takes {', '.join(sorted(GAP_ROUTES))}; the gap '{gap}' has no Core route back yet"
+        )
+    if not (change_dir / "change.yaml").is_file():
+        raise DecideError("--gap requires a Change directory (path to change.yaml)")
+    if note is not None and len(note) > REOPEN_NOTE_MAX:
+        raise DecideError(f"--note is longer than {REOPEN_NOTE_MAX} characters")
+    product_root = find_repo_root(change_dir)
+    data = _load_yaml_mapping(change_dir / "change.yaml")
+    current = data.get("status")
+    if current not in GAP_REOPEN_FROM:
+        raise DecideError(f"a gap is reopened from {sorted(GAP_REOPEN_FROM)}; the Change is '{current}'")
+    recorded = verification_gap(change_dir)
+    if recorded != gap:
+        found = repr(recorded) if recorded else "no gap"
+        raise DecideError(f"verification.md records {found}, not '{gap}'")
+    human_check = _check_password(product_root, password_prompt)
+    change_id = _change_id_from_dir(change_dir) or change_dir.name
+    with ProductMutationLock(product_root):
+        root = reopened_dir(change_dir)
+        number = max((n for n, _ in _numbered_runs(root, "verify")), default=0) + 1
+        archive = root / f"verify.{number}"
+        archive.mkdir(parents=True, exist_ok=False)
+        archived: list[str] = []
+        for source, name in (
+            (change_dir / "verification.md", "verification.md"),
+            (change_dir / "evidence" / "verification" / "run.yaml", "run.yaml"),
+        ):
+            if source.is_file():
+                source.replace(archive / name)
+                archived.append(name)
+        # Green and regression predate the specification change Analyze and Specify will make,
+        # and every gate checks them against the current tree: they go with the verification,
+        # and the tasks are declared again - Implement re-records them on the code already there.
+        for phase in ("green", "regression"):
+            for record in sorted((change_dir / "evidence" / phase).glob("*.yaml")):
+                target = archive / "evidence" / phase / record.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                record.replace(target)
+                archived.append(f"evidence/{phase}/{record.name}")
+
+        def core_rewrite(path: Path, fields: dict[str, Any], label: str) -> bool:
+            # The gate journal vouches for these bytes, so the leash does not read the
+            # Core's rewrite as a hand edit.
+            try:
+                text = path.read_text(encoding="utf-8")
+                meta, _ = parse_frontmatter(text)
+            except (OSError, FrontmatterParseError):
+                return False
+            if not isinstance(meta, dict) or all(meta.get(k) == v for k, v in fields.items()):
+                return False
+            atomic_replace(path, replace_frontmatter(text, fields).encode("utf-8"))
+            gate_receipts.record_receipt(
+                product_root,
+                kind="gap",
+                status="reopened",
+                rel_path=_rel(product_root, path),
+                artifact_id=f"{change_id}:{label}",
+                change=change_id,
+                artifact=path,
+                human_check=human_check,
+            )
+            return True
+
+        drafted: list[str] = []
+        for slice_file in sorted((change_dir / "slices").glob("*.md")):
+            if core_rewrite(slice_file, {"status": "draft"}, slice_file.stem):
+                drafted.append(_rel(product_root, slice_file))
+        for task_file in sorted((change_dir / "tasks").glob("*.md")):
+            try:
+                tmeta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+            except (OSError, FrontmatterParseError):
+                continue
+            if isinstance(tmeta, dict) and tmeta.get("status") in {"implemented", "verified"}:
+                if core_rewrite(task_file, {"status": "declared"}, task_file.stem):
+                    drafted.append(_rel(product_root, task_file))
+        delta = change_dir / "spec-delta.md"
+        if delta.is_file() and core_rewrite(delta, {"status": "proposed"}, "spec-delta"):
+            drafted.append(_rel(product_root, delta))
+        info = {
+            "change": change_id,
+            "gap": gap,
+            "reopened": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "from": current,
+            "archived": archived,
+            "drafted": drafted,
+            "note": note or None,
+        }
+        atomic_create(
+            archive / "reopen.yaml",
+            yaml.safe_dump(info, sort_keys=False, allow_unicode=True).encode("utf-8"),
+        )
+        record_change_status(
+            change_dir,
+            status=GAP_ROUTES[gap],
+            kind=GAP_REOPEN_KIND,
+            gate="decide",
+            gap=gap,
+            archive=_rel(product_root, archive),
+        )
+    return {
+        "ok": True,
+        "gate": "gap",
+        "status": "reopened",
+        "human_check": human_check,
+        "gap": gap,
+        "from": current,
+        "written": [_rel(product_root, archive), *drafted, _rel(product_root, change_dir / "change.yaml")],
+        "change_status": GAP_ROUTES[gap],
+        "gate_errors": [],
+    }
+
+
+def latest_gap_reopen(change_dir: Path) -> dict[str, Any] | None:
+    """The newest `reopened/verify.<n>/reopen.yaml`, with its `path` relative to the Change."""
+    runs = _numbered_runs(reopened_dir(change_dir), "verify")
+    if not runs:
+        return None
+    _, newest = max(runs)
+    try:
+        data = yaml.safe_load((newest / "reopen.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        data = None
+    info = dict(data) if isinstance(data, dict) else {}
+    info["path"] = newest.relative_to(change_dir).as_posix()
+    return info
+
+
+def _walk_gates_after_gap(change_dir: Path) -> list[str]:
+    """After a reopened gap's spec is accepted again: the gates the tasks had already passed.
+
+    Every task was done before the gap was found; decomposed and declaring pass on what is on
+    disk. The walk stops at the first gate that refuses - typically `implemented`, whose Green
+    and regression predate the specification change and are re-run in Implement, as the queue
+    then says.
+    """
+    from deltafuse.core.transitions import open_gap_reopen
+
+    product_root = find_repo_root(change_dir)
+    change_id = _change_id_from_dir(change_dir) or change_dir.name
+    if open_gap_reopen(product_root, change_id, until_gate="converged") is None:
+        return []
+    walked: list[str] = []
+    for gate in ("decomposed", "declaring", "implemented"):
+        try:
+            advance_change(change_dir, gate)
+        except TransitionError:
+            break
+        walked.append(gate)
+    return walked
+
+
 def apply_decision(
     start: Path | str,
     *,
@@ -329,6 +518,7 @@ def apply_decision(
     decision: str | None = None,
     spec: bool = False,
     task: str | None = None,
+    gap: str | None = None,
     note: str | None = None,
     password_prompt: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
@@ -337,6 +527,12 @@ def apply_decision(
     `password_prompt` is called only when the product has a Human Gate password;
     it is asked before the mutation lock, so a human typing holds nothing.
     """
+    if gap:
+        if decision or spec or task:
+            raise DecideError("Pass exactly one of --decision, --spec, --task or --gap")
+        if status != "reopened":
+            raise DecideError(f"--gap takes only --status reopened, got {status!r}")
+        return reopen_gap(Path(start).resolve(), gap, note=note, password_prompt=password_prompt)
     if task:
         if decision or spec:
             raise DecideError("Pass exactly one of --decision, --spec or --task")
@@ -451,6 +647,13 @@ def apply_decision(
                 else:
                     change_status = "specified"
                     written.append(_rel(product_root, change_file))
+                    walked = _walk_gates_after_gap(change_dir)
+                    if walked:
+                        change_status = {
+                            "decomposed": "decomposed",
+                            "declaring": "declared",
+                            "implemented": "implemented",
+                        }[walked[-1]]
             else:
                 gate_errors = check_gate(change_dir, "specified")
         return {

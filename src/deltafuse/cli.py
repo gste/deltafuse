@@ -585,6 +585,11 @@ def _main(argv: list[str] | None = None) -> int:
         help="Recorded human choice (cancelled, reopened: only with --task)",
     )
     decide_parser.add_argument(
+        "--gap",
+        default=None,
+        help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
+    )
+    decide_parser.add_argument(
         "--note",
         default=None,
         help="With --status reopened: what the human passes on to the next Declare",
@@ -1076,13 +1081,18 @@ def _main(argv: list[str] | None = None) -> int:
                 decision=args.decision,
                 spec=args.spec,
                 task=args.task,
+                gap=args.gap,
                 note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} "
                     + (
                         f"--decision {args.decision}"
                         if args.decision
-                        else (f"--task {args.task}" if args.task else "--spec")
+                        else (
+                            f"--task {args.task}"
+                            if args.task
+                            else (f"--gap {args.gap}" if args.gap else "--spec")
+                        )
                     )
                     + f" --status {args.status}"
                 ),

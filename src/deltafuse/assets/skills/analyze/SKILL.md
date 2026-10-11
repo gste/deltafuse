@@ -14,7 +14,7 @@ Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths s
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, and `check-gate`.
 
 1. If no Change was named, run `deltafuse next --step analyze` at the product root and use `path` plus `analyze_pass`. Halt if it exits non-zero.
-2. Write only the named pass. Do not write routing, all slices, and coverage in one invocation.
+2. Write only the named pass. Do not write routing, all slices, and coverage in one invocation. A `gap` pass comes after the human reopened a Verify `spec-gap`: read the archived verification it names, then bound the slices so Specify can write what the gap names - add the specification file to a slice's `spec_refs` (`deltafuse artifact write --kind slice`), or route the capability that owns it and write its slice - and close the `analyzed` gate as step 3 says.
    - `routing`: `routing.yaml` from `request.md` and `docs/spec/_capabilities.yaml`. Do not load spec module bodies.
    - `slice`: one `slices/<slice_id>.md` for `capability`. Read only `spec_refs` from `next`. Do not collapse two capabilities into one file.
    - `coverage`: run `deltafuse coverage <change-dir>`. Do not hand-write `coverage.yaml`.

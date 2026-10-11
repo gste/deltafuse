@@ -247,6 +247,25 @@ def last_receipt(product_root: Path, change_id: str) -> dict[str, Any] | None:
     return rows[-1] if rows else None
 
 
+# The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
+# <change> --gap spec-gap --status reopened`); the chain replays it as a rewind.
+GAP_REOPEN_KIND = "gap-reopen"
+GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
+GAP_REOPEN_TO = "analyzing"
+
+
+def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> dict[str, Any] | None:
+    """The Change's latest gap reopen, unless a `until_gate` transition has followed it."""
+    rows = load_receipts(product_root, change_id)
+    for index in range(len(rows) - 1, -1, -1):
+        if rows[index].get("kind") == GAP_REOPEN_KIND:
+            later = rows[index + 1 :]
+            if any(r.get("kind") == "transition" and r.get("gate") == until_gate for r in later):
+                return None
+            return rows[index]
+    return None
+
+
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     """V3-FIX-009: fail-closed receipt chain validation.
 
@@ -293,7 +312,17 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     # Replay: each receipt must apply a known gate from a status the chain
     # has actually reached (the bugfix path legally skips 'specified').
     current = INITIAL_STATUS
-    for i, row in enumerate(receipts):
+    replay = [r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND)]
+    for i, row in enumerate(replay):
+        if row.get("kind") == GAP_REOPEN_KIND:
+            if current not in GAP_REOPEN_FROM or row.get("to") != GAP_REOPEN_TO:
+                errors.append(
+                    f"gap reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; "
+                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' is a Core rewind"
+                )
+                break
+            current = GAP_REOPEN_TO
+            continue
         gate = row.get("gate")
         target = GATE_TARGETS.get(gate or "")
         if target is None or row.get("to") != target:
@@ -331,7 +360,9 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             f"status '{status}' is not a receipted or in-flight state and must "
             "not be set by hand"
         )
-    status_receipts = [r for r in all_receipts if r.get("kind") in ("transition", "unblock")]
+    status_receipts = [
+        r for r in all_receipts if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND)
+    ]
     if status_receipts and status_receipts[-1].get("to") not in (status, current):
         if status in RECEIPTED_TARGETS:
             errors.append(
