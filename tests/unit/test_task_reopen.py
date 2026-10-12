@@ -193,3 +193,40 @@ def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
     with pytest.raises(DecideError, match="missing or altered"):
         apply_decision(builder.change_dir, status="reopened", task="TASK-001")
     assert _status(builder) == "blocked"
+
+
+def test_red_may_not_change_a_test_another_tasks_red_froze(tmp_path: Path, repo_root: Path):
+    """ref-m02-366-1 (2026-10-11): TASK-003, declared again after a reopen, rewrote a test TASK-002's
+    Red had frozen; two Reds froze two bodies of one test and the run went round Implement."""
+    from deltafuse.core.evidence import EvidenceRunError
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-181", title="Shared test file")
+        .step_intake().step_analyze().step_specify()
+        .step_decompose(tasks=[{"id": "TASK-001", "slice": "SLICE-01", "depends_on": []},
+                               {"id": "TASK-002", "slice": "SLICE-01", "depends_on": []}])
+    )
+    shared = tmp_path / "tests" / "test_shared.py"
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    shared.write_text("def test_first():\n    assert 1 == 2\n", encoding="utf-8")
+    run_evidence(builder.change_dir, phase="red", task="TASK-001",
+                 argv=[sys.executable, "-m", "pytest", "tests/test_shared.py"],
+                 changed_paths=["tests/test_shared.py"])
+
+    shared.write_text(
+        "def test_first():\n    assert 1 == 3  # rewritten\n\n\ndef test_second():\n    assert 2 == 3\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(EvidenceRunError, match="TASK-001's Red froze its oracle") as exc_info:
+        run_evidence(builder.change_dir, phase="red", task="TASK-002",
+                     argv=[sys.executable, "-m", "pytest", "tests/test_shared.py"],
+                 changed_paths=["tests/test_shared.py"])
+    assert "test_first changed" in str(exc_info.value)
+    assert not (builder.change_dir / "evidence" / "red" / "TASK-002.yaml").exists()
+
+    # a new test beside the frozen one is fine
+    shared.write_text("def test_first():\n    assert 1 == 2\n\n\ndef test_second():\n    assert 2 == 3\n", encoding="utf-8")
+    assert run_evidence(builder.change_dir, phase="red", task="TASK-002",
+                        argv=[sys.executable, "-m", "pytest", "tests/test_shared.py::test_second"],
+                        changed_paths=["tests/test_shared.py"]).payload["result"] == "expected-failure"

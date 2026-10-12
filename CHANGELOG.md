@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Red may not change a test another task's Red froze.** In the reference run ref-m02-366-1
+  (qwen3.8-27b, M02, 2026-10-11) TASK-003, reopened and declared again, rewrote
+  `test_interleaved_admits_never_block`, which TASK-002's Red had already frozen. Two Reds then froze
+  two bodies of one test, no file could satisfy both, and the Worker - rightly - stopped in Implement
+  again and again until the run was stopped. `deltafuse evidence --phase red` now refuses, before
+  running anything, while any other live task's frozen oracle no longer matches the tree, naming the
+  task and the test; the declare skill and docs/workflow (en, ru) say to write a new test instead.
+
+- **A required token count waits for a silent tokenizer.** With `DELTAFUSE_TOKENIZER_REQUIRED` set,
+  `count_tokens` retried nothing: in ref-m02-366 a `check-gate` the Worker ran in the sandbox failed
+  on a few seconds of the machine's loopback silence. It now asks again after 1, 2, 4, 8, 15 and 30 s
+  before refusing; without the variable it falls back to the heuristic at once, as before.
+
 - **A Verify `spec-gap` has a way back: the human reopens the Change for Analyze.** In the
   reference run ref-m04-365-2 (qwen3.8-27b, M04, 2026-10-11), and in Fuse-Back on J03 (2026-10-09),
   Verify recorded `spec-gap` honestly - Specify had left out a catalogue row, in a spec file no slice

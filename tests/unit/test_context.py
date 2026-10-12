@@ -249,8 +249,42 @@ def test_required_tokenizer_does_not_fall_back_when_endpoint_fails(monkeypatch):
     monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
     monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
     monkeypatch.setattr("urllib.request.urlopen", boom)
+    slept: list[float] = []
+    monkeypatch.setattr("deltafuse.core.context._sleep", slept.append)
     with pytest.raises(TokenizerUnavailableError):
         count_tokens("alpha beta")
+    # a required count waits for a silent tokenizer before refusing (ref-m02-366)
+    from deltafuse.core.context import TOKENIZER_RETRY_WAITS_S
+
+    assert slept == list(TOKENIZER_RETRY_WAITS_S)
+
+
+def test_required_tokenizer_that_comes_back_is_counted(monkeypatch):
+    import json as _json
+
+    answers = [OSError("silent"), OSError("silent")]
+
+    class _Resp:
+        def read(self) -> bytes:
+            return _json.dumps({"count": 2}).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def flaky(req: object, timeout: float = 2):
+        if answers:
+            raise answers.pop(0)
+        return _Resp()
+
+    monkeypatch.setenv("DELTAFUSE_TOKENIZE_URL", "http://127.0.0.1:1240/tokenize")
+    monkeypatch.setenv("DELTAFUSE_TOKENIZER_REQUIRED", "1")
+    monkeypatch.setattr("urllib.request.urlopen", flaky)
+    monkeypatch.setattr("deltafuse.core.context._sleep", lambda s: None)
+    counted = count_tokens("alpha beta")
+    assert counted.measured and counted.tokens == 2
 
 
 def test_unrequired_tokenizer_still_falls_back_but_says_so(monkeypatch):

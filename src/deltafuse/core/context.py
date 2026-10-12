@@ -5,6 +5,7 @@ import fnmatch
 import json
 import math
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -269,6 +270,13 @@ def try_endpoint_token_count(text: str) -> int | None:
     return None
 
 
+# A required count waits for a silent tokenizer before refusing (TOKENIZER_REQUIRED_ENV only).
+# ref-m02-366 (2026-10-11): the machine's loopback went silent for seconds to a minute, and a
+# `check-gate` the Worker ran in the sandbox failed on it - the runner's own counts already wait.
+TOKENIZER_RETRY_WAITS_S = (1, 2, 4, 8, 15, 30)
+_sleep = time.sleep
+
+
 def count_tokens(text: str, path: Path | None = None) -> TokenCount:
     """Count tokens and name the mode that produced the number.
 
@@ -281,6 +289,12 @@ def count_tokens(text: str, path: Path | None = None) -> TokenCount:
     url = tokenize_url()
     if url:
         counted = try_endpoint_token_count(text)
+        if counted is None and required:
+            for wait in TOKENIZER_RETRY_WAITS_S:
+                _sleep(wait)
+                counted = try_endpoint_token_count(text)
+                if counted is not None:
+                    break
         if counted is not None:
             return TokenCount(counted, MODE_ENDPOINT, url)
         if required:

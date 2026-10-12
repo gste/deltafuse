@@ -402,6 +402,49 @@ def _refuse_red_after_declare(change_path: Path, task: str) -> None:
         )
 
 
+def _refuse_red_over_a_siblings_oracle(change_path: Path, task: str, repo_root: Path) -> None:
+    """A test another task's Red froze is that task's oracle: this Red may not change it.
+
+    ref-m02-366-1 (2026-10-11): TASK-003, reopened and declared again, rewrote
+    `test_interleaved_admits_never_block`, which TASK-002's Red had already frozen. Two Reds then
+    froze two bodies of one test, no file could satisfy both, and the run went round Implement
+    until it was stopped. The conflict is refused here, while a new test can still be written.
+    """
+    from deltafuse.core.oracle import red_oracle_changes
+
+    tasks_dir = change_path / "tasks"
+    closed: set[str] = set()
+    if tasks_dir.is_dir():
+        from deltafuse.core.frontmatter import parse_frontmatter
+
+        for tf in tasks_dir.glob("*.md"):
+            try:
+                meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 - an unreadable task is reported by the gates
+                continue
+            if isinstance(meta, dict) and meta.get("status") == "cancelled":
+                closed.add(str(meta.get("id") or tf.stem))
+    for record in sorted((change_path / "evidence" / "red").glob("*.yaml")):
+        sibling = record.stem
+        if sibling == task or sibling in closed:
+            continue
+        try:
+            red = yaml.safe_load(record.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
+        if not isinstance(frozen, dict):
+            continue
+        changes = red_oracle_changes(repo_root, frozen)
+        if changes:
+            raise EvidenceRunError(
+                f"{sibling}'s Red froze its oracle, and the tree no longer matches it: "
+                f"{'; '.join(changes)}. A test another task's Red froze is that task's oracle - "
+                f"restore it as it was frozen and write a new test for {task}; "
+                "nothing was run or recorded"
+            )
+
+
 def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
     """A superseded or cancelled task has no Green: it is not implemented.
 
@@ -469,6 +512,8 @@ def run_evidence(
         _refuse_green_for_a_closed_task(change_path, str(task))
 
     repo_root = find_repo_root(change_path)
+    if phase == "red":
+        _refuse_red_over_a_siblings_oracle(change_path, str(task), repo_root)
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])

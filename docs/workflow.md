@@ -246,6 +246,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `changed_paths` stays inside the Declare write scope plus the product paths this task's `allowed_paths` declares (the compiled-language stub); any other `src/**` path is refused.
+- A test another task's Red froze is that task's oracle: `deltafuse evidence --phase red` refuses, before running anything, while any other task's frozen oracle no longer matches the tree; a task writes its own new test beside it.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.
