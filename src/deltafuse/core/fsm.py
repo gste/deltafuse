@@ -15,6 +15,8 @@ from deltafuse.core.context import (
     task_write_globs,
     load_change_route,
     is_product_code_path,
+    code_write_globs,
+    product_root_of,
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
@@ -35,6 +37,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
 from deltafuse.core.schemas import SchemaRegistry, default_registry
+from deltafuse.core.test_reports import no_test_ran
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -356,16 +359,17 @@ def validate_change_package(
                         f"{task_file.name}: {e}"
                         for e in validate_paths_against_globs(
                             [p for p in allowed if isinstance(p, str)],
-                            task_write_globs(route),
+                            task_write_globs(route, repo_root),
                             label="allowed_paths",
                         )
                     )
                     if route in {"docs", "ops"}:
                         for apath in allowed:
-                            if isinstance(apath, str) and is_product_code_path(apath):
+                            if isinstance(apath, str) and is_product_code_path(apath, repo_root):
                                 errors.append(
                                     f"{task_file.name}: {route} route must not list "
-                                    f"src/** or tests/** in allowed_paths ('{apath}')"
+                                    f"{' or '.join(code_write_globs(repo_root))} in allowed_paths "
+                                    f"('{apath}')"
                                 )
                     for apath in allowed:
                         if isinstance(apath, str) and path_is_listed(apath, forbidden):
@@ -544,6 +548,14 @@ def validate_change_package(
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
+                if phase in {"green", "regression", "verification"} and route == "code" and exit_code == 0:
+                    # The record is written even when `deltafuse evidence` refused it,
+                    # so the gate asks again whether the run ran any test.
+                    nothing_ran = no_test_ran(
+                        ev_data.get("command"), ev_data.get("tests"), str(ev_data.get("summary") or "")
+                    )
+                    if nothing_ran:
+                        errors.append(f"{ev_file.relative_to(change_path)}: {phase} is not evidence: {nothing_ran}")
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
@@ -732,6 +744,21 @@ _OUTCOME_LINE = re.compile(
 )
 
 
+def verification_gap(change_path: Path) -> str | None:
+    """The gap verification.md records (any outcome but `converged`), or None."""
+    try:
+        text = (Path(change_path) / "verification.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    match = _OUTCOME_LINE.search(text)
+    if match is None:
+        return None
+    outcome = match.group("value").strip().strip("`").strip().lower()
+    if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
+        return outcome
+    return None
+
+
 def _verification_outcome_errors(ver_file: Path) -> list[str]:
     """Read the verdict Verify wrote, not merely that it wrote a file.
 
@@ -869,6 +896,173 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     ]
 
 
+def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
+    """Green must have passed the tests Red saw fail - checked here, not only when recorded.
+
+    `green_covers_red` ran when the Green evidence was written, and the record
+    is written even when that check fails, so a Green over a different test
+    closed this gate. The isolated run covers Reds frozen per test; a JVM Red
+    (frozen per file, no isolated run) had nothing else.
+    """
+    try:
+        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(red, dict) or not isinstance(green, dict) or red.get("result") != "expected-failure":
+        return []
+    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
+    failed = [str(t) for t in red_tests.get("failed") or []]
+    if not failed:
+        return []
+    green_tests = green.get("tests")
+    if no_test_ran(green.get("command"), green_tests, str(green.get("summary") or "")):
+        return []  # the evidence check names it, and why: this run ran no test
+    if not isinstance(green_tests, dict):
+        return [
+            f"{label} has no runner report, so it does not show the tests Red recorded as failing "
+            f"now passing ({failed[:5]}); record Green with the runner Red used"
+        ]
+    passed = {str(t) for t in green_tests.get("passed") or []}
+    missing = [t for t in failed if t not in passed]
+    if not missing:
+        return []
+    return [
+        f"{label} did not pass the tests Red recorded as failing: {missing[:5]}. Run the "
+        "Red tests in Green and make the product pass them"
+    ]
+
+
+def _load_record(path: Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
+    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
+    return {str(t) for t in tests.get(outcome) or []}
+
+
+def change_test_ids(change_path: Path) -> set[str]:
+    """The tests a Change's own records name: what its verification must pass.
+
+    Red's failing tests of every task not cancelled, the already-passing tests of a
+    superseded task (its test stays as regression), and every regression run's passing
+    tests.
+    """
+    ids: set[str] = set()
+    tasks_dir = change_path / "tasks"
+    for task_file in sorted(tasks_dir.glob("*.md")) if tasks_dir.is_dir() else []:
+        try:
+            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - an unreadable task is the status check's finding
+            continue
+        if not isinstance(meta, dict) or meta.get("status") == "cancelled":
+            continue
+        tid = str(meta.get("id") or task_file.stem)
+        red = _load_record(change_path / "evidence" / "red" / f"{tid}.yaml")
+        ids |= _record_tests(red, "failed")
+        if meta.get("status") == "superseded":
+            ids |= _record_tests(red, "passed")
+        ids |= _record_tests(_load_record(change_path / "evidence" / "regression" / f"{tid}.yaml"), "passed")
+    return ids
+
+
+def verification_coverage_errors(change_path: Path) -> list[str]:
+    """Verification must run and pass every test the Change's records name.
+
+    Gemma 31B shakedown cls-g31p2-m02 (2026-10-04): with `tests/test_stats.py` still
+    failing, the Worker left that file out of the verification command, the run exited 0,
+    and the converged gate closed. The gate checked only that a run existed and passed.
+    """
+    expected = change_test_ids(change_path)
+    if not expected:
+        return []
+    run = _load_record(change_path / "evidence" / "verification" / "run.yaml")
+    if not run:
+        return []  # a missing or unreadable run is reported on its own
+    if run.get("exit_code") == 0 and no_test_ran(run.get("command"), run.get("tests"), str(run.get("summary") or "")):
+        return []  # the evidence check names it, and why: this run ran no test
+    if not isinstance(run.get("tests"), dict):
+        return [
+            "Gate converged: the verification run has no runner report, so it does not show "
+            f"which tests it ran; the Change's records name {len(expected)} (for example "
+            f"{sorted(expected)[:3]}). Record verification with the runner the tasks used"
+        ]
+    passed = _record_tests(run, "passed")
+    missing = sorted(expected - passed)
+    if not missing:
+        return []
+    return [
+        f"Gate converged: the verification run did not pass {len(missing)} of the "
+        f"{len(expected)} tests this Change's Red and regression records name: {missing[:5]}. "
+        "Verification runs the whole suite; make those tests pass and record verification again"
+    ]
+
+
+def _ran_no_test(record: dict[str, Any], label: str) -> list[str]:
+    if record.get("exit_code") != 0:
+        return []
+    why = no_test_ran(record.get("command"), record.get("tests"), str(record.get("summary") or ""))
+    return [f"{label} is not evidence: {why}"] if why else []
+
+
+def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[str, Any]]:
+    """Per task, what its Red, Green and regression records say, as the Core judges them.
+
+    Reference run ref-m03-347 (2026-10-07): told by the verify skill that the Core had already
+    checked the evidence, the reference still opened every Red/Green/regression record to see for
+    itself - 25 files in one call. The Core writes what it knows into coverage.yaml instead, with
+    the same checks the implemented gate makes, so Verify reads one file.
+    """
+    current = compute_product_baseline_revision(repo_root)
+    evidence = change_path / "evidence"
+    summary: dict[str, dict[str, Any]] = {}
+    for tid, meta in sorted(_task_frontmatter_by_id(change_path).items()):
+        row: dict[str, Any] = {"status": str(meta.get("status") or "unknown")}
+        problems: list[str] = []
+        red_file = evidence / "red" / f"{tid}.yaml"
+        green_file = evidence / "green" / f"{tid}.yaml"
+        reg_file = evidence / "regression" / f"{tid}.yaml"
+        red = _load_record(red_file)
+        if red:
+            failed = len(_record_tests(red, "failed"))
+            row["red"] = f"{red.get('result')} ({red.get('failure_category') or '-'}), {failed} failing test(s)"
+        else:
+            row["red"] = "none"
+        if row["status"] in {"superseded", "cancelled"}:
+            row["green"] = row["regression"] = f"not owed ({row['status']})"
+        else:
+            green = _load_record(green_file)
+            if green:
+                row["green"] = str(green.get("result"))
+                problems += _ran_no_test(green, f"green of {tid}")
+                if red_file.is_file():
+                    label = f"green of {tid}"
+                    problems += green_coverage_errors(red_file, green_file, label)
+                    problems += frozen_oracle_errors(red_file, repo_root, label)
+                    problems += isolation_errors(red_file, green_file, label)
+                if green.get("base_revision") and green.get("base_revision") != current:
+                    problems.append(f"green of {tid} predates later changes to docs/spec/** or src/**")
+            else:
+                row["green"] = "none"
+            reg = _load_record(reg_file)
+            if reg:
+                fresh = reg.get("base_revision") == current
+                row["regression"] = f"{reg.get('result')}, {'current tree' if fresh else 'STALE'}"
+                problems += _ran_no_test(reg, f"regression of {tid}")
+                if not fresh:
+                    problems.append(f"regression of {tid} predates later changes to docs/spec/** or src/**")
+            else:
+                row["regression"] = "none"
+        row["problems"] = problems
+        summary[tid] = row
+    return summary
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -916,8 +1110,15 @@ def _validate_evidence_changed_paths_contract(
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
         return errors
-    write_globs = phase_write_globs(contract_phase, route)
+    write_globs = phase_write_globs(contract_phase, route, product_root_of(change_path))
     tasks = _task_frontmatter_by_id(change_path)
+    sibling_declared = [
+        p
+        for meta in tasks.values()
+        if meta.get("status") != "cancelled" and isinstance(meta.get("allowed_paths"), list)
+        for p in meta["allowed_paths"]
+        if isinstance(p, str)
+    ]
     for ev_file in ev_dir.glob("*.yaml"):
         try:
             ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
@@ -942,18 +1143,24 @@ def _validate_evidence_changed_paths_contract(
         allowed_globs = list(write_globs)
         if evidence_phase == "red" and route == "code":
             allowed_globs += declared
+            # A sibling's stub, written in its own Declare, is in every later Red's
+            # Core-computed changed_paths: nothing commits between tasks. ref-m02-340
+            # (2026-10-05): TASK-002's stub src/ratelimit/policy.py failed the gate for
+            # TASK-001 and TASK-003, and no retaken Red could drop it.
+            allowed_globs += sibling_declared
         for msg in validate_paths_against_globs(
             rel_paths,
             allowed_globs,
-            label=f"Gate {gate} {evidence_phase} changed_paths",
+            label=f"Gate {gate} {evidence_phase} changed_paths of {ev_file.name}",
         ):
             errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:
             for rel in rel_paths:
-                if is_product_code_path(rel):
+                if is_product_code_path(rel, product_root_of(change_path)):
                     errors.append(
                         f"Gate {gate}: {ev_file.relative_to(change_path)} {route} route "
-                        f"must not write src/** or tests/** ('{rel}')"
+                        f"must not write {' or '.join(code_write_globs(product_root_of(change_path)))} "
+                        f"('{rel}')"
                     )
         for rel in rel_paths:
             if path_is_listed(rel, forbidden):
@@ -1036,6 +1243,13 @@ def _red_category_hint(ev_data: dict) -> str:
     an assertion (gemma-334-probe M01), when the record's own summary said its
     command had never run.
     """
+    if ev_data.get("failure_category") == "test-own-error":
+        # ref-m02-339: `set & tuple` in the test body itself (core/red_cause.py).
+        return (
+            ". A test failed on an error in its own code that no product code can change, "
+            "so it would never pass; `deltafuse evidence` named the test and the line. Fix "
+            "the test so it fails only because the behaviour is missing, and record Red again"
+        )
     summary = str(ev_data.get("summary") or "").strip().splitlines()
     last = summary[-1].strip()[:160] if summary else ""
     said = f"; the record says: {last}" if last else ""
@@ -1388,9 +1602,10 @@ def _check_gate(
 
         # DF3-006 / SEC-04: a task cannot widen its write envelope by
         # editing YAML; allowed_paths must stay inside slice target_paths.
-        from deltafuse.core.leash import task_envelope_errors
+        from deltafuse.core.leash import task_envelope_errors, unreachable_green_errors
 
         errors.extend(task_envelope_errors(change_path))
+        errors.extend(f"Gate decomposed: {e}" for e in unreachable_green_errors(change_path))
 
     elif gate_lower == "declaring":
         route, route_errs = load_change_route(change_path)
@@ -1453,7 +1668,17 @@ def _check_gate(
         # DF3-006: Red and Green are bound to one test oracle — a Green stamp
         # without the task's own Red evidence does not close the gate.
         if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
+            # A superseded or cancelled task is not implemented, so a Green recorded for it
+            # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
+            # Green for a task superseded on an already-green Red, and this gate refused it as
+            # "answers an already-green Red" with every task done - no step could clear it.
+            closed = {
+                tid for tid, meta in _task_frontmatter_by_id(change_path).items()
+                if meta.get("status") in {"superseded", "cancelled"}
+            }
             for green_file in sorted(green_dir.glob("*.yaml")):
+                if green_file.stem in closed:
+                    continue
                 red_file = change_path / "evidence" / "red" / green_file.name
                 if not red_file.is_file():
                     errors.append(
@@ -1466,6 +1691,12 @@ def _check_gate(
                         f"Gate implemented: {e}"
                         for e in frozen_oracle_errors(
                             red_file, repo_root, f"green evidence '{green_file.name}'"
+                        )
+                    )
+                    errors.extend(
+                        f"Gate implemented: {e}"
+                        for e in green_coverage_errors(
+                            red_file, green_file, f"green evidence '{green_file.name}'"
                         )
                     )
                     errors.extend(
@@ -1484,6 +1715,8 @@ def _check_gate(
             errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
+        elif load_change_route(change_path)[0] == "code":
+            errors.extend(verification_coverage_errors(change_path))
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))
 
         # Check all tasks frontmatter status (P1 / T3 / RM-005)

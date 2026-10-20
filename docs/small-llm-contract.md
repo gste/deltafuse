@@ -23,6 +23,11 @@ Normative for the framework (V3-FIX-020). The program-level history lives in
   production case the framework is built for: a corporate BYOK dense ~27B. It
   stays the model the verdict is read from: a result on any other model of the
   class is evidence about the class, never a substitute for the reference.
+  The reference is the model **in bf16 at one named provider**: the route
+  (provider, quantization, no fallbacks, the 32,768 output ceiling) is fixed in
+  the judge's `qualify/thresholds.md` (`reference.route`, owner decision
+  2026-10-04). Without it OpenRouter served the same model id from 16
+  providers, fp4 among them; a run on another route is evidence about the class.
 - The floor-edge secondary is **`qwen/qwen3-32b`** — dense 32B, 131,072 context,
   16,384 max output. It sits at the 40B boundary.
 - Prices are not part of this contract: they change without notice. Campaign

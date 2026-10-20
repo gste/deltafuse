@@ -679,12 +679,21 @@ class ArtifactRegistry:
                     if repo_root:
                         d_cands.append(repo_root / d_path)
                     if not any(c.is_file() for c in d_cands if c is not None):
+                        message = f"Referenced design file '{d_path_str}' does not exist"
+                        if d_path_str.lower() in {"null", "none", "~", "n/a"}:
+                            # Gemma 31B shakedown cls-g31p3-m02 (2026-10-04): the string
+                            # "null" four decompose steps running, each step new enough
+                            # to have lost the previous one's guess at the cause.
+                            message += (
+                                "; a task without a design has design_ref null (the JSON "
+                                "value, not the string \"null\") or no design_ref at all"
+                            )
                         diagnostics.append(
                             ValidationDiagnostic(
                                 code="missing_reference",
                                 stage="reference",
                                 path="/design_ref",
-                                message=f"Referenced design file '{d_path_str}' does not exist",
+                                message=message,
                             )
                         )
 

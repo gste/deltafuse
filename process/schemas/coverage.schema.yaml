@@ -9,6 +9,23 @@ properties:
   change:
     type: string
     pattern: '^CHG-[0-9]{3,}(-[a-z0-9-]+)?$'
+  task_evidence:
+    description: "Per task, what its Red, Green and regression records say as the Core judges them, refreshed at the analyzed, implemented and converged gates. Verify reads this instead of opening every record; a record is opened only when `problems` or a gate error names it."
+    type: object
+    propertyNames:
+      pattern: '^TASK-[0-9]{3,}$'
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [status, red, green, regression, problems]
+      properties:
+        status: {type: string}
+        red: {type: string}
+        green: {type: string}
+        regression: {type: string}
+        problems:
+          type: array
+          items: {type: string}
   claims:
     type: object
     propertyNames:

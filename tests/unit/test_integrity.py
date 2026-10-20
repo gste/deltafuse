@@ -109,3 +109,35 @@ def test_validate_decision_ref_rejects_path_traversal(tmp_path: Path):
     repo.mkdir()
     errs = validate_decision_ref("../DEC-999.md", repo)
     assert any("Path traversal forbidden" in e for e in errs)
+
+
+SPEC_WITH_OWN_PREFIX = (
+    "# Usage stats\n\nIntro mentioning CR-001 and SLICE-02 in prose.\n\n"
+    "## US-001 Stats view shape\n\ntext\n\n"
+    "### US-002 Call-count fields\n\ntext\n\n"
+    "## REQ-RL-01 Capacity\n\ntext\n\n"
+    "## Out of scope\n"
+)
+
+
+def test_a_requirement_id_leading_a_heading_is_an_anchor_whatever_its_prefix(tmp_path: Path):
+    """Run c336f-m23 (M02): a Worker numbered a new capability's requirements
+    `## US-001 ...` and `## RP-001 ...`; only REQ-/SC-/POL- counted as anchors,
+    so every reference was refused 14 times and the run stalled in Specify."""
+    spec = tmp_path / "spec.md"
+    spec.write_text(SPEC_WITH_OWN_PREFIX, encoding="utf-8")
+    anchors = find_spec_anchors(spec)
+    assert {"US-001", "US-002", "REQ-RL-01"} <= anchors
+    # Prose mentions and headings without an id stay out.
+    assert "CR-001" not in anchors and "SLICE-02" not in anchors
+    assert not any("Out" in a for a in anchors)
+
+
+def test_a_missing_anchor_is_refused_with_the_anchors_the_file_has(tmp_path: Path):
+    spec = tmp_path / "docs" / "spec" / "monitoring" / "usage_stats.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(SPEC_WITH_OWN_PREFIX, encoding="utf-8")
+    assert validate_spec_ref("docs/spec/monitoring/usage_stats.md#US-001", tmp_path) is None
+    err = validate_spec_ref("docs/spec/monitoring/usage_stats.md#us-001-stats-view-shape", tmp_path)
+    assert err is not None and "not found" in err
+    assert "REQ-RL-01, US-001, US-002" in err, err

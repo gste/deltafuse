@@ -7,6 +7,326 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.8] - 2026-10-21
+
+### Fixed
+
+- **The Worker blocks a task only after a Green attempt.** In the reference run ref-v338-a
+  (qwen3.8-27b, M01, 2026-10-20) the Worker, reading the history of a reopened task, ran `deltafuse
+  state --status blocked` "as a probe" before writing any code; the Core accepted it and the run
+  halted for the human over an oracle nobody had tried. `deltafuse state --task <id> --status blocked`
+  from the Worker is now refused until the task has a Green the Core recorded (stamped, no earlier
+  than the task's Red), and a task with no Red cannot be blocked at all; the refusal names the Green
+  step. The implement skill no longer says "do not record Green" for a wrong oracle: it says to record
+  Green against it as declared, and docs/workflow (en, ru) says the same. The human's decisions are
+  unchanged.
+
+- **A run that ran no test is not evidence.** Fuse-Back, Gradle J01 (2026-10-09): right after Green,
+  regression ran the same `gradle --no-daemon test`, Gradle reported the test task `UP-TO-DATE` and ran
+  nothing, and the record read `exit_code: 0`, `passed`, authentic; the `implemented` gate closed, and
+  only `converged` noticed, for the verification run. For a runner whose report the Core reads
+  (pytest, Maven, Gradle), `deltafuse evidence` and every gate now refuse a passing Green, regression
+  or verification run with no report written by that run, or with one naming no test that passed or
+  failed. When Gradle's log shows the task was skipped (`UP-TO-DATE`, `FROM-CACHE`) the refusal says so
+  and names `--rerun`; the implement and verify skills and docs/workflow (en, ru) say the same. The
+  Core does not rewrite the Worker's command. A pytest run that names its own `--junitxml` is read from
+  that file. Runners without a report the Core reads are not judged this way, and a multi-module Gradle
+  build that skips some modules still leaves a fresh, partial report - only `--rerun` covers that.
+
+- **Red may not change a test another task's Red froze.** In the reference run ref-m02-366-1
+  (qwen3.8-27b, M02, 2026-10-11) TASK-003, reopened and declared again, rewrote
+  `test_interleaved_admits_never_block`, which TASK-002's Red had already frozen. Two Reds then froze
+  two bodies of one test, no file could satisfy both, and the Worker - rightly - stopped in Implement
+  again and again until the run was stopped. `deltafuse evidence --phase red` now refuses, before
+  running anything, while any other live task's frozen oracle no longer matches the tree, naming the
+  task and the test; the declare skill and docs/workflow (en, ru) say to write a new test instead.
+
+- **A required token count waits for a silent tokenizer.** With `DELTAFUSE_TOKENIZER_REQUIRED` set,
+  `count_tokens` retried nothing: in ref-m02-366 a `check-gate` the Worker ran in the sandbox failed
+  on a few seconds of the machine's loopback silence. It now asks again after 1, 2, 4, 8, 15 and 30 s
+  before refusing; without the variable it falls back to the heuristic at once, as before.
+
+- **A Verify `spec-gap` has a way back: the human reopens the Change for Analyze.** In the
+  reference run ref-m04-365-2 (qwen3.8-27b, M04, 2026-10-11), and in Fuse-Back on J03 (2026-10-09),
+  Verify recorded `spec-gap` honestly - Specify had left out a catalogue row, in a spec file no slice
+  named - the `converged` gate refused it, and no command led back: the queue chose Verify seven times
+  and the run was stopped as stalled. Now `deltafuse next` halts for the human on a recorded gap, and
+  `deltafuse decide <change-dir> --gap spec-gap --status reopened [--note]` archives verification.md,
+  the verification run and the tasks' Green and regression under `reopened/verify.<n>/`, returns the
+  slices to `draft`, the tasks to `declared` and spec-delta.md to `proposed` (each rewrite vouched by a
+  gate receipt), and rewinds the Change to `analyzing` with a `gap-reopen` receipt the transition chain
+  replays. Analyze gets a `gap` pass that may widen the slices' bounds; once the human accepts the
+  specification again, the Core walks `decomposed` and `declaring`, and Implement re-records Green and
+  regression on the code already there. Other gaps still halt, now saying there is no route back. The
+  leash takes the verify archive as the human's write. Docs (workflow, state-machine) and the verify
+  and analyze skills describe it.
+
+- **Reopening a task puts its product files back as the `declaring` gate found them.** In the
+  reference run ref-m04-363-2 (qwen3.8-27b, M04, 2026-10-11) the Worker wrote TASK-002 to the
+  accepted spec in Implement, proved four of its own frozen tests contradictory and blocked the
+  task, leaving the code in place. Reopening archived the Red but not the code, so the corrected
+  oracle passed on it: Red `already-green` for a task promising a delta, a second halt on the same
+  task, and the run ended - the Worker had done right. The `declaring` gate (every Red taken, no
+  task implemented) now copies each live task's product files (its listed `allowed_paths` outside
+  Declare's test globs, stubs included) to `.deltafuse/snapshots/<change>/` and records their
+  digests in its transition receipt (`product_snapshot`); `decide --status reopened` restores the
+  task's files to those copies, refuses when a copy no longer matches its digest, and names the
+  restored files in `reopen.yaml` and the next declare step. A sibling that changed the same file
+  loses that change too; its evidence goes stale and the queue sends it back to Implement (owner
+  decision 2026-10-11). docs/workflow and docs/state-machine (en, ru) and the declare skill say so.
+
+- **`workflow.code_roots` sets where a `code`-route Change reads and writes (target 3.3.8).**
+  Fuse-Back on J03 (2026-10-08): in a multi-module Maven repository the code and tests live in
+  `<module>/src/main/java` and `<module>/src/test/java`, and every phase contract named only the
+  root `src/**` and `tests/**`, so no Change there passed `decomposed` ("outside the phase
+  contract", "outside what this Change may write", "may change no product file"). The key
+  `workflow.code_roots` was accepted by validate-config and read by nothing; **it now takes
+  effect.** `context.code_write_globs(product_root)` returns it, or `src/**`/`tests/**` when it is
+  unset, and those two globs are replaced by it in the Declare, Implement and Verify contracts
+  (`allowed_read` too, so the Worker sees the module's code), in `deltafuse next`'s envelope and
+  the human guide, in task `allowed_paths` at `decomposed`, in the bound of a slice with no target
+  paths (`leash.capability_roots`, no longer dead), in the reachable-Green check and in the leash's
+  orphan-product rule. A module keeps code and tests under one glob (`svc/src/**`); with the key
+  set, Declare's Red `changed_paths` are bounded by the roots rather than by `tests/**`. Without
+  the key nothing changes. docs/context-model and docs/contracts/leash (en, ru) describe it.
+
+- **`deltafuse evidence` runs `mvn`, `gradle` and `gradlew` on Windows.** Fuse-Back on J01
+  (2026-10-08, Windows 11, Maven 3.9.12): `-- mvn -B test` ran nothing - Maven on Windows is
+  `mvn.cmd`, which CreateProcess does not find by the bare name - and Red was recorded
+  `fixture-error` with `[WinError 2]`, although `mvn -B test` is the runner `workflow.test_commands`
+  and the skills name; writing `mvn.cmd` in the product breaks Linux and CI. On Windows the Core
+  now resolves the runner through `shutil.which` (PATHEXT) and, when it is a `.cmd`/`.bat`
+  script, runs that script - for the evidence run and for Green's isolated run of the frozen
+  tests - while the record keeps the command as the Worker gave it. A runner with a path
+  (`./gradlew`) is looked for in the product. Only batch scripts are substituted: a PATH lookup
+  of `python` would find another interpreter than the venv's own, which CreateProcess prefers.
+  cmd.exe reads `& | < > ^ %` in a batch file's arguments as its own, so such an argument is
+  refused before anything runs. A runner found nowhere is recorded as "runner `mvn` not found
+  on PATH" (exit 127) instead of the bare `[WinError 2]`. Elsewhere than Windows nothing changes.
+
+- **Red no longer takes Specify's uncommitted output for its own change.** Fuse-Back, shopkit
+  (2026-10-08): Specify changed `docs/spec/shared/general_utilities.md` and nobody committed
+  between steps; Red's Core-computed `changed_paths` (the git dirty set) took the spec file along
+  with the test, `deltafuse evidence` said "authentic", and the `declaring` gate refused the record
+  a step later, when only the human could undo it. The bench never saw it: its runner commits
+  after every step. The `specified` gate now records, in its transition receipt (`spec_snapshot`),
+  the digest of every uncommitted `docs/spec/**` file it accepts; evidence leaves such a file out
+  of Red's, Green's and regression's `changed_paths` while its bytes still match
+  (`core/spec_baseline.py`). A file changed after acceptance still counts. And `deltafuse
+  evidence` now runs the gate's own `changed_paths` check on the record it writes, so a path
+  outside the phase contract is named at once (for a spec file: "changed after the `specified`
+  gate accepted it"), not at the gate. docs/workflow (en, ru) describe it.
+
+- **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
+  the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
+  `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference
+  labeled it `none`, the Core closed it as `superseded` and the run passed; in ref-m03-356 it labeled
+  the same task `added`, and the already-green Red of a task promising a delta halted the run for the
+  human (owner rule 2026-10-04). The decompose skill now says the field names a change in behavior: a
+  task that only guards behavior the product already has is `none`, even when the Change writes that
+  requirement down for the first time. No Core rule changed.
+
+- **The human can reopen a blocked task for Declare.** In the reference run ref-m01-352
+  (qwen3.8-27b, M01, 2026-10-08) the Worker declared a Red test no code could pass (a 10 s penalty
+  still asserted at t=100), found it in Implement and marked the task blocked, as the skill says.
+  The human's only answer was `--status cancelled`, which dropped the task's whole promise - the
+  Change then closed with nothing implemented. `deltafuse decide <change-dir> --task <id> --status
+  reopened [--note "<why>"]` now moves the task's Red/Green/regression records to
+  `reopened/<task>.<n>/` (outside `evidence/`, with the note in `reopen.yaml`), returns it to
+  `pending` and journals a `task` gate receipt `reopened`. That task alone may then be declared
+  again while its Change is `declared` or `implementing`; a new Red freezes the corrected oracle,
+  and Red is still refused once it is declared. Leaving `blocked` is the human's in both ways:
+  `deltafuse state` refuses it and names both commands, as does the `blocked` halt. The declare
+  skill says how to take a reopened task; docs/workflow and docs/state-machine (en, ru) describe it.
+  The leash takes the archive (for a task the journal says was reopened) as the human's write,
+  and the reopened task's new Red record as the Core's, so the `implemented` gate names neither.
+
+- **`coverage.yaml` carries the Core's evidence summary per task, and Verify reads it.** In the
+  reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07) the verify skill already said the Core
+  had checked the evidence, and the reference still opened every Red/Green/regression record and
+  task file to see for itself: 25 files in one call, against the bench's bounded-reads threshold
+  of 24, growing with the number of tasks. The Core now writes `task_evidence` into
+  `coverage.yaml` - per task its status, Red result, Green result, whether regression is on the
+  current tree, and `problems` from the same checks the `implemented` gate makes - and refreshes
+  it at the `implemented` gate as well as `analyzed` and `converged`. The verify skill takes the
+  evidence from there and opens a record only when its `problems` or a gate error names it;
+  `coverage.schema.yaml` and `docs/workflow(.ru).md` describe the field. No check moved.
+
+- **`deltafuse next` names no ready step when no intake is waiting.** After the archive in the
+  reference run ref-m03-347 (qwen3.8-27b, M03, 2026-10-07), `next --json` returned a ready
+  `intake` step (`intake_pending: false`) next to a `done` halt. The verify skill says to execute
+  the ready step `next` names, and the reference opened CHG-002 from the request CHG-001 had just
+  delivered. With no intake file waiting and no step asked for, `selected` is now `null` and the
+  `done` halt says not to start a Change the human has not stated; `next --step intake` still
+  names it, and the exit code is unchanged.
+
+- **A superseded task has no Green, and a stray one does not block the `implemented` gate.** In
+  the reference run ref-m03-346 (qwen3.8-27b, M03, 2026-10-07) a task correctly superseded on
+  an already-green Red later got a Green record anyway; `deltafuse evidence` accepted it, and the
+  `implemented` gate then refused it as "answers an already-green Red" with every task done - no
+  step could clear it, and the run stalled. The gate now skips the Green of superseded and
+  cancelled tasks, and `deltafuse evidence --phase green` refuses for such a task, saying its
+  test stays as regression.
+
+- **A delta task must be able to turn its own Red green.** In the reference run ref-m03-345
+  (qwen3.8-27b, M03, 2026-10-07) Decompose split "write the tests" (TASK-001: `allowed_paths`
+  tests only, `src/**` forbidden) from "implement" (TASK-002, depending on TASK-001). TASK-001
+  ran first and its Red could never pass inside its own envelope; the reference proved it and
+  halted. An older run (c336b-m01) closed the same split only by writing `src/` outside the
+  task's `allowed_paths`. The `decomposed` gate now refuses, on the `code` route, a task with a
+  requirement delta that may change no product file and depends on no task that may; the
+  decompose skill says so. Over the 107 Changes of the bench runs to date it flags 5, each such
+  a split or a delta task with no paths at all.
+
+- **Blocked is judged on the oracle as declared.** In the Gemma 31B shakedown cls-g31-m03
+  (M03, 2026-10-06) the Worker rewrote a frozen test, Green was refused for it, and the task was
+  then marked `blocked` as an "oracle mismatch" - a halt that read to the human as a declared
+  oracle no code can pass. `deltafuse state --status blocked` is now refused while the task's
+  frozen oracle is changed, naming the change; the implement skill says so.
+
+- **Verify reads the Core's trace instead of every evidence record.** In the reference run
+  ref-m02-341 (qwen3.8-27b, M02, 2026-10-05) the verify step held 30 files in one call - 15 of
+  them Red/Green/regression records, 5 task files - because the verify skill asked the Worker
+  to "confirm valid Red/Green evidence, scoped regressions, allowed paths, and no test-oracle
+  weakening" by hand: checks the Core had already made at the `implemented` gate and makes again
+  at `converged`. The step's context grew with the number of tasks and broke the bench's
+  bounded-reads threshold (24 files). The skill now reads the trace from `coverage.yaml` and
+  opens an evidence record, task file or source artifact only when a gate error names it or for
+  a gap it found; `docs/workflow(.ru).md` say the same. No check moved or weakened.
+
+- **Red is not taken again after Declare.** In the Gemma 31B shakedown cls-g31s5-m02 (M02,
+  2026-10-05), with its Green refused in Implement ("Green did not turn the Red tests green"),
+  the Worker recorded Red for the task again, three times, and each was accepted as authentic:
+  a Red retaken there freezes the tests as they are at that moment, so the frozen-oracle check
+  no longer guarded the declared oracle. `deltafuse evidence --phase red` now refuses, before
+  running anything, a task that is `implementing`, `implemented` or `verified`, or `declared`
+  once the Change has left Declare, and names the way out (green and regression, or `blocked`
+  when the declared oracle is wrong); the implement skill says the same. While the Change is
+  still in Declare a `declared` task may retake Red: the first version of this guard covered
+  that too and left the reference run ref-m02-340 no way out of the next defect.
+
+- **A sibling task's Declare stub does not fail another task's Red.** Nothing commits between
+  tasks, so the Core-computed `changed_paths` of every later Red carries the stubs earlier
+  tasks wrote in their own Declare. In ref-m02-340 (qwen3.8-27b, M02, 2026-10-05) TASK-002's
+  stub `src/ratelimit/policy.py` failed the `declaring` gate for TASK-001 and TASK-003 - and,
+  told only the path, the reference hand-edited the wrong Red records. A Red's product paths
+  may now be any path a task of the Change (not cancelled) declares in `allowed_paths`, and
+  the refusal names the record.
+
+- **`deltafuse artifact write --change` takes the Change id as well as its directory.** In
+  the Gemma 31B shakedowns cls-g31s-m02 and cls-g31s3-m02 (M02, 2026-10-04/05) the Worker
+  passed `CHG-001-ratelimit-stats-policy` instead of `docs/changes/CHG-001-ratelimit-stats-policy`.
+  The writer looked for `<product>/CHG-001-.../change.yaml`, answered that `change.yaml`
+  "cannot be read", and the Worker - told its Change was broken - rewrote the Core-owned file
+  by hand until the run stalled. A bare Change id (or its unique `CHG-NNN` prefix) now resolves
+  to the Change directory under the product's changes path. The queue also halts, as for an
+  unreadable file, on a `change.yaml` that parses but has no valid Change `id` (the second
+  run's hand-written `change: <id>`), instead of selecting analyze while every write is refused.
+
+- **Cancelling a task is the human's decision.** `deltafuse state --task <id> --status
+  cancelled` let the Worker drop a pending or declared task with no condition (observation
+  from the reference run ref-m02-338, 2026-10-04): a hard task could simply be cancelled, and
+  only an independent hidden suite would notice. `deltafuse state` now refuses `cancelled`
+  and names both ways out: the Worker marks a task it cannot do `blocked` and stops; the human
+  cancels with `deltafuse decide <change-dir> --task <id> --status cancelled`, behind the
+  Human Gate password when the product has one, journaled as a `task` gate receipt. A
+  `blocked` task can now be cancelled (by the human only); the halts for a blocked task and
+  for an already-green Red that promised a delta name the command.
+
+- **Verification runs the whole suite.** In the Gemma 31B shakedown cls-g31p2-m02 (M02,
+  2026-10-04) `tests/test_stats.py` still failed, the Worker left it out of the verification
+  command, the run exited 0 and the `converged` gate closed: the gate checked only that a
+  verification run existed and passed. It now refuses a run that did not pass every test the
+  Change's own records name - the Red tests of every task not cancelled, a superseded task's
+  passing tests, each regression run's tests - and a run with no runner report. Over the 26
+  verification runs of the bench to date it flags that run and one more (a Red test deleted
+  before verification, gemma31-335-rep, 2026-09-26) and no other. The verify skill and
+  `docs/workflow(.ru).md` say the same.
+
+- **A Red test that fails on an error in its own code is not Red.** In the reference run
+  ref-m02-339 (qwen3.8-27b, M02, 2026-10-05) Declare wrote `assert not (new & NETWORKY_MODULES)`
+  with `new` a set and `NETWORKY_MODULES` a tuple: `set & tuple` raises TypeError whatever the
+  product does. Red was recorded as `behavioral-mismatch` next to five honest failures, the
+  oracle was frozen, and Implement could only prove that no code passes it and halt for the
+  human. `deltafuse evidence` now reads each failure from the runner's report (pytest) and
+  refuses, as `failure_category: test-own-error`, a test whose failure was raised in the test
+  file itself and is a NameError/UnboundLocalError, or a TypeError between built-in types on
+  a line that names nothing from the product (no product import, nothing assigned from one,
+  no fixture argument, no helper of the test module). The refusal names the test and line;
+  the declare skill and `docs/workflow.md` say the same. Over every Red report of the bench
+  runs to date (628 failed tests) the rule flags exactly this test.
+
+- **A hand-broken `change.yaml` halts the Change instead of reading as "no work".** In the
+  Gemma 31B shakedown cls-g31s-m02 (M02, 2026-10-04) the Worker rewrote `change.yaml` with a
+  file tool (front-matter delimiters, no `id`). The queue skipped the unreadable package, so
+  `deltafuse next` answered "No ready work" with nothing blocked and the run ended as if the
+  Change were done. The queue now reports the package as blocked, says why the file cannot be
+  read and that the human restores it. `deltafuse artifact write`, refusing for want of a
+  Change id, now also says that only the Core writes `change.yaml`: told only "no valid
+  Change id", the Worker had rewritten the file by hand six times. In the same run a refusal
+  for a field the artifact kind does not take (`Field 'kind' is not an allowed semantic
+  field`) was repeated nine times by the Worker; the refusal now lists the allowed fields.
+
+- **A task whose Red is already-green is closed, not declared forever.** In the Gemma 31B
+  shakedown cls-g31g-m02b (M02, 2026-10-04) a "verify the architectural constraints" task
+  wrote a test that the earlier tasks had already made pass. `deltafuse evidence` recorded
+  `already-green` and said to "return this outcome upstream", which named no command;
+  `deltafuse state --status already-green` was refused; the queue selected declare for the
+  task again, and a new step's conversation no longer had the advice: seven declare steps in
+  a row, after which the Worker hand-edited other tasks' Red records. The documented exit
+  (close the whole Change as a no-op) would have thrown away six tasks' work. Owner decision
+  2026-10-04: a task with `requirement_delta: none` and an already-green Red becomes
+  `superseded` (`deltafuse state <change-dir> --task <id> --status superseded`, allowed from
+  pending, declaring or declared and only then; its test stays as regression); a task that
+  promises a requirement delta halts for the human, who cancels it or has it declared again.
+  `deltafuse next` names the command in its reason, `deltafuse evidence` names it in its
+  advice, and the declare skill, `docs/state-machine.md` and `docs/workflow.md` say the same.
+
+- **A declared oracle no code can pass stops the task for the human.** In the reference
+  run ref-m02-338 (M02, 2026-10-04) the Worker proved during Implement that two of its own
+  Red tests for TASK-004 contradicted the accepted spec; the implement skill said to
+  "stop and re-declare it", there is no way back from `declared` to Declare (and a
+  re-declared Red could not fail on code Implement already changed), and the queue selected
+  implement five times until the runner stopped the run. The skill now says to mark the
+  task `blocked` (`deltafuse state <change-dir> --task <id> --status blocked`) and say
+  why; the blocked halt's reason says the task waits for the human. Owner decision
+  2026-10-04.
+
+- **A design_ref written as the string "null" is refused with the fix.** In the Gemma 31B
+  shakedown cls-g31p3-m02 (M02, 2026-10-04) the Worker sent `design_ref: "null"` four
+  decompose steps running; the refusal said only that the file 'null' does not exist, and
+  each new step had lost the previous one's guess at the cause. The value is still refused;
+  the message now says a task without a design has `design_ref: null` or none.
+
+### Changed
+
+- `docs/small-llm-contract.md`: the reference is `qwen/qwen3.8-27b` in bf16 at one named
+  provider; the route is fixed in the judge's `qualify/thresholds.md` (`reference.route`).
+
+## [3.3.7] - 2026-10-03
+
+### Fixed
+
+- **A requirement id that starts a heading is an anchor, whatever its prefix.** Only
+  `REQ-`, `SC-` and `POL-` ids counted, and nothing said so: in run c336f-m23
+  (qwen3.8-27b, M02) the Worker numbered two new capabilities' requirements
+  `## US-001 ...` and `## RP-001 ...`, every `spec-delta.md` reference was refused 14
+  times with "Anchor not found", and the run stalled in Specify after $1.2. Any
+  `## ABC-001 ...` heading is now an anchor, and a refused anchor is reported with the
+  anchors the file has.
+- **The implemented gate checks that Green passed the Red tests.** `green_covers_red` ran
+  only when the Green evidence was recorded, and the record was written even when it
+  failed, so a Green recorded over a different test closed the gate. 3.3.5's isolated run
+  hid this for pytest Reds frozen per test; a JVM Red (frozen per file, no isolated run)
+  had nothing else. The gate now reads the Green record's runner report and refuses a
+  Green that did not pass every test in its Red's `tests.failed`, or that has no report.
+- **The Red record no longer names conftest files that do not exist.** It listed every
+  `conftest.py` candidate on the frozen test's path, absent ones with `sha256: null`, and
+  the Worker went looking for them: run c336b-m01 (qwen3.8-27b, M01) failed T6 on
+  `git ls-files conftest.py tests/conftest.py`, correctness 100. The candidates follow
+  from the test's path, so only existing ones are recorded; one that appears later is
+  still refused as added.
+
 ## [3.3.6] - 2026-09-30
 
 ### Added

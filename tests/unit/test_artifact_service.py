@@ -759,3 +759,46 @@ def test_aw34_missing_slice_selection_and_malformed_slice_rejection(tmp_path: Pa
             },
         )
     assert exc_info3.value.code == "missing_reference"
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["---\nchange: CHG-001-x\nstatus: analyzing\n---\n", "change: CHG-001-x\nstatus: analyzing\n"],
+)
+def test_a_hand_written_change_yaml_is_named_as_such(tmp_path, content):
+    """cls-g31s-m02 (2026-10-04): told only "no valid Change id", the Worker rewrote
+    change.yaml by hand six times."""
+    from deltafuse.core.artifact_write import _change_id
+
+    (tmp_path / "change.yaml").write_text(content, encoding="utf-8")
+    with pytest.raises(ArtifactServiceError) as exc_info:
+        _change_id(tmp_path)
+    assert exc_info.value.code == "missing_change_authority"
+    assert "Only the Core writes change.yaml" in str(exc_info.value)
+    assert "human restores it" in str(exc_info.value)
+
+
+def test_an_unexposed_field_refusal_names_the_allowed_fields(product_root: Path, auth_context: AuthorizationContext):
+    """cls-g31s-m02 (2026-10-04): told only that 'kind' was not allowed, the Worker sent the
+    same routing fields nine times."""
+    service = ArtifactService(product_root, auth_context)
+    with pytest.raises(ArtifactServiceError) as exc_info:
+        service.create(kind="task", identity="TASK-001", semantic_payload={"kind": "feature", "colour": "red"})
+    assert exc_info.value.code == "unexposed_field"
+    message = str(exc_info.value)
+    assert "'colour'" in message and "Allowed fields:" in message and "title" in message
+
+
+def test_a_change_named_by_its_id_is_found_where_changes_live(tmp_path, repo_root, monkeypatch):
+    """cls-g31s-m02 / cls-g31s3-m02: `--change CHG-001-...` (the id, not the directory) was
+    answered "change.yaml cannot be read", and the Worker rewrote change.yaml by hand."""
+    from deltafuse.core.artifact_write import named_change_dir
+    from deltafuse.core.installer import install
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-001", title="Named").step_intake()
+    monkeypatch.chdir(tmp_path)
+    assert named_change_dir(Path(builder.change_dir.name)) == builder.change_dir.resolve()
+    assert named_change_dir(Path("CHG-001")) == builder.change_dir.resolve()
+    assert named_change_dir(Path("CHG-999")) == (tmp_path / "CHG-999").resolve()

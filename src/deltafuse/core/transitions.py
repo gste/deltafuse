@@ -247,6 +247,25 @@ def last_receipt(product_root: Path, change_id: str) -> dict[str, Any] | None:
     return rows[-1] if rows else None
 
 
+# The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
+# <change> --gap spec-gap --status reopened`); the chain replays it as a rewind.
+GAP_REOPEN_KIND = "gap-reopen"
+GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
+GAP_REOPEN_TO = "analyzing"
+
+
+def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> dict[str, Any] | None:
+    """The Change's latest gap reopen, unless a `until_gate` transition has followed it."""
+    rows = load_receipts(product_root, change_id)
+    for index in range(len(rows) - 1, -1, -1):
+        if rows[index].get("kind") == GAP_REOPEN_KIND:
+            later = rows[index + 1 :]
+            if any(r.get("kind") == "transition" and r.get("gate") == until_gate for r in later):
+                return None
+            return rows[index]
+    return None
+
+
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     """V3-FIX-009: fail-closed receipt chain validation.
 
@@ -293,7 +312,17 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     # Replay: each receipt must apply a known gate from a status the chain
     # has actually reached (the bugfix path legally skips 'specified').
     current = INITIAL_STATUS
-    for i, row in enumerate(receipts):
+    replay = [r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND)]
+    for i, row in enumerate(replay):
+        if row.get("kind") == GAP_REOPEN_KIND:
+            if current not in GAP_REOPEN_FROM or row.get("to") != GAP_REOPEN_TO:
+                errors.append(
+                    f"gap reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; "
+                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' is a Core rewind"
+                )
+                break
+            current = GAP_REOPEN_TO
+            continue
         gate = row.get("gate")
         target = GATE_TARGETS.get(gate or "")
         if target is None or row.get("to") != target:
@@ -331,7 +360,9 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             f"status '{status}' is not a receipted or in-flight state and must "
             "not be set by hand"
         )
-    status_receipts = [r for r in all_receipts if r.get("kind") in ("transition", "unblock")]
+    status_receipts = [
+        r for r in all_receipts if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND)
+    ]
     if status_receipts and status_receipts[-1].get("to") not in (status, current):
         if status in RECEIPTED_TARGETS:
             errors.append(
@@ -382,7 +413,8 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
 # tasks and evidence, so it refreshes it itself before judging: a missing or
 # stale mapping was a gate the Worker could only fix by running a Core command
 # it had to remember (roadmap item 4: box B -> box A).
-COVERAGE_GATES = frozenset({"analyzed", "converged"})
+# `implemented` too: coverage.yaml carries the per-task evidence summary Verify reads.
+COVERAGE_GATES = frozenset({"analyzed", "implemented", "converged"})
 
 
 def _refresh_coverage(change_path: Path) -> None:
@@ -509,6 +541,22 @@ def advance_change(
             "to": target,
             "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+        if gate == "declaring":
+            # The tasks' product files before Implement: a reopened task is declared again
+            # against them (core/task_snapshot.py, ref-m04-363-2).
+            from deltafuse.core.task_snapshot import record_declaring_snapshot
+
+            snapshot = record_declaring_snapshot(product_root, change_path, change_id)
+            if snapshot:
+                entry["product_snapshot"] = snapshot
+        if gate == "specified":
+            # What Specify left uncommitted, as accepted: evidence leaves it out of later
+            # changed_paths while its bytes still match (core/spec_baseline.py).
+            from deltafuse.core.spec_baseline import spec_snapshot
+
+            snapshot = spec_snapshot(product_root)
+            if snapshot:
+                entry["spec_snapshot"] = snapshot
         entry = append_receipt(product_root, entry)
 
         _write_change_status(change_path, data, target)
@@ -529,12 +577,153 @@ def advance_change(
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
 # (`deltafuse state`) instead of hand-editing task/slice/Change frontmatter.
 TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"declaring", "declared", "blocked", "cancelled"},
-    "declaring": {"declared", "blocked"},
-    "declared": {"implementing", "implemented", "blocked", "cancelled"},
+    "pending": {"declaring", "declared", "blocked", "cancelled", "superseded"},
+    "declaring": {"declared", "blocked", "superseded"},
+    "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
     "implementing": {"implemented", "blocked"},
     "implemented": {"verified", "blocked"},
+    # Only the human leaves `blocked` (decide --task): cancelling drops the task,
+    # reopening (`pending`) sends it back to Declare with its old evidence archived.
+    "blocked": {"cancelled", "pending"},
 }
+
+# Cancelling drops what a task promised, so it is the human's call: `deltafuse decide
+# <change-dir> --task <id> --status cancelled`, behind the Human Gate password when the
+# product has one. ref-m02-338 observation (2026-10-04): `deltafuse state` let the Worker
+# cancel a pending task with no condition - a hard task could simply be dropped, and only
+# the bench's hidden suite would notice.
+HUMAN_TASK_STATUSES = frozenset({"cancelled"})
+
+
+def human_cancel_hint(change_path: Path | str, task_id: str) -> str:
+    return (
+        f"cancelling a task drops what it promised, which is the human's decision: "
+        f"`deltafuse decide {Path(change_path).as_posix()} --task {task_id} --status cancelled`. "
+        "If the task cannot be done, mark it blocked with `deltafuse state <change-dir> --task "
+        f"{task_id} --status blocked`, say why, and stop"
+    )
+
+
+def human_unblock_hint(change_path: Path | str, task_id: str) -> str:
+    where = Path(change_path).as_posix()
+    return (
+        f"task {task_id} is blocked, and only the human answers that halt: "
+        f"`deltafuse decide {where} --task {task_id} --status cancelled` drops it, "
+        f"`deltafuse decide {where} --task {task_id} --status reopened` sends it back to "
+        "Declare. Stop and report why it is blocked"
+    )
+
+
+def green_attempt_error(change_path: Path, product_root: Path, task_id: str) -> str | None:
+    """Why the Worker may not block this task yet: no Green was tried against its Red.
+
+    ref-v338-a-M01 (2026-10-20): the reference, reading the history of a reopened task, ran
+    `deltafuse state --status blocked` "as a probe" before writing any code, and the run halted
+    for the human with an oracle nobody had tried. Blocked says the declared oracle proved wrong;
+    what proves it is a Green the Core recorded against that oracle, and the human reads it.
+    """
+    where = Path(change_path).as_posix()
+    retry = (
+        f"implement the product change and record Green with `deltafuse evidence {where} --phase green "
+        f"--task {task_id} -- <test command>`; block only if that run shows the declared oracle itself "
+        "is wrong - the Core keeps the failed Green record for the human"
+    )
+    evidence = Path(change_path) / "evidence"
+    try:
+        red = yaml.safe_load((evidence / "red" / f"{task_id}.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        red = None
+    if not isinstance(red, dict):
+        return (
+            f"task {task_id} cannot be marked blocked: it has no Red record, so there is no declared "
+            f"oracle to be wrong. Declare it first; then {retry}"
+        )
+    try:
+        green = yaml.safe_load((evidence / "green" / f"{task_id}.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        green = None
+    if isinstance(green, dict):
+        from deltafuse.core.evidence import evidence_stamp_error
+
+        if evidence_stamp_error(green, Path(product_root)) is None and str(green.get("timestamp") or "") >= str(
+            red.get("timestamp") or ""
+        ):
+            return None
+    return f"task {task_id} cannot be marked blocked before a Green attempt against the oracle Red froze: {retry}"
+
+
+# Statuses of Declare that a reopened task takes again after its Change has left Declare.
+REOPENED_DECLARE_STATUSES = frozenset({"declaring", "declared"})
+REOPENED_CHANGE_STATUSES = frozenset({"declared", "implementing"})
+
+
+def red_result(change_path: Path, task_id: str) -> str | None:
+    """The `result` of a task's Red record, or None when it has none."""
+    red = Path(change_path) / "evidence" / "red" / f"{task_id}.yaml"
+    try:
+        data = yaml.safe_load(red.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    result = data.get("result") if isinstance(data, dict) else None
+    return str(result) if result else None
+
+
+def supersede_errors(change_path: Path, task_id: str, meta: dict[str, Any]) -> list[str]:
+    """Why a task may not become `superseded`, or nothing when it may.
+
+    An already-green Red proves there is nothing to implement against the task's oracle:
+    the implemented gate refuses it, and declare selected the task again and again (Gemma
+    31B shakedown cls-g31g-m02b, 2026-10-04: a "verify the constraints" task whose
+    constraints earlier tasks had already met, seven declare steps in a row, then the
+    Worker hand-edited other tasks' Red records). Closing the whole Change as a no-op would
+    have thrown away six tasks' work. A task that changes no requirement and whose oracle
+    already passes is superseded by the work around it, and its test stays as regression
+    (owner decision 2026-10-04). A task that promises a requirement delta is not: its
+    oracle passing on unchanged code is a contradiction the human settles.
+    """
+    result = red_result(change_path, task_id)
+    if result != "already-green":
+        return [
+            f"task {task_id} can be superseded only when its Red record is already-green "
+            f"(found: {result or 'no Red record'}); declare it first"
+        ]
+    delta = str(meta.get("requirement_delta") or "").strip().lower()
+    if delta != "none":
+        return [
+            f"task {task_id} promises requirement_delta '{delta or 'unset'}', yet its Red "
+            "already passes on unchanged code: that is the human's to settle - cancel the "
+            "task if the behavior already exists, or delete its Red record and declare it again"
+        ]
+    return []
+
+
+def already_green_advice(change_path: Path | str, task_id: str) -> str:
+    """What `deltafuse evidence` tells the Worker after recording an already-green Red.
+
+    "Return this outcome upstream" named no command (cls-g31g-m02b, 2026-10-04).
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    change_dir = Path(change_path)
+    try:
+        meta, _ = parse_frontmatter((change_dir / "tasks" / f"{task_id}.md").read_text(encoding="utf-8"))
+    except Exception:  # an unreadable task file only loses the specific advice
+        meta = {}
+    if not supersede_errors(change_dir, task_id, meta if isinstance(meta, dict) else {}):
+        advice = (
+            "The task changes no requirement, so earlier work already meets it: close it with "
+            f"`deltafuse state {change_path} --task {task_id} --status superseded`; its test "
+            "stays as regression."
+        )
+    else:
+        advice = (
+            "The task promises a requirement delta, so a passing oracle on unchanged code is "
+            "for the human to settle: stop and report it."
+        )
+    return (
+        "Red is already-green: the oracle passed on unchanged product code, so there is "
+        f"nothing to implement against it. {advice} Do not proceed to Implement on this Red."
+    )
 SLICE_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"specified"},
 }
@@ -605,12 +794,14 @@ def set_artifact_status(
     task_id: str | None = None,
     slice_id: str | None = None,
     change_status: bool = False,
+    human: bool = False,
 ) -> dict[str, Any]:
     """Core-owned write of one artifact status (V3-FIX-010).
 
     Exactly one of task_id / slice_id / change_status selects the artifact.
     The transition must be allowed, the Change receipt chain must be intact,
-    and the write is journaled like every other Core status write.
+    and the write is journaled like every other Core status write. `human` is set
+    only by `deltafuse decide`, after the Human Gate check: it alone may cancel a task.
     """
     if sum(bool(x) for x in (task_id, slice_id, change_status)) != 1:
         raise TransitionError("choose exactly one of --task, --slice, or --change")
@@ -689,13 +880,51 @@ def set_artifact_status(
                     "receipt": None,
                     "unchanged": True,
                 }
+            if task_id and current == "blocked" and not human:
+                raise TransitionError(human_unblock_hint(change_path, task_id))
+            if task_id and status in HUMAN_TASK_STATUSES and not human:
+                raise TransitionError(human_cancel_hint(change_path, task_id))
             if current not in allowed or status not in allowed[current]:
                 raise TransitionError(
                     f"cannot set status '{status}' from '{current}' for {file.name}"
                 )
+            if task_id and status == "superseded":
+                refusals = supersede_errors(change_path, task_id, meta)
+                if refusals:
+                    raise TransitionError("; ".join(refusals))
+            if task_id and status == "blocked":
+                # Gemma 31B shakedown cls-g31-m03 (2026-10-06): the Worker rewrote a frozen
+                # test, Green was refused for it, and the task was then marked blocked as an
+                # "oracle mismatch" - the halt read to the human as a declared oracle no code
+                # can pass. Blocked is judged on the oracle as declared.
+                red_file = change_path / "evidence" / "red" / f"{task_id}.yaml"
+                if red_file.is_file():
+                    from deltafuse.core.fsm import frozen_oracle_errors
+
+                    changed = frozen_oracle_errors(red_file, product_root, f"Red of {task_id}")
+                    if changed:
+                        raise TransitionError(
+                            f"task {task_id} cannot be marked blocked while its declared oracle is "
+                            f"changed ({'; '.join(changed)}): restore the tests as Red froze them, "
+                            "then block only if that declared oracle itself is wrong"
+                        )
+            if task_id and status == "blocked" and not human:
+                no_attempt = green_attempt_error(change_path, product_root, task_id)
+                if no_attempt:
+                    raise TransitionError(no_attempt)
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")
+                from deltafuse.core import gate_receipts
+
+                if (
+                    status in REOPENED_DECLARE_STATUSES
+                    and change_status_now in REOPENED_CHANGE_STATUSES
+                    and gate_receipts.task_reopened(product_root, change=data.get("id"), task=task_id)
+                ):
+                    # The human reopened this task after its oracle proved wrong
+                    # (ref-m01-352): it is declared again while its siblings implement.
+                    owners = owners | REOPENED_CHANGE_STATUSES
                 if change_status_now not in owners:
                     raise TransitionError(
                         f"task {task_id} cannot become '{status}' while the Change is "

@@ -203,3 +203,18 @@ def test_a_java_file_is_frozen_whole_by_bytes(tmp_path: Path):
     edit(tmp_path, "}\n}\n", "}\n  @Test void more() {}\n}\n", rel=java)
     errs = errors(tmp_path, red)
     assert errs and f"{java} changed" in errs[0], errs
+
+
+def test_the_record_lists_no_path_that_is_not_on_disk(tmp_path: Path):
+    """Run c336b-m01 failed T6: the record listed the absent `conftest.py` and
+    `tests/conftest.py` with `sha256: null`, and the Worker went to look for
+    them (`git ls-files conftest.py tests/conftest.py`). Absent candidates
+    follow from the test's path, so they are not written down."""
+    red = freeze(tmp_path, {TEST_FILE: ORACLE, CONFTEST: CONFTEST_TEXT}, FAILED, declared=[TEST_FILE])
+    files = record_of(red)["files"]
+    assert [f["path"] for f in files] == [CONFTEST]
+    assert all((tmp_path / f["path"]).is_file() for f in files)
+    # The root conftest that was absent is still watched.
+    (tmp_path / "conftest.py").write_text(AUTOUSE, encoding="utf-8")
+    errs = errors(tmp_path, red)
+    assert errs and "conftest.py was added" in errs[0], errs

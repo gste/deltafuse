@@ -228,6 +228,9 @@ def next_analyze_pass(
             allowed_read=analyze_allowed_read("routing"),
             allowed_write=analyze_allowed_write("routing"),
         )
+    gap = _gap_pass(path, product_root)
+    if gap is not None:
+        return gap
     uncovered = uncovered_primary_capabilities(path)
     if uncovered:
         cap = uncovered[0]
@@ -258,6 +261,42 @@ def next_analyze_pass(
             allowed_write=analyze_allowed_write("coverage"),
         )
     return None
+
+
+def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | None:
+    """Analyze for a Change the human reopened from a Verify gap (decide --gap).
+
+    ref-m04-365-2 (2026-10-11): the catalogue row Verify found missing sat in a spec file no
+    slice named, so Specify could not write it; the slice bounds are Analyze's.
+    """
+    if _change_status(change_path) != "analyzing":
+        return None
+    from deltafuse.core.decide import latest_gap_reopen
+    from deltafuse.core.transitions import open_gap_reopen
+
+    try:
+        change = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    change_id = change.get("id") if isinstance(change, dict) else None
+    if not change_id or open_gap_reopen(Path(product_root), str(change_id), until_gate="analyzed") is None:
+        return None
+    info = latest_gap_reopen(change_path) or {}
+    note = str(info.get("note") or "").strip()
+    where = f"docs/changes/{change_path.name}/{info['path']}/" if info.get("path") else "reopened/"
+    return AnalyzeCursor(
+        pass_name="gap",
+        reason=(
+            f"Verify recorded '{info.get('gap') or 'a gap'}' and the human reopened the Change for "
+            f"Analyze; the verification is archived in {where}. Bound the slices so Specify can "
+            "write what the gap names: add the specification file to a slice's spec_refs, or route "
+            "the capability that owns it and write its slice. Then check-gate analyzed and "
+            "advance --gate analyzed; every slice is back to draft, and Specify follows"
+            + (f". The human's note: {note}" if note else "")
+        ),
+        allowed_read=[*_ROUTING_READ, *_SLICE_READ, "docs/spec/**", f"docs/changes/*/{info.get('path', 'reopened')}/**"],
+        allowed_write=list(dict.fromkeys([*_ROUTING_WRITE, *_SLICE_WRITE])),
+    )
 
 
 def routing_claim_capabilities(change_path: Path | str) -> dict[str, str]:
@@ -512,7 +551,17 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             claims_out[cid]["tests"] = _claim_covering_tests(path, trace_repo_root, tasks, cid)
     if unmapped:
         raise CoverageError("no slice for claims: " + ", ".join(unmapped))
-    return {"change": _change_id(path), "claims": claims_out}
+    document: dict[str, Any] = {"change": _change_id(path), "claims": claims_out}
+    if (path / "evidence").is_dir():
+        from deltafuse.core.fsm import task_evidence_summary
+
+        # A summary for Verify to read, never a reason for coverage (or the gate that
+        # refreshes it) to fail: the gates make the same checks themselves.
+        try:
+            document["task_evidence"] = task_evidence_summary(path, find_repo_root(path))
+        except Exception:  # noqa: BLE001
+            pass
+    return document
 
 
 # A claim names a method/parameter and the class it belongs to, in either order:

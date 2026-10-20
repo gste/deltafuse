@@ -22,6 +22,7 @@ from deltafuse.core.queue import (
     format_human_guide,
     format_item,
     format_queue,
+    intake_sources_pending,
     load_product_root,
     queue_snapshot,
     select_next,
@@ -573,10 +574,25 @@ def _main(argv: list[str] | None = None) -> int:
         help="Apply the specification Human Gate (spec-delta.md on the Change path)",
     )
     decide_parser.add_argument(
+        "--task",
+        default=None,
+        help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
+    )
+    decide_parser.add_argument(
         "--status",
         required=True,
-        choices=["accepted", "rejected"],
-        help="Recorded human choice",
+        choices=["accepted", "rejected", "cancelled", "reopened"],
+        help="Recorded human choice (cancelled, reopened: only with --task)",
+    )
+    decide_parser.add_argument(
+        "--gap",
+        default=None,
+        help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
+    )
+    decide_parser.add_argument(
+        "--note",
+        default=None,
+        help="With --status reopened: what the human passes on to the next Declare",
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
@@ -963,13 +979,12 @@ def _main(argv: list[str] | None = None) -> int:
             ):
                 # The record is an honest observation, but it is a stop, not a
                 # green light: there is no failure for Implement to remove, and
-                # the implemented gate refuses an already-green Red.
-                print(
-                    "Red is already-green: the oracle passed on unchanged product code, so "
-                    "there is nothing to implement against it. Stop and return this outcome "
-                    "upstream - do not proceed to Implement on this Red.",
-                    file=sys.stderr,
-                )
+                # the implemented gate refuses an already-green Red. "Return it
+                # upstream" named no command, and the Worker declared the task seven
+                # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
+                from deltafuse.core.transitions import already_green_advice
+
+                print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
         print("Evidence is not authentic:", file=sys.stderr)
         for err in outcome.errors:
@@ -1002,6 +1017,22 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Next failed: {ex}", file=sys.stderr)
             return 2
         selected = select_next(queue, step=args.step)
+        had_item = selected is not None
+        if (
+            args.step is None
+            and selected is not None
+            and selected.step == "intake"
+            and not (
+                selected.intake_pending
+                if selected.intake_pending is not None
+                else intake_sources_pending(load_product_root(target))
+            )
+        ):
+            # ref-m03-347 (2026-10-07): after the archive, `next` named a ready intake step
+            # (intake_pending false) next to a "done" halt; the verify skill says to execute a
+            # ready step, and the reference opened CHG-002 from the request CHG-001 had just
+            # delivered. With no intake waiting there is no ready step to name.
+            selected = None
         _journal(
             target if only is None else only,
             cmd="next",
@@ -1013,7 +1044,7 @@ def _main(argv: list[str] | None = None) -> int:
             empty=selected is None,
         )
         guide = (
-            format_human_guide(selected)
+            format_human_guide(selected, load_product_root(target if only is None else only))
             if selected is not None
             else format_human_blocked_queue(queue)
         )
@@ -1039,7 +1070,7 @@ def _main(argv: list[str] | None = None) -> int:
             print("No ready work.", file=sys.stderr)
             print(format_queue(queue), file=sys.stderr)
             print("To start a new Change: /intake", file=sys.stderr)
-        return 0 if selected is not None else 1
+        return 0 if had_item else 1
 
     elif args.command == "decide":
         target = Path(args.path)
@@ -1049,9 +1080,20 @@ def _main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 decision=args.decision,
                 spec=args.spec,
+                task=args.task,
+                gap=args.gap,
+                note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} "
-                    + (f"--decision {args.decision}" if args.decision else "--spec")
+                    + (
+                        f"--decision {args.decision}"
+                        if args.decision
+                        else (
+                            f"--task {args.task}"
+                            if args.task
+                            else (f"--gap {args.gap}" if args.gap else "--spec")
+                        )
+                    )
                     + f" --status {args.status}"
                 ),
             )

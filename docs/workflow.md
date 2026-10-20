@@ -134,7 +134,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 - `spec-delta.md` validates against `spec-delta.schema.yaml` (`added`, `modified`, and `removed` required).
 - Added or modified paths exist under `docs/spec/**` with their anchors.
 - `docs/spec/_capabilities.yaml` validates against the capability schema and lists each slice `primary_capability` with live spec files.
-- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing `#REQ-*` / `#SC-*` anchor.
+- If `added` and `modified` are empty (`requirement_delta: none`), each slice `spec_refs` cites an existing anchor. An anchor is the id a heading of the spec file starts with (`## REQ-01 Title` -> `#REQ-01`, `## US-001 ...` -> `#US-001`; any uppercase prefix), a `REQ-*` / `SC-*` / `POL-*` id anywhere in the file, or an explicit `<a id>`. A refused anchor is reported with the anchors the file has.
 - Specification changes reviewed and approved by human maintainer (Human Gate: Spec).
 - `change.yaml` status is `specified` or `specification-proposed`.
 - Product source code is not required at this gate.
@@ -223,7 +223,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
-3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it.
+3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it. Neither is a test that fails on an error in its own code which no product code can change - a name it never bound, or an operator between built-in values on a line that uses nothing from the product (`set & tuple`): `deltafuse evidence` records it as `test-own-error`, names the test and line, and exits non-zero.
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml
    schema_version: 3
@@ -246,6 +246,8 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - Executable test fails with the expected failure signature, **or** the public oracle already passes and evidence result is `already-green`.
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `changed_paths` stays inside the Declare write scope plus the product paths this task's `allowed_paths` declares (the compiled-language stub); any other `src/**` path is refused.
+- A test another task's Red froze is that task's oracle: `deltafuse evidence --phase red` refuses, before running anything, while any other task's frozen oracle no longer matches the tree; a task writes its own new test beside it.
+- The Core computes `changed_paths` from the git dirty set, and nothing need commit between steps: the `specified` gate records, in its transition receipt, the digest of every uncommitted `docs/spec/**` file it accepts, and evidence leaves such a file out while its bytes still match - Specify's output is not Red's, Green's or regression's change. A specification file changed after acceptance still counts, and `deltafuse evidence` names it at once, with the gate's own message, instead of the gate a step later.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.
@@ -268,14 +270,16 @@ Author the minimal production code necessary to turn the failing test target gre
    `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
    Do not hand-write evidence YAML.
 3. Execute the capability/domain regression test suite the same way (`--phase regression`).
+   A run that ran no test is not evidence. For a runner whose report the Core reads (pytest, Maven, Gradle), `deltafuse evidence` and every gate refuse a passing Green, regression or verification run with no fresh report, or with a report naming no test that passed or failed. Gradle skips a test task whose inputs did not change since the last run (`> Task :test UP-TO-DATE`) and exits 0, which is the usual case right after Green; the refusal says so - run it with `--rerun` (`gradle test --rerun`, Gradle 7.6+; `--rerun-tasks` before that). A runner the Core has no report for (`npm test`, a script) is not judged this way.
 4. Transition task status to `implemented`.
 
 ### Gate
 - Test target passes cleanly.
 - Full regression suite passes without failures.
 - `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
-- On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a requirement that is genuinely already met closes the Change on the no-op path (terminal `not-reproduced`) instead.
+- On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a task whose oracle is already met is closed instead: `superseded` when it changes no requirement (`requirement_delta: none`; the Core refuses it otherwise), or by the human when it promised one. A Change whose every requirement is already met closes on the no-op path (terminal `not-reproduced`). A declared oracle that Implement shows no code can pass (it contradicts the accepted spec or itself) is not edited and not re-declared from Implement: the Worker records Green against it as declared - the run fails, and the Core keeps the record for the human - and then marks the task `blocked` (the Core refuses `blocked` from the Worker until the task has a Green it recorded no earlier than the task's Red); the human settles it: `deltafuse decide <change-dir> --task <id> --status cancelled` drops the task, `--status reopened [--note "<why>"]` archives its evidence under `reopened/<task>.<n>/`, puts the task's product files back as the `declaring` gate found them (the gate copies them to `.deltafuse/snapshots/<change>/` and records their digests in its receipt), and returns it to `pending`. A reopened task, and only it, is declared again while its Change is past Declare; `deltafuse next` names the archive and the human's note.
 - On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle_tests` (or, on an older record, `red_oracle`) and refuses a difference, naming the test or the file that moved, so weakening the assertion during Implement does not produce a Green; and with pytest the frozen tests must have passed on their own in the Green's isolated run (`oracle_isolation`).
+- On `route: code`, each Green must have passed the tests its Red recorded as failing (`tests.failed`): the gate reads the Green record's own runner report and refuses a Green over other tests, or one with no report, whatever its exit code.
 - Task status transitioned to `implemented`.
 
 ---
@@ -290,14 +294,14 @@ The Verifier checks that:
 1. Every normalized claim in `request.md` (`CR-*` or stable labels such as `O1`/`E1`) traces to a slice in `routing.yaml`.
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
-4. Every task has verified `red`, `green`, and `regression` evidence artifacts.
+4. Every task has verified `red`, `green`, and `regression` evidence artifacts. The Core checks these records at the `implemented` gate and again at `converged`, and names any record at fault; the Verifier reads the trace from `coverage.yaml` - including `task_evidence`, the Core's per-task summary of those records, refreshed at the `implemented` gate - and opens a record only when that summary or a gate error names it, so this step's context does not grow with the number of tasks.
 5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses.
 
 ### Convergence Analysis
 1. Execute full project verification suite.
-2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`).
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`). The `converged` gate refuses a run that did not pass every test the Change's Red and regression records name (the Red tests of every task not cancelled, a superseded task's passing tests, each regression run's tests): a failing test is fixed, never left out of the command.
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
-   - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here;
+   - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here. `deltafuse next` then halts for the human instead of selecting Verify again. For `spec-gap` the human answers with `deltafuse decide <change-dir> --gap spec-gap --status reopened [--note "<why>"]`: verification.md, the verification run and every task's Green and regression move to `reopened/verify.<n>/`, the slices return to `draft`, the tasks to `declared` and spec-delta.md to `proposed`, and the Change rewinds to `analyzing` (a `gap-reopen` receipt the chain replays). Analyze gets a `gap` pass that names the gap and may widen the slices' bounds; Specify follows; once the human accepts the specification again the Core walks `decomposed` and `declaring`, and Implement re-records Green and regression on the code already there. Other gaps have no Core route back yet and halt.;
    - Traceability matrix;
    - Evidence audit;
    - Delta verification;

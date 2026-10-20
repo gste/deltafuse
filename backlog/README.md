@@ -13,6 +13,24 @@
   принято и реализовано в 3.3.6. Без него ядро пакета остаётся без
   владельца, как только его подкаталоги нужны другой capability (Markdown: 13
   из 35 файлов; на JVM это родительские пакеты).
+- [x] [q6: regression принят без единого выполненного теста](roadmap/q6-fuse-back/REGRESSION-WITHOUT-TESTS.md) —
+  наблюдение 2026-10-09: Gradle `test` UP-TO-DATE после Green, regression `passed`, поймал только `converged`.
+  Сделано 2026-10-20: прогон без выполненных тестов не доказательство (ветка `fix/regression-needs-report`).
+- [x] [q6: у вердикта Verify `spec-gap` нет пути назад](roadmap/q6-fuse-back/SPEC-GAP-NO-ROUTE.md) —
+  наблюдение 2026-10-09: Change с `spec-gap` не может ни сойтись, ни вернуться на Specify; переход
+  `verifying -> analyzing` есть в таблице, но команды нет.
+  Сделано 2026-10-11: `deltafuse decide --gap spec-gap --status reopened` возвращает Change на Analyze (`f14261d`).
+
+- [x] [q6: пути записи Change — из `workflow.code_roots`](roadmap/q6-fuse-back/CHANGE-WRITE-PATHS.md) —
+  постановка 2026-10-08, решение владельца: делать. На маршруте `code` задача пишет только корневые
+  `src/**` и `tests/**`, а объявленный `workflow.code_roots` не действует: Change на многомодульном
+  Maven (J03) стоит на `decomposed`.
+- [ ] [q6: Red записывает незакоммиченную правку спецификации](roadmap/q6-fuse-back/RED-UNCOMMITTED-SPEC.md) —
+  наблюдение 2026-10-08: `evidence` принимает Red, гейт `declaring` его отвергает, отмотать может только
+  человек (`reopened`).
+- [ ] [q6: `deltafuse evidence` не находит `mvn` на Windows](roadmap/q6-fuse-back/EVIDENCE-RUNNER-WINDOWS.md) —
+  постановка 2026-10-08: `subprocess.run` без `shutil.which`, `mvn.cmd` не находится; Red/Green для Java на
+  Windows — `fixture-error`.
 
 ## Прочее
 

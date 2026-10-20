@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import json
+import os
 import shlex
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -19,6 +21,7 @@ from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors, isolation_e
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
+from deltafuse.core.red_cause import own_code_error
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
     FAILED,
@@ -26,13 +29,17 @@ from deltafuse.core.test_reports import (
     PASSED,
     SKIPPED,
     green_covers_red,
+    no_test_ran,
     read_report,
     red_is_authentic,
+    runner_family,
     wants_junit_flag,
+    worker_junit_path,
 )
 from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
+OWN_CODE_RED_CATEGORY = "test-own-error"
 RECORDED_BY = "deltafuse-evidence"
 STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
@@ -129,6 +136,82 @@ def _load_change_id(change_path: Path) -> str:
     return data["id"]
 
 
+# Windows runs a `.cmd`/`.bat` runner through cmd.exe, which CreateProcess does not find by its
+# bare name (Maven is `mvn.cmd`, Gradle `gradle.bat`/`gradlew.bat`).
+BATCH_SUFFIXES = frozenset({".cmd", ".bat"})
+# cmd.exe reads these in a batch file's arguments as its own (chaining, redirection, escapes,
+# variables), so an argument holding one would run more than the test command.
+CMD_METACHARACTERS = frozenset("&|<>^%")
+
+
+def _on_windows() -> bool:
+    return os.name == "nt"
+
+
+def resolve_runner(argv: list[str], repo_root: Path) -> list[str]:
+    """*argv* with a Windows batch runner replaced by the script it names.
+
+    Fuse-Back on J01 (2026-10-08, Windows 11, Maven 3.9.12): `-- mvn -B test` ran nothing - Maven
+    on Windows is `mvn.cmd`, CreateProcess does not find it by `mvn` - and Red was recorded
+    `fixture-error` with `[WinError 2]`; writing `mvn.cmd` in the product breaks Linux and CI.
+    Only a `.cmd`/`.bat` that `shutil.which` finds (PATHEXT) is substituted: anything else runs
+    as given, because CreateProcess looks in the running interpreter's own directory first and a
+    PATH lookup would swap the venv's `python` for another one. A runner with a path
+    (`./gradlew`) is looked for in the product. Elsewhere than Windows the argv runs as given.
+    """
+    if not argv or not _on_windows():
+        return list(argv)
+    program = str(argv[0])
+    target = program
+    if "/" in program or "\\" in program:
+        path = Path(program)
+        target = str(path if path.is_absolute() else repo_root / path)
+    found = shutil.which(target)
+    if not found or Path(found).suffix.lower() not in BATCH_SUFFIXES:
+        return list(argv)
+    unsafe = [arg for arg in argv[1:] if CMD_METACHARACTERS & set(str(arg))]
+    if unsafe:
+        raise EvidenceRunError(
+            f"'{program}' is the batch file {found}, which Windows runs through cmd.exe, and cmd.exe "
+            f"reads & | < > ^ % in its arguments as its own: {', '.join(repr(a) for a in unsafe)}. "
+            "Pass the test command without them; nothing was run or recorded"
+        )
+    return [found, *argv[1:]]
+
+
+def _runner_not_found(program: str, ex: OSError) -> str:
+    return f"runner `{program}` not found on PATH ({ex})"
+
+
+_CONTRACT_GATES = {"red": ("declare", "declaring"), "green": ("implement", "implemented"),
+                   "regression": ("implement", "implemented")}
+
+
+def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) -> list[str]:
+    """The gate's changed_paths check on this record, now rather than at the gate.
+
+    Fuse-Back shopkit (2026-10-08): evidence said "authentic" and the `declaring` gate refused the
+    record a step later, when it could no longer be retaken.
+    """
+    if phase not in _CONTRACT_GATES:
+        return []
+    from deltafuse.core.fsm import _validate_evidence_changed_paths_contract
+
+    contract, gate = _CONTRACT_GATES[phase]
+    mine = f"{dest.name}:"
+    out: list[str] = []
+    for msg in _validate_evidence_changed_paths_contract(change_path, phase, contract, gate=gate, route=route):
+        if mine not in msg:
+            continue
+        if "'docs/spec/" in msg:
+            msg += (
+                " - the specification changed after the `specified` gate accepted it, and "
+                f"{contract.capitalize()} does not write the specification"
+            )
+        out.append(msg)
+    return out
+
+
 def _sanitize_command(argv: list[str]) -> str:
     try:
         return shlex.join(argv)
@@ -191,7 +274,7 @@ def _isolated_oracle_run(
     started_at = time.time()
     try:
         proc = subprocess.run(
-            run_argv,
+            resolve_runner(run_argv, repo_root),
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -331,7 +414,7 @@ def write_stamped_evidence(
 
 
 
-def _core_computed_changed_paths(repo_root: Path) -> list[str]:
+def _core_computed_changed_paths(repo_root: Path, change_path: Path | None = None) -> list[str]:
     """Core-derived dirty paths the Worker is accountable for.
 
     Worker lists are an expected subset of this set, so it must hold only the
@@ -345,12 +428,21 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
     except LeashError:
         # No git repository (bench sandbox, fresh install): nothing to derive.
         return []
+    accepted: set[str] = set()
+    if change_path is not None:
+        # Specify's output, uncommitted and untouched since the `specified` gate accepted it,
+        # is not this phase's change (core/spec_baseline.py; Fuse-Back shopkit 2026-10-08).
+        from deltafuse.core.spec_baseline import unchanged_since_specified
+
+        accepted = unchanged_since_specified(repo_root, _load_change_id(change_path))
     out: list[str] = []
     for raw in paths:
         rel = posix_relpath(raw)
         parts = rel.split("/")
         if is_exempt_path(rel):
             continue  # .deltafuse/**, interpreter caches, the other leash exemptions
+        if rel in accepted:
+            continue
         if parts[:2] == ["docs", "changes"]:
             # The Change's own bookkeeping, not a product change: its evidence
             # (written by this command), task files `state` rewrites, coverage.
@@ -358,6 +450,113 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
             continue
         out.append(raw)
     return out
+
+# Statuses whose Red is taken and its oracle frozen. A `declared` task may still retake Red
+# while the Change is in Declare: ref-m02-340 (2026-10-05) needed to, once this guard also
+# covered that phase - nothing has consumed the oracle yet.
+RED_TAKEN_STATUSES = frozenset({"declared", "implementing", "implemented", "verified"})
+DECLARE_CHANGE_STATUSES = frozenset({"decomposed", "declaring"})
+
+
+def _refuse_red_after_declare(change_path: Path, task: str) -> None:
+    """Red belongs to Declare; past it, retaking Red would re-freeze the oracle.
+
+    Gemma 31B shakedown cls-g31s5-m02 (2026-10-05): during Implement, with its Green refused
+    ("Green did not turn the Red tests green"), the Worker recorded Red for TASK-001 again,
+    three times, each accepted as authentic. A Red retaken there freezes whatever the tests
+    are at that moment, so the frozen-oracle check no longer guards the declared one.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unknown or unreadable task is refused where it always was
+        return
+    status = meta.get("status") if isinstance(meta, dict) else None
+    if status == "declared":
+        try:
+            change = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - a broken change.yaml is reported elsewhere
+            change = None
+        if isinstance(change, dict) and change.get("status") in DECLARE_CHANGE_STATUSES:
+            return
+    if status in RED_TAKEN_STATUSES:
+        raise EvidenceRunError(
+            f"{task_id} is '{status}': its Red was recorded in Declare and froze the declared "
+            "oracle, so Red is not taken again - that would freeze the tests as they are now. "
+            "In Implement record green and regression; if the declared oracle itself is wrong, "
+            f"mark the task blocked (`deltafuse state <change-dir> --task {task_id} --status "
+            "blocked`), say why, and stop. Nothing was run or recorded"
+        )
+
+
+def _refuse_red_over_a_siblings_oracle(change_path: Path, task: str, repo_root: Path) -> None:
+    """A test another task's Red froze is that task's oracle: this Red may not change it.
+
+    ref-m02-366-1 (2026-10-11): TASK-003, reopened and declared again, rewrote
+    `test_interleaved_admits_never_block`, which TASK-002's Red had already frozen. Two Reds then
+    froze two bodies of one test, no file could satisfy both, and the run went round Implement
+    until it was stopped. The conflict is refused here, while a new test can still be written.
+    """
+    from deltafuse.core.oracle import red_oracle_changes
+
+    tasks_dir = change_path / "tasks"
+    closed: set[str] = set()
+    if tasks_dir.is_dir():
+        from deltafuse.core.frontmatter import parse_frontmatter
+
+        for tf in tasks_dir.glob("*.md"):
+            try:
+                meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 - an unreadable task is reported by the gates
+                continue
+            if isinstance(meta, dict) and meta.get("status") == "cancelled":
+                closed.add(str(meta.get("id") or tf.stem))
+    for record in sorted((change_path / "evidence" / "red").glob("*.yaml")):
+        sibling = record.stem
+        if sibling == task or sibling in closed:
+            continue
+        try:
+            red = yaml.safe_load(record.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
+        if not isinstance(frozen, dict):
+            continue
+        changes = red_oracle_changes(repo_root, frozen)
+        if changes:
+            raise EvidenceRunError(
+                f"{sibling}'s Red froze its oracle, and the tree no longer matches it: "
+                f"{'; '.join(changes)}. A test another task's Red froze is that task's oracle - "
+                f"restore it as it was frozen and write a new test for {task}; "
+                "nothing was run or recorded"
+            )
+
+
+def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
+    """A superseded or cancelled task has no Green: it is not implemented.
+
+    ref-m03-346 (2026-10-07): a Green recorded for a task superseded on an already-green Red
+    was accepted here and then refused by the implemented gate, with no step left to clear it.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unknown task is refused where it always was
+        return
+    status = meta.get("status") if isinstance(meta, dict) else None
+    if status in {"superseded", "cancelled"}:
+        raise EvidenceRunError(
+            f"{task_id} is '{status}': it is not implemented, so it has no Green - "
+            + ("its Red already passed and its test stays as regression. " if status == "superseded" else "")
+            + "Nothing was run or recorded; go on with the next task `deltafuse next` names"
+        )
+
 
 def run_evidence(
     change_dir: Path | str,
@@ -397,7 +596,14 @@ def run_evidence(
     if not change_path.is_dir():
         raise EvidenceRunError(f"Change package directory not found: {change_path}")
 
+    if phase == "red":
+        _refuse_red_after_declare(change_path, str(task))
+    if phase == "green":
+        _refuse_green_for_a_closed_task(change_path, str(task))
+
     repo_root = find_repo_root(change_path)
+    if phase == "red":
+        _refuse_red_over_a_siblings_oracle(change_path, str(task), repo_root)
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])
@@ -405,7 +611,7 @@ def run_evidence(
         # The Core computes the changed set from git anyway and refused a list
         # that missed any of it; with no list it records its own (roadmap item
         # 4: box B -> box A). A list the Worker gives is still checked.
-        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root))
+        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root, change_path))
 
     def _as_text(raw: object) -> str:
         if raw is None:
@@ -425,10 +631,14 @@ def run_evidence(
         junit_path = report_dir / f"junit-{phase}-{task or 'run'}.xml"
         junit_path.unlink(missing_ok=True)
         run_argv = [*argv, f"--junitxml={junit_path}"]
+    elif runner_family(argv) == "pytest" and worker_junit_path(argv):
+        # The Worker named the report itself: read that one, if this run wrote it.
+        junit_path = repo_root / str(worker_junit_path(argv))
+    launch_argv = resolve_runner(run_argv, repo_root)
     started_at = time.time()
     try:
         proc = subprocess.run(
-            run_argv,
+            launch_argv,
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -440,7 +650,7 @@ def run_evidence(
         log = (_as_text(proc.stdout) + _as_text(proc.stderr)).strip()
     except FileNotFoundError as ex:
         exit_code = 127
-        log = str(ex)
+        log = _runner_not_found(str(argv[0]), ex)
     except subprocess.TimeoutExpired as ex:
         exit_code = 124
         log = (_as_text(ex.stdout) + _as_text(ex.stderr)).strip()
@@ -462,6 +672,13 @@ def run_evidence(
             # The log mentioned an assertion but nothing ran, or a test could not
             # run: not a behavioural failure however the log reads.
             category = "fixture-error"
+    own_code = None
+    if phase == "red" and exit_code != 0 and report is not None and category == AUTHENTIC_RED_CATEGORY:
+        # The gate reads the category, so a test no product code can pass is not
+        # recorded as a behavioural failure (ref-m02-339, core/red_cause.py).
+        own_code = own_code_error(report, repo_root)
+        if own_code:
+            category = OWN_CODE_RED_CATEGORY
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":
@@ -538,7 +755,7 @@ def run_evidence(
             f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
             "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
         )
-    computed = _core_computed_changed_paths(repo_root)
+    computed = _core_computed_changed_paths(repo_root, change_path)
     if computed:
         worker_paths = set(rel_paths)
         missing = sorted(p for p in computed if p not in worker_paths)
@@ -548,6 +765,7 @@ def run_evidence(
                 f"missing {missing}"
             )
     errors.extend(private_errors)
+    errors.extend(_contract_errors_now(change_path, phase, dest, route))
     red_from_report = False
     if phase == "red" and route == "code" and result == "expected-failure":
         if report is not None:
@@ -558,6 +776,8 @@ def run_evidence(
             ok, why = red_is_authentic(report)
             if not ok:
                 errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
+            elif own_code:
+                errors.append(own_code)
         elif category != AUTHENTIC_RED_CATEGORY:
             # No machine-readable report from this runner: the old heuristic,
             # marked as such in the record so a weaker verdict is visible.
@@ -587,6 +807,10 @@ def run_evidence(
             )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
+    if phase in {"green", "regression", "verification"} and route == "code" and result == "passed":
+        nothing_ran = no_test_ran(argv, payload.get("tests"), log)
+        if nothing_ran:
+            errors.append(f"{phase} is not evidence: {nothing_ran}")
     if timed_out:
         errors.append(f"command timed out after {timeout}s")
 

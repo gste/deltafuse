@@ -7,6 +7,9 @@ import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.hasher import compute_product_baseline_revision
 
+# The test every code-route regression and verification fixture reports as passed.
+REGRESSION_TEST = "tests.test_core::test_existing_behaviour"
+
 
 class MockChangeBuilder:
     def __init__(
@@ -479,6 +482,9 @@ class MockChangeBuilder:
                 "exit_code": 0,
                 "result": "passed",
                 "summary": "Test passed after implementation",
+                # What the Core records: pytest's own report of the run (a passing
+                # run with none is refused as one that ran no test).
+                "tests": {"source": "junitxml", "passed": [f"tests.test_{task_id.lower()}::test_behaviour"]},
                 "changed_paths": ["src/core.py"],
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
@@ -494,6 +500,7 @@ class MockChangeBuilder:
                 "exit_code": 0,
                 "result": "passed",
                 "summary": "Full test suite passed",
+                "tests": {"source": "junitxml", "passed": [REGRESSION_TEST]},
                 "changed_paths": ["src/core.py"],
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
@@ -540,6 +547,7 @@ class MockChangeBuilder:
             "exit_code": 0,
             "result": "passed",
             "summary": "Verification pass passed",
+            **({"tests": {"source": "junitxml", "passed": [REGRESSION_TEST]}} if self.route == "code" else {}),
             "changed_paths": [],
             "spec_status": "unchanged",
             "base_revision": self._baseline_revision(),
@@ -564,3 +572,64 @@ class MockChangeBuilder:
 
         self._core_advance("converged")
         return self
+
+
+def record_green_attempt(change_dir: Path, task_id: str = "TASK-001") -> Path:
+    """A failed Green the Core recorded: what the Worker needs before it may block the task.
+
+    A task with no Red record gets one first: a task is blocked on its declared oracle.
+
+    Written through the Core's own stamp (`write_stamped_evidence`), as `deltafuse evidence
+    --phase green` writes it when the frozen Red tests still fail.
+    """
+    from datetime import datetime, timezone
+
+    from deltafuse.core.evidence import write_stamped_evidence
+    from deltafuse.core.fsm import find_repo_root
+
+    change_dir = Path(change_dir)
+    change_id = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8"))["id"]
+    product_root = find_repo_root(change_dir)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    red = change_dir / "evidence" / "red" / f"{task_id}.yaml"
+    if not red.is_file():
+        # A task is blocked on its declared oracle, so it has one.
+        write_stamped_evidence(
+            red,
+            {
+                "schema_version": 3,
+                "change": change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": now,
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "behavioral-mismatch",
+                "summary": "Test failed as expected",
+                "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+                "spec_status": "unchanged",
+            },
+            product_root,
+        )
+    dest = change_dir / "evidence" / "green" / f"{task_id}.yaml"
+    write_stamped_evidence(
+        dest,
+        {
+            "schema_version": 3,
+            "change": change_id,
+            "task": task_id,
+            "phase": "green",
+            "timestamp": now,
+            "command": f"pytest tests/test_{task_id.lower()}.py",
+            "exit_code": 1,
+            "result": "failed",
+            "failure_category": "behavioral-mismatch",
+            "summary": "the frozen Red test still fails",
+            "changed_paths": [],
+            "spec_status": "unchanged",
+            "base_revision": compute_product_baseline_revision(product_root),
+        },
+        product_root,
+    )
+    return dest

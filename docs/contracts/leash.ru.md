@@ -20,6 +20,8 @@ Intake `write` не содержит `src/**`. Declare/Implement оставля�
 
 **Структурные артефакты.** `routing.yaml`, `spec-delta.md`, `slices/*.md` и `tasks/*.md` Change проходят, даже внутри envelope, только если их байты совпадают с digest известного писателя: receipt Artifact Writer (`result_sha256` в `.deltafuse/receipts/`), `deltafuse state` (`sha256` в receipt `artifact-status`) или `decide` (`artifact_sha256` в журнале гейтов). Рукописный файл — нарушение с подсказкой команды `deltafuse artifact write` (п. 1 роадмапа).
 
+**Корни кода.** `src/**` и `tests/**` выше означают корни кода продукта: `workflow.code_roots` из `.deltafuse/config.yaml`, если задан (например `[svc/src/**]`), иначе эти два. Hook и `deltafuse leash` судят «бесхозную» правку продукта и envelope Declare/Implement по тем же корням, что `deltafuse next` кладёт в `envelope.read` и `envelope.write`.
+
 **Кэши интерпретатора.** `*.pyc`, `__pycache__/**` и `.pytest_cache/**` исключены: их пишет запуск Red- и Green-тестов, и воркер не может этого избежать.
 
 **`forbidden_paths` задачи.** На Declare и Implement `forbidden_paths` задачи сужают только её тестовую и продуктовую область. Собственные файлы Change (`docs/changes/*/evidence/**`, `coverage.yaml`, `change.yaml`) остаются в envelope: туда пишет `deltafuse evidence`, и задача, запретившая `docs/**`, не должна превращать это в нарушение.

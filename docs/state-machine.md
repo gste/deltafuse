@@ -34,6 +34,7 @@ stateDiagram-v2
     converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
     verifying --> analyzing: gap / drift detected
+    implemented --> analyzing: the human reopens a spec-gap
     
     normalized --> rejected: invalid / out of scope
     analyzing --> rejected: unfeasible
@@ -62,7 +63,7 @@ stateDiagram-v2
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. Entered only when every machine check of the `specified` gate passes except the two that are the human's to settle when they accept - their receipt, and a capability this Change routes into that is still a `draft`; otherwise `deltafuse state` refuses and returns the errors to the Worker. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` added/modified files must stay in slice `spec_refs`. `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `declaring` | All tasks validated against `task.schema.yaml`. |
-| `declaring` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `declared`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. On `route: code` `already-green` is a stopping outcome - the Worker returns it upstream and the Change closes terminally, because it cannot carry `implemented`. Private `_` access is rejected on `route: code`. |
+| `declaring` | Preparing the declared Red oracle for tasks. `docs`/`ops` use a file or schema oracle, not product pytest. | `declared`, `not-reproduced` | The declared oracle fails for the expected public reason, proves unreproducible, or records `already-green` when the public oracle already passes. On `route: code` an `already-green` Red cannot carry `implemented`, so it stops the task: a task with `requirement_delta: none` is already met by the work around it and the Worker closes it as `superseded` (`deltafuse state --task <id> --status superseded`, which the Core allows only then; its test stays as regression); a task that promises a requirement delta halts for the human, who cancels it or has it declared again. A Change whose every requirement is already met still closes on the no-op path. Private `_` access is rejected on `route: code`. |
 | `declared` | Verified Red evidence recorded for all tasks. | `implementing` | Human review of Red evidence if required. |
 | `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression, and the Red they answer actually failed - a Green answering an `already-green` Red proves no delta and does not close this gate. `docs`/`ops`: allowed files exist; no `src/**`. |
 | `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
@@ -125,8 +126,9 @@ stateDiagram-v2
     implemented --> verified: verify
     
     pending --> blocked: external dependency
-    blocked --> pending: unblocked
-    pending --> cancelled: task cancelled
+    blocked --> cancelled: the human cancels
+    blocked --> pending: the human reopens
+    pending --> cancelled: the human cancels
     pending --> superseded: task replaced
     
     verified --> [*]
@@ -144,8 +146,8 @@ stateDiagram-v2
 | `implementing` | Implementation code being authored. | `implemented` | Tests pass; regression suite passes. |
 | `implemented` | Green & regression evidence recorded. | `verified` | Evidence in `evidence/green/` & `regression/`. |
 | `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
-| `blocked` | Implementation blocked by dependency or issue. | `pending` | Blocking reason documented. |
-| `cancelled` | Task cancelled during Change lifecycle. | *Terminal* | Cancellation rationale documented. |
+| `blocked` | Implementation blocked by dependency or issue; the run halts for the human. | `cancelled`, `pending` (the human only) | Blocking reason documented. The human reopens with `deltafuse decide <change-dir> --task <id> --status reopened [--note "<why>"]`: the task's evidence moves to `reopened/<task>.<n>/`, its product files return to the copies the `declaring` gate took, a `task` gate receipt `reopened` is journaled, and that task alone may be declared again while its Change is `declared` or `implementing`. |
+| `cancelled` | Task cancelled during Change lifecycle - the human's decision, never the Worker's: `deltafuse decide <change-dir> --task <id> --status cancelled` (Human Gate password when set; journaled as a `task` gate receipt). `deltafuse state` refuses it. | *Terminal* | Cancellation rationale documented. |
 | `superseded` | Task replaced by finer-grained tasks. | *Terminal* | Superseding task IDs documented. |
 
 ---

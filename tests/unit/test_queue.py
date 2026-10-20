@@ -81,9 +81,11 @@ def test_next_json_empty_product_has_done_halt(tmp_path: Path, repo_root: Path, 
     out, _ = capsys.readouterr()
     assert ret == 0
     data = json.loads(out)
-    assert data["selected"]["skill"] == "intake"
-    assert data["selected"]["intake_pending"] is False
+    # ref-m03-347 (2026-10-07): a ready intake step next to a "done" halt was read as work,
+    # and the Worker opened a second Change from a request already delivered.
+    assert data["selected"] is None
     assert data["halt"]["kind"] == "done"
+    assert "Do not start a Change unless the human" in data["halt"]["prompt"]
     assert data.get("envelope") is None
 
 
@@ -431,3 +433,29 @@ def test_next_names_the_skill_file_so_the_worker_does_not_guess(tmp_path: Path, 
     assert item.skill_path == f".agents/skills/{item.skill}/SKILL.md"
     assert (tmp_path / item.skill_path).is_file()
     assert skill_file(tmp_path, "nosuchskill") is None
+
+
+@pytest.mark.parametrize(
+    "content, problem",
+    [
+        ("---\nchange: CHG-001\nstatus: analyzing\n---\n", "not valid YAML"),
+        ("- just\n- a list\n", "not a YAML mapping"),
+        # cls-g31s3-m02: valid YAML rewritten by hand, `change:` in place of `id:`.
+        ("change: CHG-001\nstatus: analyzing\nroute: code\n", "no valid Change id"),
+    ],
+)
+def test_a_hand_broken_change_yaml_halts_instead_of_reading_as_done(
+    tmp_path: Path, repo_root: Path, content: str, problem: str
+):
+    """cls-g31s-m02 (2026-10-04): the Worker rewrote change.yaml as two YAML documents and
+    `deltafuse next` answered "No ready work" with nothing blocked."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-001", title="Broken").step_intake()
+    (builder.change_dir / "change.yaml").write_text(content, encoding="utf-8")
+
+    queue = build_work_queue(tmp_path)
+    assert not queue.ready
+    assert len(queue.blocked) == 1
+    reason = queue.blocked[0].reason
+    assert "change.yaml is broken" in reason and problem in reason
+    assert "restores it from version control" in reason

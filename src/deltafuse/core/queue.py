@@ -14,7 +14,7 @@ from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
-from deltafuse.core.transitions import receipt_mismatch
+from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -31,6 +31,30 @@ TASK_IMPLEMENT = {"declared", "implementing"}
 TASK_DONE = {"implemented", "verified", "cancelled", "superseded"}
 # Change statuses that own the declare / implement phase of their tasks.
 DECLARE_PHASE = frozenset({"decomposed", "declaring"})
+
+
+def _declare_reason(change_path: Path, rel: str, tid: str, tstatus: str) -> str:
+    """Why declare is next; for a task the human reopened, what was wrong with its last oracle."""
+    from deltafuse.core.decide import latest_reopen
+
+    reopen = latest_reopen(change_path, tid)
+    if reopen is None or tstatus != "pending":
+        return f"Task {tid} status '{tstatus}'"
+    note = str(reopen.get("note") or "").strip()
+    restored = [str(p) for p in reopen.get("restored") or []]
+    return (
+        f"Task {tid} was blocked and the human reopened it: its declared oracle was wrong. "
+        f"Its earlier evidence is archived in {rel}/{reopen['path']}/ (red.yaml names the "
+        "tests Red froze)"
+        + (
+            f"; its product files are back as the declaring gate found them ({', '.join(restored)})"
+            if restored
+            else ""
+        )
+        + ". Declare it again: fix the oracle so the accepted specification can "
+        "pass it, record Red, then set it declared"
+        + (f". The human's note: {note}" if note else "")
+    )
 IMPLEMENT_PHASE = frozenset({"declared", "implementing"})
 # Change statuses before the decomposed gate: task files may already be on
 # disk, but they are Decompose's output and do not pick the step yet.
@@ -296,10 +320,59 @@ def _stale_task_evidence(
     return out
 
 
+def _unreadable_change(change_path: Path) -> str | None:
+    """Why change.yaml cannot be read as one mapping, or None when it can.
+
+    Gemma 31B shakedown cls-g31s-m02 (2026-10-04): the Worker rewrote change.yaml
+    with write_file (front-matter delimiters, no `id`). The queue skipped the
+    unreadable package, `deltafuse next` answered "No ready work" with nothing
+    blocked, and the run ended as if the Change were done.
+    """
+    change_file = change_path / "change.yaml"
+    if not change_file.is_file():
+        return None
+    try:
+        data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - any parse failure is the same halt
+        first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        return f"it is not valid YAML ({first})"
+    if not isinstance(data, dict):
+        return "it is not a YAML mapping"
+    # cls-g31s3-m02: rewritten by hand as `change: <id>` with no `id` - valid YAML, so
+    # the queue went on selecting analyze while every artifact write was refused.
+    from deltafuse.core.artifact_write import CHANGE_ID
+
+    cid = data.get("id")
+    if not isinstance(cid, str) or not CHANGE_ID.match(cid):
+        return f"it has no valid Change id (id: {cid!r})"
+    return None
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data = _load_change(change_path)
-    if not data:
-        return [], []
+    problem = _unreadable_change(change_path)
+    if not data or problem:
+        if problem is None:
+            return [], []
+        rel = _rel(product_root, change_path)
+        return [], [
+            WorkItem(
+                kind="blocked",
+                step=None,
+                skill=None,
+                gate=None,
+                change_id=change_path.name,
+                path=rel,
+                task=None,
+                task_path=None,
+                reason=(
+                    f"{rel}/change.yaml is broken: {problem}. Only the Core writes "
+                    "change.yaml; it was written by hand. The human restores it from "
+                    "version control, then `deltafuse next` resumes."
+                ),
+                halt_kind="blocked",
+            )
+        ]
     change_id = data.get("id")
     if not isinstance(change_id, str):
         change_id = change_path.name
@@ -380,7 +453,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     path=rel,
                     task=tid,
                     task_path=_rel(product_root, tfile),
-                    reason=f"Task {tid} is blocked",
+                    reason=(
+                        f"Task {tid} is blocked: it waits for the human (the Worker's reply "
+                        "that blocked it says why - for example a declared oracle it showed "
+                        "no code can pass). The human cancels it with `deltafuse decide "
+                        f"{rel} --task {tid} --status cancelled`, or reopens it for Declare "
+                        f"with `deltafuse decide {rel} --task {tid} --status reopened --note "
+                        '"<why>"`'
+                    ),
                     halt_kind="blocked",
                 )
             ]
@@ -400,6 +480,49 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     halt_kind="blocked",
                 )
             ]
+        if tstatus in TASK_DECLARE | TASK_IMPLEMENT and red_result(change_path, tid) == "already-green":
+            # The oracle passed on unchanged code: nothing to implement, and the
+            # implemented gate refuses such a Red. Without this the task was selected
+            # for declare again and again, and a new step's conversation no longer
+            # had the evidence command's advice (cls-g31g-m02b, 2026-10-04).
+            meta, _ = parse_frontmatter(tfile.read_text(encoding="utf-8"))
+            red_rel = f"{rel}/evidence/red/{tid}.yaml"
+            if not supersede_errors(change_path, tid, meta if isinstance(meta, dict) else {}):
+                return [
+                    _item_for_step(
+                        "declare",
+                        change_id=change_id,
+                        path=rel,
+                        task=tid,
+                        task_path=_rel(product_root, tfile),
+                        reason=(
+                            f"Task {tid}: its Red is already-green and it changes no "
+                            "requirement, so earlier work already meets it; close it with "
+                            f"deltafuse state {rel} --task {tid} --status superseded "
+                            "(its test stays as regression)"
+                        ),
+                    )
+                ], []
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=tid,
+                    task_path=_rel(product_root, tfile),
+                    reason=(
+                        f"Task {tid}: its Red is already-green, yet it promises "
+                        f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
+                        "The human decides: cancel it (deltafuse decide "
+                        f"{rel} --task {tid} --status cancelled) if the behavior already "
+                        f"exists, or delete {red_rel} and have it declared again"
+                    ),
+                    halt_kind="blocked",
+                )
+            ]
         if tstatus in TASK_DECLARE:
             return [
                 _item_for_step(
@@ -408,7 +531,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     path=rel,
                     task=tid,
                     task_path=_rel(product_root, tfile),
-                    reason=f"Task {tid} status '{tstatus}'",
+                    reason=_declare_reason(change_path, rel, tid, tstatus),
                 )
             ], []
         if tstatus in TASK_IMPLEMENT and status not in DECLARE_PHASE:
@@ -499,6 +622,37 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     "(check-gate, then advance --gate implemented)",
                 )
             ], []
+
+    if status in {"implemented", "verifying"}:
+        from deltafuse.core.fsm import verification_gap
+
+        gap = verification_gap(change_path)
+        if gap is not None:
+            # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2
+            # chose Verify seven times). The human answers it.
+            route = (
+                f"The human reopens it for Analyze with `deltafuse decide {rel} --gap {gap} "
+                '--status reopened --note "<what the gap names>"`'
+                if gap == "spec-gap"
+                else "The Core has no route back for this gap yet; the human settles it"
+            )
+            return [], [
+                WorkItem(
+                    kind="blocked",
+                    step=None,
+                    skill=None,
+                    gate=None,
+                    change_id=change_id,
+                    path=rel,
+                    task=None,
+                    task_path=None,
+                    reason=(
+                        f"Change {change_id}: Verify recorded the gap '{gap}' in verification.md, "
+                        f"so it does not converge and is not repaired silently. {route}"
+                    ),
+                    halt_kind="blocked",
+                )
+            ]
 
     if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
@@ -788,7 +942,10 @@ def build_halt(
         }
     return {
         "kind": "done",
-        "prompt": "No ready work. Merge/push is a Human Gate. Do not git push.",
+        "prompt": (
+            "No ready work and no new intake file is waiting. Do not start a Change unless the "
+            "human already stated one in this chat. Merge/push is a Human Gate. Do not git push."
+        ),
         "choices": [_choice("inspect", "Stop", None)],
     }
 
@@ -882,11 +1039,16 @@ _EVIDENCE_HINTS: dict[str, list[tuple[str, str]]] = {
 }
 
 
-def format_human_guide(item: WorkItem) -> str:
+def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
     """Checklist from the step contract. Same Change files as llm/script; not a second process."""
     if item.kind != "ready" or not item.step or item.step not in PHASE_CONTRACTS:
         return format_human_blocked_item(item)
-    phase = PHASE_CONTRACTS[item.step]
+    from deltafuse.core.context import phase_allowed_paths
+
+    phase = {
+        "allowed_read": phase_allowed_paths(item.step, "read", product_root),
+        "allowed_write": phase_allowed_paths(item.step, "write", product_root),
+    }
     change_dir = item.path or "<change-dir>"
     lines = [
         f"# {item.step}  {item.change_id or ''}  {item.task or ''}".rstrip(),

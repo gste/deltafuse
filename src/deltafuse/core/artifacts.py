@@ -212,10 +212,13 @@ class ArtifactService:
         descriptor = self.registry.get_descriptor(kind)
         allowed_fields = descriptor.get("creatable_semantic_fields") or descriptor.get("allowed_semantic_fields") or []
 
+        # cls-g31s-m02 (2026-10-04): told only that 'kind' was not allowed, the Worker sent
+        # the same fields nine times; the refusal now names the fields that are.
         for k in semantic_payload.keys():
             if allowed_fields and k not in allowed_fields:
                 raise ArtifactServiceError(
-                    f"Field '{k}' is not an allowed semantic field for kind '{kind}' create",
+                    f"Field '{k}' is not an allowed semantic field for kind '{kind}' create. "
+                    f"Allowed fields: {', '.join(sorted(allowed_fields))}.",
                     code="unexposed_field",
                 )
 

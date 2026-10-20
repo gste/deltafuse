@@ -37,6 +37,7 @@ REMOVED_PROFILES = {
     ),
 }
 TERMINAL_STATUSES = frozenset({"accepted", "rejected"})
+TASK_VERDICTS = frozenset({"cancelled", "reopened"})
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "
     "protect against a forged journal (the Human Gate password guards the "
@@ -121,9 +122,15 @@ def record_receipt(
     `human_check` records how the Core knew a human answered: "password" when
     the Human Gate password was verified, "none" when the product has none.
     """
-    if kind not in {"decision", "spec"}:
+    if kind not in {"decision", "spec", "task", "gap"}:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
-    if status not in {"accepted", "rejected"}:
+    # A task's Human Gate verdicts answer its `blocked` halt: cancelling drops what it
+    # promised (ref-m02-338 observation, 2026-10-04); reopening sends it back to Declare
+    # because its declared oracle was wrong (ref-m01-352, 2026-10-08).
+    verdicts = (
+        TASK_VERDICTS if kind == "task" else {"reopened"} if kind == "gap" else {"accepted", "rejected"}
+    )
+    if status not in verdicts:
         raise ReceiptError(f"unknown gate verdict: {status!r}")
 
     root = Path(product_root)
@@ -290,4 +297,23 @@ def has_click(
             return True
         if want_path and event.get("path") == want_path:
             return True
+    return False
+
+
+def task_reopened(product_root: Path, *, change: str | None, task: str) -> bool:
+    """True when the human's latest verdict on this task is `reopened`.
+
+    A reopened task is declared again after its Change has left Declare; the Core lets
+    it, and only it, do that. The verdict counts only from an intact journal entry.
+    """
+    for entry in reversed(load_receipts(Path(product_root))):
+        if entry.get("kind") != "task" or entry.get("id") != task:
+            continue
+        if change is not None and entry.get("change") != change:
+            continue
+        if entry.get("receipt_version") is not None and (
+            not entry.get("chain_hash") or _chain_hash(entry) != entry["chain_hash"]
+        ):
+            continue
+        return entry.get("status") == "reopened"
     return False

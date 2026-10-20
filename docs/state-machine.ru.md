@@ -89,7 +89,7 @@ Change может быть переведён в терминальное сос
 | `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
 | `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
 | `declared` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
-| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. На `route: code` Green отвечает на Red, который действительно падал: Green поверх `already-green` Red не доказывает дельту и гейт не закрывает. |
+| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. На `route: code` Green отвечает на Red, который действительно падал: Green поверх `already-green` Red не доказывает дельту и гейт не закрывает. Задачу с `already-green` Red и `requirement_delta: none` уже выполнила работа вокруг неё: Worker закрывает её как `superseded` (`deltafuse state --task <id> --status superseded`, ядро разрешает только в этом случае; тест остаётся регрессионным). Задача, обещавшая дельту требований, останавливается до решения человека. |
 | `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
 | `verifying` | `converged` | Запущен `/verify`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
 | `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |
@@ -146,7 +146,8 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 - `implemented`: тест и регрессии прошли успешно (Green evidence);
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
 - `blocked`: обнаружено внешнее препятствие или ошибка в контракте;
-- `cancelled`: задача отменена по решению архитектора/разработчика;
+- `cancelled`: задача отменена — только решением человека, не воркера: `deltafuse decide <change-dir> --task <id> --status cancelled` (пароль Human Gate, если задан; квитанция вида `task` в журнале). `deltafuse state` такой переход отказывает;
+- из `blocked` выходит только человек: отменой (выше) или переоткрытием `deltafuse decide <change-dir> --task <id> --status reopened [--note "<почему>"]` — доказательства задачи переносятся в `reopened/<task>.<n>/`, её продуктовые файлы возвращаются к копиям, снятым гейтом `declaring`, в журнал пишется квитанция `task`/`reopened`, задача возвращается в `pending`, и только её можно объявить заново, когда Change уже `declared` или `implementing`;
 - `superseded`: заменена другой задачей.
 
 Задачи не удаляются после выполнения. Они сохраняются в пакете Change для сохранения полной истории и трассируемости.

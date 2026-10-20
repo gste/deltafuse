@@ -32,6 +32,7 @@ deltafuse leash <product-root> --file src/foo.py --file docs/changes/CHG-001/req
 | Ready Worker step | `halt` is JSON `null`, `envelope` validates, `write` is non-empty. |
 | Human Gate / nothing to run | `envelope` is JSON `null`. Product paths in the diff are orphans and fail. Exempt paths (`docs/intake/**`, `AGENTS.md`, `.deltafuse/**`) still skip. |
 | Orphan product edit | `src/**`, `tests/**`, ops/deploy MUST be covered by a ready Change envelope. `docs/spec/**` MUST after `project.baseline: accepted`. Docs/ops route MUST NOT cover `src/**`. |
+| Code roots | `src/**` and `tests/**` above stand for the product's code roots: `workflow.code_roots` in `.deltafuse/config.yaml` when set (for example `[svc/src/**]`), else those two. The hook and `deltafuse leash` judge orphan product edits and the Declare/Implement envelopes against the same roots `deltafuse next` puts in `envelope.read` and `envelope.write`. |
 | Intake `write` | MUST NOT include `src/**`. |
 | Declare/Implement | Declare keeps `tests/**` and Red evidence globs, not `src/**`. Implement keeps `tests/**` and shrinks product paths to task `allowed_paths`. |
 | `leash` side effects | Zero product writes. Diagnostics on stderr unless `--json`. |

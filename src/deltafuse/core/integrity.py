@@ -124,14 +124,26 @@ def path_is_inside_repo(path: Path, repo_root: Path) -> bool:
     return resolved == repo or resolved.is_relative_to(repo)
 
 
+# A requirement id at the start of a heading (`## US-001 Stats view shape`,
+# `### REQ-RL-01 Capacity`): an uppercase prefix and at least one `-` segment.
+_HEADING_ID = re.compile(r"^#{1,6}[ \t]+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b", re.MULTILINE)
+
+
 def find_spec_anchors(spec_file_path: Path) -> set[str]:
-    """Extracts anchor tags and headers from a specification markdown file."""
+    """Extracts anchor tags and requirement ids from a specification markdown file.
+
+    A heading that starts with a requirement id makes that id an anchor, whatever
+    its prefix: a capability names its own requirements (`US-001`, `RP-001`).
+    Until run c336f-m23 only REQ-/SC-/POL- counted, which no skill said, and a
+    Worker that followed its own spec's numbering was refused 14 times in
+    Specify. REQ-/SC-/POL- ids anywhere in the text still count, as before.
+    """
     if not spec_file_path.is_file():
         return set()
     text = spec_file_path.read_text(encoding="utf-8")
     html_anchors = re.findall(r"<(?:a|span)[^>]*(?:id|name)=['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
     header_anchors = re.findall(r"\b((?:REQ|SC|POL)-[A-Z0-9_-]+)\b", text)
-    return set(html_anchors) | set(header_anchors)
+    return set(html_anchors) | set(header_anchors) | set(_HEADING_ID.findall(text))
 
 
 def draft_spec_files(repo_root: Path) -> frozenset[str]:
@@ -185,7 +197,10 @@ def validate_spec_ref(
     if anchor:
         anchors = find_spec_anchors(file_path)
         if anchor not in anchors:
-            return f"Anchor '#{anchor}' not found in specification file '{file_part}'"
+            # Name what is there: a refusal that only says "not found" left the
+            # Worker guessing slug forms (c336f-m23).
+            have = ", ".join(sorted(anchors)[:12]) or "none - start a heading with an id, e.g. `## REQ-01 Title`"
+            return f"Anchor '#{anchor}' not found in specification file '{file_part}'; anchors in this file: {have}"
 
     return None
 

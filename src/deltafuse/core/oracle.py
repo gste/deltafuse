@@ -7,7 +7,8 @@ comments or docstrings): `body` - the definition with its decorators, and any
 redefinition; `context` - within the test's own module, its class, what it
 refers to by name, transitively, and what pytest applies unnamed (`pytestmark`,
 hooks, autouse fixtures, module-level code). `files` freezes whole every
-conftest.py on the path to the product root (absent ones too) and every other
+existing conftest.py on the path to the product root (one added later is
+found again from the test's path, so absent ones are not listed) and every other
 declared Python module without tests (by AST), Java, data and unparseable files
 (by bytes); `config` the pytest config files on that path (by bytes). Names are
 not followed into other modules. Run-time effects are the isolated run's job.
@@ -282,8 +283,12 @@ def freeze_red_oracle(repo_root: Path | str, changed_paths: Iterable[str], faile
         tests += [{"path": rel, "test": key, "body": _sha("\n".join(body)), "context": _context(units, context, refs)}
                   for key, body, context, refs in found]
     test_files = sorted({t["path"] for t in tests})
+    # Only conftest files that exist: the candidates follow from the test's
+    # path, so an absent one needs no entry - and a listed path that is not on
+    # disk is one the Worker goes to look for (T6, run c336b-m01).
     for rel in _on_path(test_files, "conftest.py"):
-        whole.setdefault(rel, "ast")
+        if (root / rel).is_file():
+            whole.setdefault(rel, "ast")
     files = [{"path": rel, "form": form, "sha256": _file_digest(root, rel, form)} for rel, form in sorted(whole.items())]
     record: dict[str, Any] = {"version": FORMAT_VERSION, "tests": tests, "files": files}
     if test_files:
@@ -326,6 +331,9 @@ def red_oracle_changes(repo_root: Path | str, recorded: dict[str, Any]) -> list[
             changes.append(f"what {rel}::{test} relies on changed (in {rel}: a fixture, helper, import, "
                            "its class, or module-level code)")
     test_files = sorted({str(e.get("path")) for e in recorded.get("tests") or []})
+    listed = {str(e.get("path")) for e in recorded.get("files") or []}
+    changes += [f"{rel} was added (a conftest.py on the frozen test's path, frozen whole)"
+                for rel in _on_path(test_files, "conftest.py") if rel not in listed and (root / rel).is_file()]
     if "config" in recorded and _config_digest(root, test_files) != recorded["config"]:
         changes.append("the pytest configuration on the frozen tests' path changed ("
                        + ", ".join(CONFIG_FILES) + " between the product root and the test)")

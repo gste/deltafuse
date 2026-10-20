@@ -199,3 +199,23 @@ def test_aw38_verify_product_lock_rejects_missing_and_malformed_fields(tmp_path,
     with pytest.raises(ArtifactRegistryError) as exc:
         reg.verify_product_lock(tmp_path)
     assert "unavailable" in str(exc.value)
+
+
+def test_the_string_null_as_design_ref_is_refused_with_the_fix(tmp_path: Path):
+    """Gemma 31B shakedown cls-g31p3-m02 (2026-10-04): design_ref "null" (a string) four
+    decompose steps running. The value is still refused; the refusal now names the fix."""
+    registry = ArtifactRegistry()
+    payload = {
+        "id": "TASK-001", "change": "CHG-001", "slice": "SLICE-01", "kind": "feature",
+        "status": "pending", "depends_on": [], "requirement_delta": "added", "spec_refs": [],
+        "design_ref": "null", "allowed_paths": ["src/auth.py"], "forbidden_paths": [],
+        "context_budget": {"max_tokens": 16000, "max_files": 24},
+    }
+    res = registry.validate_references("task", payload, change_dir=tmp_path)
+    design = [d for d in res.diagnostics if d.path == "/design_ref"]
+    assert design and not res.valid
+    assert 'not the string "null"' in design[0].message
+    payload["design_ref"] = "docs/design/missing.md"
+    other = [d for d in registry.validate_references("task", payload, change_dir=tmp_path).diagnostics
+             if d.path == "/design_ref"]
+    assert other and "not the string" not in other[0].message

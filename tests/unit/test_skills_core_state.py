@@ -59,8 +59,8 @@ SKILL_CORE_CONTRACT = {
     "analyze": ("analyzed", 0),
     "specify": ("specified", 2),  # slice state + Change in-flight state
     "decompose": ("decomposed", 0),
-    "declare": ("declaring", 1),  # task -> declared
-    "implement": ("implemented", 1),  # task -> implemented
+    "declare": ("declaring", 2),  # task -> declared; an already-green task -> superseded
+    "implement": ("implemented", 2),  # task -> implemented; a wrong declared oracle -> blocked
     "verify": ("converged", 1),  # task -> verified
 }
 

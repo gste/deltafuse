@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -12,8 +13,12 @@ import yaml
 
 from deltafuse.core.context import (
     DEFAULT_CHANGE_ROUTE,
+    DEFAULT_CODE_WRITE_GLOBS,
     PHASE_CONTRACTS,
+    code_write_globs,
+    configured_code_roots,
     load_change_route,
+    product_root_of,
     matches_contract_globs,
     path_is_listed,
     phase_allowed_paths,
@@ -184,7 +189,7 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     if item.allowed_write:
         writes = list(item.allowed_write)
     elif step in PHASE_CONTRACTS:
-        writes = list(phase_write_globs(step, DEFAULT_CHANGE_ROUTE))
+        writes = list(phase_write_globs(step, DEFAULT_CHANGE_ROUTE, product_root))
     else:
         writes = []
     change_dir = _change_dir(product_root, item)
@@ -193,10 +198,10 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         route, _ = load_change_route(change_dir)
         route = route or DEFAULT_CHANGE_ROUTE
         if not item.allowed_write:
-            writes = list(phase_write_globs(step, route))
+            writes = list(phase_write_globs(step, route, product_root))
     allowed_paths, forbidden = _task_path_lists(product_root, item)
     if step in {"declare", "implement"} and allowed_paths:
-        phase = phase_write_globs(step, route)
+        phase = phase_write_globs(step, route, product_root)
         # Declare writes tests plus the product stub its task declared: a
         # compiled language cannot compile a test against a symbol that does not
         # exist yet, so the throwing stub has to be on disk before Red can be
@@ -208,7 +213,7 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         if step == "declare":
             product_phase = [
                 glob
-                for glob in phase_write_globs("implement", route)
+                for glob in phase_write_globs("implement", route, product_root)
                 if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
             ]
         change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
@@ -222,11 +227,11 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     return _unique(_minus_forbidden(writes, forbidden))
 
 
-def envelope_read_globs(item: WorkItem) -> list[str]:
+def envelope_read_globs(item: WorkItem, product_root: Path | None = None) -> list[str]:
     if item.allowed_read:
         return _unique(list(item.allowed_read))
     if item.step:
-        return _unique(phase_allowed_paths(item.step, "read"))
+        return _unique(phase_allowed_paths(item.step, "read", product_root))
     return []
 
 
@@ -239,7 +244,7 @@ def build_envelope(item: WorkItem | None, product_root: Path) -> dict[str, Any] 
         "change": item.change_id,
         "task": item.task,
         "write": envelope_write_globs(item, product_root),
-        "read": envelope_read_globs(item),
+        "read": envelope_read_globs(item, product_root),
     }
 
 
@@ -259,9 +264,80 @@ def is_exempt_path(rel_path: str) -> bool:
     return False
 
 
-def is_product_path(rel_path: str, *, baseline: str = "draft") -> bool:
+REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
+_REOPEN_ARCHIVE = re.compile(r"^docs/changes/[^/]+/reopened/(?P<task>[^/]+)\.\d+/(?P<name>[^/]+)$")
+
+
+def reopen_archive_path(product_root: Path, rel_path: str) -> bool:
+    """A file `deltafuse decide --status reopened` writes, for a task the journal says was reopened.
+
+    The archive lies outside every step's envelope because the human, not the Worker, writes
+    it (ref-m01-352 dry run, 2026-10-08: the implemented gate's leash named reopen.yaml).
+    """
     rel = posix_relpath(rel_path)
-    if matches_contract_globs(rel, CODE_WRITE_GLOBS):
+    gap = _GAP_ARCHIVE.match(rel)
+    if gap is not None:
+        # `decide --gap` archives the verification here; its gap-reopen receipt names the folder.
+        name = gap["name"]
+        allowed = name in GAP_ARCHIVE_FILES or name.startswith("evidence/")
+        return allowed and _gap_archive_receipted(product_root, gap["dir"])
+    match = _REOPEN_ARCHIVE.match(rel)
+    if not match or match["name"] not in REOPEN_ARCHIVE_FILES:
+        return False
+    from deltafuse.core.gate_receipts import has_click
+
+    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+
+
+GAP_ARCHIVE_FILES = frozenset({"reopen.yaml", "verification.md", "run.yaml"})
+_GAP_ARCHIVE = re.compile(
+    r"^(?P<dir>docs/changes/[^/]+/reopened/verify\.\d+)/"
+    r"(?P<name>[^/]+|evidence/(?:green|regression)/[^/]+\.yaml)$"
+)
+
+
+def _gap_archive_receipted(product_root: Path, archive: str) -> bool:
+    journal = Path(product_root) / ".deltafuse" / "transitions.jsonl"
+    try:
+        lines = journal.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("kind") == "gap-reopen" and row.get("archive") == archive:
+            return True
+    return False
+
+
+_RED_RECORD = re.compile(r"^docs/changes/[^/]+/evidence/red/(?P<task>[^/]+)\.yaml$")
+
+
+def reopened_red_path(product_root: Path, rel_path: str) -> bool:
+    """The Red record of a task the human reopened: Declare writes it after the Change left Declare."""
+    match = _RED_RECORD.match(posix_relpath(rel_path))
+    if not match:
+        return False
+    from deltafuse.core.gate_receipts import has_click
+
+    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+
+
+def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:
+    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files."""
+    if configured_code_roots(product_root) is None:
+        return CODE_WRITE_GLOBS
+    ops = tuple(g for g in CODE_WRITE_GLOBS if g not in DEFAULT_CODE_WRITE_GLOBS)
+    return code_write_globs(product_root) + ops
+
+
+def is_product_path(
+    rel_path: str, *, baseline: str = "draft", product_root: Path | None = None
+) -> bool:
+    rel = posix_relpath(rel_path)
+    if matches_contract_globs(rel, code_and_ops_globs(product_root)):
         return True
     if baseline == "accepted" and matches_contract_globs(rel, SPEC_WRITE_GLOBS):
         return True
@@ -406,20 +482,11 @@ DEFAULT_CAPABILITY_ROOTS = ("src/**", "tests/**", "docs/spec/**")
 
 
 def capability_roots(product_root: Path | None) -> tuple[str, ...]:
-    """Capability catalog roots (DF3-006): config workflow.code_roots wins."""
-    if product_root is None:
+    """What a task may write when its slice names no bounds (DF3-006): the code roots
+    (`workflow.code_roots` when set, see code_write_globs) and the specification."""
+    if configured_code_roots(product_root) is None:
         return DEFAULT_CAPABILITY_ROOTS
-    try:
-        data = yaml.safe_load(
-            (product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
-        ) or {}
-    except Exception:
-        return DEFAULT_CAPABILITY_ROOTS
-    workflow = data.get("workflow") if isinstance(data, dict) else None
-    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
-    if isinstance(roots, list) and roots:
-        return tuple(str(r) for r in roots)
-    return DEFAULT_CAPABILITY_ROOTS
+    return code_write_globs(product_root) + ("docs/spec/**",)
 
 
 def _glob_covers(task_glob: str, slice_glob: str) -> bool:
@@ -462,13 +529,14 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     # that could widen it is outside the decompose envelope. The route's own
     # write globs are already the widest envelope it has.
     route, _ = load_change_route(change_path)
+    product_root = product_root_of(change_path)
     route_globs = [
         glob
         for phase in ("declare", "implement")
-        for glob in phase_write_globs(phase, route or DEFAULT_CHANGE_ROUTE)
+        for glob in phase_write_globs(phase, route or DEFAULT_CHANGE_ROUTE, product_root)
         if not glob.replace("\\", "/").startswith("docs/changes")
     ]
-    default_bounds = list(dict.fromkeys(list(DEFAULT_CAPABILITY_ROOTS) + route_globs))
+    default_bounds = list(dict.fromkeys(list(capability_roots(product_root)) + route_globs))
 
     errors: list[str] = []
     for tf in sorted(tasks_dir.glob("*.md")):
@@ -491,6 +559,78 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
                     f"Task {tid}: allowed_paths '{task_glob}' is outside what this Change may "
                     f"write; use paths under {', '.join(bounds)}"
                 )
+    return errors
+
+
+def unreachable_green_errors(change_path: Path) -> list[str]:
+    """A task that promises a requirement delta must be able to turn its Red green.
+
+    Reference run ref-m03-345 (qwen3.8-27b, M03, 2026-10-07): Decompose split "write the
+    tests" (TASK-001, allowed_paths tests/ only, src/** forbidden) from "implement" (TASK-002,
+    depending on TASK-001). TASK-001's Red could never pass inside its own envelope, and it ran
+    first: the reference proved it and halted. An older run (c336b-m01) closed the same split
+    only by writing src/ outside the task's allowed_paths. A delta task that may change no
+    product file is fine only after a task that may - so it must depend on one.
+    """
+    from deltafuse.core.frontmatter import parse_frontmatter
+
+    route, _ = load_change_route(change_path)
+    if (route or DEFAULT_CHANGE_ROUTE) != "code":
+        return []
+    tasks_dir = change_path / "tasks"
+    if not tasks_dir.is_dir():
+        return []
+    product_root = product_root_of(change_path)
+    roots = configured_code_roots(product_root)
+    if roots:
+        # A module keeps code and tests under one root (svc/src/**): the root is the product.
+        product_globs = list(roots)
+    else:
+        declare = set(phase_write_globs("declare", "code"))
+        product_globs = [
+            g for g in phase_write_globs("implement", "code")
+            if g not in declare and not g.replace("\\", "/").startswith("docs/")
+        ]
+    tasks: dict[str, dict] = {}
+    for tf in sorted(tasks_dir.glob("*.md")):
+        try:
+            meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(meta, dict):
+            tasks[str(meta.get("id") or tf.stem)] = meta
+
+    def owns_product(tid: str) -> bool:
+        paths = [str(p) for p in tasks.get(tid, {}).get("allowed_paths") or []]
+        return any(_glob_covers(p, g) for p in paths for g in product_globs)
+
+    def depends_on_product(tid: str) -> bool:
+        seen: set[str] = set()
+        todo = [str(d) for d in tasks.get(tid, {}).get("depends_on") or []]
+        while todo:
+            dep = todo.pop()
+            if dep in seen or dep not in tasks:
+                continue
+            seen.add(dep)
+            if owns_product(dep):
+                return True
+            todo.extend(str(d) for d in tasks[dep].get("depends_on") or [])
+        return False
+
+    errors: list[str] = []
+    for tid, meta in tasks.items():
+        delta = str(meta.get("requirement_delta") or "").strip().lower()
+        if delta in {"", "none"} or meta.get("status") in {"cancelled", "superseded"}:
+            continue
+        if owns_product(tid) or depends_on_product(tid):
+            continue
+        paths = [str(p) for p in meta.get("allowed_paths") or []]
+        errors.append(
+            f"Task {tid} promises requirement_delta '{delta}' but may change no product file "
+            f"(allowed_paths {paths}) and depends on no task that may: its Red tests could never "
+            "turn Green. Give it the product paths its tests need, merge it with the task that "
+            "changes the product, or make it depend on that task"
+        )
     return errors
 
 
@@ -865,13 +1005,19 @@ def check_paths(
                 for reason in status_reasons
             )
             continue
-        if is_product_path(raw, baseline=baseline):
+        if is_product_path(raw, baseline=baseline, product_root=product_root):
             if not env_list:
                 errors.append(f"leash: '{raw}' is not covered by any Change")
             else:
                 errors.append(
                     f"leash: '{raw}' is outside the {step_label} write envelope{phase_hint}"
                 )
+            continue
+        if product_root is not None and reopen_archive_path(product_root, raw):
+            continue  # written by the human's `deltafuse decide --status reopened`
+        if product_root is not None and reopened_red_path(product_root, raw):
+            # a reopened task is declared again past Declare; its Red is still the Core's
+            errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
         if is_change_artifact(raw) and env_list:
             # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a
