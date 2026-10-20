@@ -13,8 +13,12 @@ import yaml
 
 from deltafuse.core.context import (
     DEFAULT_CHANGE_ROUTE,
+    DEFAULT_CODE_WRITE_GLOBS,
     PHASE_CONTRACTS,
+    code_write_globs,
+    configured_code_roots,
     load_change_route,
+    product_root_of,
     matches_contract_globs,
     path_is_listed,
     phase_allowed_paths,
@@ -185,7 +189,7 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     if item.allowed_write:
         writes = list(item.allowed_write)
     elif step in PHASE_CONTRACTS:
-        writes = list(phase_write_globs(step, DEFAULT_CHANGE_ROUTE))
+        writes = list(phase_write_globs(step, DEFAULT_CHANGE_ROUTE, product_root))
     else:
         writes = []
     change_dir = _change_dir(product_root, item)
@@ -194,10 +198,10 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         route, _ = load_change_route(change_dir)
         route = route or DEFAULT_CHANGE_ROUTE
         if not item.allowed_write:
-            writes = list(phase_write_globs(step, route))
+            writes = list(phase_write_globs(step, route, product_root))
     allowed_paths, forbidden = _task_path_lists(product_root, item)
     if step in {"declare", "implement"} and allowed_paths:
-        phase = phase_write_globs(step, route)
+        phase = phase_write_globs(step, route, product_root)
         # Declare writes tests plus the product stub its task declared: a
         # compiled language cannot compile a test against a symbol that does not
         # exist yet, so the throwing stub has to be on disk before Red can be
@@ -209,7 +213,7 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         if step == "declare":
             product_phase = [
                 glob
-                for glob in phase_write_globs("implement", route)
+                for glob in phase_write_globs("implement", route, product_root)
                 if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
             ]
         change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
@@ -223,11 +227,11 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     return _unique(_minus_forbidden(writes, forbidden))
 
 
-def envelope_read_globs(item: WorkItem) -> list[str]:
+def envelope_read_globs(item: WorkItem, product_root: Path | None = None) -> list[str]:
     if item.allowed_read:
         return _unique(list(item.allowed_read))
     if item.step:
-        return _unique(phase_allowed_paths(item.step, "read"))
+        return _unique(phase_allowed_paths(item.step, "read", product_root))
     return []
 
 
@@ -240,7 +244,7 @@ def build_envelope(item: WorkItem | None, product_root: Path) -> dict[str, Any] 
         "change": item.change_id,
         "task": item.task,
         "write": envelope_write_globs(item, product_root),
-        "read": envelope_read_globs(item),
+        "read": envelope_read_globs(item, product_root),
     }
 
 
@@ -321,9 +325,19 @@ def reopened_red_path(product_root: Path, rel_path: str) -> bool:
     return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
 
 
-def is_product_path(rel_path: str, *, baseline: str = "draft") -> bool:
+def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:
+    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files."""
+    if configured_code_roots(product_root) is None:
+        return CODE_WRITE_GLOBS
+    ops = tuple(g for g in CODE_WRITE_GLOBS if g not in DEFAULT_CODE_WRITE_GLOBS)
+    return code_write_globs(product_root) + ops
+
+
+def is_product_path(
+    rel_path: str, *, baseline: str = "draft", product_root: Path | None = None
+) -> bool:
     rel = posix_relpath(rel_path)
-    if matches_contract_globs(rel, CODE_WRITE_GLOBS):
+    if matches_contract_globs(rel, code_and_ops_globs(product_root)):
         return True
     if baseline == "accepted" and matches_contract_globs(rel, SPEC_WRITE_GLOBS):
         return True
@@ -468,20 +482,11 @@ DEFAULT_CAPABILITY_ROOTS = ("src/**", "tests/**", "docs/spec/**")
 
 
 def capability_roots(product_root: Path | None) -> tuple[str, ...]:
-    """Capability catalog roots (DF3-006): config workflow.code_roots wins."""
-    if product_root is None:
+    """What a task may write when its slice names no bounds (DF3-006): the code roots
+    (`workflow.code_roots` when set, see code_write_globs) and the specification."""
+    if configured_code_roots(product_root) is None:
         return DEFAULT_CAPABILITY_ROOTS
-    try:
-        data = yaml.safe_load(
-            (product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
-        ) or {}
-    except Exception:
-        return DEFAULT_CAPABILITY_ROOTS
-    workflow = data.get("workflow") if isinstance(data, dict) else None
-    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
-    if isinstance(roots, list) and roots:
-        return tuple(str(r) for r in roots)
-    return DEFAULT_CAPABILITY_ROOTS
+    return code_write_globs(product_root) + ("docs/spec/**",)
 
 
 def _glob_covers(task_glob: str, slice_glob: str) -> bool:
@@ -524,13 +529,14 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     # that could widen it is outside the decompose envelope. The route's own
     # write globs are already the widest envelope it has.
     route, _ = load_change_route(change_path)
+    product_root = product_root_of(change_path)
     route_globs = [
         glob
         for phase in ("declare", "implement")
-        for glob in phase_write_globs(phase, route or DEFAULT_CHANGE_ROUTE)
+        for glob in phase_write_globs(phase, route or DEFAULT_CHANGE_ROUTE, product_root)
         if not glob.replace("\\", "/").startswith("docs/changes")
     ]
-    default_bounds = list(dict.fromkeys(list(DEFAULT_CAPABILITY_ROOTS) + route_globs))
+    default_bounds = list(dict.fromkeys(list(capability_roots(product_root)) + route_globs))
 
     errors: list[str] = []
     for tf in sorted(tasks_dir.glob("*.md")):
@@ -574,11 +580,17 @@ def unreachable_green_errors(change_path: Path) -> list[str]:
     tasks_dir = change_path / "tasks"
     if not tasks_dir.is_dir():
         return []
-    declare = set(phase_write_globs("declare", "code"))
-    product_globs = [
-        g for g in phase_write_globs("implement", "code")
-        if g not in declare and not g.replace("\\", "/").startswith("docs/")
-    ]
+    product_root = product_root_of(change_path)
+    roots = configured_code_roots(product_root)
+    if roots:
+        # A module keeps code and tests under one root (svc/src/**): the root is the product.
+        product_globs = list(roots)
+    else:
+        declare = set(phase_write_globs("declare", "code"))
+        product_globs = [
+            g for g in phase_write_globs("implement", "code")
+            if g not in declare and not g.replace("\\", "/").startswith("docs/")
+        ]
     tasks: dict[str, dict] = {}
     for tf in sorted(tasks_dir.glob("*.md")):
         try:
@@ -993,7 +1005,7 @@ def check_paths(
                 for reason in status_reasons
             )
             continue
-        if is_product_path(raw, baseline=baseline):
+        if is_product_path(raw, baseline=baseline, product_root=product_root):
             if not env_list:
                 errors.append(f"leash: '{raw}' is not covered by any Change")
             else:

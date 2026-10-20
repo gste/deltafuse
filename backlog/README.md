@@ -14,6 +14,17 @@
   владельца, как только его подкаталоги нужны другой capability (Markdown: 13
   из 35 файлов; на JVM это родительские пакеты).
 
+- [x] [q6: пути записи Change — из `workflow.code_roots`](roadmap/q6-fuse-back/CHANGE-WRITE-PATHS.md) —
+  постановка 2026-10-08, решение владельца: делать. На маршруте `code` задача пишет только корневые
+  `src/**` и `tests/**`, а объявленный `workflow.code_roots` не действует: Change на многомодульном
+  Maven (J03) стоит на `decomposed`.
+- [ ] [q6: Red записывает незакоммиченную правку спецификации](roadmap/q6-fuse-back/RED-UNCOMMITTED-SPEC.md) —
+  наблюдение 2026-10-08: `evidence` принимает Red, гейт `declaring` его отвергает, отмотать может только
+  человек (`reopened`).
+- [ ] [q6: `deltafuse evidence` не находит `mvn` на Windows](roadmap/q6-fuse-back/EVIDENCE-RUNNER-WINDOWS.md) —
+  постановка 2026-10-08: `subprocess.run` без `shutil.which`, `mvn.cmd` не находится; Red/Green для Java на
+  Windows — `fixture-error`.
+
 ## Прочее
 
 - [ ] Add python 3.15 support

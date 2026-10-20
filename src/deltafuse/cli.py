@@ -1044,7 +1044,7 @@ def _main(argv: list[str] | None = None) -> int:
             empty=selected is None,
         )
         guide = (
-            format_human_guide(selected)
+            format_human_guide(selected, load_product_root(target if only is None else only))
             if selected is not None
             else format_human_blocked_queue(queue)
         )

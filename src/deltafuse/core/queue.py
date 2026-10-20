@@ -1039,11 +1039,16 @@ _EVIDENCE_HINTS: dict[str, list[tuple[str, str]]] = {
 }
 
 
-def format_human_guide(item: WorkItem) -> str:
+def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
     """Checklist from the step contract. Same Change files as llm/script; not a second process."""
     if item.kind != "ready" or not item.step or item.step not in PHASE_CONTRACTS:
         return format_human_blocked_item(item)
-    phase = PHASE_CONTRACTS[item.step]
+    from deltafuse.core.context import phase_allowed_paths
+
+    phase = {
+        "allowed_read": phase_allowed_paths(item.step, "read", product_root),
+        "allowed_write": phase_allowed_paths(item.step, "write", product_root),
+    }
     change_dir = item.path or "<change-dir>"
     lines = [
         f"# {item.step}  {item.change_id or ''}  {item.task or ''}".rstrip(),

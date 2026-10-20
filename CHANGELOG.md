@@ -51,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loses that change too; its evidence goes stale and the queue sends it back to Implement (owner
   decision 2026-10-11). docs/workflow and docs/state-machine (en, ru) and the declare skill say so.
 
+- **`workflow.code_roots` sets where a `code`-route Change reads and writes (target 3.3.8).**
+  Fuse-Back on J03 (2026-10-08): in a multi-module Maven repository the code and tests live in
+  `<module>/src/main/java` and `<module>/src/test/java`, and every phase contract named only the
+  root `src/**` and `tests/**`, so no Change there passed `decomposed` ("outside the phase
+  contract", "outside what this Change may write", "may change no product file"). The key
+  `workflow.code_roots` was accepted by validate-config and read by nothing; **it now takes
+  effect.** `context.code_write_globs(product_root)` returns it, or `src/**`/`tests/**` when it is
+  unset, and those two globs are replaced by it in the Declare, Implement and Verify contracts
+  (`allowed_read` too, so the Worker sees the module's code), in `deltafuse next`'s envelope and
+  the human guide, in task `allowed_paths` at `decomposed`, in the bound of a slice with no target
+  paths (`leash.capability_roots`, no longer dead), in the reachable-Green check and in the leash's
+  orphan-product rule. A module keeps code and tests under one glob (`svc/src/**`); with the key
+  set, Declare's Red `changed_paths` are bounded by the roots rather than by `tests/**`. Without
+  the key nothing changes. docs/context-model and docs/contracts/leash (en, ru) describe it.
+
 - **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
   the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
   `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference

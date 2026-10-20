@@ -165,6 +165,15 @@ context:
 | **Implement** | Ровно одна задача, упавший тест, Red evidence, разрешённые файлы кода. | Другие задачи, нерелевантные файлы репозитория. | Минимальный код, `evidence/green/` |
 | **Verify** | `coverage.yaml`, summaries задач, evidence, дифы спеки и кода. | Загрузка полных файлов, не затронутых дельтой. | `verification.md`, перенос в архив |
 
+**Где Change маршрута `code` держит код: `workflow.code_roots`.** Declare, Implement и Verify читают и пишут `src/**` и `tests/**`, пока `.deltafuse/config.yaml` не задаёт `workflow.code_roots`; тогда эти два глоба заменяются заданными везде, где они ограничивают Change: в контрактах фаз (`allowed_read`/`allowed_write` и envelope `deltafuse next`), в `allowed_paths` задач на гейте `decomposed`, в границе слайса без целевых путей, в проверке достижимого Green и в правиле leash о «бесхозной» правке продукта. Код и тесты модуля лежат под одним глобом — Declare и Implement различаются задачами и `allowed_paths`, а не глобами. `docs/spec/**`, ops-глобы и маршруты `docs`/`ops` не меняются. Многомодульный Maven:
+
+```yaml
+workflow:
+  code_roots: [audit-service/src/**, document-service/src/**]
+```
+
+Расширять значение по умолчанию до `**/src/**` не нужно: это открыло бы любой вложенный `src` (vendored-код, примеры).
+
 ### Политики эскалации
 - **On missing context**: если агенту не хватает данных или спецификация неоднозначна — **Stop-and-Ask** (остановка и оформление вопроса/Decision вместо додумывания).
 - **On budget exceeded**: если контекст слайса превышает установленный лимит — **Split-Slice** (деление слайса на более мелкие изолированные части).
