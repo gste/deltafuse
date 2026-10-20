@@ -269,6 +269,7 @@ Author the minimal production code necessary to turn the failing test target gre
    `deltafuse evidence <change-dir> --phase green --task <task-id> --changed-path <rel> -- <command>`.
    Do not hand-write evidence YAML.
 3. Execute the capability/domain regression test suite the same way (`--phase regression`).
+   A run that ran no test is not evidence. For a runner whose report the Core reads (pytest, Maven, Gradle), `deltafuse evidence` and every gate refuse a passing Green, regression or verification run with no fresh report, or with a report naming no test that passed or failed. Gradle skips a test task whose inputs did not change since the last run (`> Task :test UP-TO-DATE`) and exits 0, which is the usual case right after Green; the refusal says so - run it with `--rerun` (`gradle test --rerun`, Gradle 7.6+; `--rerun-tasks` before that). A runner the Core has no report for (`npm test`, a script) is not judged this way.
 4. Transition task status to `implemented`.
 
 ### Gate

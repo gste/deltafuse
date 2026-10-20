@@ -27,9 +27,12 @@ from deltafuse.core.test_reports import (
     PASSED,
     SKIPPED,
     green_covers_red,
+    no_test_ran,
     read_report,
     red_is_authentic,
+    runner_family,
     wants_junit_flag,
+    worker_junit_path,
 )
 from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
@@ -541,6 +544,9 @@ def run_evidence(
         junit_path = report_dir / f"junit-{phase}-{task or 'run'}.xml"
         junit_path.unlink(missing_ok=True)
         run_argv = [*argv, f"--junitxml={junit_path}"]
+    elif runner_family(argv) == "pytest" and worker_junit_path(argv):
+        # The Worker named the report itself: read that one, if this run wrote it.
+        junit_path = repo_root / str(worker_junit_path(argv))
     started_at = time.time()
     try:
         proc = subprocess.run(
@@ -712,6 +718,10 @@ def run_evidence(
             )
     if phase in {"green", "regression"} and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
+    if phase in {"green", "regression", "verification"} and route == "code" and result == "passed":
+        nothing_ran = no_test_ran(argv, payload.get("tests"), log)
+        if nothing_ran:
+            errors.append(f"{phase} is not evidence: {nothing_ran}")
     if timed_out:
         errors.append(f"command timed out after {timeout}s")
 
