@@ -21,7 +21,7 @@ from deltafuse.core.evidence import run_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue, select_next
 from deltafuse.core.transitions import TransitionError, set_artifact_status
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_green_attempt
 
 
 def _decomposed(tmp_path: Path, repo_root: Path, *, delta: str) -> MockChangeBuilder:
@@ -107,6 +107,7 @@ def test_a_blocked_task_halts_the_queue_and_says_why(tmp_path: Path, repo_root: 
     unsatisfiable, and with no way back to declare the queue selected implement five times.
     Owner decision: the Worker marks such a task blocked and the human settles it."""
     builder = _decomposed(tmp_path, repo_root, delta="added")
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     queue = build_work_queue(tmp_path)
     assert not queue.ready

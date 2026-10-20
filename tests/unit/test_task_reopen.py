@@ -24,7 +24,7 @@ from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue
 from deltafuse.core.transitions import TransitionError, set_artifact_status
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_green_attempt
 
 WRONG_ORACLE = "def test_penalty():\n    assert 10 > 100  # still blocked at t=100\n"
 FIXED_ORACLE = "def test_penalty():\n    assert 10 < 100 and False  # fails until implemented\n"
@@ -64,6 +64,7 @@ def _blocked_in_implement(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     assert _red(tmp_path, builder, WRONG_ORACLE).payload["result"] == "expected-failure"
     set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     builder._core_advance("declaring")
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     return builder
 
@@ -89,7 +90,8 @@ def test_the_human_reopens_and_the_task_is_declared_again(tmp_path: Path, repo_r
     archive = change / "reopened" / "TASK-001.1"
     assert (archive / "red.yaml").is_file()
     info = yaml.safe_load((archive / "reopen.yaml").read_text(encoding="utf-8"))
-    assert info["archived"] == ["red.yaml"] and info["note"] == "t=100 contradicts a 10 s penalty"
+    # The failed Green the block rests on goes with the Red it answered.
+    assert info["archived"] == ["red.yaml", "green.yaml"] and info["note"] == "t=100 contradicts a 10 s penalty"
     assert gate_receipts.task_reopened(tmp_path, change="CHG-180", task="TASK-001")
 
     ready = build_work_queue(tmp_path).ready
@@ -111,6 +113,7 @@ def test_the_human_reopens_and_the_task_is_declared_again(tmp_path: Path, repo_r
     assert gate_errors and not any("reopened" in e for e in gate_errors), gate_errors
 
     # A second block and reopen archives under the next number.
+    record_green_attempt(change, "TASK-001")
     set_artifact_status(change, status="blocked", task_id="TASK-001")
     apply_decision(change, status="reopened", task="TASK-001")
     assert (change / "reopened" / "TASK-001.2" / "red.yaml").is_file()
@@ -169,6 +172,7 @@ def test_reopening_restores_the_tasks_product_files_as_declaring_found_them(tmp_
     }
 
     product.write_text("VALUE = 42  # Implement's attempt\n", encoding="utf-8")
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     result = apply_decision(builder.change_dir, status="reopened", task="TASK-001")
     assert product.read_text(encoding="utf-8") == "VALUE = 0\n"
@@ -189,6 +193,7 @@ def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
     set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     advance_change(builder.change_dir, "declaring")
     (snapshot_dir(tmp_path, "CHG-180") / "src" / "core.py").write_text("VALUE = 99\n", encoding="utf-8")
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     with pytest.raises(DecideError, match="missing or altered"):
         apply_decision(builder.change_dir, status="reopened", task="TASK-001")

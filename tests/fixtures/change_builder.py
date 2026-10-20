@@ -572,3 +572,64 @@ class MockChangeBuilder:
 
         self._core_advance("converged")
         return self
+
+
+def record_green_attempt(change_dir: Path, task_id: str = "TASK-001") -> Path:
+    """A failed Green the Core recorded: what the Worker needs before it may block the task.
+
+    A task with no Red record gets one first: a task is blocked on its declared oracle.
+
+    Written through the Core's own stamp (`write_stamped_evidence`), as `deltafuse evidence
+    --phase green` writes it when the frozen Red tests still fail.
+    """
+    from datetime import datetime, timezone
+
+    from deltafuse.core.evidence import write_stamped_evidence
+    from deltafuse.core.fsm import find_repo_root
+
+    change_dir = Path(change_dir)
+    change_id = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8"))["id"]
+    product_root = find_repo_root(change_dir)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    red = change_dir / "evidence" / "red" / f"{task_id}.yaml"
+    if not red.is_file():
+        # A task is blocked on its declared oracle, so it has one.
+        write_stamped_evidence(
+            red,
+            {
+                "schema_version": 3,
+                "change": change_id,
+                "task": task_id,
+                "phase": "red",
+                "timestamp": now,
+                "command": f"pytest tests/test_{task_id.lower()}.py",
+                "exit_code": 1,
+                "result": "expected-failure",
+                "failure_category": "behavioral-mismatch",
+                "summary": "Test failed as expected",
+                "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+                "spec_status": "unchanged",
+            },
+            product_root,
+        )
+    dest = change_dir / "evidence" / "green" / f"{task_id}.yaml"
+    write_stamped_evidence(
+        dest,
+        {
+            "schema_version": 3,
+            "change": change_id,
+            "task": task_id,
+            "phase": "green",
+            "timestamp": now,
+            "command": f"pytest tests/test_{task_id.lower()}.py",
+            "exit_code": 1,
+            "result": "failed",
+            "failure_category": "behavioral-mismatch",
+            "summary": "the frozen Red test still fails",
+            "changed_paths": [],
+            "spec_status": "unchanged",
+            "base_revision": compute_product_baseline_revision(product_root),
+        },
+        product_root,
+    )
+    return dest

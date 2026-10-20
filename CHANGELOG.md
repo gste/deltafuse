@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Worker blocks a task only after a Green attempt.** In the reference run ref-v338-a
+  (qwen3.8-27b, M01, 2026-10-20) the Worker, reading the history of a reopened task, ran `deltafuse
+  state --status blocked` "as a probe" before writing any code; the Core accepted it and the run
+  halted for the human over an oracle nobody had tried. `deltafuse state --task <id> --status blocked`
+  from the Worker is now refused until the task has a Green the Core recorded (stamped, no earlier
+  than the task's Red), and a task with no Red cannot be blocked at all; the refusal names the Green
+  step. The implement skill no longer says "do not record Green" for a wrong oracle: it says to record
+  Green against it as declared, and docs/workflow (en, ru) says the same. The human's decisions are
+  unchanged.
+
 - **A run that ran no test is not evidence.** Fuse-Back, Gradle J01 (2026-10-09): right after Green,
   regression ran the same `gradle --no-daemon test`, Gradle reported the test task `UP-TO-DATE` and ran
   nothing, and the record read `exit_code: 0`, `passed`, authentic; the `implemented` gate closed, and

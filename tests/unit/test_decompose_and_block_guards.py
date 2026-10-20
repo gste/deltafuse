@@ -19,7 +19,7 @@ from deltafuse.core.evidence import run_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.leash import unreachable_green_errors
 from deltafuse.core.transitions import TransitionError, set_artifact_status
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_green_attempt
 
 
 def _task(change: Path, tid: str, delta: str, paths: list[str], deps: list[str] | None = None) -> None:
@@ -65,7 +65,9 @@ def test_blocked_is_refused_while_the_frozen_oracle_is_changed(tmp_path: Path, r
 
     test_file.write_text("def test_feature():\n    assert 1 == 1\n", encoding="utf-8")
     with pytest.raises(TransitionError, match="restore the tests as Red froze them"):
+        record_green_attempt(builder.change_dir, "TASK-001")
         set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
 
     test_file.write_text("def test_feature():\n    assert 1 == 2\n", encoding="utf-8")
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
