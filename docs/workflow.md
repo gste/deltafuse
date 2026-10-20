@@ -247,6 +247,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - Red tests listed in `changed_paths` must not access `_`-prefixed product internals.
 - `changed_paths` stays inside the Declare write scope plus the product paths this task's `allowed_paths` declares (the compiled-language stub); any other `src/**` path is refused.
 - A test another task's Red froze is that task's oracle: `deltafuse evidence --phase red` refuses, before running anything, while any other task's frozen oracle no longer matches the tree; a task writes its own new test beside it.
+- The Core computes `changed_paths` from the git dirty set, and nothing need commit between steps: the `specified` gate records, in its transition receipt, the digest of every uncommitted `docs/spec/**` file it accepts, and evidence leaves such a file out while its bytes still match - Specify's output is not Red's, Green's or regression's change. A specification file changed after acceptance still counts, and `deltafuse evidence` names it at once, with the gate's own message, instead of the gate a step later.
 - `evidence/red/<task-id>.yaml` exists and validates against `evidence.schema.yaml`.
 - Task status transitioned to `declared`.
 - Hidden / independent suites are not replaced by the agent's tests.

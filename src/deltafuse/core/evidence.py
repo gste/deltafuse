@@ -180,6 +180,35 @@ def _runner_not_found(program: str, ex: OSError) -> str:
     return f"runner `{program}` not found on PATH ({ex})"
 
 
+_CONTRACT_GATES = {"red": ("declare", "declaring"), "green": ("implement", "implemented"),
+                   "regression": ("implement", "implemented")}
+
+
+def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) -> list[str]:
+    """The gate's changed_paths check on this record, now rather than at the gate.
+
+    Fuse-Back shopkit (2026-10-08): evidence said "authentic" and the `declaring` gate refused the
+    record a step later, when it could no longer be retaken.
+    """
+    if phase not in _CONTRACT_GATES:
+        return []
+    from deltafuse.core.fsm import _validate_evidence_changed_paths_contract
+
+    contract, gate = _CONTRACT_GATES[phase]
+    mine = f"{dest.name}:"
+    out: list[str] = []
+    for msg in _validate_evidence_changed_paths_contract(change_path, phase, contract, gate=gate, route=route):
+        if mine not in msg:
+            continue
+        if "'docs/spec/" in msg:
+            msg += (
+                " - the specification changed after the `specified` gate accepted it, and "
+                f"{contract.capitalize()} does not write the specification"
+            )
+        out.append(msg)
+    return out
+
+
 def _sanitize_command(argv: list[str]) -> str:
     try:
         return shlex.join(argv)
@@ -382,7 +411,7 @@ def write_stamped_evidence(
 
 
 
-def _core_computed_changed_paths(repo_root: Path) -> list[str]:
+def _core_computed_changed_paths(repo_root: Path, change_path: Path | None = None) -> list[str]:
     """Core-derived dirty paths the Worker is accountable for.
 
     Worker lists are an expected subset of this set, so it must hold only the
@@ -396,12 +425,21 @@ def _core_computed_changed_paths(repo_root: Path) -> list[str]:
     except LeashError:
         # No git repository (bench sandbox, fresh install): nothing to derive.
         return []
+    accepted: set[str] = set()
+    if change_path is not None:
+        # Specify's output, uncommitted and untouched since the `specified` gate accepted it,
+        # is not this phase's change (core/spec_baseline.py; Fuse-Back shopkit 2026-10-08).
+        from deltafuse.core.spec_baseline import unchanged_since_specified
+
+        accepted = unchanged_since_specified(repo_root, _load_change_id(change_path))
     out: list[str] = []
     for raw in paths:
         rel = posix_relpath(raw)
         parts = rel.split("/")
         if is_exempt_path(rel):
             continue  # .deltafuse/**, interpreter caches, the other leash exemptions
+        if rel in accepted:
+            continue
         if parts[:2] == ["docs", "changes"]:
             # The Change's own bookkeeping, not a product change: its evidence
             # (written by this command), task files `state` rewrites, coverage.
@@ -570,7 +608,7 @@ def run_evidence(
         # The Core computes the changed set from git anyway and refused a list
         # that missed any of it; with no list it records its own (roadmap item
         # 4: box B -> box A). A list the Worker gives is still checked.
-        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root))
+        rel_paths = _posix_paths(_core_computed_changed_paths(repo_root, change_path))
 
     def _as_text(raw: object) -> str:
         if raw is None:
@@ -711,7 +749,7 @@ def run_evidence(
             f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
             "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
         )
-    computed = _core_computed_changed_paths(repo_root)
+    computed = _core_computed_changed_paths(repo_root, change_path)
     if computed:
         worker_paths = set(rel_paths)
         missing = sorted(p for p in computed if p not in worker_paths)
@@ -721,6 +759,7 @@ def run_evidence(
                 f"missing {missing}"
             )
     errors.extend(private_errors)
+    errors.extend(_contract_errors_now(change_path, phase, dest, route))
     red_from_report = False
     if phase == "red" and route == "code" and result == "expected-failure":
         if report is not None:

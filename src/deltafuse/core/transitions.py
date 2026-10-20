@@ -549,6 +549,14 @@ def advance_change(
             snapshot = record_declaring_snapshot(product_root, change_path, change_id)
             if snapshot:
                 entry["product_snapshot"] = snapshot
+        if gate == "specified":
+            # What Specify left uncommitted, as accepted: evidence leaves it out of later
+            # changed_paths while its bytes still match (core/spec_baseline.py).
+            from deltafuse.core.spec_baseline import spec_snapshot
+
+            snapshot = spec_snapshot(product_root)
+            if snapshot:
+                entry["spec_snapshot"] = snapshot
         entry = append_receipt(product_root, entry)
 
         _write_change_status(change_path, data, target)
