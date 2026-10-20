@@ -7,6 +7,9 @@ import yaml
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.hasher import compute_product_baseline_revision
 
+# The test every code-route regression and verification fixture reports as passed.
+REGRESSION_TEST = "tests.test_core::test_existing_behaviour"
+
 
 class MockChangeBuilder:
     def __init__(
@@ -479,6 +482,9 @@ class MockChangeBuilder:
                 "exit_code": 0,
                 "result": "passed",
                 "summary": "Test passed after implementation",
+                # What the Core records: pytest's own report of the run (a passing
+                # run with none is refused as one that ran no test).
+                "tests": {"source": "junitxml", "passed": [f"tests.test_{task_id.lower()}::test_behaviour"]},
                 "changed_paths": ["src/core.py"],
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
@@ -494,6 +500,7 @@ class MockChangeBuilder:
                 "exit_code": 0,
                 "result": "passed",
                 "summary": "Full test suite passed",
+                "tests": {"source": "junitxml", "passed": [REGRESSION_TEST]},
                 "changed_paths": ["src/core.py"],
                 "spec_status": "unchanged",
                 "base_revision": self._baseline_revision(),
@@ -540,6 +547,7 @@ class MockChangeBuilder:
             "exit_code": 0,
             "result": "passed",
             "summary": "Verification pass passed",
+            **({"tests": {"source": "junitxml", "passed": [REGRESSION_TEST]}} if self.route == "code" else {}),
             "changed_paths": [],
             "spec_status": "unchanged",
             "base_revision": self._baseline_revision(),

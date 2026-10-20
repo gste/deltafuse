@@ -23,6 +23,8 @@ written in those words and holds in both.
 
 from __future__ import annotations
 
+import re
+import shlex
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -148,6 +150,11 @@ def read_report(
     if family == "pytest":
         if junit_path is None or not junit_path.is_file():
             return None
+        try:
+            if newer_than is not None and junit_path.stat().st_mtime < newer_than:
+                return None  # the Worker's own --junitxml file, left by an earlier run
+        except OSError:
+            return None
         # A test that raises inside its body is a `<failure>` for pytest; an
         # `<error>` is a fixture or collection problem, so the test never ran.
         return TestReport(
@@ -172,6 +179,64 @@ def read_report(
                 outcomes.update(read_junit_xml(path, error_means=FAILED))
         return TestReport("surefire", outcomes) if found else None
     return None
+
+
+def worker_junit_path(argv: list[str]) -> str | None:
+    """The report path the Worker gave pytest itself, when it did."""
+    for i, arg in enumerate(argv):
+        for flag in ("--junitxml", "--junit-xml"):
+            if arg.startswith(f"{flag}="):
+                return arg.split("=", 1)[1] or None
+            if arg == flag and i + 1 < len(argv):
+                return argv[i + 1]
+    return None
+
+
+# Gradle's word for a task it skipped: its inputs did not change since the last
+# run (UP-TO-DATE), or the build cache already had its outputs (FROM-CACHE).
+_GRADLE_SKIPPED_TEST = re.compile(r"UP-TO-DATE|FROM-CACHE|\d+ up-to-date|\d+ from cache")
+
+
+def _command_argv(command: object) -> list[str]:
+    if isinstance(command, list):
+        return [str(arg) for arg in command]
+    try:
+        return shlex.split(str(command or ""))
+    except ValueError:
+        return str(command or "").split()
+
+
+def no_test_ran(command: object, tests: object, log: str = "") -> str | None:
+    """Why a passing run is no evidence: the runner ran no test. None when it did.
+
+    Fuse-Back, Gradle J01 (2026-10-09): right after Green, regression ran the same
+    `gradle test`, Gradle reported the test task UP-TO-DATE and ran nothing, and the
+    record read `exit_code: 0`, `passed`, authentic. A runner whose report the Core
+    reads either leaves a fresh report naming the tests it ran, or ran none. A runner
+    without such a report is not judged here - there is nothing to judge it by.
+    """
+    argv = _command_argv(command)
+    family = runner_family(argv)
+    if not family:
+        return None
+    if isinstance(tests, dict) and (tests.get(PASSED) or tests.get(FAILED)):
+        return None
+    if family == "jvm" and _GRADLE_SKIPPED_TEST.search(log or ""):
+        return (
+            "the runner ran no test: Gradle reported the test task up to date (or took it from "
+            "the build cache) and executed nothing. Add `--rerun` to the test task "
+            "(`gradle test --rerun`; before Gradle 7.6, `--rerun-tasks`) and record it again"
+        )
+    if not isinstance(tests, dict):
+        return (
+            f"the runner ran no test it reported: `{argv[0]}` left no test report written by "
+            "this run, so the record does not show that any test ran. Run the tests so that "
+            "they execute, and record it again"
+        )
+    return (
+        "the runner ran no test: its report of this run names none that passed or failed, "
+        "and a suite that did not run is not evidence. Run the tests, and record it again"
+    )
 
 
 def red_is_authentic(report: TestReport) -> tuple[bool, str | None]:

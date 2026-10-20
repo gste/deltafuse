@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A run that ran no test is not evidence.** Fuse-Back, Gradle J01 (2026-10-09): right after Green,
+  regression ran the same `gradle --no-daemon test`, Gradle reported the test task `UP-TO-DATE` and ran
+  nothing, and the record read `exit_code: 0`, `passed`, authentic; the `implemented` gate closed, and
+  only `converged` noticed, for the verification run. For a runner whose report the Core reads
+  (pytest, Maven, Gradle), `deltafuse evidence` and every gate now refuse a passing Green, regression
+  or verification run with no report written by that run, or with one naming no test that passed or
+  failed. When Gradle's log shows the task was skipped (`UP-TO-DATE`, `FROM-CACHE`) the refusal says so
+  and names `--rerun`; the implement and verify skills and docs/workflow (en, ru) say the same. The
+  Core does not rewrite the Worker's command. A pytest run that names its own `--junitxml` is read from
+  that file. Runners without a report the Core reads are not judged this way, and a multi-module Gradle
+  build that skips some modules still leaves a fresh, partial report - only `--rerun` covers that.
+
 - **Red may not change a test another task's Red froze.** In the reference run ref-m02-366-1
   (qwen3.8-27b, M02, 2026-10-11) TASK-003, reopened and declared again, rewrote
   `test_interleaved_admits_never_block`, which TASK-002's Red had already frozen. Two Reds then froze

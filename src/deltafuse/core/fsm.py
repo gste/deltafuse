@@ -37,6 +37,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
 from deltafuse.core.schemas import SchemaRegistry, default_registry
+from deltafuse.core.test_reports import no_test_ran
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -547,6 +548,14 @@ def validate_change_package(
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
+                if phase in {"green", "regression", "verification"} and route == "code" and exit_code == 0:
+                    # The record is written even when `deltafuse evidence` refused it,
+                    # so the gate asks again whether the run ran any test.
+                    nothing_ran = no_test_ran(
+                        ev_data.get("command"), ev_data.get("tests"), str(ev_data.get("summary") or "")
+                    )
+                    if nothing_ran:
+                        errors.append(f"{ev_file.relative_to(change_path)}: {phase} is not evidence: {nothing_ran}")
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
@@ -907,6 +916,8 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
     if not failed:
         return []
     green_tests = green.get("tests")
+    if no_test_ran(green.get("command"), green_tests, str(green.get("summary") or "")):
+        return []  # the evidence check names it, and why: this run ran no test
     if not isinstance(green_tests, dict):
         return [
             f"{label} has no runner report, so it does not show the tests Red recorded as failing "
@@ -973,6 +984,8 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     run = _load_record(change_path / "evidence" / "verification" / "run.yaml")
     if not run:
         return []  # a missing or unreadable run is reported on its own
+    if run.get("exit_code") == 0 and no_test_ran(run.get("command"), run.get("tests"), str(run.get("summary") or "")):
+        return []  # the evidence check names it, and why: this run ran no test
     if not isinstance(run.get("tests"), dict):
         return [
             "Gate converged: the verification run has no runner report, so it does not show "
@@ -988,6 +1001,13 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
         f"{len(expected)} tests this Change's Red and regression records name: {missing[:5]}. "
         "Verification runs the whole suite; make those tests pass and record verification again"
     ]
+
+
+def _ran_no_test(record: dict[str, Any], label: str) -> list[str]:
+    if record.get("exit_code") != 0:
+        return []
+    why = no_test_ran(record.get("command"), record.get("tests"), str(record.get("summary") or ""))
+    return [f"{label} is not evidence: {why}"] if why else []
 
 
 def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[str, Any]]:
@@ -1019,6 +1039,7 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
             green = _load_record(green_file)
             if green:
                 row["green"] = str(green.get("result"))
+                problems += _ran_no_test(green, f"green of {tid}")
                 if red_file.is_file():
                     label = f"green of {tid}"
                     problems += green_coverage_errors(red_file, green_file, label)
@@ -1032,6 +1053,7 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
             if reg:
                 fresh = reg.get("base_revision") == current
                 row["regression"] = f"{reg.get('result')}, {'current tree' if fresh else 'STALE'}"
+                problems += _ran_no_test(reg, f"regression of {tid}")
                 if not fresh:
                     problems.append(f"regression of {tid} predates later changes to docs/spec/** or src/**")
             else:
