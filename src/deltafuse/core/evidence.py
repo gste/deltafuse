@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import json
+import os
 import shlex
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -131,6 +133,53 @@ def _load_change_id(change_path: Path) -> str:
     return data["id"]
 
 
+# Windows runs a `.cmd`/`.bat` runner through cmd.exe, which CreateProcess does not find by its
+# bare name (Maven is `mvn.cmd`, Gradle `gradle.bat`/`gradlew.bat`).
+BATCH_SUFFIXES = frozenset({".cmd", ".bat"})
+# cmd.exe reads these in a batch file's arguments as its own (chaining, redirection, escapes,
+# variables), so an argument holding one would run more than the test command.
+CMD_METACHARACTERS = frozenset("&|<>^%")
+
+
+def _on_windows() -> bool:
+    return os.name == "nt"
+
+
+def resolve_runner(argv: list[str], repo_root: Path) -> list[str]:
+    """*argv* with a Windows batch runner replaced by the script it names.
+
+    Fuse-Back on J01 (2026-10-08, Windows 11, Maven 3.9.12): `-- mvn -B test` ran nothing - Maven
+    on Windows is `mvn.cmd`, CreateProcess does not find it by `mvn` - and Red was recorded
+    `fixture-error` with `[WinError 2]`; writing `mvn.cmd` in the product breaks Linux and CI.
+    Only a `.cmd`/`.bat` that `shutil.which` finds (PATHEXT) is substituted: anything else runs
+    as given, because CreateProcess looks in the running interpreter's own directory first and a
+    PATH lookup would swap the venv's `python` for another one. A runner with a path
+    (`./gradlew`) is looked for in the product. Elsewhere than Windows the argv runs as given.
+    """
+    if not argv or not _on_windows():
+        return list(argv)
+    program = str(argv[0])
+    target = program
+    if "/" in program or "\\" in program:
+        path = Path(program)
+        target = str(path if path.is_absolute() else repo_root / path)
+    found = shutil.which(target)
+    if not found or Path(found).suffix.lower() not in BATCH_SUFFIXES:
+        return list(argv)
+    unsafe = [arg for arg in argv[1:] if CMD_METACHARACTERS & set(str(arg))]
+    if unsafe:
+        raise EvidenceRunError(
+            f"'{program}' is the batch file {found}, which Windows runs through cmd.exe, and cmd.exe "
+            f"reads & | < > ^ % in its arguments as its own: {', '.join(repr(a) for a in unsafe)}. "
+            "Pass the test command without them; nothing was run or recorded"
+        )
+    return [found, *argv[1:]]
+
+
+def _runner_not_found(program: str, ex: OSError) -> str:
+    return f"runner `{program}` not found on PATH ({ex})"
+
+
 def _sanitize_command(argv: list[str]) -> str:
     try:
         return shlex.join(argv)
@@ -193,7 +242,7 @@ def _isolated_oracle_run(
     started_at = time.time()
     try:
         proc = subprocess.run(
-            run_argv,
+            resolve_runner(run_argv, repo_root),
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -541,10 +590,11 @@ def run_evidence(
         junit_path = report_dir / f"junit-{phase}-{task or 'run'}.xml"
         junit_path.unlink(missing_ok=True)
         run_argv = [*argv, f"--junitxml={junit_path}"]
+    launch_argv = resolve_runner(run_argv, repo_root)
     started_at = time.time()
     try:
         proc = subprocess.run(
-            run_argv,
+            launch_argv,
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -556,7 +606,7 @@ def run_evidence(
         log = (_as_text(proc.stdout) + _as_text(proc.stderr)).strip()
     except FileNotFoundError as ex:
         exit_code = 127
-        log = str(ex)
+        log = _runner_not_found(str(argv[0]), ex)
     except subprocess.TimeoutExpired as ex:
         exit_code = 124
         log = (_as_text(ex.stdout) + _as_text(ex.stderr)).strip()

@@ -66,6 +66,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   set, Declare's Red `changed_paths` are bounded by the roots rather than by `tests/**`. Without
   the key nothing changes. docs/context-model and docs/contracts/leash (en, ru) describe it.
 
+- **`deltafuse evidence` runs `mvn`, `gradle` and `gradlew` on Windows.** Fuse-Back on J01
+  (2026-10-08, Windows 11, Maven 3.9.12): `-- mvn -B test` ran nothing - Maven on Windows is
+  `mvn.cmd`, which CreateProcess does not find by the bare name - and Red was recorded
+  `fixture-error` with `[WinError 2]`, although `mvn -B test` is the runner `workflow.test_commands`
+  and the skills name; writing `mvn.cmd` in the product breaks Linux and CI. On Windows the Core
+  now resolves the runner through `shutil.which` (PATHEXT) and, when it is a `.cmd`/`.bat`
+  script, runs that script - for the evidence run and for Green's isolated run of the frozen
+  tests - while the record keeps the command as the Worker gave it. A runner with a path
+  (`./gradlew`) is looked for in the product. Only batch scripts are substituted: a PATH lookup
+  of `python` would find another interpreter than the venv's own, which CreateProcess prefers.
+  cmd.exe reads `& | < > ^ %` in a batch file's arguments as its own, so such an argument is
+  refused before anything runs. A runner found nowhere is recorded as "runner `mvn` not found
+  on PATH" (exit 127) instead of the bare `[WinError 2]`. Elsewhere than Windows nothing changes.
+
 - **Decompose says what `requirement_delta` means for a task that guards existing behavior.** In
   the reference runs on M03 (qwen3.8-27b, 2026-10-08) the backward-compatibility claim (CR-009, a
   `constraint`) became a guard task whose test passes on unchanged code. In ref-m03-351 the reference
