@@ -614,6 +614,44 @@ def human_unblock_hint(change_path: Path | str, task_id: str) -> str:
     )
 
 
+def green_attempt_error(change_path: Path, product_root: Path, task_id: str) -> str | None:
+    """Why the Worker may not block this task yet: no Green was tried against its Red.
+
+    ref-v338-a-M01 (2026-10-20): the reference, reading the history of a reopened task, ran
+    `deltafuse state --status blocked` "as a probe" before writing any code, and the run halted
+    for the human with an oracle nobody had tried. Blocked says the declared oracle proved wrong;
+    what proves it is a Green the Core recorded against that oracle, and the human reads it.
+    """
+    where = Path(change_path).as_posix()
+    retry = (
+        f"implement the product change and record Green with `deltafuse evidence {where} --phase green "
+        f"--task {task_id} -- <test command>`; block only if that run shows the declared oracle itself "
+        "is wrong - the Core keeps the failed Green record for the human"
+    )
+    evidence = Path(change_path) / "evidence"
+    try:
+        red = yaml.safe_load((evidence / "red" / f"{task_id}.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        red = None
+    if not isinstance(red, dict):
+        return (
+            f"task {task_id} cannot be marked blocked: it has no Red record, so there is no declared "
+            f"oracle to be wrong. Declare it first; then {retry}"
+        )
+    try:
+        green = yaml.safe_load((evidence / "green" / f"{task_id}.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        green = None
+    if isinstance(green, dict):
+        from deltafuse.core.evidence import evidence_stamp_error
+
+        if evidence_stamp_error(green, Path(product_root)) is None and str(green.get("timestamp") or "") >= str(
+            red.get("timestamp") or ""
+        ):
+            return None
+    return f"task {task_id} cannot be marked blocked before a Green attempt against the oracle Red froze: {retry}"
+
+
 # Statuses of Declare that a reopened task takes again after its Change has left Declare.
 REOPENED_DECLARE_STATUSES = frozenset({"declaring", "declared"})
 REOPENED_CHANGE_STATUSES = frozenset({"declared", "implementing"})
@@ -870,6 +908,10 @@ def set_artifact_status(
                             f"changed ({'; '.join(changed)}): restore the tests as Red froze them, "
                             "then block only if that declared oracle itself is wrong"
                         )
+            if task_id and status == "blocked" and not human:
+                no_attempt = green_attempt_error(change_path, product_root, task_id)
+                if no_attempt:
+                    raise TransitionError(no_attempt)
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")

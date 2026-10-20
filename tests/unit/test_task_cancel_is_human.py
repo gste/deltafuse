@@ -18,7 +18,7 @@ from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue
 from deltafuse.core.transitions import TransitionError, set_artifact_status
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_green_attempt
 
 
 def _decomposed(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
@@ -48,6 +48,7 @@ def test_the_worker_cannot_cancel_a_task(tmp_path: Path, repo_root: Path):
 
 def test_the_human_cancels_a_blocked_task_and_the_receipt_says_so(tmp_path: Path, repo_root: Path):
     builder = _decomposed(tmp_path, repo_root)
+    record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     assert build_work_queue(tmp_path).blocked
 
