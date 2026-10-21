@@ -30,6 +30,7 @@ from deltafuse.core.queue import (
 from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core import gate_password
 from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
+from deltafuse.core.transitions import already_green_advice, set_artifact_status
 from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
@@ -103,6 +104,30 @@ def _journal(start: Path | str, **event: object) -> None:
     from deltafuse.bench.journal import record_event
 
     record_event(start, **event)
+
+
+def _fail(start: Path, what: str, error: object, code: int, **event: object) -> int:
+    """Journal a refused command, print `<what>: <error>` on stderr, return `code`."""
+    event.setdefault("ok", False)  # a caller that places `ok` itself keeps its journal key order
+    _journal(start, **event, errors=[str(error)])
+    print(f"{what}: {error}", file=sys.stderr)
+    return code
+
+
+def _print_errors(header: str, errors: list[str]) -> None:
+    print(header, file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+
+
+def _report(cmd: str, target: Path, errors: list[str], failed: str, valid: str, **event: object) -> int:
+    """Journal a validator's verdict; list the errors on stderr (exit 1) or print `valid` (exit 0)."""
+    _journal(target, cmd=cmd, ok=not errors, errors=errors, n_errors=len(errors), **event)
+    if errors:
+        _print_errors(f"{failed} for {target} with {len(errors)} error(s):", errors)
+        return 1
+    print(valid)
+    return 0
 
 
 def _read_secret(prompt: str, hint: str = "") -> str:
@@ -378,7 +403,6 @@ def _main(argv: list[str] | None = None) -> int:
     state_parser.add_argument("--status", required=True, help="New status")
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
-    # validate-layout command (P6.1)
     # new command (DF3-005 / C-03): deterministic Change scaffolding
     new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
     new_parser.add_argument("product_path", nargs="?", default=".", help="Product root (default: current dir)")
@@ -392,226 +416,136 @@ def _main(argv: list[str] | None = None) -> int:
 
     # evidence command (WK-002)
     ev_parser = subparsers.add_parser(
-        "evidence",
-        help="Run a command after '--' and write evidence/red|green|regression YAML",
+        "evidence", help="Run a command after '--' and write evidence/red|green|regression YAML"
     )
     ev_parser.add_argument("change_path", help="Path to Change package directory")
     ev_parser.add_argument(
-        "--phase",
-        "-p",
-        required=True,
-        choices=["red", "green", "regression", "verification"],
+        "--phase", "-p", required=True, choices=["red", "green", "regression", "verification"],
         help="Evidence phase to record",
     )
     ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
-    ev_parser.add_argument(
-        "--changed-path",
-        action="append",
-        default=[],
-        dest="changed_paths",
-        help="Relative path written by the Worker (repeatable)",
-    )
+    ev_parser.add_argument("--changed-path", action="append", default=[], dest="changed_paths",
+                           help="Relative path written by the Worker (repeatable)")
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
 
-    cov_parser = subparsers.add_parser(
-        "coverage",
-        help="Write coverage.yaml from routing and slices (no LLM)",
-    )
+    cov_parser = subparsers.add_parser("coverage",
+                                       help="Write coverage.yaml from routing and slices (no LLM)")
     cov_parser.add_argument("change_path", help="Path to Change package directory")
 
     # next / work queue (WK-003)
-    next_parser = subparsers.add_parser(
-        "next",
-        help="Select the next ready lifecycle step (no LLM)",
-    )
-    next_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root or Change package directory (default: current dir)",
-    )
+    next_parser = subparsers.add_parser("next", help="Select the next ready lifecycle step (no LLM)")
+    next_parser.add_argument("path", nargs="?", default=".",
+                             help="Product root or Change package directory (default: current dir)")
     next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
     next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
     next_parser.add_argument(
-        "--human",
-        action="store_true",
+        "--human", action="store_true",
         help="Print a checklist from the step contract (same files, not a second process)",
     )
-    next_parser.add_argument(
-        "--step",
-        choices=list(step_names()),
-        help="Only select this step",
-    )
+    next_parser.add_argument("--step", choices=list(step_names()), help="Only select this step")
 
     decide_parser = subparsers.add_parser(
-        "decide",
-        help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)",
+        "decide", help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)"
     )
+    decide_parser.add_argument("path", nargs="?", default=".",
+                               help="Product root, or Change directory for --spec")
+    decide_parser.add_argument("--decision", "-d", default=None, help="DEC id or docs/decisions/*.md path")
+    decide_parser.add_argument("--spec", action="store_true",
+                               help="Apply the specification Human Gate (spec-delta.md on the Change path)")
     decide_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root, or Change directory for --spec",
-    )
-    decide_parser.add_argument(
-        "--decision",
-        "-d",
-        default=None,
-        help="DEC id or docs/decisions/*.md path",
-    )
-    decide_parser.add_argument(
-        "--spec",
-        action="store_true",
-        help="Apply the specification Human Gate (spec-delta.md on the Change path)",
-    )
-    decide_parser.add_argument(
-        "--task",
-        default=None,
+        "--task", default=None,
         help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
     )
     decide_parser.add_argument(
-        "--status",
-        required=True,
-        choices=["accepted", "rejected", "cancelled", "reopened"],
+        "--status", required=True, choices=["accepted", "rejected", "cancelled", "reopened"],
         help="Recorded human choice (cancelled, reopened: only with --task)",
     )
     decide_parser.add_argument(
-        "--gap",
-        default=None,
+        "--gap", default=None,
         help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
     )
     decide_parser.add_argument(
-        "--note",
-        default=None,
-        help="With --status reopened: what the human passes on to the next Declare",
+        "--note", default=None, help="With --status reopened: what the human passes on to the next Declare"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
     # Human Gate password: interactive only, never a flag or an environment
     # variable - anything a Worker's shell can pass, a Worker can pass.
     gpw_parser = subparsers.add_parser(
-        "gate-password",
-        help="Set, clear or show the optional Human Gate password (interactive only)",
+        "gate-password", help="Set, clear or show the optional Human Gate password (interactive only)"
     )
     gpw_parser.add_argument("action", choices=["set", "clear", "status"])
     gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
 
     cap_parser = subparsers.add_parser(
-        "capability",
-        help="Propose a capability the catalog does not have yet (draft, Analyze)",
+        "capability", help="Propose a capability the catalog does not have yet (draft, Analyze)"
     )
     cap_sub = cap_parser.add_subparsers(dest="capability_command", required=True)
-    cap_propose = cap_sub.add_parser(
-        "propose", help="Add <domain>.<capability> to the catalog as a draft"
-    )
+    cap_propose = cap_sub.add_parser("propose", help="Add <domain>.<capability> to the catalog as a draft")
     cap_propose.add_argument("name", help="<domain>.<capability>, e.g. monitoring.usage_stats")
     cap_propose.add_argument("--summary", required=True, help="One line: what it is responsible for")
-    cap_propose.add_argument(
-        "--spec", required=True, help="Spec file Specify will write, under docs/spec/"
-    )
-    cap_propose.add_argument(
-        "--code-root", action="append", default=[], help="Code root it will own (repeatable)"
-    )
+    cap_propose.add_argument("--spec", required=True, help="Spec file Specify will write, under docs/spec/")
+    cap_propose.add_argument("--code-root", action="append", default=[],
+                             help="Code root it will own (repeatable)")
     cap_propose.add_argument("--path", default=".", help="Product root")
 
     # board snapshot (FM-001)
-    board_parser = subparsers.add_parser(
-        "board",
-        help="Emit a read-only fuse-map board snapshot (no product writes)",
-    )
+    board_parser = subparsers.add_parser("board",
+                                         help="Emit a read-only fuse-map board snapshot (no product writes)")
+    board_parser.add_argument("product_path", nargs="?", default=".",
+                              help="Product repository root (default: current dir)")
     board_parser.add_argument(
-        "product_path",
-        nargs="?",
-        default=".",
-        help="Product repository root (default: current dir)",
-    )
-    board_parser.add_argument(
-        "--json",
-        action="store_true",
-        default=True,
+        "--json", action="store_true", default=True,
         help="Write the snapshot JSON to stdout (default; the only stdout on success)",
     )
-    board_parser.add_argument(
-        "--archive",
-        action="store_true",
-        help="Include archived Change cards",
-    )
+    board_parser.add_argument("--archive", action="store_true", help="Include archived Change cards")
 
-    # lint-context command (P7.6)
     # validate-config (DF3-009 item 5): one validator for config contracts
-    cfg_parser = subparsers.add_parser(
-        "validate-config", help="Validate .deltafuse/config.yaml as one contract"
-    )
+    cfg_parser = subparsers.add_parser("validate-config",
+                                       help="Validate .deltafuse/config.yaml as one contract")
     cfg_parser.add_argument("product_path", nargs="?", default=".")
     cfg_parser.add_argument("--json", action="store_true")
 
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
-    leash_parser = subparsers.add_parser(
-        "leash",
-        help="Check git diff against the current write envelope (no LLM)",
-    )
-    leash_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root (default: current dir)",
-    )
+    leash_parser = subparsers.add_parser("leash",
+                                         help="Check git diff against the current write envelope (no LLM)")
+    leash_parser.add_argument("path", nargs="?", default=".", help="Product root (default: current dir)")
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
     leash_parser.add_argument(
-        "--base",
-        default=None,
+        "--base", default=None,
         help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
     )
-    leash_parser.add_argument(
-        "--head",
-        default=None,
-        help="Exact head SHA (default: HEAD); requires --base",
-    )
-    leash_parser.add_argument(
-        "--file",
-        action="append",
-        default=[],
-        dest="files",
-        help="Relative path to check instead of git diff (repeatable)",
-    )
+    leash_parser.add_argument("--head", default=None, help="Exact head SHA (default: HEAD); requires --base")
+    leash_parser.add_argument("--file", action="append", default=[], dest="files",
+                              help="Relative path to check instead of git diff (repeatable)")
 
     bench_parser = subparsers.add_parser(
-        "bench",
-        help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)",
+        "bench", help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)"
     )
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
     bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
     bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
     bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
+    bench_init.add_argument("--force", "-f", action="store_true",
+                            help="Recreate the sandbox if the directory already exists")
     bench_init.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Recreate the sandbox if the directory already exists",
-    )
-    bench_init.add_argument(
-        "--pack",
-        default=None,
+        "--pack", default=None,
         help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
     )
     # `score` and `compare` live in deltafuse-bench since 3.3.0: the judge is
     # versioned apart from the framework it measures (roadmap: one harness in
     # deltafuse-bench). The framework keeps only what a product produces.
-    bench_journal = bench_sub.add_parser(
-        "journal",
-        help="Judge: collect Core attempts from a sandbox journal (no LLM)",
-    )
+    bench_journal = bench_sub.add_parser("journal",
+                                         help="Judge: collect Core attempts from a sandbox journal (no LLM)")
     bench_journal.add_argument("product_dir", help="Product root created by bench init")
 
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
     art_sub = art_parser.add_subparsers(dest="artifact_cmd", required=True)
-
     art_write = art_sub.add_parser(
-        "write",
-        help="Create or update a Change artifact: fields plus a prose body (the Worker's path)",
+        "write", help="Create or update a Change artifact: fields plus a prose body (the Worker's path)"
     )
     art_write.add_argument("--kind", "-k", required=True, help="task | slice | routing | spec-delta | change")
     art_write.add_argument("--change", "-c", required=True, help="Change directory")
@@ -645,14 +579,7 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate":
         target = Path(args.change_path)
         errors = validate_change_package(target)
-        _journal(target, cmd="validate", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"Change package {target} is valid.")
-        return 0
+        return _report("validate", target, errors, "Validation failed", f"Change package {target} is valid.")
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
@@ -678,9 +605,7 @@ def _main(argv: list[str] | None = None) -> int:
             token_heuristic=tokenizer["heuristic"],
         )
         if errors:
-            print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
+            _print_errors(f"Gate {args.gate} check failed for {target}:", errors)
             return 1
         for warning in warnings:
             print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
@@ -695,22 +620,16 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Change package {target.name} successfully archived to {dest}")
             return 0
         except ArchivalError as ae:
-            _journal(target, cmd="archive", ok=False, errors=[str(ae)])
-            print(f"Archival failed: {ae}", file=sys.stderr)
-            return 1
+            return _fail(target, "Archival failed", ae, 1, cmd="archive")
         except Exception as ex:
-            _journal(target, cmd="archive", ok=False, errors=[str(ex)])
-            print(f"Unexpected error during archival: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Unexpected error during archival", ex, 2, cmd="archive")
 
     elif args.command == "advance":
         target = Path(args.change_path)
         try:
             result = advance_change(target, args.gate)
         except TransitionError as te:
-            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=[str(te)])
-            print(f"advance failed: {te}", file=sys.stderr)
-            return 1
+            return _fail(target, "advance failed", te, 1, cmd="advance", gate=args.gate)
         receipt = dict(result)
         receipt.pop("ok", None)
         # P12: `advance --gate converged` is the one call a Worker makes now, so the
@@ -728,42 +647,27 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"advance: leash ({result['leash']['mode']}): {finding}", file=sys.stderr)
             if (result.get("leash") or {}).get("checked") is False:
                 print(f"advance: leash not checked: {result['leash']['reason']}", file=sys.stderr)
-            print(
-                f"advance: gate '{result['gate']}' applied: "
-                f"{result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"advance: gate '{result['gate']}' applied: {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "state":
-        # TransitionError is already imported at module scope; re-importing it
-        # here would make it a function-local name and leave the `advance`
-        # branch above referencing it before assignment.
-        from deltafuse.core.transitions import set_artifact_status
-
         target = Path(args.change_path)
         try:
             result = set_artifact_status(
-                target,
-                status=args.status,
-                task_id=args.task,
-                slice_id=args.slice_id,
+                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
                 change_status=args.change,
             )
         except TransitionError as te:
-            _journal(target, cmd="state", status=args.status, ok=False, errors=[str(te)])
-            print(f"state failed: {te}", file=sys.stderr)
-            return 1
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
         _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
-            print(
-                f"state: {result['artifact']} status {result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"state: {result['artifact']} status {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "new":
@@ -771,10 +675,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         try:
             change_dir = scaffold_change(
-                Path(args.product_path),
-                args.change_id,
-                route=args.route,
-                title=args.title,
+                Path(args.product_path), args.change_id, route=args.route, title=args.title
             )
         except ScaffoldError as se:
             print(f"new failed: {se}", file=sys.stderr)
@@ -789,45 +690,22 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
-        _journal(target, cmd="validate-layout", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"DeltaFuse product layout at {target} is valid.")
-        return 0
+        valid = f"DeltaFuse product layout at {target} is valid."
+        return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
+        target = Path(args.change_path)
         try:
             outcome = run_evidence(
-                Path(args.change_path),
-                phase=args.phase,
-                task=args.task,
-                argv=evidence_argv,
-                changed_paths=args.changed_paths,
-                timeout=args.timeout,
+                target, phase=args.phase, task=args.task, argv=evidence_argv,
+                changed_paths=args.changed_paths, timeout=args.timeout,
             )
         except EvidenceRunError as ex:
-            _journal(
-                Path(args.change_path),
-                cmd="evidence",
-                phase=args.phase,
-                task=args.task,
-                ok=False,
-                errors=[str(ex)],
-            )
-            print(f"Evidence run failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(
-            Path(args.change_path),
-            cmd="evidence",
-            phase=args.phase,
-            task=args.task,
-            ok=bool(outcome.authentic),
-            errors=list(outcome.errors or []),
-            n_errors=len(outcome.errors or []),
-        )
+            return _fail(target, "Evidence run failed", ex, 2, cmd="evidence", phase=args.phase,
+                         task=args.task)
+        errors = list(outcome.errors or [])
+        _journal(target, cmd="evidence", phase=args.phase, task=args.task, ok=bool(outcome.authentic),
+                 errors=errors, n_errors=len(errors))
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
@@ -840,27 +718,19 @@ def _main(argv: list[str] | None = None) -> int:
                 # the implemented gate refuses an already-green Red. "Return it
                 # upstream" named no command, and the Worker declared the task seven
                 # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
-                from deltafuse.core.transitions import already_green_advice
-
                 print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
-        print("Evidence is not authentic:", file=sys.stderr)
-        for err in outcome.errors:
-            print(f"  - {err}", file=sys.stderr)
+        _print_errors("Evidence is not authentic:", outcome.errors)
         return 1
 
     elif args.command == "coverage":
+        target = Path(args.change_path)
         try:
-            dest = write_coverage(Path(args.change_path))
-        except CoverageError as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 1
+            dest = write_coverage(target)
         except Exception as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(Path(args.change_path), cmd="coverage", ok=True)
+            code = 1 if isinstance(ex, CoverageError) else 2
+            return _fail(target, "Coverage failed", ex, code, cmd="coverage")
+        _journal(target, cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
@@ -871,9 +741,7 @@ def _main(argv: list[str] | None = None) -> int:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
             queue = build_work_queue(target, only_change=only)
         except QueueError as ex:
-            _journal(target, cmd="next", ok=False, mode=mode, errors=[str(ex)])
-            print(f"Next failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Next failed", ex, 2, cmd="next", ok=False, mode=mode)
         selected = select_next(queue, step=args.step)
         had_item = selected is not None
         if (
@@ -891,8 +759,9 @@ def _main(argv: list[str] | None = None) -> int:
             # ready step, and the reference opened CHG-002 from the request CHG-001 had just
             # delivered. With no intake waiting there is no ready step to name.
             selected = None
+        scope = target if only is None else only
         _journal(
-            target if only is None else only,
+            scope,
             cmd="next",
             ok=True if mode in {"list", "json"} else selected is not None,
             mode=mode,
@@ -902,16 +771,12 @@ def _main(argv: list[str] | None = None) -> int:
             empty=selected is None,
         )
         guide = (
-            format_human_guide(selected, load_product_root(target if only is None else only))
+            format_human_guide(selected, load_product_root(scope))
             if selected is not None
             else format_human_blocked_queue(queue)
         )
         if args.json:
-            payload = queue_snapshot(
-                queue,
-                selected=selected,
-                product_root=load_product_root(target if only is None else only),
-            )
+            payload = queue_snapshot(queue, selected=selected, product_root=load_product_root(scope))
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -932,37 +797,18 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "decide":
         target = Path(args.path)
+        which = (f"--decision {args.decision}" if args.decision else f"--task {args.task}" if args.task
+                 else f"--gap {args.gap}" if args.gap else "--spec")
         try:
             result = apply_decision(
-                target,
-                status=args.status,
-                decision=args.decision,
-                spec=args.spec,
-                task=args.task,
-                gap=args.gap,
-                note=args.note,
+                target, status=args.status, decision=args.decision, spec=args.spec, task=args.task,
+                gap=args.gap, note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
-                    f"deltafuse decide {args.path} "
-                    + (
-                        f"--decision {args.decision}"
-                        if args.decision
-                        else (
-                            f"--task {args.task}"
-                            if args.task
-                            else (f"--gap {args.gap}" if args.gap else "--spec")
-                        )
-                    )
-                    + f" --status {args.status}"
+                    f"deltafuse decide {args.path} {which} --status {args.status}"
                 ),
             )
-        except DecideError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 1
-        except QueueError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 2
+        except (DecideError, QueueError) as ex:
+            return _fail(target, "Decide failed", ex, 1 if isinstance(ex, DecideError) else 2, cmd="decide")
         _journal(
             target,
             cmd="decide",
@@ -1003,22 +849,14 @@ def _main(argv: list[str] | None = None) -> int:
             errors = payload["violations"]
             mode = payload["mode"]
             skipped = payload["skipped"]
-            _journal(
-                root,
-                cmd="leash",
-                ok=payload["ok"],
-                errors=errors,
-                n_errors=len(errors),
-                skipped=skipped,
-            )
+            _journal(root, cmd="leash", ok=payload["ok"], errors=errors, n_errors=len(errors),
+                     skipped=skipped)
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif skipped:
                 print("leash: no write envelope (no ready Worker step)")
             elif errors:
-                print(f"leash: {len(errors)} path(s) outside the write envelope", file=sys.stderr)
-                for err in errors:
-                    print(f"  - {err}", file=sys.stderr)
+                _print_errors(f"leash: {len(errors)} path(s) outside the write envelope", errors)
             else:
                 print("leash: diff is inside the write envelope")
             if errors and mode != "advisory":
@@ -1038,14 +876,9 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "board":
         target = Path(args.product_path)
         try:
-            snapshot = build_board_snapshot(
-                target,
-                include_archive=args.archive,
-            )
+            snapshot = build_board_snapshot(target, include_archive=args.archive)
         except BoardError as ex:
-            _journal(target, cmd="board", ok=False, errors=[str(ex)])
-            print(f"Board failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Board failed", ex, 2, cmd="board")
         _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
@@ -1077,10 +910,7 @@ def _main(argv: list[str] | None = None) -> int:
                     meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
-                        ref_files: list[Path] = []
-                        for sref in meta.get("spec_refs", []):
-                            sp_rel = sref.split("#")[0]
-                            ref_files.append(repo_root / sp_rel)
+                        ref_files = [repo_root / sref.split("#")[0] for sref in meta.get("spec_refs", [])]
                         b_errs = validate_context_budget(
                             budget, ref_files, repo_root=repo_root, receipt=token_receipt
                         )
@@ -1095,10 +925,7 @@ def _main(argv: list[str] | None = None) -> int:
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
                         b_errs = validate_task_context_budget(
-                            budget,
-                            meta.get("spec_refs") or [],
-                            meta.get("allowed_paths") or [],
-                            repo_root,
+                            budget, meta.get("spec_refs") or [], meta.get("allowed_paths") or [], repo_root,
                             receipt=token_receipt,
                         )
                         errors.extend(f"{tf.name}: {e}" for e in b_errs)
@@ -1111,38 +938,24 @@ def _main(argv: list[str] | None = None) -> int:
                     errors.append(f"{tf.name}: {ex}")
         if not token_receipt:
             token_receipt = token_count_receipt()
-        _journal(
+        return _report(
+            "lint-context",
             target,
-            cmd="lint-context",
-            ok=not errors,
-            errors=errors,
-            n_errors=len(errors),
+            errors,
+            "Context budget validation failed",
+            f"Context budget for {target} is within limits (tokens counted by {token_receipt.get('mode')}).",
             token_mode=token_receipt.get("mode"),
             token_measured=token_receipt.get("measured"),
             token_heuristic=token_receipt.get("heuristic"),
         )
-        if errors:
-            print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(
-            f"Context budget for {target} is within limits "
-            f"(tokens counted by {token_receipt.get('mode')})."
-        )
-        return 0
 
     elif args.command == "bench":
-        from deltafuse.bench import BenchError
         from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
 
         try:
             if args.bench_cmd == "init":
                 meta = init_bench_product(
-                    args.case_id,
-                    args.product_dir,
-                    pack_root=args.pack,
-                    force=args.force,
+                    args.case_id, args.product_dir, pack_root=args.pack, force=args.force
                 )
                 product = Path(args.product_dir).resolve()
                 print(f"Bench {meta['case']} ready in {product}")
@@ -1163,10 +976,7 @@ def _main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        except BenchError as ex:
-            print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
-        except Exception as ex:
+        except Exception as ex:  # BenchError included: same text, same code
             print(f"Bench failed: {ex}", file=sys.stderr)
             return 2
 
