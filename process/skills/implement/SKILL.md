@@ -7,8 +7,6 @@ description: Implement one DeltaFuse task against accepted specification and a f
 
 Make one declared Red oracle Green with the smallest compliant production change.
 
-Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
-
 ## Worker (LLM)
 
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `advance`.

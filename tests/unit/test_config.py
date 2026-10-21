@@ -67,3 +67,17 @@ def test_validate_config_json_exits_1_on_errors_and_prints_only_json(tmp_path, r
     assert main(["validate-config", str(tmp_path), "--json"]) == 1
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is False and out["errors"]
+
+
+def test_paths_are_fixed_and_another_value_is_refused(tmp_path, repo_root):
+    """Owner decision 2026-10-21: the Core names docs/changes and the other document directories
+    itself, so a product that moves one is refused instead of half-read."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    assert validate_config(tmp_path) == []  # the template's own paths are the fixed ones
+    config = tmp_path / ".deltafuse" / "config.yaml"
+    text = config.read_text(encoding="utf-8")
+    config.write_text(text.replace("changes: docs/changes", "changes: work/changes"), encoding="utf-8")
+    errors = validate_config(tmp_path)
+    assert any("paths.changes is 'work/changes'" in e and "'docs/changes'" in e for e in errors), errors
+    config.write_text(text.replace("  archive: docs/archive\n", "  archive: docs/archive\n  drafts: x\n"), encoding="utf-8")
+    assert any("unknown paths key 'drafts'" in e for e in validate_config(tmp_path))

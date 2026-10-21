@@ -7,7 +7,7 @@ description: Route a normalized DeltaFuse Change through product capabilities, c
 
 Turn claims into bounded, evidence-backed deltas. This is the lifecycle's iterative Decision-convergence step.
 
-Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+Context limits come from `.deltafuse/config.yaml`.
 
 ## Worker (LLM)
 

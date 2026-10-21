@@ -7,8 +7,6 @@ description: Declare what must become true for one DeltaFuse task by writing a R
 
 Declare the behavior that must become true. That is the point of writing Red tests before Implement.
 
-Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
-
 ## Worker (LLM)
 
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `advance`.

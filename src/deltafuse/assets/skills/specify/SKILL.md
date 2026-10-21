@@ -7,8 +7,6 @@ description: Apply one analyzed DeltaFuse slice to the normative product specifi
 
 Establish the normative state from which tasks may be derived.
 
-Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
-
 ## Worker (LLM)
 
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, `advance`, and `decide`.

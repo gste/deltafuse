@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`paths` in `.deltafuse/config.yaml` are fixed, and `validate-config` refuses another value**
+  (owner decision on the codebase audit). The Core names `docs/changes` itself about a hundred times
+  and the other document directories likewise; only the queue, the board and `artifact write`
+  followed `paths.changes`, so a product that moved it was half-read. `paths.intake`, `changes`,
+  `specification`, `decisions` and `archive` must keep their defaults; an unknown `paths` key is
+  refused too. The skills no longer tell the Worker to resolve artifact roots from the config.
 - **The Core recovers an interrupted Writer transaction.** `recover_pending_transactions` had no
   caller, though docs/using said the Core ran it. Every Writer operation now runs it first, under
   the mutation lock: a write cut after its file was published gets its receipt, one cut before is

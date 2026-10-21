@@ -7,8 +7,6 @@ description: Verify traceability and cross-artifact convergence for a DeltaFuse 
 
 Prove that the Delta was fully fused before removing the Change from active context.
 
-Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
-
 ## Worker (LLM)
 
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `advance`.

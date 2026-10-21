@@ -15,6 +15,17 @@ import yaml
 from deltafuse.core.gate_receipts import PROFILES, REMOVED_PROFILES
 
 KNOWN_TOP_KEYS = {"schema_version", "framework", "paths", "context", "workflow", "project", "adapters"}
+# Where the Core reads and writes the product's documents. Fixed in this version: the Core names
+# these directories itself (`docs/changes` alone ~100 times), so another value would leave a
+# product half-read - the queue followed `paths.changes`, the leash and the gates did not
+# (codebase audit 2026-10-21, owner decision: refuse rather than half-support).
+FIXED_PATHS = {
+    "intake": "docs/intake",
+    "changes": "docs/changes",
+    "specification": "docs/spec",
+    "decisions": "docs/decisions",
+    "archive": "docs/archive",
+}
 KNOWN_WORKFLOW_KEYS = {
     "schema_version",
     "leash",
@@ -98,6 +109,21 @@ def validate_config(product_root: Path | str) -> list[str]:
     unknown_top = set(data) - KNOWN_TOP_KEYS
     if unknown_top:
         errors.append(f"config.yaml: unknown top-level keys {sorted(unknown_top)}")
+
+    paths = data.get("paths")
+    if paths is not None:
+        if not isinstance(paths, dict):
+            errors.append("config.yaml: paths must be a mapping")
+        else:
+            for key, value in sorted(paths.items()):
+                fixed = FIXED_PATHS.get(key)
+                if fixed is None:
+                    errors.append(f"config.yaml: unknown paths key {key!r}; known: {sorted(FIXED_PATHS)}")
+                elif str(value).strip("/").replace("\\", "/") != fixed:
+                    errors.append(
+                        f"config.yaml: paths.{key} is {value!r}, but this version of the Core reads and "
+                        f"writes {fixed!r} only; set it to {fixed!r} or remove it"
+                    )
 
     project = data.get("project")
     if project is not None:

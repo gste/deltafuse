@@ -7,7 +7,7 @@ description: Decompose one specified DeltaFuse slice into dependency-ordered ato
 
 Create executable work without creating new product law.
 
-Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths shown below are defaults.
+Context limits come from `.deltafuse/config.yaml`.
 
 ## Worker (LLM)
 

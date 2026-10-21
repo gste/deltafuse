@@ -7,8 +7,6 @@ description: Normalize a raw feature, bug, document, log, or review note into an
 
 Create the immutable Change request.
 
-Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defaults.
-
 ## Worker (LLM)
 
 This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, and `advance`.
