@@ -217,3 +217,15 @@ def test_coverage_carries_the_cores_evidence_summary_per_task(tmp_path: Path, re
     row = doc["task_evidence"]["TASK-001"]
     assert row["status"] == "superseded" and row["red"].startswith("already-green")
     assert row["green"] == "not owed (superseded)" and row["problems"] == []
+
+
+def test_the_advice_finds_a_task_file_named_with_a_slug(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: the advice read `tasks/<id>.md` only, so for
+    `TASK-001-<slug>.md` it lost requirement_delta and sent a supersedable task to the human."""
+    from deltafuse.core.transitions import already_green_advice
+
+    builder = _decomposed(tmp_path, repo_root, delta="none")
+    _already_green_red(tmp_path, builder)
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    task.rename(task.with_name("TASK-001-penalty-window.md"))
+    assert "--status superseded`" in already_green_advice(builder.change_dir, "TASK-001")

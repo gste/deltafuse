@@ -706,7 +706,9 @@ def already_green_advice(change_path: Path | str, task_id: str) -> str:
 
     change_dir = Path(change_path)
     try:
-        meta, _ = parse_frontmatter((change_dir / "tasks" / f"{task_id}.md").read_text(encoding="utf-8"))
+        # Found as every other Core step finds it: `TASK-NNN-<slug>.md` is allowed.
+        task_file, _ = _artifact_file(change_dir / "tasks", task_id, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
     except Exception:  # an unreadable task file only loses the specific advice
         meta = {}
     if not supersede_errors(change_dir, task_id, meta if isinstance(meta, dict) else {}):
