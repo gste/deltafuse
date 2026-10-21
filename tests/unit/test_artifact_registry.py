@@ -186,3 +186,53 @@ def test_the_string_null_as_design_ref_is_refused_with_the_fix(tmp_path: Path):
     other = [d for d in registry.validate_references("task", payload, change_dir=tmp_path).diagnostics
              if d.path == "/design_ref"]
     assert other and "not the string" not in other[0].message
+
+
+def _pin_order(tmp_path: Path, kind: str, payload: dict, pointer: str, rels: list) -> list:
+    """Write one file per candidate location, each with its own id; peel them off in turn."""
+    repo = tmp_path / "repo"
+    (repo / ".deltafuse").mkdir(parents=True)
+    root = repo / "sub"
+    cdir = repo / "cdir"
+    bases = {"root": root, "repo": repo, "cdir": cdir}
+    files = []
+    for n, (base, rel) in enumerate(rels):
+        path = bases[base].joinpath(*rel)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"---\nid: WINNER-{n}\nchange: CHG-001\n---\nbody\n", encoding="utf-8")
+        files.append(path)
+    winners = []
+    for path in files:
+        res = ArtifactRegistry().validate_references(
+            kind, payload, product_root=root, change_dir=cdir, change_id="CHG-001"
+        )
+        msgs = [d.message for d in res.diagnostics if d.path == pointer]
+        winners.append(msgs[0].split("identity '")[1].split("'")[0])
+        path.unlink()
+    return winners
+
+
+def test_reference_candidate_order_is_pinned(tmp_path: Path):
+    """The first existing candidate wins; this pins the search order of slice and dependency files."""
+    chg = ("docs", "changes", "CHG-001")
+    slice_rels = [
+        ("root", ("slices", "SLICE-01.md")),
+        ("repo", chg + ("slices", "SLICE-01.md")),
+        ("root", chg + ("slices", "SLICE-01.md")),
+        ("cdir", ("slices", "SLICE-01.md")),
+        ("cdir", ("SLICE-01.md",)),
+        ("repo", ("slices", "SLICE-01.md")),
+    ]
+    assert _pin_order(tmp_path / "s", "task", {"slice": "SLICE-01"}, "/slice", slice_rels) == [
+        f"WINNER-{n}" for n in range(len(slice_rels))
+    ]
+    dep_rels = [
+        ("root", ("tasks", "TASK-001.md")),
+        ("repo", chg + ("tasks", "TASK-001.md")),
+        ("root", chg + ("tasks", "TASK-001.md")),
+        ("cdir", ("tasks", "TASK-001.md")),
+        ("repo", ("tasks", "TASK-001.md")),
+    ]
+    assert _pin_order(tmp_path / "d", "task", {"depends_on": ["TASK-001"]}, "/depends_on", dep_rels) == [
+        f"WINNER-{n}" for n in range(len(dep_rels))
+    ]
