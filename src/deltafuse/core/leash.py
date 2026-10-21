@@ -48,14 +48,8 @@ CODE_WRITE_GLOBS = (
     "ops/**",
 )
 SPEC_WRITE_GLOBS = ("docs/spec/**",)
-EXEMPT_EXACT = frozenset(
-    {
-        "AGENTS.md",
-        "CHANGELOG.md",
-        ".deltafuse/lock.yaml",
-        ".deltafuse/config.yaml",
-    }
-)
+# Exact, case-sensitive names; `.deltafuse/lock.yaml` and `config.yaml` fall under `.deltafuse/**`.
+EXEMPT_EXACT = frozenset({"AGENTS.md", "CHANGELOG.md"})
 EXEMPT_GLOBS = (
     ".git/**",
     ".deltafuse/**",
@@ -304,9 +298,9 @@ def reopened_red_path(product_root: Path, rel_path: str) -> bool:
 
 
 def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:
-    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files."""
-    if configured_code_roots(product_root) is None:
-        return CODE_WRITE_GLOBS
+    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files.
+
+    Without code roots this is CODE_WRITE_GLOBS, in its order."""
     ops = tuple(g for g in CODE_WRITE_GLOBS if g not in DEFAULT_CODE_WRITE_GLOBS)
     return code_write_globs(product_root) + ops
 
@@ -467,14 +461,10 @@ def _covered_by(rel_path: str, envelopes: list[dict[str, Any]]) -> dict[str, Any
 
 
 
-DEFAULT_CAPABILITY_ROOTS = ("src/**", "tests/**", "docs/spec/**")
-
-
 def capability_roots(product_root: Path | None) -> tuple[str, ...]:
     """What a task may write when its slice names no bounds (DF3-006): the code roots
-    (`workflow.code_roots` when set, see code_write_globs) and the specification."""
-    if configured_code_roots(product_root) is None:
-        return DEFAULT_CAPABILITY_ROOTS
+    (`workflow.code_roots` when set, else src/** and tests/**; see code_write_globs) and
+    the specification."""
     return code_write_globs(product_root) + ("docs/spec/**",)
 
 
@@ -482,15 +472,13 @@ def _glob_covers(task_glob: str, slice_glob: str) -> bool:
     """True when task_glob is bounded by slice_glob (path-prefix semantics)."""
     norm = lambda g: g.replace("\\", "/").strip().lstrip("/")
     task, sl = norm(task_glob), norm(slice_glob)
-    if task == sl:
-        return True
-    base = sl[:-3] if sl.endswith("/**") else sl
     if sl.endswith("/**"):
-        return task == base or task.startswith(base + "/")
+        base = sl[:-3]
+        return task == base or task.startswith(base + "/")  # task == sl starts with base + "/"
     return task == sl
 
 
-def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[str]:
+def task_envelope_errors(change_path: Path) -> list[str]:
     """SEC-04 / DF3-006: task allowed_paths must stay inside their slice
     target_paths (or the capability-catalog roots when the slice declares
     none). A task cannot widen its write envelope by editing YAML."""
@@ -522,8 +510,6 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     errors: list[str] = []
     for tf, meta in iter_frontmatter(tasks_dir):
         tid = str(meta.get("id") or tf.stem)
-        if task_id is not None and tid != task_id:
-            continue
         sid = str(meta.get("slice") or "")
         bounds = slice_bounds.get(sid) or default_bounds
         for raw in meta.get("allowed_paths") or []:
@@ -850,9 +836,9 @@ def collect_chain_envelopes(
 
 def check_paths(
     rel_paths: list[str],
-    envelopes: list[dict[str, Any]] | dict[str, Any] | None = None,
+    envelopes: list[dict[str, Any]] | None = None,
     *,
-    envelope: dict[str, Any] | None = None,
+    envelope: dict[str, Any] | None = None,  # one envelope, the bench's form of the call
     baseline: str = "draft",
     product_root: Path | None = None,
     base: str | None = None,
@@ -870,9 +856,7 @@ def check_paths(
     ``base`` instead of refused outright, because every `deltafuse advance`
     and `decide` appends to them; without it any change is refused.
     """
-    if isinstance(envelopes, dict):
-        env_list = [envelopes]
-    elif envelopes is None:
+    if envelopes is None:
         env_list = [envelope] if envelope is not None else []
     else:
         env_list = list(envelopes)
