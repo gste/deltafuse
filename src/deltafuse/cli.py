@@ -893,8 +893,11 @@ def _main(argv: list[str] | None = None) -> int:
         errors = validate_config(Path(args.product_path))
         _journal(Path(args.product_path), cmd="validate-config", ok=not errors, errors=errors, n_errors=len(errors))
         if args.json:
+            # Codebase audit 2026-10-21: the JSON was followed by the "valid" line and exit 0,
+            # errors or not - unparseable output with a passing code.
             print(json.dumps({"ok": not errors, "errors": errors}, ensure_ascii=False, indent=2))
-        elif errors:
+            return 1 if errors else 0
+        if errors:
             for e in errors:
                 print(f"config: {e}", file=sys.stderr)
             return 1

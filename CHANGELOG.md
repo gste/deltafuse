@@ -73,6 +73,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A task reopen counts only in its own Change.** The leash looked the reopen up by task id alone,
+  so reopening TASK-001 of one Change let a Red record or a reopen archive of TASK-001 in any other
+  Change through.
+- **`check-gate` refuses an unknown gate**, as `advance` does; a typo printed "passed" and exited 0.
+- **`validate-config --json` exits 1 on errors and prints only the JSON.** It printed the JSON, then
+  the "valid" line, and exited 0 whatever the errors.
+- **The coverage summary names what the `implemented` gate refuses**: a Green with no Red, and on
+  the code route a Green over an already-green Red.
+- **A dead legacy-vocabulary text search is gone.** Its pattern held backspace bytes where `` was
+  meant and matched nothing; the v2 statuses it meant to catch are refused by the schemas' status
+  enums, and fixed it would have refused prose that says "targeting".
 - **The analyze gap pass closes the `analyzed` gate.** After `decide --gap spec-gap`, the skill's
   step 3 closed the gate only for the `coverage` pass, so a literal Worker could finish the gap pass
   and never advance. It now reads "`coverage` or `gap`".
