@@ -40,6 +40,15 @@ REMOVED_PROFILES = {
 }
 TERMINAL_STATUSES = frozenset({"accepted", "rejected"})
 TASK_VERDICTS = frozenset({"cancelled", "reopened"})
+# Receipt kind -> the verdicts it records. A task's Human Gate verdicts answer its `blocked`
+# halt: cancelling drops what it promised (ref-m02-338 observation, 2026-10-04); reopening
+# sends it back to Declare because its declared oracle was wrong (ref-m01-352, 2026-10-08).
+_VERDICTS = {
+    "decision": TERMINAL_STATUSES,
+    "spec": TERMINAL_STATUSES,
+    "task": TASK_VERDICTS,
+    "gap": frozenset({"reopened"}),
+}
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "
     "protect against a forged journal (the Human Gate password guards the "
@@ -90,6 +99,11 @@ def _chain_hash(entry: dict[str, Any]) -> str:
     )
 
 
+def _chain_intact(entry: dict[str, Any]) -> bool:
+    chain = entry.get("chain_hash")
+    return bool(chain) and _chain_hash(entry) == chain
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     """The mapping rows of a JSONL journal, oldest first; blank and unreadable lines skipped."""
     if not path.is_file():
@@ -128,15 +142,9 @@ def record_receipt(
     `human_check` records how the Core knew a human answered: "password" when
     the Human Gate password was verified, "none" when the product has none.
     """
-    if kind not in {"decision", "spec", "task", "gap"}:
+    if kind not in _VERDICTS:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
-    # A task's Human Gate verdicts answer its `blocked` halt: cancelling drops what it
-    # promised (ref-m02-338 observation, 2026-10-04); reopening sends it back to Declare
-    # because its declared oracle was wrong (ref-m01-352, 2026-10-08).
-    verdicts = (
-        TASK_VERDICTS if kind == "task" else {"reopened"} if kind == "gap" else {"accepted", "rejected"}
-    )
-    if status not in verdicts:
+    if status not in _VERDICTS[kind]:
         raise ReceiptError(f"unknown gate verdict: {status!r}")
 
     root = Path(product_root)
@@ -212,8 +220,7 @@ def journal_errors(product_root: Path) -> list[str]:
         if version is None:
             continue  # legacy line: no receipt semantics claimed
         label = f"receipt[{index}]"
-        chain = entry.get("chain_hash")
-        if not chain or _chain_hash(entry) != chain:
+        if not _chain_intact(entry):
             errors.append(f"{label}: chain hash mismatch (entry was edited)")
         if entry.get("prev_hash") is None:
             errors.append(f"{label}: missing prev_hash")
@@ -257,9 +264,7 @@ def has_valid_receipt(
             continue
         version = entry.get("receipt_version")
         if version is not None:
-            if version != RECEIPT_VERSION:
-                continue
-            if not entry.get("chain_hash") or _chain_hash(entry) != entry["chain_hash"]:
+            if version != RECEIPT_VERSION or not _chain_intact(entry):
                 continue
         if (
             current_digest is not None
@@ -307,9 +312,7 @@ def task_reopened(product_root: Path, *, change: str | None, task: str) -> bool:
             continue
         if change is not None and entry.get("change") != change:
             continue
-        if entry.get("receipt_version") is not None and (
-            not entry.get("chain_hash") or _chain_hash(entry) != entry["chain_hash"]
-        ):
+        if entry.get("receipt_version") is not None and not _chain_intact(entry):
             continue
         return entry.get("status") == "reopened"
     return False
