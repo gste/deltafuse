@@ -687,6 +687,11 @@ def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
 
 
 _TASKS_CLOSED = frozenset({"cancelled", "superseded"})
+_TASKS_IMPLEMENTED = frozenset({"implemented", "verified"})
+# Statuses whose Red is taken and its oracle frozen. A `declared` task may still retake Red
+# while the Change is in Declare: ref-m02-340 (2026-10-05) needed to, once this guard also
+# covered that phase - nothing has consumed the oracle yet.
+RED_TAKEN_STATUSES = frozenset({"declared", "implementing"}) | _TASKS_IMPLEMENTED
 
 
 def _tasks_behind_gate(
@@ -990,7 +995,7 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
             row["red"] = f"{red.get('result')} ({red.get('failure_category') or '-'}), {failed} failing test(s)"
         else:
             row["red"] = "none"
-        if row["status"] in {"superseded", "cancelled"}:
+        if row["status"] in _TASKS_CLOSED:
             row["green"] = row["regression"] = f"not owed ({row['status']})"
         else:
             green = _load_record(green_file)
@@ -1040,17 +1045,26 @@ def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     ]
 
 
+# Evidence phase -> (the phase whose write contract its changed_paths must keep, its gate).
+CONTRACT_GATES = {
+    "red": ("declare", "declaring"),
+    "green": ("implement", "implemented"),
+    "regression": ("implement", "implemented"),
+}
+
+
 def _validate_evidence_changed_paths_contract(
     change_path: Path,
     evidence_phase: str,
-    contract_phase: str,
+    contract_phase: str | None = None,
     *,
-    gate: str,
+    gate: str | None = None,
     route: str = "code",
     only_file: str | None = None,
 ) -> list[str]:
     """RM-002: evidence changed_paths must stay inside route write globs.
 
+    `contract_phase` and `gate` default to the evidence phase's own (CONTRACT_GATES).
     `only_file` limits the check to one record (`deltafuse evidence` asks about the one it
     just wrote).
 
@@ -1067,6 +1081,8 @@ def _validate_evidence_changed_paths_contract(
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
         return errors
+    contract_phase = contract_phase or CONTRACT_GATES[evidence_phase][0]
+    gate = gate or CONTRACT_GATES[evidence_phase][1]
     write_globs = phase_write_globs(contract_phase, route, product_root_of(change_path))
     tasks = _task_frontmatter_by_id(change_path)
     sibling_declared = [
@@ -1568,19 +1584,8 @@ def _check_gate(
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
-        errors.extend(
-            _tasks_behind_gate(
-                change_path,
-                "declaring",
-                {"declared", "implementing", "implemented", "verified"},
-                ("red",),
-            )
-        )
-        errors.extend(
-            _validate_evidence_changed_paths_contract(
-                change_path, "red", "declare", gate="declaring", route=route
-            )
-        )
+        errors.extend(_tasks_behind_gate(change_path, "declaring", RED_TAKEN_STATUSES, ("red",)))
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "red", route=route))
 
     elif gate_lower == "implemented":
         green_dir = change_path / "evidence" / "green"
@@ -1593,7 +1598,7 @@ def _check_gate(
         behind = _tasks_behind_gate(
             change_path,
             "implemented",
-            {"implemented", "verified"},
+            _TASKS_IMPLEMENTED,
             ("green", "regression") if route == "code" else ("green",),
         )
         if any("every task must be implemented first" in e for e in behind):
@@ -1605,59 +1610,37 @@ def _check_gate(
             errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
         else:
             errors.extend(behind)
-        errors.extend(
-            _validate_evidence_changed_paths_contract(
-                change_path, "green", "implement", gate="implemented", route=route
-            )
-        )
-        if reg_dir.is_dir() and list(reg_dir.glob("*.yaml")):
-            errors.extend(
-                _validate_evidence_changed_paths_contract(
-                    change_path, "regression", "implement", gate="implemented", route=route
-                )
-            )
-
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "green", route=route))
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "regression", route=route))
 
         # DF3-006: Red and Green are bound to one test oracle — a Green stamp
         # without the task's own Red evidence does not close the gate.
-        if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
-            # A superseded or cancelled task is not implemented, so a Green recorded for it
-            # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
-            # Green for a task superseded on an already-green Red, and this gate refused it as
-            # "answers an already-green Red" with every task done - no step could clear it.
-            closed = {
-                tid for tid, meta in _task_frontmatter_by_id(change_path).items()
-                if meta.get("status") in {"superseded", "cancelled"}
-            }
-            for green_file in sorted(green_dir.glob("*.yaml")):
-                if green_file.stem in closed:
-                    continue
-                red_file = change_path / "evidence" / "red" / green_file.name
-                if not red_file.is_file():
-                    errors.append(
-                        f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
-                    )
-                    continue
-                if route == "code":
-                    errors.extend(_already_green_red_errors(red_file, green_file.name))
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in frozen_oracle_errors(
-                            red_file, repo_root, f"green evidence '{green_file.name}'"
-                        )
-                    )
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in green_coverage_errors(
-                            red_file, green_file, f"green evidence '{green_file.name}'"
-                        )
-                    )
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in isolation_errors(
-                            red_file, green_file, f"green evidence '{green_file.name}'"
-                        )
-                    )
+        # A superseded or cancelled task is not implemented, so a Green recorded for it
+        # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
+        # Green for a task superseded on an already-green Red, and this gate refused it as
+        # "answers an already-green Red" with every task done - no step could clear it.
+        closed = {
+            tid for tid, meta in _task_frontmatter_by_id(change_path).items()
+            if meta.get("status") in _TASKS_CLOSED
+        }
+        for green_file in sorted(green_dir.glob("*.yaml")):
+            if green_file.stem in closed:
+                continue
+            red_file = change_path / "evidence" / "red" / green_file.name
+            if not red_file.is_file():
+                errors.append(
+                    f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+                )
+                continue
+            if route == "code":
+                label = f"green evidence '{green_file.name}'"
+                errors.extend(_already_green_red_errors(red_file, green_file.name))
+                errors.extend(
+                    f"Gate implemented: {e}"
+                    for e in frozen_oracle_errors(red_file, repo_root, label)
+                    + green_coverage_errors(red_file, green_file, label)
+                    + isolation_errors(red_file, green_file, label)
+                )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"
@@ -1674,7 +1657,7 @@ def _check_gate(
 
         # Check all tasks frontmatter status (P1 / T3 / RM-005)
         if tasks_dir.is_dir():
-            terminal = {"implemented", "verified", "cancelled", "superseded"}
+            terminal = _TASKS_IMPLEMENTED | _TASKS_CLOSED
             for task_file in tasks_dir.glob("*.md"):
                 try:
                     meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))

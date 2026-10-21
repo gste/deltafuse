@@ -18,8 +18,12 @@ import yaml
 
 from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import (
+    CONTRACT_GATES,
+    RED_TAKEN_STATUSES,
+    _TASKS_CLOSED,
     _frontmatters,
     _load_record,
+    _validate_evidence_changed_paths_contract,
     find_repo_root,
     frozen_oracle_errors,
     isolation_errors,
@@ -189,34 +193,27 @@ def _runner_not_found(program: str, ex: OSError) -> str:
     return f"runner `{program}` not found on PATH ({ex})"
 
 
-_CONTRACT_GATES = {"red": ("declare", "declaring"), "green": ("implement", "implemented"),
-                   "regression": ("implement", "implemented")}
-
-
 def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) -> list[str]:
     """The gate's changed_paths check on this record, now rather than at the gate.
 
     Fuse-Back shopkit (2026-10-08): evidence said "authentic" and the `declaring` gate refused the
     record a step later, when it could no longer be retaken.
     """
-    if phase not in _CONTRACT_GATES:
+    if phase not in CONTRACT_GATES:
         return []
-    from deltafuse.core.fsm import _validate_evidence_changed_paths_contract
-
-    contract, gate = _CONTRACT_GATES[phase]
-    out: list[str] = []
+    contract = CONTRACT_GATES[phase][0]
     # Selected by file, not by the message text: the forbidden_paths and docs/ops messages name
     # the record without a colon after it, and a text filter dropped both at record time.
-    for msg in _validate_evidence_changed_paths_contract(
-        change_path, phase, contract, gate=gate, route=route, only_file=dest.name
-    ):
-        if "'docs/spec/" in msg:
-            msg += (
-                " - the specification changed after the `specified` gate accepted it, and "
-                f"{contract.capitalize()} does not write the specification"
-            )
-        out.append(msg)
-    return out
+    return [
+        msg + (
+            " - the specification changed after the `specified` gate accepted it, and "
+            f"{contract.capitalize()} does not write the specification"
+            if "'docs/spec/" in msg else ""
+        )
+        for msg in _validate_evidence_changed_paths_contract(
+            change_path, phase, route=route, only_file=dest.name
+        )
+    ]
 
 
 def _sanitize_command(argv: list[str]) -> str:
@@ -444,10 +441,6 @@ def _core_computed_changed_paths(repo_root: Path, change_path: Path | None = Non
         out.append(raw)
     return out
 
-# Statuses whose Red is taken and its oracle frozen. A `declared` task may still retake Red
-# while the Change is in Declare: ref-m02-340 (2026-10-05) needed to, once this guard also
-# covered that phase - nothing has consumed the oracle yet.
-RED_TAKEN_STATUSES = frozenset({"declared", "implementing", "implemented", "verified"})
 DECLARE_CHANGE_STATUSES = frozenset({"decomposed", "declaring"})
 
 
@@ -536,7 +529,7 @@ def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
     if found is None:
         return
     task_id, status = found
-    if status in {"superseded", "cancelled"}:
+    if status in _TASKS_CLOSED:
         raise EvidenceRunError(
             f"{task_id} is '{status}': it is not implemented, so it has no Green - "
             + ("its Red already passed and its test stays as regression. " if status == "superseded" else "")
