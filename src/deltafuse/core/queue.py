@@ -721,6 +721,27 @@ def _human_gate_halt(
     return halt
 
 
+# Checked in this order: a pending Decision is answered before a specification.
+_HUMAN_GATE_PROMPTS = {
+    "decision": "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
+    "spec": "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
+}
+
+
+def _human_gate_targets(item: WorkItem, product_root: Path) -> list[tuple[str, str, str]]:
+    """(choice id suffix, label subject, `decide` arguments) a blocked Human Gate item offers."""
+    if item.halt_kind == "decision":
+        if not item.change_id:
+            return []
+        return [
+            (f":{row['id']}", f"{row['id']}: {row['title']}", f"{item.path or '.'} --decision {row['id']}")
+            for row in list_proposed_decisions_for_change(item.change_id, product_root)
+        ]
+    if not item.path:
+        return []
+    return [(f"-spec:{item.change_id}", f"specification for {item.change_id}", f"{item.path} --spec")]
+
+
 def build_halt(
     queue: WorkQueue,
     selected: WorkItem | None,
@@ -747,60 +768,24 @@ def build_halt(
             ],
         }
     kinds = {item.halt_kind for item in queue.blocked if item.halt_kind}
-    if "decision" in kinds:
+    for kind, prompt in _HUMAN_GATE_PROMPTS.items():
+        if kind not in kinds:
+            continue
         choices: list[dict[str, Any]] = []
         for item in queue.blocked:
-            if item.halt_kind != "decision" or not item.change_id:
+            if item.halt_kind != kind:
                 continue
-            for row in list_proposed_decisions_for_change(item.change_id, product_root):
-                loc = item.path or "."
-                choices.append(
-                    _choice(
-                        f"accept:{row['id']}",
-                        f"Accept {row['id']}: {row['title']}",
-                        f"deltafuse decide {loc} --decision {row['id']} --status accepted",
+            for suffix, subject, target in _human_gate_targets(item, product_root):
+                for verb, status in (("accept", "accepted"), ("reject", "rejected")):
+                    choices.append(
+                        _choice(
+                            f"{verb}{suffix}",
+                            f"{verb.capitalize()} {subject}",
+                            f"deltafuse decide {target} --status {status}",
+                        )
                     )
-                )
-                choices.append(
-                    _choice(
-                        f"reject:{row['id']}",
-                        f"Reject {row['id']}: {row['title']}",
-                        f"deltafuse decide {loc} --decision {row['id']} --status rejected",
-                    )
-                )
         choices.append(_choice("inspect", "Stop and inspect", None))
-        return _human_gate_halt(
-            "decision",
-            "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
-            choices,
-            product_root,
-        )
-    if "spec" in kinds:
-        choices = []
-        for item in queue.blocked:
-            if item.halt_kind != "spec" or not item.path:
-                continue
-            choices.append(
-                _choice(
-                    f"accept-spec:{item.change_id}",
-                    f"Accept specification for {item.change_id}",
-                    f"deltafuse decide {item.path} --spec --status accepted",
-                )
-            )
-            choices.append(
-                _choice(
-                    f"reject-spec:{item.change_id}",
-                    f"Reject specification for {item.change_id}",
-                    f"deltafuse decide {item.path} --spec --status rejected",
-                )
-            )
-        choices.append(_choice("inspect", "Stop and inspect", None))
-        return _human_gate_halt(
-            "spec",
-            "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
-            choices,
-            product_root,
-        )
+        return _human_gate_halt(kind, prompt, choices, product_root)
     if queue.blocked:
         return {
             "kind": "blocked",
