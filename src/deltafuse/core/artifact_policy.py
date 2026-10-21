@@ -348,12 +348,3 @@ def validate_artifact_policy(
             )
 
     return PolicyOutcome(authorized=True, reason="Authorized")
-
-
-def revalidate_authorization_context(auth_ctx: AuthorizationContext, product_root: Path | str | None = None) -> bool:
-    """Re-verify authorization fingerprint against live product root under commit lock."""
-    root = Path(product_root).resolve() if product_root else auth_ctx.product_root
-    current_lock = _get_lock_hash(root)
-    if current_lock != auth_ctx.lock_hash:
-        return False
-    return True
