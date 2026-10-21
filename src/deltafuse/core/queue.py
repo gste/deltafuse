@@ -10,6 +10,7 @@ import yaml
 
 from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
+from deltafuse.core.config import config_section
 from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
@@ -206,18 +207,8 @@ def load_product_root(start: Path | str) -> Path:
 
 
 def changes_dir(product_root: Path) -> Path:
-    config_file = product_root / ".deltafuse" / "config.yaml"
-    rel = "docs/changes"
-    if config_file.is_file():
-        try:
-            data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-        except Exception:
-            data = None
-        if isinstance(data, dict):
-            paths = data.get("paths") or {}
-            if isinstance(paths, dict) and isinstance(paths.get("changes"), str):
-                rel = paths["changes"]
-    return product_root / rel
+    rel = config_section(product_root, "paths").get("changes")
+    return product_root / (rel if isinstance(rel, str) else "docs/changes")
 
 
 def _consumed_intake_refs(product_root: Path) -> set[str]:
@@ -656,12 +647,7 @@ DEFAULT_ADAPTER_ROOTS = (".agents/skills", ".cursor/skills", ".gemini/skills")
 
 def adapter_skill_roots(product_root: Path) -> list[str]:
     """Where installed skills live, from `adapters.roots` in the product config."""
-    try:
-        data = yaml.safe_load((product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return list(DEFAULT_ADAPTER_ROOTS)
-    adapters = data.get("adapters") if isinstance(data, dict) else None
-    roots = adapters.get("roots") if isinstance(adapters, dict) else None
+    roots = config_section(product_root, "adapters", tolerate=(OSError, yaml.YAMLError)).get("roots")
     if isinstance(roots, list) and roots:
         return [str(r) for r in roots if isinstance(r, str) and r.strip()]
     return list(DEFAULT_ADAPTER_ROOTS)

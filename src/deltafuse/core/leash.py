@@ -25,6 +25,7 @@ from deltafuse.core.context import (
     phase_write_globs,
     posix_relpath,
 )
+from deltafuse.core.config import config_section
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.queue import WorkItem
@@ -113,19 +114,7 @@ def _unique(items: list[str]) -> list[str]:
 
 def load_leash_mode(product_root: Path, *, missing: str = DEFAULT_LEASH_MODE) -> str:
     """CLI default when the key is absent is enforce. Hook install uses missing='off'."""
-    path = product_root / ".deltafuse" / "config.yaml"
-    if not path.is_file():
-        return missing
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
-        return missing
-    if not isinstance(data, dict):
-        return missing
-    workflow = data.get("workflow")
-    if not isinstance(workflow, dict):
-        return missing
-    raw = workflow.get("leash")
+    raw = config_section(product_root, "workflow").get("leash")
     if raw is None:
         return missing
     mode = normalize_leash_mode(raw)
@@ -133,22 +122,8 @@ def load_leash_mode(product_root: Path, *, missing: str = DEFAULT_LEASH_MODE) ->
 
 
 def load_baseline(product_root: Path) -> str:
-    path = product_root / ".deltafuse" / "config.yaml"
-    if not path.is_file():
-        return "draft"
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
-        return "draft"
-    if not isinstance(data, dict):
-        return "draft"
-    project = data.get("project")
-    if not isinstance(project, dict):
-        return "draft"
-    raw = str(project.get("baseline") or "draft").strip().lower()
-    if raw == "accepted":
-        return "accepted"
-    return "draft"
+    raw = str(config_section(product_root, "project").get("baseline") or "draft").strip().lower()
+    return "accepted" if raw == "accepted" else "draft"
 
 
 def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], list[str]]:

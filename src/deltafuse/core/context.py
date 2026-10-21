@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 import yaml
+from deltafuse.core.config import config_section
 from deltafuse.core.integrity import path_is_inside_repo
 
 
@@ -204,14 +205,7 @@ def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | 
     """`workflow.code_roots` from the product's config, or None when it sets none."""
     if product_root is None:
         return None
-    try:
-        data = yaml.safe_load(
-            (Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
-        )
-    except (OSError, yaml.YAMLError):
-        return None
-    workflow = data.get("workflow") if isinstance(data, dict) else None
-    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
+    roots = config_section(product_root, "workflow", tolerate=(OSError, yaml.YAMLError)).get("code_roots")
     if not isinstance(roots, list):
         return None
     clean = [posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()]
