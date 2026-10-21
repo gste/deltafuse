@@ -416,225 +416,136 @@ def _main(argv: list[str] | None = None) -> int:
 
     # evidence command (WK-002)
     ev_parser = subparsers.add_parser(
-        "evidence",
-        help="Run a command after '--' and write evidence/red|green|regression YAML",
+        "evidence", help="Run a command after '--' and write evidence/red|green|regression YAML"
     )
     ev_parser.add_argument("change_path", help="Path to Change package directory")
     ev_parser.add_argument(
-        "--phase",
-        "-p",
-        required=True,
-        choices=["red", "green", "regression", "verification"],
+        "--phase", "-p", required=True, choices=["red", "green", "regression", "verification"],
         help="Evidence phase to record",
     )
     ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
-    ev_parser.add_argument(
-        "--changed-path",
-        action="append",
-        default=[],
-        dest="changed_paths",
-        help="Relative path written by the Worker (repeatable)",
-    )
+    ev_parser.add_argument("--changed-path", action="append", default=[], dest="changed_paths",
+                           help="Relative path written by the Worker (repeatable)")
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
 
-    cov_parser = subparsers.add_parser(
-        "coverage",
-        help="Write coverage.yaml from routing and slices (no LLM)",
-    )
+    cov_parser = subparsers.add_parser("coverage",
+                                       help="Write coverage.yaml from routing and slices (no LLM)")
     cov_parser.add_argument("change_path", help="Path to Change package directory")
 
     # next / work queue (WK-003)
-    next_parser = subparsers.add_parser(
-        "next",
-        help="Select the next ready lifecycle step (no LLM)",
-    )
-    next_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root or Change package directory (default: current dir)",
-    )
+    next_parser = subparsers.add_parser("next", help="Select the next ready lifecycle step (no LLM)")
+    next_parser.add_argument("path", nargs="?", default=".",
+                             help="Product root or Change package directory (default: current dir)")
     next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
     next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
     next_parser.add_argument(
-        "--human",
-        action="store_true",
+        "--human", action="store_true",
         help="Print a checklist from the step contract (same files, not a second process)",
     )
-    next_parser.add_argument(
-        "--step",
-        choices=list(step_names()),
-        help="Only select this step",
-    )
+    next_parser.add_argument("--step", choices=list(step_names()), help="Only select this step")
 
     decide_parser = subparsers.add_parser(
-        "decide",
-        help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)",
+        "decide", help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)"
     )
+    decide_parser.add_argument("path", nargs="?", default=".",
+                               help="Product root, or Change directory for --spec")
+    decide_parser.add_argument("--decision", "-d", default=None, help="DEC id or docs/decisions/*.md path")
+    decide_parser.add_argument("--spec", action="store_true",
+                               help="Apply the specification Human Gate (spec-delta.md on the Change path)")
     decide_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root, or Change directory for --spec",
-    )
-    decide_parser.add_argument(
-        "--decision",
-        "-d",
-        default=None,
-        help="DEC id or docs/decisions/*.md path",
-    )
-    decide_parser.add_argument(
-        "--spec",
-        action="store_true",
-        help="Apply the specification Human Gate (spec-delta.md on the Change path)",
-    )
-    decide_parser.add_argument(
-        "--task",
-        default=None,
+        "--task", default=None,
         help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
     )
     decide_parser.add_argument(
-        "--status",
-        required=True,
-        choices=["accepted", "rejected", "cancelled", "reopened"],
+        "--status", required=True, choices=["accepted", "rejected", "cancelled", "reopened"],
         help="Recorded human choice (cancelled, reopened: only with --task)",
     )
     decide_parser.add_argument(
-        "--gap",
-        default=None,
+        "--gap", default=None,
         help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
     )
     decide_parser.add_argument(
-        "--note",
-        default=None,
-        help="With --status reopened: what the human passes on to the next Declare",
+        "--note", default=None, help="With --status reopened: what the human passes on to the next Declare"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
     # Human Gate password: interactive only, never a flag or an environment
     # variable - anything a Worker's shell can pass, a Worker can pass.
     gpw_parser = subparsers.add_parser(
-        "gate-password",
-        help="Set, clear or show the optional Human Gate password (interactive only)",
+        "gate-password", help="Set, clear or show the optional Human Gate password (interactive only)"
     )
     gpw_parser.add_argument("action", choices=["set", "clear", "status"])
     gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
 
     cap_parser = subparsers.add_parser(
-        "capability",
-        help="Propose a capability the catalog does not have yet (draft, Analyze)",
+        "capability", help="Propose a capability the catalog does not have yet (draft, Analyze)"
     )
     cap_sub = cap_parser.add_subparsers(dest="capability_command", required=True)
-    cap_propose = cap_sub.add_parser(
-        "propose", help="Add <domain>.<capability> to the catalog as a draft"
-    )
+    cap_propose = cap_sub.add_parser("propose", help="Add <domain>.<capability> to the catalog as a draft")
     cap_propose.add_argument("name", help="<domain>.<capability>, e.g. monitoring.usage_stats")
     cap_propose.add_argument("--summary", required=True, help="One line: what it is responsible for")
-    cap_propose.add_argument(
-        "--spec", required=True, help="Spec file Specify will write, under docs/spec/"
-    )
-    cap_propose.add_argument(
-        "--code-root", action="append", default=[], help="Code root it will own (repeatable)"
-    )
+    cap_propose.add_argument("--spec", required=True, help="Spec file Specify will write, under docs/spec/")
+    cap_propose.add_argument("--code-root", action="append", default=[],
+                             help="Code root it will own (repeatable)")
     cap_propose.add_argument("--path", default=".", help="Product root")
 
     # board snapshot (FM-001)
-    board_parser = subparsers.add_parser(
-        "board",
-        help="Emit a read-only fuse-map board snapshot (no product writes)",
-    )
+    board_parser = subparsers.add_parser("board",
+                                         help="Emit a read-only fuse-map board snapshot (no product writes)")
+    board_parser.add_argument("product_path", nargs="?", default=".",
+                              help="Product repository root (default: current dir)")
     board_parser.add_argument(
-        "product_path",
-        nargs="?",
-        default=".",
-        help="Product repository root (default: current dir)",
-    )
-    board_parser.add_argument(
-        "--json",
-        action="store_true",
-        default=True,
+        "--json", action="store_true", default=True,
         help="Write the snapshot JSON to stdout (default; the only stdout on success)",
     )
-    board_parser.add_argument(
-        "--archive",
-        action="store_true",
-        help="Include archived Change cards",
-    )
+    board_parser.add_argument("--archive", action="store_true", help="Include archived Change cards")
 
     # validate-config (DF3-009 item 5): one validator for config contracts
-    cfg_parser = subparsers.add_parser(
-        "validate-config", help="Validate .deltafuse/config.yaml as one contract"
-    )
+    cfg_parser = subparsers.add_parser("validate-config",
+                                       help="Validate .deltafuse/config.yaml as one contract")
     cfg_parser.add_argument("product_path", nargs="?", default=".")
     cfg_parser.add_argument("--json", action="store_true")
 
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
-    leash_parser = subparsers.add_parser(
-        "leash",
-        help="Check git diff against the current write envelope (no LLM)",
-    )
-    leash_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root (default: current dir)",
-    )
+    leash_parser = subparsers.add_parser("leash",
+                                         help="Check git diff against the current write envelope (no LLM)")
+    leash_parser.add_argument("path", nargs="?", default=".", help="Product root (default: current dir)")
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
     leash_parser.add_argument(
-        "--base",
-        default=None,
+        "--base", default=None,
         help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
     )
-    leash_parser.add_argument(
-        "--head",
-        default=None,
-        help="Exact head SHA (default: HEAD); requires --base",
-    )
-    leash_parser.add_argument(
-        "--file",
-        action="append",
-        default=[],
-        dest="files",
-        help="Relative path to check instead of git diff (repeatable)",
-    )
+    leash_parser.add_argument("--head", default=None, help="Exact head SHA (default: HEAD); requires --base")
+    leash_parser.add_argument("--file", action="append", default=[], dest="files",
+                              help="Relative path to check instead of git diff (repeatable)")
 
     bench_parser = subparsers.add_parser(
-        "bench",
-        help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)",
+        "bench", help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)"
     )
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
     bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
     bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
     bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
+    bench_init.add_argument("--force", "-f", action="store_true",
+                            help="Recreate the sandbox if the directory already exists")
     bench_init.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Recreate the sandbox if the directory already exists",
-    )
-    bench_init.add_argument(
-        "--pack",
-        default=None,
+        "--pack", default=None,
         help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
     )
     # `score` and `compare` live in deltafuse-bench since 3.3.0: the judge is
     # versioned apart from the framework it measures (roadmap: one harness in
     # deltafuse-bench). The framework keeps only what a product produces.
-    bench_journal = bench_sub.add_parser(
-        "journal",
-        help="Judge: collect Core attempts from a sandbox journal (no LLM)",
-    )
+    bench_journal = bench_sub.add_parser("journal",
+                                         help="Judge: collect Core attempts from a sandbox journal (no LLM)")
     bench_journal.add_argument("product_dir", help="Product root created by bench init")
 
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
     art_sub = art_parser.add_subparsers(dest="artifact_cmd", required=True)
-
     art_write = art_sub.add_parser(
-        "write",
-        help="Create or update a Change artifact: fields plus a prose body (the Worker's path)",
+        "write", help="Create or update a Change artifact: fields plus a prose body (the Worker's path)"
     )
     art_write.add_argument("--kind", "-k", required=True, help="task | slice | routing | spec-delta | change")
     art_write.add_argument("--change", "-c", required=True, help="Change directory")
