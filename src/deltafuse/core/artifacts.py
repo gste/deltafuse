@@ -102,7 +102,7 @@ class ArtifactService:
     @property
     def transaction_mgr(self) -> TransactionManager:
         if self._transaction_mgr is None:
-            self._transaction_mgr = TransactionManager(self.product_root, change_dir=self.change_dir)
+            self._transaction_mgr = TransactionManager(self.product_root)
         return self._transaction_mgr
 
     def _resolve_target_path(self, kind: str, identity_or_target: str | Path) -> Path:

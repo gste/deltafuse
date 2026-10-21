@@ -89,9 +89,8 @@ def _write_atomic_json(target_path: Path, content_dict: dict[str, Any]) -> None:
 class TransactionManager:
     """Core transaction manager for artifact updates, receipts, and crash recovery."""
 
-    def __init__(self, product_root: Path, change_dir: Path | None = None):
+    def __init__(self, product_root: Path):
         self.product_root = Path(product_root)
-        self.change_dir = Path(change_dir) if change_dir else self.product_root
         self.journal_dir = self.product_root / ".deltafuse" / "journal"
         self.receipts_dir = self.product_root / ".deltafuse" / "receipts"
 
