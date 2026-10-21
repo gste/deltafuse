@@ -105,36 +105,26 @@ def _strip_anchor(ref: str) -> str:
     return ref.split("#", 1)[0].strip()
 
 
-def routing_primary_capabilities(change_path: Path | str) -> list[str]:
-    """Distinct owning capabilities from routing.yaml, stable order."""
-    data = _load_yaml_mapping(Path(change_path) / "routing.yaml")
-    if not data:
-        return []
-    claims = data.get("claims")
+def _routing_claims(change_path: Path | str) -> list[tuple[Any, str]]:
+    """(claim id, primary_capability) of each routing.yaml claim that names a capability."""
+    claims = (_load_yaml_mapping(Path(change_path) / "routing.yaml") or {}).get("claims")
     if not isinstance(claims, dict):
         return []
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for row in claims.values():
-        if not isinstance(row, dict):
-            continue
-        cap = row.get("primary_capability")
-        if isinstance(cap, str) and cap and cap not in seen:
-            seen.add(cap)
-            ordered.append(cap)
-    ordered.sort()
-    return ordered
+    return [
+        (cid, row["primary_capability"])
+        for cid, row in claims.items()
+        if isinstance(row, dict) and isinstance(row.get("primary_capability"), str) and row["primary_capability"]
+    ]
+
+
+def routing_primary_capabilities(change_path: Path | str) -> list[str]:
+    """Distinct owning capabilities from routing.yaml, sorted; a claim with a non-string id counts too."""
+    return sorted({cap for _, cap in _routing_claims(change_path)})
 
 
 def slice_primary_capabilities(change_path: Path | str) -> dict[str, str]:
     """Map SLICE-NN -> primary_capability for readable slice files."""
-    found: dict[str, str] = {}
-    for _, meta in iter_frontmatter(Path(change_path) / "slices"):
-        slice_id = meta.get("id")
-        cap = meta.get("primary_capability")
-        if isinstance(slice_id, str) and isinstance(cap, str) and cap:
-            found[slice_id] = cap
-    return found
+    return {row.slice_id: row.primary_capability for row in load_slice_records(change_path)}
 
 
 def covered_primary_capabilities(change_path: Path | str) -> set[str]:
@@ -291,20 +281,8 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> PassCursor | None:
 
 
 def routing_claim_capabilities(change_path: Path | str) -> dict[str, str]:
-    data = _load_yaml_mapping(Path(change_path) / "routing.yaml")
-    if not data:
-        return {}
-    claims = data.get("claims")
-    if not isinstance(claims, dict):
-        return {}
-    caps: dict[str, str] = {}
-    for cid, row in claims.items():
-        if not isinstance(cid, str) or not isinstance(row, dict):
-            continue
-        cap = row.get("primary_capability")
-        if isinstance(cap, str) and cap:
-            caps[cid] = cap
-    return caps
+    """Claim id -> primary_capability from routing.yaml, for string claim ids."""
+    return {cid: cap for cid, cap in _routing_claims(change_path) if isinstance(cid, str)}
 
 
 def load_slice_records(change_path: Path | str) -> list[SliceRecord]:
