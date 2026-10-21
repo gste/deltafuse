@@ -161,19 +161,23 @@ def validate_config(product_root: Path | str) -> list[str]:
     return errors
 
 
+def config_section(
+    product_root: Path | str,
+    key: str,
+    *,
+    tolerate: tuple[type[BaseException], ...] = (Exception,),
+) -> dict:
+    """One top-level mapping of `.deltafuse/config.yaml`, or {} when the file, its YAML or the
+    key is missing or not a mapping. A read or parse error outside *tolerate* propagates."""
+    try:
+        data = yaml.safe_load((Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    except tolerate:
+        return {}
+    section = data.get(key) if isinstance(data, dict) else None
+    return section if isinstance(section, dict) else {}
+
+
 def load_trace_claims_mode(product_root: Path | str, *, missing: str = "off") -> str:
     """`workflow.trace_claims`: off (default) or warn. See TRACE_CLAIMS_MODES."""
-    path = Path(product_root) / ".deltafuse" / "config.yaml"
-    if not path.is_file():
-        return missing
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
-        return missing
-    if not isinstance(data, dict):
-        return missing
-    workflow = data.get("workflow")
-    if not isinstance(workflow, dict):
-        return missing
-    mode = workflow.get("trace_claims")
+    mode = config_section(product_root, "workflow").get("trace_claims")
     return mode if mode in TRACE_CLAIMS_MODES else missing

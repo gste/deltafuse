@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 import yaml
+from deltafuse.core.config import config_section
 from deltafuse.core.integrity import path_is_inside_repo
 
 
@@ -142,6 +143,13 @@ _ROUTE_IMPLEMENT_EVIDENCE = [
 ]
 _DOCS_WRITE_GLOBS = ["docs/spec/**", "CHANGELOG.md"]
 _OPS_WRITE_GLOBS = ["deploy/**", "docs/ops/**", "ops/**"]
+# Declare and Implement on a non-code route; any other (phase, route) uses PHASE_CONTRACTS.
+_ROUTE_WRITE_GLOBS = {
+    ("declare", "docs"): _DOCS_WRITE_GLOBS + _ROUTE_TARGET_EVIDENCE,
+    ("declare", "ops"): _OPS_WRITE_GLOBS + _ROUTE_TARGET_EVIDENCE,
+    ("implement", "docs"): _DOCS_WRITE_GLOBS + _ROUTE_IMPLEMENT_EVIDENCE,
+    ("implement", "ops"): _OPS_WRITE_GLOBS + _ROUTE_IMPLEMENT_EVIDENCE,
+}
 
 
 def normalize_change_route(value: Any) -> str | None:
@@ -156,34 +164,21 @@ def normalize_change_route(value: Any) -> str | None:
 
 def load_change_route(change_path: Path | str) -> tuple[str, list[str]]:
     """SSOT is change.yaml `route`; routing.yaml may echo it. Missing means code."""
-    path = Path(change_path)
     errors: list[str] = []
-    change_route = None
-    routing_route = None
-    change_file = path / "change.yaml"
-    if change_file.is_file():
+    routes: dict[str, str | None] = {}
+    for name in ("change.yaml", "routing.yaml"):
+        file = Path(change_path) / name
+        if not file.is_file():
+            continue
         try:
-            data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
+            data = yaml.safe_load(file.read_text(encoding="utf-8"))
         except Exception:
             data = None
         if isinstance(data, dict) and "route" in data:
-            change_route = normalize_change_route(data.get("route"))
-            if change_route is None:
-                errors.append(
-                    f"change.yaml: route must be one of {', '.join(sorted(CHANGE_ROUTES))}"
-                )
-    routing_file = path / "routing.yaml"
-    if routing_file.is_file():
-        try:
-            data = yaml.safe_load(routing_file.read_text(encoding="utf-8"))
-        except Exception:
-            data = None
-        if isinstance(data, dict) and "route" in data:
-            routing_route = normalize_change_route(data.get("route"))
-            if routing_route is None:
-                errors.append(
-                    f"routing.yaml: route must be one of {', '.join(sorted(CHANGE_ROUTES))}"
-                )
+            routes[name] = normalize_change_route(data.get("route"))
+            if routes[name] is None:
+                errors.append(f"{name}: route must be one of {', '.join(sorted(CHANGE_ROUTES))}")
+    change_route, routing_route = routes.get("change.yaml"), routes.get("routing.yaml")
     if change_route and routing_route and change_route != routing_route:
         errors.append(
             f"route mismatch: change.yaml has '{change_route}' but routing.yaml has '{routing_route}'"
@@ -204,14 +199,7 @@ def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | 
     """`workflow.code_roots` from the product's config, or None when it sets none."""
     if product_root is None:
         return None
-    try:
-        data = yaml.safe_load(
-            (Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")
-        )
-    except (OSError, yaml.YAMLError):
-        return None
-    workflow = data.get("workflow") if isinstance(data, dict) else None
-    roots = workflow.get("code_roots") if isinstance(workflow, dict) else None
+    roots = config_section(product_root, "workflow", tolerate=(OSError, yaml.YAMLError)).get("code_roots")
     if not isinstance(roots, list):
         return None
     clean = [posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()]
@@ -332,7 +320,7 @@ TOKENIZER_RETRY_WAITS_S = (1, 2, 4, 8, 15, 30)
 _sleep = time.sleep
 
 
-def count_tokens(text: str, path: Path | None = None) -> TokenCount:
+def count_tokens(text: str) -> TokenCount:
     """Count tokens and name the mode that produced the number.
 
     Q0-2: the endpoint is tried first, exactly as before. What changed is that
@@ -362,13 +350,13 @@ def count_tokens(text: str, path: Path | None = None) -> TokenCount:
             f"{TOKENIZER_REQUIRED_ENV} is set but {TOKENIZE_URL_ENV} is empty; "
             "a measured token count is mandatory for a qualification run"
         )
-    # `path` stays in the signature for callers; A04-01 does not depend on file type.
+    # A04-01 does not depend on file type, so no path is taken.
     return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
 
 
-def estimate_tokens(text: str, path: Path | None = None) -> int:
+def estimate_tokens(text: str) -> int:
     """Token count: optional /tokenize, else the A04-01 byte estimate."""
-    return count_tokens(text, path).tokens
+    return count_tokens(text).tokens
 
 
 def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
@@ -393,7 +381,7 @@ def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
             content = resolved.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        counted = count_tokens(content, resolved)
+        counted = count_tokens(content)
         total += counted.tokens
         modes.add(counted.mode)
         details.add(counted.detail)
@@ -485,14 +473,25 @@ def validate_context_budget(
         seen.add(resolved)
         unique_files.append(resolved)
 
-    if max_files is not None and len(unique_files) > max_files:
+    return errors + _budget_errors(max_files, max_tokens, len(unique_files), unique_files, receipt)
+
+
+def _budget_errors(
+    max_files: Any,
+    max_tokens: Any,
+    files_loaded: int,
+    counted_files: list[Path],
+    receipt: dict[str, Any] | None,
+) -> list[str]:
+    """The max_files and max_tokens verdicts; *receipt* gets the token counting mode."""
+    errors: list[str] = []
+    if max_files is not None and files_loaded > max_files:
         errors.append(
-            f"Context budget exceeded: {len(unique_files)} files loaded, "
+            f"Context budget exceeded: {files_loaded} files loaded, "
             f"maximum allowed is {max_files}"
         )
-
     if max_tokens is not None:
-        estimated, counted = count_files_tokens(unique_files)
+        estimated, counted = count_files_tokens(counted_files)
         if receipt is not None:
             receipt.update(counted)
         if estimated > max_tokens:
@@ -502,7 +501,6 @@ def validate_context_budget(
             )
     elif receipt is not None:
         receipt.update(token_count_receipt())
-
     return errors
 
 
@@ -546,20 +544,8 @@ def phase_write_globs(
     product_root: Path | str | None = None,
 ) -> list[str]:
     """Write globs for Declare/Implement evidence and task allowed_paths (RM-021)."""
-    resolved = normalize_change_route(route) or DEFAULT_CHANGE_ROUTE
-    if phase == "declare":
-        if resolved == "docs":
-            return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
-        if resolved == "ops":
-            return list(_OPS_WRITE_GLOBS) + list(_ROUTE_TARGET_EVIDENCE)
-        return phase_allowed_paths("declare", "write", product_root)
-    if phase == "implement":
-        if resolved == "docs":
-            return list(_DOCS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
-        if resolved == "ops":
-            return list(_OPS_WRITE_GLOBS) + list(_ROUTE_IMPLEMENT_EVIDENCE)
-        return phase_allowed_paths("implement", "write", product_root)
-    return phase_allowed_paths(phase, "write", product_root)
+    globs = _ROUTE_WRITE_GLOBS.get((phase, normalize_change_route(route) or DEFAULT_CHANGE_ROUTE))
+    return list(globs) if globs is not None else phase_allowed_paths(phase, "write", product_root)
 
 
 def task_write_globs(
@@ -644,20 +630,4 @@ def validate_task_context_budget(
     for apath in allowed_paths:
         consider(apath, must_exist=False)
 
-    if max_files is not None and len(unique_declared) > max_files:
-        errors.append(
-            f"Context budget exceeded: {len(unique_declared)} files loaded, "
-            f"maximum allowed is {max_files}"
-        )
-    if max_tokens is not None:
-        estimated, counted = count_files_tokens(unique_existing)
-        if receipt is not None:
-            receipt.update(counted)
-        if estimated > max_tokens:
-            errors.append(
-                f"Context budget exceeded: estimated {estimated} tokens loaded, "
-                f"maximum allowed is {max_tokens}"
-            )
-    elif receipt is not None:
-        receipt.update(token_count_receipt())
-    return errors
+    return errors + _budget_errors(max_files, max_tokens, len(unique_declared), unique_existing, receipt)

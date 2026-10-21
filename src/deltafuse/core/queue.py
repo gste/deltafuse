@@ -8,14 +8,15 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
-from deltafuse.core.specify import SpecifyCursor, next_specify_pass
-from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.analyze import PassCursor, next_analyze_pass
+from deltafuse.core.specify import next_specify_pass
+from deltafuse.core.config import config_section
+from deltafuse.core.frontmatter import iter_frontmatter
+from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
-from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
+from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
 TERMINAL_CHANGE = {
@@ -151,38 +152,14 @@ def _item_for_step(
     )
 
 
-def _item_for_analyze(
-    *,
-    change_id: str,
-    path: str,
-    cursor: AnalyzeCursor,
-) -> WorkItem:
+def _item_for_pass(step: str, *, change_id: str, path: str, cursor: PassCursor) -> WorkItem:
+    """The analyze or specify step on the pass the cursor names."""
     return _item_for_step(
-        "analyze",
+        step,
         change_id=change_id,
         path=path,
         reason=cursor.reason,
-        analyze_pass=cursor.pass_name,
-        capability=cursor.capability,
-        slice_id=cursor.slice_id,
-        spec_refs=cursor.spec_refs,
-        allowed_read=cursor.allowed_read,
-        allowed_write=cursor.allowed_write,
-    )
-
-
-def _item_for_specify(
-    *,
-    change_id: str,
-    path: str,
-    cursor: SpecifyCursor,
-) -> WorkItem:
-    return _item_for_step(
-        "specify",
-        change_id=change_id,
-        path=path,
-        reason=cursor.reason,
-        specify_pass=cursor.pass_name,
+        **{f"{step}_pass": cursor.pass_name},
         capability=cursor.capability,
         slice_id=cursor.slice_id,
         spec_refs=cursor.spec_refs,
@@ -206,18 +183,8 @@ def load_product_root(start: Path | str) -> Path:
 
 
 def changes_dir(product_root: Path) -> Path:
-    config_file = product_root / ".deltafuse" / "config.yaml"
-    rel = "docs/changes"
-    if config_file.is_file():
-        try:
-            data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-        except Exception:
-            data = None
-        if isinstance(data, dict):
-            paths = data.get("paths") or {}
-            if isinstance(paths, dict) and isinstance(paths.get("changes"), str):
-                rel = paths["changes"]
-    return product_root / rel
+    rel = config_section(product_root, "paths").get("changes")
+    return product_root / (rel if isinstance(rel, str) else "docs/changes")
 
 
 def _consumed_intake_refs(product_root: Path) -> set[str]:
@@ -265,33 +232,13 @@ def intake_sources_pending(product_root: Path) -> bool:
     return False
 
 
-def _load_change(change_path: Path) -> dict[str, Any] | None:
-    change_file = change_path / "change.yaml"
-    if not change_file.is_file():
-        return None
-    try:
-        data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _load_tasks(change_path: Path) -> list[tuple[str, str, Path]]:
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return []
-    found: list[tuple[str, str, Path]] = []
-    for task_file in tasks_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
-        tid = meta.get("id")
-        status = meta.get("status")
-        if isinstance(tid, str) and isinstance(status, str):
-            found.append((tid, status, task_file))
+def _load_tasks(change_path: Path) -> list[tuple[str, str, Path, dict[str, Any]]]:
+    """(id, status, file, frontmatter) of each readable task, in task-number order."""
+    found = [
+        (meta["id"], meta["status"], task_file, meta)
+        for task_file, meta in iter_frontmatter(change_path / "tasks")
+        if isinstance(meta.get("id"), str) and isinstance(meta.get("status"), str)
+    ]
     found.sort(key=lambda row: _task_sort_key(row[0]))
     return found
 
@@ -320,32 +267,33 @@ def _stale_task_evidence(
     return out
 
 
-def _unreadable_change(change_path: Path) -> str | None:
-    """Why change.yaml cannot be read as one mapping, or None when it can.
+def _read_change(change_path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """change.yaml as a mapping with a valid id, or None and why it cannot be read as one.
 
-    Gemma 31B shakedown cls-g31s-m02 (2026-10-04): the Worker rewrote change.yaml
-    with write_file (front-matter delimiters, no `id`). The queue skipped the
-    unreadable package, `deltafuse next` answered "No ready work" with nothing
-    blocked, and the run ended as if the Change were done.
+    (None, None) when there is no change.yaml. Gemma 31B shakedown cls-g31s-m02
+    (2026-10-04): the Worker rewrote change.yaml with write_file (front-matter
+    delimiters, no `id`). The queue skipped the unreadable package, `deltafuse
+    next` answered "No ready work" with nothing blocked, and the run ended as if
+    the Change were done.
     """
     change_file = change_path / "change.yaml"
     if not change_file.is_file():
-        return None
+        return None, None
     try:
         data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001 - any parse failure is the same halt
         first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
-        return f"it is not valid YAML ({first})"
+        return None, f"it is not valid YAML ({first})"
     if not isinstance(data, dict):
-        return "it is not a YAML mapping"
+        return None, "it is not a YAML mapping"
     # cls-g31s3-m02: rewritten by hand as `change: <id>` with no `id` - valid YAML, so
     # the queue went on selecting analyze while every artifact write was refused.
     from deltafuse.core.artifact_write import CHANGE_ID
 
     cid = data.get("id")
     if not isinstance(cid, str) or not CHANGE_ID.match(cid):
-        return f"it has no valid Change id (id: {cid!r})"
-    return None
+        return None, f"it has no valid Change id (id: {cid!r})"
+    return data, None
 
 
 
@@ -368,11 +316,8 @@ def _halt(
 
 
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
-    data = _load_change(change_path)
-    problem = _unreadable_change(change_path)
-    if not data or problem:
-        if problem is None:
-            return [], []
+    data, problem = _read_change(change_path)
+    if problem:
         rel = _rel(product_root, change_path)
         return _halt(
             change_path.name,
@@ -381,9 +326,9 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             "change.yaml; it was written by hand. The human restores it from "
             "version control, then `deltafuse next` resumes.",
         )
-    change_id = data.get("id")
-    if not isinstance(change_id, str):
-        change_id = change_path.name
+    if data is None:
+        return [], []
+    change_id = data["id"]
     status = data.get("status")
     if not isinstance(status, str) or status in TERMINAL_CHANGE:
         return [], []
@@ -415,7 +360,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # fix them, and the run looped for twenty minutes.
     phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
 
-    for tid, tstatus, tfile in phase_tasks:
+    for tid, tstatus, tfile, meta in phase_tasks:
         if tstatus == "blocked":
             return _halt(
                 change_id,
@@ -443,9 +388,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             # implemented gate refuses such a Red. Without this the task was selected
             # for declare again and again, and a new step's conversation no longer
             # had the evidence command's advice (cls-g31g-m02b, 2026-10-04).
-            meta, _ = parse_frontmatter(tfile.read_text(encoding="utf-8"))
             red_rel = f"{rel}/evidence/red/{tid}.yaml"
-            if not supersede_errors(change_path, tid, meta if isinstance(meta, dict) else {}):
+            if not supersede_errors(change_path, tid, meta):
                 return [
                     _item_for_step(
                         "declare",
@@ -465,7 +409,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 change_id,
                 rel,
                 f"Task {tid}: its Red is already-green, yet it promises "
-                f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
+                f"requirement_delta '{meta.get('requirement_delta')}'. "
                 "The human decides: cancel it (deltafuse decide "
                 f"{rel} --task {tid} --status cancelled) if the behavior already "
                 f"exists, or delete {red_rel} and have it declared again",
@@ -500,7 +444,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # declaring gate was still closed, and to verify with the Change at
     # 'decomposed' (q0 run 20260921T081038Z).
     if tasks and status in DECLARE_PHASE:
-        ahead = [(tid, s) for tid, s, _ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
+        ahead = [(tid, s) for tid, s, *_ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
         if ahead:
             tid, tstatus = ahead[0]
             return _halt(
@@ -510,7 +454,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 "the task ran ahead of the declaring gate",
                 task=tid,
             )
-        declared = [(tid, tfile) for tid, s, tfile in tasks if s in TASK_IMPLEMENT]
+        declared = [(tid, tfile) for tid, s, tfile, _ in tasks if s in TASK_IMPLEMENT]
         if declared:
             tid, tfile = declared[-1]
             return [
@@ -525,8 +469,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
     if tasks and status in IMPLEMENT_PHASE:
-        implemented = [(tid, tfile) for tid, s, tfile in tasks if s == "implemented"]
-        if implemented and all(s in TASK_DONE for _, s, _ in tasks):
+        implemented = [(tid, tfile) for tid, s, tfile, _ in tasks if s == "implemented"]
+        if implemented and all(s in TASK_DONE for _, s, *_ in tasks):
             stale = _stale_task_evidence(product_root, change_path, [tid for tid, _ in implemented])
             if stale:
                 # Green and regression are stamped with the spec/src tree. A
@@ -563,8 +507,6 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             ], []
 
     if status in {"implemented", "verifying"}:
-        from deltafuse.core.fsm import verification_gap
-
         gap = verification_gap(change_path)
         if gap is not None:
             # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2
@@ -582,7 +524,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 f"so it does not converge and is not repaired silently. {route}",
             )
 
-    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
+    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, *_ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
     ):
         return [
@@ -596,7 +538,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
 
     cursor = next_analyze_pass(change_path, product_root)
     if cursor is not None:
-        return [_item_for_analyze(change_id=change_id, path=rel, cursor=cursor)], []
+        return [_item_for_pass("analyze", change_id=change_id, path=rel, cursor=cursor)], []
 
     if status in {"normalized", "analyzing"} and not check_gate(change_path, "analyzed"):
         # DF3-004: artifacts prove the gate, but only Core may stamp the
@@ -621,7 +563,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
         cursor = next_specify_pass(change_path, product_root)
-        return [_item_for_specify(change_id=change_id, path=rel, cursor=cursor)], []
+        return [_item_for_pass("specify", change_id=change_id, path=rel, cursor=cursor)], []
 
     if status == "specified":
         return [
@@ -666,12 +608,7 @@ DEFAULT_ADAPTER_ROOTS = (".agents/skills", ".cursor/skills", ".gemini/skills")
 
 def adapter_skill_roots(product_root: Path) -> list[str]:
     """Where installed skills live, from `adapters.roots` in the product config."""
-    try:
-        data = yaml.safe_load((product_root / ".deltafuse" / "config.yaml").read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return list(DEFAULT_ADAPTER_ROOTS)
-    adapters = data.get("adapters") if isinstance(data, dict) else None
-    roots = adapters.get("roots") if isinstance(adapters, dict) else None
+    roots = config_section(product_root, "adapters", tolerate=(OSError, yaml.YAMLError)).get("roots")
     if isinstance(roots, list) and roots:
         return [str(r) for r in roots if isinstance(r, str) and r.strip()]
     return list(DEFAULT_ADAPTER_ROOTS)
@@ -782,6 +719,27 @@ def _human_gate_halt(
     return halt
 
 
+# Checked in this order: a pending Decision is answered before a specification.
+_HUMAN_GATE_PROMPTS = {
+    "decision": "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
+    "spec": "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
+}
+
+
+def _human_gate_targets(item: WorkItem, product_root: Path) -> list[tuple[str, str, str]]:
+    """(choice id suffix, label subject, `decide` arguments) a blocked Human Gate item offers."""
+    if item.halt_kind == "decision":
+        if not item.change_id:
+            return []
+        return [
+            (f":{row['id']}", f"{row['id']}: {row['title']}", f"{item.path or '.'} --decision {row['id']}")
+            for row in list_proposed_decisions_for_change(item.change_id, product_root)
+        ]
+    if not item.path:
+        return []
+    return [(f"-spec:{item.change_id}", f"specification for {item.change_id}", f"{item.path} --spec")]
+
+
 def build_halt(
     queue: WorkQueue,
     selected: WorkItem | None,
@@ -808,60 +766,24 @@ def build_halt(
             ],
         }
     kinds = {item.halt_kind for item in queue.blocked if item.halt_kind}
-    if "decision" in kinds:
+    for kind, prompt in _HUMAN_GATE_PROMPTS.items():
+        if kind not in kinds:
+            continue
         choices: list[dict[str, Any]] = []
         for item in queue.blocked:
-            if item.halt_kind != "decision" or not item.change_id:
+            if item.halt_kind != kind:
                 continue
-            for row in list_proposed_decisions_for_change(item.change_id, product_root):
-                loc = item.path or "."
-                choices.append(
-                    _choice(
-                        f"accept:{row['id']}",
-                        f"Accept {row['id']}: {row['title']}",
-                        f"deltafuse decide {loc} --decision {row['id']} --status accepted",
+            for suffix, subject, target in _human_gate_targets(item, product_root):
+                for verb, status in (("accept", "accepted"), ("reject", "rejected")):
+                    choices.append(
+                        _choice(
+                            f"{verb}{suffix}",
+                            f"{verb.capitalize()} {subject}",
+                            f"deltafuse decide {target} --status {status}",
+                        )
                     )
-                )
-                choices.append(
-                    _choice(
-                        f"reject:{row['id']}",
-                        f"Reject {row['id']}: {row['title']}",
-                        f"deltafuse decide {loc} --decision {row['id']} --status rejected",
-                    )
-                )
         choices.append(_choice("inspect", "Stop and inspect", None))
-        return _human_gate_halt(
-            "decision",
-            "A Decision is a Human Gate. Present these choices and wait. Do not pick.",
-            choices,
-            product_root,
-        )
-    if "spec" in kinds:
-        choices = []
-        for item in queue.blocked:
-            if item.halt_kind != "spec" or not item.path:
-                continue
-            choices.append(
-                _choice(
-                    f"accept-spec:{item.change_id}",
-                    f"Accept specification for {item.change_id}",
-                    f"deltafuse decide {item.path} --spec --status accepted",
-                )
-            )
-            choices.append(
-                _choice(
-                    f"reject-spec:{item.change_id}",
-                    f"Reject specification for {item.change_id}",
-                    f"deltafuse decide {item.path} --spec --status rejected",
-                )
-            )
-        choices.append(_choice("inspect", "Stop and inspect", None))
-        return _human_gate_halt(
-            "spec",
-            "Specification accept is a Human Gate. Present these choices and wait. Do not pick.",
-            choices,
-            product_root,
-        )
+        return _human_gate_halt(kind, prompt, choices, product_root)
     if queue.blocked:
         return {
             "kind": "blocked",
@@ -971,8 +893,6 @@ def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
     """Checklist from the step contract. Same Change files as llm/script; not a second process."""
     if item.kind != "ready" or not item.step or item.step not in PHASE_CONTRACTS:
         return format_human_blocked_item(item)
-    from deltafuse.core.context import phase_allowed_paths
-
     phase = {
         "allowed_read": phase_allowed_paths(item.step, "read", product_root),
         "allowed_write": phase_allowed_paths(item.step, "write", product_root),
