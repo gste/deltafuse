@@ -37,7 +37,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.schemas import SchemaRegistry, default_registry
-from deltafuse.core.test_reports import no_test_ran
+from deltafuse.core.test_reports import no_test_error, no_test_ran
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -540,14 +540,10 @@ def validate_change_package(
                         errors.append(
                             f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
-                if phase in {"green", "regression", "verification"} and route == "code" and exit_code == 0:
+                if phase in {"green", "regression", "verification"} and route == "code":
                     # The record is written even when `deltafuse evidence` refused it,
                     # so the gate asks again whether the run ran any test.
-                    nothing_ran = no_test_ran(
-                        ev_data.get("command"), ev_data.get("tests"), str(ev_data.get("summary") or "")
-                    )
-                    if nothing_ran:
-                        errors.append(f"{ev_file.relative_to(change_path)}: {phase} is not evidence: {nothing_ran}")
+                    errors.extend(_ran_no_test(ev_data, f"{ev_file.relative_to(change_path)}: {phase}"))
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
@@ -907,7 +903,7 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
     failed = _record_test_list(red, "failed")
     if not failed:
         return []
-    if no_test_ran(green.get("command"), green.get("tests"), str(green.get("summary") or "")):
+    if no_test_ran(*_run_of(green)):
         return []  # the evidence check names it, and why: this run ran no test
     if not isinstance(green.get("tests"), dict):
         return [
@@ -957,7 +953,7 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     run = _load_record(change_path / "evidence" / "verification" / "run.yaml")
     if not run:
         return []  # a missing or unreadable run is reported on its own
-    if run.get("exit_code") == 0 and no_test_ran(run.get("command"), run.get("tests"), str(run.get("summary") or "")):
+    if run.get("exit_code") == 0 and no_test_ran(*_run_of(run)):
         return []  # the evidence check names it, and why: this run ran no test
     if not isinstance(run.get("tests"), dict):
         return [
@@ -976,11 +972,14 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     ]
 
 
+def _run_of(record: dict[str, Any]) -> tuple[object, object, str]:
+    """A record's run as `no_test_ran` reads it: command, runner report, summary."""
+    return record.get("command"), record.get("tests"), str(record.get("summary") or "")
+
+
 def _ran_no_test(record: dict[str, Any], label: str) -> list[str]:
-    if record.get("exit_code") != 0:
-        return []
-    why = no_test_ran(record.get("command"), record.get("tests"), str(record.get("summary") or ""))
-    return [f"{label} is not evidence: {why}"] if why else []
+    """`no_test_error` for a passing record."""
+    return no_test_error(label, *_run_of(record)) if record.get("exit_code") == 0 else []
 
 
 def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[str, Any]]:
