@@ -482,8 +482,9 @@ def _refuse_red_after_declare(change_path: Path, task: str) -> None:
             f"{task_id} is '{status}': its Red was recorded in Declare and froze the declared "
             "oracle, so Red is not taken again - that would freeze the tests as they are now. "
             "In Implement record green and regression; if the declared oracle itself is wrong, "
-            f"mark the task blocked (`deltafuse state <change-dir> --task {task_id} --status "
-            "blocked`), say why, and stop. Nothing was run or recorded"
+            "record Green against it as declared, then mark the task blocked (`deltafuse state "
+            f"<change-dir> --task {task_id} --status blocked`), say why, and stop. Nothing was run "
+            "or recorded"
         )
 
 

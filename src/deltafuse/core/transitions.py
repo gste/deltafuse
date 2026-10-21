@@ -564,8 +564,9 @@ def human_cancel_hint(change_path: Path | str, task_id: str) -> str:
     return (
         f"cancelling a task drops what it promised, which is the human's decision: "
         f"`deltafuse decide {Path(change_path).as_posix()} --task {task_id} --status cancelled`. "
-        "If the task cannot be done, mark it blocked with `deltafuse state <change-dir> --task "
-        f"{task_id} --status blocked`, say why, and stop"
+        "If the task cannot be done, record Green against its oracle as declared, then mark it "
+        f"blocked with `deltafuse state <change-dir> --task {task_id} --status blocked`, say why, "
+        "and stop"
     )
 
 
