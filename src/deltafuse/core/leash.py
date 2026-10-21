@@ -274,14 +274,20 @@ def _gap_archive_receipted(product_root: Path, archive: str) -> bool:
         lines = journal.read_text(encoding="utf-8").splitlines()
     except OSError:
         return False
+    return any(row.get("kind") == "gap-reopen" and row.get("archive") == archive for row in _json_rows(lines))
+
+
+def _json_rows(lines: list[str]) -> list[dict[str, Any]]:
+    """The JSON objects among journal lines; any other line is skipped."""
+    rows: list[dict[str, Any]] = []
     for line in lines:
         try:
-            row = json.loads(line)
+            entry = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(row, dict) and row.get("kind") == "gap-reopen" and row.get("archive") == archive:
-            return True
-    return False
+        if isinstance(entry, dict):
+            rows.append(entry)
+    return rows
 
 
 _RED_RECORD = re.compile(r"^docs/changes/[^/]+/evidence/red/(?P<task>[^/]+)\.yaml$")
@@ -415,13 +421,8 @@ def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str,
     for journal, digest_key in ((".deltafuse/transitions.jsonl", "sha256"),
                                 (".deltafuse/gate-journal.jsonl", "artifact_sha256")):
         text = _bytes_at(root, journal, head=head)
-        for line in (text or b"").decode("utf-8", errors="replace").splitlines():
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(entry, dict):
-                add(entry.get("path"), entry.get(digest_key))
+        for entry in _json_rows((text or b"").decode("utf-8", errors="replace").splitlines()):
+            add(entry.get("path"), entry.get(digest_key))
     return out
 
 
@@ -722,12 +723,8 @@ def core_status_writes(
         return {}  # core_journal_errors reports the rewrite; nothing is vouched for
     dirs = _change_dirs(root)
     moves: dict[str, list[dict[str, Any]]] = {}
-    for raw in new[len(old):]:
-        try:
-            entry = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(entry, dict) or entry.get("kind") != "artifact-status":
+    for entry in _json_rows(new[len(old):]):
+        if entry.get("kind") != "artifact-status":
             continue
         folder = {"task": "tasks", "slice": "slices"}.get(str(entry.get("artifact")))
         change_dir = dirs.get(str(entry.get("change")))
@@ -787,7 +784,7 @@ def collect_chain_envelopes(
     since ``base`` - `deltafuse state` rewrites the task file on every task
     transition - so a task the Worker never touched adds no paths.
     """
-    from deltafuse.core.queue import _load_tasks
+    from deltafuse.core.queue import _item_for_step, _load_tasks
     from deltafuse.core.steps import STEP_CONTRACTS, STEP_ORDER
 
     root = Path(product_root)
@@ -795,14 +792,9 @@ def collect_chain_envelopes(
 
     def last_gates(lines: list[str]) -> dict[str, str]:
         out: dict[str, str] = {}
-        for raw in lines:
-            try:
-                entry = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+        for entry in _json_rows(lines):
             if (
-                isinstance(entry, dict)
-                and entry.get("kind") == "transition"
+                entry.get("kind") == "transition"
                 and isinstance(entry.get("change"), str)
                 and entry.get("gate") in gate_step
             ):
@@ -826,7 +818,6 @@ def collect_chain_envelopes(
             continue  # a rewound chain is receipt_chain_errors' business, not a wider fence
         rel_dir = change_dir.relative_to(root).as_posix()
         for step in STEP_ORDER[low : high + 1]:
-            spec = STEP_CONTRACTS[step]
             items: list[WorkItem] = []
             if step in {"declare", "implement"}:
                 # gemma-31b M01 (2026-09-26): evidence written, the gate advanced and the
@@ -841,19 +832,14 @@ def collect_chain_envelopes(
                     )
                     if task_rel in changed or wrote_evidence:
                         items.append(
-                            WorkItem(
-                                kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],
-                                change_id=change_id, path=rel_dir, task=task_id,
+                            _item_for_step(
+                                step, change_id=change_id, path=rel_dir, task=task_id,
                                 task_path=task_rel, reason="receipt chain since base",
                             )
                         )
             else:
                 items.append(
-                    WorkItem(
-                        kind="ready", step=step, skill=spec["skill"], gate=spec["gate"],
-                        change_id=change_id, path=rel_dir, task=None, task_path=None,
-                        reason="receipt chain since base",
-                    )
+                    _item_for_step(step, change_id=change_id, path=rel_dir, reason="receipt chain since base")
                 )
             for item in items:
                 env = build_envelope(item, root)
