@@ -232,17 +232,6 @@ def intake_sources_pending(product_root: Path) -> bool:
     return False
 
 
-def _load_change(change_path: Path) -> dict[str, Any] | None:
-    change_file = change_path / "change.yaml"
-    if not change_file.is_file():
-        return None
-    try:
-        data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _load_tasks(change_path: Path) -> list[tuple[str, str, Path, dict[str, Any]]]:
     """(id, status, file, frontmatter) of each readable task, in task-number order."""
     found = [
@@ -278,32 +267,33 @@ def _stale_task_evidence(
     return out
 
 
-def _unreadable_change(change_path: Path) -> str | None:
-    """Why change.yaml cannot be read as one mapping, or None when it can.
+def _read_change(change_path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """change.yaml as a mapping with a valid id, or None and why it cannot be read as one.
 
-    Gemma 31B shakedown cls-g31s-m02 (2026-10-04): the Worker rewrote change.yaml
-    with write_file (front-matter delimiters, no `id`). The queue skipped the
-    unreadable package, `deltafuse next` answered "No ready work" with nothing
-    blocked, and the run ended as if the Change were done.
+    (None, None) when there is no change.yaml. Gemma 31B shakedown cls-g31s-m02
+    (2026-10-04): the Worker rewrote change.yaml with write_file (front-matter
+    delimiters, no `id`). The queue skipped the unreadable package, `deltafuse
+    next` answered "No ready work" with nothing blocked, and the run ended as if
+    the Change were done.
     """
     change_file = change_path / "change.yaml"
     if not change_file.is_file():
-        return None
+        return None, None
     try:
         data = yaml.safe_load(change_file.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001 - any parse failure is the same halt
         first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
-        return f"it is not valid YAML ({first})"
+        return None, f"it is not valid YAML ({first})"
     if not isinstance(data, dict):
-        return "it is not a YAML mapping"
+        return None, "it is not a YAML mapping"
     # cls-g31s3-m02: rewritten by hand as `change: <id>` with no `id` - valid YAML, so
     # the queue went on selecting analyze while every artifact write was refused.
     from deltafuse.core.artifact_write import CHANGE_ID
 
     cid = data.get("id")
     if not isinstance(cid, str) or not CHANGE_ID.match(cid):
-        return f"it has no valid Change id (id: {cid!r})"
-    return None
+        return None, f"it has no valid Change id (id: {cid!r})"
+    return data, None
 
 
 
@@ -326,11 +316,8 @@ def _halt(
 
 
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
-    data = _load_change(change_path)
-    problem = _unreadable_change(change_path)
-    if not data or problem:
-        if problem is None:
-            return [], []
+    data, problem = _read_change(change_path)
+    if problem:
         rel = _rel(product_root, change_path)
         return _halt(
             change_path.name,
@@ -339,9 +326,9 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             "change.yaml; it was written by hand. The human restores it from "
             "version control, then `deltafuse next` resumes.",
         )
-    change_id = data.get("id")
-    if not isinstance(change_id, str):
-        change_id = change_path.name
+    if data is None:
+        return [], []
+    change_id = data["id"]
     status = data.get("status")
     if not isinstance(status, str) or status in TERMINAL_CHANGE:
         return [], []
