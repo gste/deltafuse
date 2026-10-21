@@ -70,7 +70,9 @@ _COVERAGE_WRITE = [
 
 
 @dataclass
-class AnalyzeCursor:
+class PassCursor:
+    """The one write the Core names for an Analyze or Specify pass."""
+
     pass_name: str
     reason: str
     capability: str | None = None
@@ -207,11 +209,11 @@ def _change_status(change_path: Path) -> str | None:
 def next_analyze_pass(
     change_path: Path | str,
     product_root: Path | str,
-) -> AnalyzeCursor | None:
+) -> PassCursor | None:
     """Next Analyze write for this Change, or None when Analyze is complete on disk."""
     path = Path(change_path)
     if not (path / "routing.yaml").is_file():
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="routing",
             reason="Write routing.yaml from request.md and the capability catalog",
             allowed_read=analyze_allowed_read("routing"),
@@ -225,7 +227,7 @@ def next_analyze_pass(
         cap = uncovered[0]
         spec_refs = catalog_spec_refs(product_root, cap)
         slice_id = next_slice_id(path)
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="slice",
             reason=f"Write slices/{slice_id}.md for {cap}",
             capability=cap,
@@ -235,7 +237,7 @@ def next_analyze_pass(
             allowed_write=analyze_allowed_write("slice"),
         )
     if not (path / "coverage.yaml").is_file():
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="coverage",
             reason="Run deltafuse coverage, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
@@ -243,7 +245,7 @@ def next_analyze_pass(
         )
     status = _change_status(path)
     if status in {"normalized", "analyzing"}:
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="coverage",
             reason="Run deltafuse coverage if needed, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
@@ -252,7 +254,7 @@ def next_analyze_pass(
     return None
 
 
-def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | None:
+def _gap_pass(change_path: Path, product_root: Path | str) -> PassCursor | None:
     """Analyze for a Change the human reopened from a Verify gap (decide --gap).
 
     ref-m04-365-2 (2026-10-11): the catalogue row Verify found missing sat in a spec file no
@@ -273,7 +275,7 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | No
     info = latest_gap_reopen(change_path) or {}
     note = str(info.get("note") or "").strip()
     where = f"docs/changes/{change_path.name}/{info['path']}/" if info.get("path") else "reopened/"
-    return AnalyzeCursor(
+    return PassCursor(
         pass_name="gap",
         reason=(
             f"Verify recorded '{info.get('gap') or 'a gap'}' and the human reopened the Change for "

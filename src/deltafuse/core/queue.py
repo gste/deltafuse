@@ -8,8 +8,8 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
-from deltafuse.core.specify import SpecifyCursor, next_specify_pass
+from deltafuse.core.analyze import PassCursor, next_analyze_pass
+from deltafuse.core.specify import next_specify_pass
 from deltafuse.core.config import config_section
 from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
@@ -152,38 +152,14 @@ def _item_for_step(
     )
 
 
-def _item_for_analyze(
-    *,
-    change_id: str,
-    path: str,
-    cursor: AnalyzeCursor,
-) -> WorkItem:
+def _item_for_pass(step: str, *, change_id: str, path: str, cursor: PassCursor) -> WorkItem:
+    """The analyze or specify step on the pass the cursor names."""
     return _item_for_step(
-        "analyze",
+        step,
         change_id=change_id,
         path=path,
         reason=cursor.reason,
-        analyze_pass=cursor.pass_name,
-        capability=cursor.capability,
-        slice_id=cursor.slice_id,
-        spec_refs=cursor.spec_refs,
-        allowed_read=cursor.allowed_read,
-        allowed_write=cursor.allowed_write,
-    )
-
-
-def _item_for_specify(
-    *,
-    change_id: str,
-    path: str,
-    cursor: SpecifyCursor,
-) -> WorkItem:
-    return _item_for_step(
-        "specify",
-        change_id=change_id,
-        path=path,
-        reason=cursor.reason,
-        specify_pass=cursor.pass_name,
+        **{f"{step}_pass": cursor.pass_name},
         capability=cursor.capability,
         slice_id=cursor.slice_id,
         spec_refs=cursor.spec_refs,
@@ -577,7 +553,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
 
     cursor = next_analyze_pass(change_path, product_root)
     if cursor is not None:
-        return [_item_for_analyze(change_id=change_id, path=rel, cursor=cursor)], []
+        return [_item_for_pass("analyze", change_id=change_id, path=rel, cursor=cursor)], []
 
     if status in {"normalized", "analyzing"} and not check_gate(change_path, "analyzed"):
         # DF3-004: artifacts prove the gate, but only Core may stamp the
@@ -602,7 +578,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
         cursor = next_specify_pass(change_path, product_root)
-        return [_item_for_specify(change_id=change_id, path=rel, cursor=cursor)], []
+        return [_item_for_pass("specify", change_id=change_id, path=rel, cursor=cursor)], []
 
     if status == "specified":
         return [
