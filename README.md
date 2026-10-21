@@ -115,4 +115,6 @@ The installer preserves existing product files. `-Force`/`--force` updates only 
 
 Validate an installed product with `tests/validate-layout.ps1` or `tests/validate-layout.sh`.
 
+On Windows, a product with deep paths (Java packages, Fuse-Back characterization tests) needs long paths in git, or `git add` fails with "Filename too long": `git config core.longpaths true` in the product repository. DeltaFuse does not change your git configuration.
+
 See [canonical process documentation](docs/README.md).

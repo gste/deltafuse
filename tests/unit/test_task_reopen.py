@@ -183,7 +183,9 @@ def test_reopening_restores_the_tasks_product_files_as_declaring_found_them(tmp_
 
 
 def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
-    from deltafuse.core.task_snapshot import snapshot_dir
+    import hashlib
+
+    from deltafuse.core.task_snapshot import snapshot_copy
     from deltafuse.core.transitions import advance_change
 
     builder = _decomposed(tmp_path, repo_root)
@@ -192,7 +194,9 @@ def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
     _red(tmp_path, builder, WRONG_ORACLE)
     set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     advance_change(builder.change_dir, "declaring")
-    (snapshot_dir(tmp_path, "CHG-180") / "src" / "core.py").write_text("VALUE = 99\n", encoding="utf-8")
+    copy = snapshot_copy(tmp_path, hashlib.sha256((tmp_path / "src" / "core.py").read_bytes()).hexdigest())
+    assert copy.is_file()
+    copy.write_text("VALUE = 99\n", encoding="utf-8")
     record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     with pytest.raises(DecideError, match="missing or altered"):
@@ -235,3 +239,45 @@ def test_red_may_not_change_a_test_another_tasks_red_froze(tmp_path: Path, repo_
     assert run_evidence(builder.change_dir, phase="red", task="TASK-002",
                         argv=[sys.executable, "-m", "pytest", "tests/test_shared.py::test_second"],
                         changed_paths=["tests/test_shared.py"]).payload["result"] == "expected-failure"
+
+
+def test_a_snapshot_copy_is_named_by_content_so_a_deep_path_stays_short(tmp_path: Path, repo_root: Path):
+    """Fuse-Back, Gradle J01 (2026-10-21): the copy mirrored the tree under
+    `.deltafuse/snapshots/<change>/`, ~45 characters on top of a 104-character test path, and
+    `git add` on Windows failed with "Filename too long". The copy is now named by its sha256."""
+    from deltafuse.core.task_snapshot import record_declaring_snapshot, snapshot_copy
+
+    deep = "src/main/java/fuseback/characterization/traffic_management/rate_limiting/TokenBucketLimiter.java"
+    (tmp_path / deep).parent.mkdir(parents=True)
+    (tmp_path / deep).write_text("class TokenBucketLimiter {}\n", encoding="utf-8")
+    change = tmp_path / "docs" / "changes" / "CHG-001-negative-amount"
+    (change / "tasks").mkdir(parents=True)
+    (change / "tasks" / "TASK-001.md").write_text(
+        f"---\nid: TASK-001\nstatus: declared\nallowed_paths: [{deep}]\n---\n", encoding="utf-8"
+    )
+    snapshot = record_declaring_snapshot(tmp_path, change, "CHG-001-negative-amount")
+    copy = snapshot_copy(tmp_path, snapshot[deep])
+    assert copy.read_bytes() == (tmp_path / deep).read_bytes()
+    assert len(copy.relative_to(tmp_path).as_posix()) == len(".deltafuse/snapshots/") + 64
+    assert not (tmp_path / ".deltafuse" / "snapshots" / "CHG-001-negative-amount").exists()
+
+
+def test_a_copy_taken_by_3_3_8_in_the_mirrored_layout_is_still_restored(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.task_snapshot import restore_plan, snapshot_copy, snapshot_dir
+    from deltafuse.core.transitions import advance_change
+
+    builder = _decomposed(tmp_path, repo_root)
+    product = tmp_path / "src" / "core.py"
+    product.parent.mkdir(parents=True, exist_ok=True)
+    product.write_text("VALUE = 0\n", encoding="utf-8")
+    _red(tmp_path, builder, WRONG_ORACLE)
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    advance_change(builder.change_dir, "declaring")
+    data = product.read_bytes()
+    copy = snapshot_copy(tmp_path, __import__("hashlib").sha256(data).hexdigest())
+    legacy = snapshot_dir(tmp_path, "CHG-180") / "src" / "core.py"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(data)
+    copy.unlink()
+    plan, problems = restore_plan(tmp_path, "CHG-180", {"allowed_paths": ["src/core.py"]})
+    assert problems == [] and plan == [("src/core.py", data)]

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `declaring` snapshot names a copy by its content, so a deep path stays short.** Fuse-Back,
+  Gradle J01 (2026-10-21): 3.3.8 mirrored each task's product files under
+  `.deltafuse/snapshots/<change>/<path>`, ~45 characters on top of a 104-character test path, and
+  `git add` on Windows failed with "Filename too long" (the gate itself passed). A copy is now
+  `.deltafuse/snapshots/<sha256>` - 85 characters from the product root whatever the source path,
+  one copy per content - and the receipt's `{path: sha256}` is how reopening finds it. Copies 3.3.8
+  took in the mirrored layout are still restored. README (en, ru) says a product with deep paths
+  needs `git config core.longpaths true` on Windows; DeltaFuse does not change git configuration.
+
 ### Removed
 
 - **The legacy `artifact describe|create|update|validate|update-index` subcommands** (owner
