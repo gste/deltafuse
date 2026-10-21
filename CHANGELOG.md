@@ -28,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (it never restored a file: a `prepared` transaction had not replaced one).
 - **`artifact write` exits 3 for a stage refusal** (`unauthorized_stage`, `stage_halted`), as the
   retired `artifact create` did: 3 is a policy refusal, 2 a malformed request. It exited 2.
+- **The Core is a tenth smaller (src 19.4K -> 17.6K lines), with no check weakened.** The codebase
+  audit (backlog/roadmap/codebase-audit/AUDIT.md) found the growth was the same file-reading and
+  refusal code copied into each fix. Shared helpers now read YAML records, frontmatter directories,
+  JSONL journals and config sections, write files atomically, build halts and CLI failures, and run
+  git; dead definitions, unused imports and parameters are gone. Each change kept every refusal and
+  receipt: what `deltafuse next` prints is pinned word for word by a new golden test
+  (tests/golden/next_texts.json), the CLI was compared on 120 argv cases, and the gate checks on 452
+  calls, before and after. One effect is visible: a broken route is reported once per gate, not
+  twice.
 - **The skills are a tenth shorter (41.3 KB -> 37.1 KB), with no rule dropped.** A Worker reads one
   skill on every step. Removed are sentences that repeat another sentence of the same skill, or a
   Core refusal that names the fix at the moment it matters (implement: the frozen-oracle and
