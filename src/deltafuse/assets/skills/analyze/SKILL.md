@@ -11,7 +11,7 @@ Resolve artifact roots and context limits from `.deltafuse/config.yaml`; paths s
 
 ## Worker (LLM)
 
-This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, and `check-gate`.
+This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, and `advance`.
 
 1. If no Change was named, run `deltafuse next --step analyze` at the product root and use `path` plus `analyze_pass`. Halt if it exits non-zero.
 2. Write only the named pass. Do not write routing, all slices, and coverage in one invocation. A `gap` pass comes after the human reopened a Verify `spec-gap`: read the archived verification it names, then bound the slices so Specify can write what the gap names - add the specification file to a slice's `spec_refs` (`deltafuse artifact write --kind slice`), or route the capability that owns it and write its slice - and close the `analyzed` gate as step 3 says.
@@ -19,7 +19,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
    - `slice`: one `slices/<slice_id>.md` for `capability`. Read only `spec_refs` from `next`. Do not collapse two capabilities into one file.
    - `coverage`: run `deltafuse coverage <change-dir>`. Do not hand-write `coverage.yaml`.
 3. If `analyze_pass` is `coverage` or `gap`, close with `deltafuse advance <change-dir> --gate analyzed`: the Core checks the gate and stamps the transition in one call. Halt if it exits non-zero and show the errors it prints. For `routing` or `slice`, do not run `advance`.
-4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `advance` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
 ## Context
@@ -73,10 +73,9 @@ Every artifact below is written with `deltafuse artifact write --kind <kind> --c
      "body": "Scope, dependencies, unchanged behaviour, intent, risk and size, in prose."
    }
    ```
-3. For each slice record in/out of scope, dependencies, exact spec references, unchanged behavior, risks, and context budget.
-4. Classify independently in the slice `body`, not as extra fields: `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, and `size`.
-5. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
-6. Create proposed Decision records (kind `decision`) only for material product, architecture, integration, policy or operational choices the request leaves open. Leave `identity` out: the Core allocates `DEC-NNNN` and keeps it `proposed`; only the human accepts it. A Decision no one needs costs the run: do not raise one for a choice the request already settles.
+3. In each slice `body`, in prose and not as extra fields: in/out of scope, dependencies, exact spec references, unchanged behavior, risks, context budget, and the classification `intent`, `delta_kind`, `requirement_delta`, `design_impact`, `risk`, `size`.
+4. Compute an explicit delta projection for specification, catalog, Decisions, tasks, tests, implementation, and evidence; use `operation: none` where considered but unchanged.
+5. Create proposed Decision records (kind `decision`) only for material product, architecture, integration, policy or operational choices the request leaves open. Leave `identity` out: the Core allocates `DEC-NNNN` and keeps it `proposed`; only the human accepts it. Do not raise one for a choice the request already settles.
 
    ```json
    {
@@ -90,8 +89,7 @@ Every artifact below is written with `deltafuse artifact write --kind <kind> --c
    ```
 
    `kind`: product | architecture | integration | policy | operational.
-7. Re-run only affected slices after human clarification or a terminal Decision.
-8. Do not invent `coverage.yaml`. The Core writes it from routing and slice frontmatter (`deltafuse coverage`).
+6. Re-run only affected slices after human clarification or a terminal Decision.
 
 If context exceeds budget, split by connected capability components and outcomes; add integration slices instead of truncating context.
 
@@ -101,10 +99,4 @@ Exit only when all claims are routed, every routing primary capability has a sli
 
 Write `routing.yaml`, `slices/**` and any Decision or catalog proposal through the Writer. The Core writes `coverage.yaml` and the `change.yaml` index. `analysis.md` is optional.
 
-`deltafuse next` always selects one Analyze pass (`routing` | one `slice` | `coverage`). Leave status `analyzing` until routing, slices, and coverage are on disk. Do not skip Specify. Do not auto-accept Decisions.
-
-Set `route` in `routing.yaml` to `code` (default), `docs`, or `ops`; if the Change was scaffolded with another route, correct it with `deltafuse artifact write --kind change` (`{"target": "change.yaml", "fields": {"route": "docs"}}`). `docs`/`ops` do not skip Specify.
-
-Unknown top-level keys on `routing.yaml` and `coverage.yaml` (including `schema_version`) do not fail `analyzed`. `routing.yaml` itself remains required. Two slice files do not satisfy Specify without live `docs/spec/**`.
-
-`analysis.md` is optional. `analyzed` is routing, slices (one per routing primary capability), and coverage; `change.yaml` `analysis.summary` may be null.
+Do not skip Specify, on any route. Set `route` in `routing.yaml` to `code` (default), `docs`, or `ops`; if the Change was scaffolded with another route, correct it with `deltafuse artifact write --kind change` (`{"target": "change.yaml", "fields": {"route": "docs"}}`).

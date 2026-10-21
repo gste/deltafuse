@@ -11,14 +11,14 @@ Resolve artifact roots from `.deltafuse/config.yaml`; paths shown below are defa
 
 ## Worker (LLM)
 
-This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, `check-gate`, and `decide`.
+This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `coverage`, `advance`, and `decide`.
 
 1. If no Change was named, run `deltafuse next --step specify` at the product root and use `path` plus `specify_pass`. Halt if it exits non-zero.
 2. Write only the named pass.
    - `slice`: live `docs/spec/**` files listed in `spec_refs` (and `_capabilities.yaml` only for an accepted catalog delta). Append that slice to `spec-delta.md`. Record the Core-owned slice state: `deltafuse state <change-dir> --slice <slice-id> --status specified`. Do not load other spec modules.
-   - `close`: record the Core-owned Change in-flight status `deltafuse state <change-dir> --change --status specification-proposed`. If the Core refuses, fix the listed errors and run it again - except a refusal only a human can clear: `blocked-on-decision` on this call, or a capability the catalog still carries as `status: draft` at the `specified` gate. Stop on those and return the Change upstream; no edit of yours passes them, and accepting is the Human Gate's, not the Worker's. Never set `specified` or any other status by hand. Do not invent new requirements.
+   - `close`: record the Core-owned Change in-flight status `deltafuse state <change-dir> --change --status specification-proposed`. If the Core refuses, fix the listed errors and run it again - except a refusal only a human can clear: `blocked-on-decision` on this call, or a capability the catalog still carries as `status: draft` at the `specified` gate. Stop on those and return the Change upstream. Never set `specified` or any other status by hand. Do not invent new requirements.
 3. If `specify_pass` is `close`, close with `deltafuse advance <change-dir> --gate specified`: the Core checks the gate and stamps the transition in one call. Halt if it exits non-zero and show the errors it prints. For `slice`, do not run `advance`.
-4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `check-gate` failed or they chose inspect, stop.
+4. Then run `deltafuse next`. Do not choose the next slash command yourself. If it names a ready step, load that skill and execute it in this same session. If it exits non-zero with halt.kind `decision` or `spec`, present `halt.choices` in the host multiple-choice UI, wait, run only `choice.command`, and continue. If `advance` failed or they chose inspect, stop.
 5. Do not auto-accept Decisions or merge.
 
 ## Context
@@ -47,13 +47,13 @@ Read the named slice, its typed delta, `spec_refs` from `next`, accepted related
 3. Apply an accepted capability catalog delta when required.
 4. Mirror every accepted Decision that affects observable behavior, a contract, policy, or required invariant into the named spec files.
 5. If `requirement_delta: none`, do not edit spec; record exact accepted `spec_refs` proving sufficiency.
-6. Update this slice status to `specified`. Present normative edits for the human specification gate after all slices are specified. `deltafuse decide --spec` records the click; do not write `accepted` on `spec-delta.md`.
+6. Present normative edits for the human specification gate after all slices are specified. `deltafuse decide --spec` records the click; do not write `accepted` on `spec-delta.md`.
 
-Do not accept Decisions, invent behavior, or implement code. A newly discovered material question: stop; do not continue Specify.
+Do not implement code. A newly discovered material question: stop; do not continue Specify.
 
 ## Gate
 
-The specification change is accepted via `deltafuse decide --spec`, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task. `spec-delta` added/modified files must belong to slice `spec_refs`. EARS phrasing does not replace live `docs/spec/**` (F-010).
+The specification change is accepted via `deltafuse decide --spec`, or unchanged status is proven by exact references. No normative behavior remains only in a request, Decision, design, or task.
 
 Do not write deploy YAML or `docs/ops/**`; those belong to `route: ops` Implement.
 

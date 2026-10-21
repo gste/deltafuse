@@ -7,7 +7,7 @@ description: Run the DeltaFuse Process through-mode. Follow `deltafuse next` in 
 
 Stay on the Process without waiting for the human to paste `/analyze`, `/specify`, `/decompose`, `/declare`, `/implement`, or `/verify`.
 
-This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `check-gate`, `decide`, and `archive`. Through-mode is not a lifecycle step and not a Human Gate.
+This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, `evidence`, `advance`, `decide`, and `archive`. Through-mode is not a lifecycle step and not a Human Gate.
 
 ## Worker (LLM)
 
@@ -25,10 +25,4 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
 
 ## Halt
 
-Human action is required only for:
-
-1. A Decision (`halt.kind: decision`) — buttons from `halt.choices`.
-2. A specification Human Gate (`halt.kind: spec`) — buttons from `halt.choices`.
-3. A failed gate, blocked task, or anything that needs inspection (`halt.kind: blocked`, or a non-zero `advance`).
-
-`deltafuse decide` records the human's click. It is not auto-accept. `inspect` (`command` is null) means stop. Never `git push`.
+Human action is required only for a Decision, a specification Human Gate, or a blocked or failed step (step 6-7). `deltafuse decide` records the human's click; it is not auto-accept.

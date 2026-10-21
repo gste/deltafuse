@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (it never restored a file: a `prepared` transaction had not replaced one).
 - **`artifact write` exits 3 for a stage refusal** (`unauthorized_stage`, `stage_halted`), as the
   retired `artifact create` did: 3 is a policy refusal, 2 a malformed request. It exited 2.
+- **The skills are a tenth shorter (41.3 KB -> 37.1 KB), with no rule dropped.** A Worker reads one
+  skill on every step. Removed are sentences that repeat another sentence of the same skill, or a
+  Core refusal that names the fix at the moment it matters (implement: the frozen-oracle and
+  `blocked` refusals; declare: the sibling-oracle refusal; verify: the coverage mapping), stale
+  lines (declare named `check-gate --gate converged`; verify ended with a line about Specify;
+  analyze kept notes from before the Artifact Writer), and "why" narration. Every skill now says
+  the Core owns `advance` and stops when `advance` fails, not `check-gate`.
 - **`deltafuse next` names `advance --gate <gate>`, never `check-gate`.** Every step skill closes a
   gate with `advance` alone (one decision, one call), and the reasons and envelopes `next` wrote
   said `check-gate`. For a Declare or Implement task the envelope now says to advance once `next`
