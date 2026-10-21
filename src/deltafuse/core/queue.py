@@ -348,6 +348,25 @@ def _unreadable_change(change_path: Path) -> str | None:
     return None
 
 
+
+def _halt(
+    change_id: str | None,
+    path: str | None,
+    reason: str,
+    *,
+    task: str | None = None,
+    task_path: str | None = None,
+    halt_kind: str = "blocked",
+) -> tuple[list["WorkItem"], list["WorkItem"]]:
+    """A Change that halts for the human: no ready step, one blocked item saying why."""
+    return [], [
+        WorkItem(
+            kind="blocked", step=None, skill=None, gate=None, change_id=change_id, path=path,
+            task=task, task_path=task_path, reason=reason, halt_kind=halt_kind,
+        )
+    ]
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data = _load_change(change_path)
     problem = _unreadable_change(change_path)
@@ -355,24 +374,13 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         if problem is None:
             return [], []
         rel = _rel(product_root, change_path)
-        return [], [
-            WorkItem(
-                kind="blocked",
-                step=None,
-                skill=None,
-                gate=None,
-                change_id=change_path.name,
-                path=rel,
-                task=None,
-                task_path=None,
-                reason=(
-                    f"{rel}/change.yaml is broken: {problem}. Only the Core writes "
-                    "change.yaml; it was written by hand. The human restores it from "
-                    "version control, then `deltafuse next` resumes."
-                ),
-                halt_kind="blocked",
-            )
-        ]
+        return _halt(
+            change_path.name,
+            rel,
+            f"{rel}/change.yaml is broken: {problem}. Only the Core writes "
+            "change.yaml; it was written by hand. The human restores it from "
+            "version control, then `deltafuse next` resumes.",
+        )
     change_id = data.get("id")
     if not isinstance(change_id, str):
         change_id = change_path.name
@@ -384,52 +392,18 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     if mismatch:
         # DF3-004: change.yaml must agree with the last Core receipt; a
         # hand-edited status without a receipt halts the Change.
-        return [], [
-            WorkItem(
-                kind="blocked",
-                step=None,
-                skill=None,
-                gate=None,
-                change_id=change_id,
-                path=rel,
-                task=None,
-                task_path=None,
-                reason=mismatch,
-                halt_kind="blocked",
-            )
-        ]
+        return _halt(change_id, rel, mismatch)
     intent = data.get("intent") if isinstance(data.get("intent"), str) else "unknown"
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
     if unresolved:
-        return [], [
-            WorkItem(
-                kind="blocked",
-                step=None,
-                skill=None,
-                gate=None,
-                change_id=change_id,
-                path=rel,
-                task=None,
-                task_path=None,
-                reason="; ".join(unresolved),
-                halt_kind="decision",
-            )
-        ]
+        return _halt(change_id, rel, "; ".join(unresolved), halt_kind="decision")
     if status == "specification-proposed":
-        return [], [
-            WorkItem(
-                kind="blocked",
-                step=None,
-                skill=None,
-                gate=None,
-                change_id=change_id,
-                path=rel,
-                task=None,
-                task_path=None,
-                reason="Human specification gate (status specification-proposed)",
-                halt_kind="spec",
-            )
-        ]
+        return _halt(
+            change_id,
+            rel,
+            "Human specification gate (status specification-proposed)",
+            halt_kind="spec",
+        )
 
     tasks = _load_tasks(change_path)
     from deltafuse.core.leash import task_envelope_errors
@@ -443,43 +417,27 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
 
     for tid, tstatus, tfile in phase_tasks:
         if tstatus == "blocked":
-            return [], [
-                WorkItem(
-                    kind="blocked",
-                    step=None,
-                    skill=None,
-                    gate=None,
-                    change_id=change_id,
-                    path=rel,
-                    task=tid,
-                    task_path=_rel(product_root, tfile),
-                    reason=(
-                        f"Task {tid} is blocked: it waits for the human (the Worker's reply "
-                        "that blocked it says why - for example a declared oracle it showed "
-                        "no code can pass). The human cancels it with `deltafuse decide "
-                        f"{rel} --task {tid} --status cancelled`, or reopens it for Declare "
-                        f"with `deltafuse decide {rel} --task {tid} --status reopened --note "
-                        '"<why>"`'
-                    ),
-                    halt_kind="blocked",
-                )
-            ]
+            return _halt(
+                change_id,
+                rel,
+                f"Task {tid} is blocked: it waits for the human (the Worker's reply "
+                "that blocked it says why - for example a declared oracle it showed "
+                "no code can pass). The human cancels it with `deltafuse decide "
+                f"{rel} --task {tid} --status cancelled`, or reopens it for Declare "
+                f"with `deltafuse decide {rel} --task {tid} --status reopened --note "
+                '"<why>"`',
+                task=tid,
+                task_path=_rel(product_root, tfile),
+            )
         faults = [e for e in envelope_faults if e.startswith(f"Task {tid}:")]
         if faults:
-            return [], [
-                WorkItem(
-                    kind="blocked",
-                    step=None,
-                    skill=None,
-                    gate=None,
-                    change_id=change_id,
-                    path=rel,
-                    task=tid,
-                    task_path=_rel(product_root, tfile),
-                    reason="; ".join(faults),
-                    halt_kind="blocked",
-                )
-            ]
+            return _halt(
+                change_id,
+                rel,
+                "; ".join(faults),
+                task=tid,
+                task_path=_rel(product_root, tfile),
+            )
         if tstatus in TASK_DECLARE | TASK_IMPLEMENT and red_result(change_path, tid) == "already-green":
             # The oracle passed on unchanged code: nothing to implement, and the
             # implemented gate refuses such a Red. Without this the task was selected
@@ -503,26 +461,17 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                         ),
                     )
                 ], []
-            return [], [
-                WorkItem(
-                    kind="blocked",
-                    step=None,
-                    skill=None,
-                    gate=None,
-                    change_id=change_id,
-                    path=rel,
-                    task=tid,
-                    task_path=_rel(product_root, tfile),
-                    reason=(
-                        f"Task {tid}: its Red is already-green, yet it promises "
-                        f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
-                        "The human decides: cancel it (deltafuse decide "
-                        f"{rel} --task {tid} --status cancelled) if the behavior already "
-                        f"exists, or delete {red_rel} and have it declared again"
-                    ),
-                    halt_kind="blocked",
-                )
-            ]
+            return _halt(
+                change_id,
+                rel,
+                f"Task {tid}: its Red is already-green, yet it promises "
+                f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
+                "The human decides: cancel it (deltafuse decide "
+                f"{rel} --task {tid} --status cancelled) if the behavior already "
+                f"exists, or delete {red_rel} and have it declared again",
+                task=tid,
+                task_path=_rel(product_root, tfile),
+            )
         if tstatus in TASK_DECLARE:
             return [
                 _item_for_step(
@@ -554,23 +503,13 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         ahead = [(tid, s) for tid, s, _ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
         if ahead:
             tid, tstatus = ahead[0]
-            return [], [
-                WorkItem(
-                    kind="blocked",
-                    step=None,
-                    skill=None,
-                    gate=None,
-                    change_id=change_id,
-                    path=rel,
-                    task=tid,
-                    task_path=None,
-                    reason=(
-                        f"Task {tid} is '{tstatus}' while the Change is '{status}': "
-                        "the task ran ahead of the declaring gate"
-                    ),
-                    halt_kind="blocked",
-                )
-            ]
+            return _halt(
+                change_id,
+                rel,
+                f"Task {tid} is '{tstatus}' while the Change is '{status}': "
+                "the task ran ahead of the declaring gate",
+                task=tid,
+            )
         declared = [(tid, tfile) for tid, s, tfile in tasks if s in TASK_IMPLEMENT]
         if declared:
             tid, tfile = declared[-1]
@@ -636,23 +575,12 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 if gap == "spec-gap"
                 else "The Core has no route back for this gap yet; the human settles it"
             )
-            return [], [
-                WorkItem(
-                    kind="blocked",
-                    step=None,
-                    skill=None,
-                    gate=None,
-                    change_id=change_id,
-                    path=rel,
-                    task=None,
-                    task_path=None,
-                    reason=(
-                        f"Change {change_id}: Verify recorded the gap '{gap}' in verification.md, "
-                        f"so it does not converge and is not repaired silently. {route}"
-                    ),
-                    halt_kind="blocked",
-                )
-            ]
+            return _halt(
+                change_id,
+                rel,
+                f"Change {change_id}: Verify recorded the gap '{gap}' in verification.md, "
+                f"so it does not converge and is not repaired silently. {route}",
+            )
 
     if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
@@ -974,6 +902,21 @@ def queue_snapshot(
     }
 
 
+def _pass_lines(item: WorkItem, *, spec_refs: bool) -> list[str]:
+    """The Analyze or Specify pass a step is on, and what it names."""
+    name, value = ("analyze_pass", item.analyze_pass) if item.analyze_pass else ("specify_pass", item.specify_pass)
+    if not value:
+        return []
+    out = [f"{name}: {value}"]
+    if item.capability:
+        out.append(f"capability: {item.capability}")
+    if item.slice_id:
+        out.append(f"slice_id: {item.slice_id}")
+    if spec_refs and item.spec_refs:
+        out.append("spec_refs: " + ", ".join(item.spec_refs))
+    return out
+
+
 def format_item(item: WorkItem) -> str:
     lines = [
         f"next: /{item.skill}" if item.skill else "next: (blocked)",
@@ -985,22 +928,7 @@ def format_item(item: WorkItem) -> str:
         f"task_path: {item.task_path or '-'}",
         f"skill_path: {item.skill_path or '-'}",
     ]
-    if item.analyze_pass:
-        lines.append(f"analyze_pass: {item.analyze_pass}")
-        if item.capability:
-            lines.append(f"capability: {item.capability}")
-        if item.slice_id:
-            lines.append(f"slice_id: {item.slice_id}")
-        if item.spec_refs:
-            lines.append("spec_refs: " + ", ".join(item.spec_refs))
-    elif item.specify_pass:
-        lines.append(f"specify_pass: {item.specify_pass}")
-        if item.capability:
-            lines.append(f"capability: {item.capability}")
-        if item.slice_id:
-            lines.append(f"slice_id: {item.slice_id}")
-        if item.spec_refs:
-            lines.append("spec_refs: " + ", ".join(item.spec_refs))
+    lines += _pass_lines(item, spec_refs=True)
     lines.append(f"reason: {item.reason}")
     return "\n".join(lines)
 
@@ -1064,18 +992,7 @@ def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
         f"task_path: {item.task_path or '-'}",
         f"skill_path: {item.skill_path or '-'}",
     ]
-    if item.analyze_pass:
-        lines.append(f"analyze_pass: {item.analyze_pass}")
-        if item.capability:
-            lines.append(f"capability: {item.capability}")
-        if item.slice_id:
-            lines.append(f"slice_id: {item.slice_id}")
-    elif item.specify_pass:
-        lines.append(f"specify_pass: {item.specify_pass}")
-        if item.capability:
-            lines.append(f"capability: {item.capability}")
-        if item.slice_id:
-            lines.append(f"slice_id: {item.slice_id}")
+    lines += _pass_lines(item, spec_refs=False)
     lines.extend(
         [
             f"reason: {item.reason}",
