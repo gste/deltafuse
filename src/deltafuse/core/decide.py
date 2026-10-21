@@ -12,12 +12,24 @@ from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 
-from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core import gate_password, gate_receipts
 from deltafuse.core.gate_receipts import ReceiptError
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
-from deltafuse.core.transitions import TransitionError, _artifact_file, advance_change, set_artifact_status
+from deltafuse.core.task_snapshot import apply_restore, restore_plan
+from deltafuse.core.transitions import (
+    GAP_REOPEN_FROM,
+    GAP_REOPEN_KIND,
+    GAP_REOPEN_TO,
+    GATE_TARGETS,
+    TransitionError,
+    _artifact_file,
+    advance_change,
+    open_gap_reopen,
+    record_change_status,
+    set_artifact_status,
+)
 
 DECIDE_STATUSES = ("accepted", "rejected")
 
@@ -77,8 +89,6 @@ def _unblock_change_if_decisions_resolved(product_root: Path, change_id: str, ch
         return None
     if data.get("status") != "blocked-on-decision":
         return None
-    from deltafuse.core.transitions import record_change_status
-
     # V3-FIX-009: decide is a Core command, so its unblock transition is
     # journaled like any other Core status write - receipt first.
     record_change_status(change_dir, status="analyzing", kind="unblock", gate="decide")
@@ -148,6 +158,51 @@ def _write_with_receipt(
         raise DecideError(f"Human Gate receipt was not recorded, verdict undone: {ex}") from ex
 
 
+def _require_change_dir(change_dir: Path, flag: str) -> None:
+    if not (change_dir / "change.yaml").is_file():
+        raise DecideError(f"{flag} requires a Change directory (path to change.yaml)")
+
+
+def _check_note(note: str | None) -> None:
+    if note is not None and len(note) > REOPEN_NOTE_MAX:
+        raise DecideError(f"--note is longer than {REOPEN_NOTE_MAX} characters")
+
+
+def _record_task_verdict(
+    product_root: Path, task_file: Path, task_id: str, *, status: str, change: str | None, human_check: str
+) -> None:
+    """The task's Human Gate receipt, after its status was moved; the caller holds the lock."""
+    try:
+        gate_receipts.record_receipt(
+            product_root,
+            kind="task",
+            status=status,
+            rel_path=_rel(product_root, task_file),
+            artifact_id=task_id,
+            change=change,
+            artifact=task_file,
+            human_check=human_check,
+        )
+    except (ReceiptError, OSError) as ex:
+        raise DecideError(f"task {status}, but its Human Gate receipt was not recorded: {ex}") from ex
+
+
+def _result(
+    gate: str,
+    status: str,
+    human_check: str,
+    ids: dict[str, Any],
+    written: list[str],
+    *,
+    ok: bool = True,
+    change_status: str | None = None,
+    gate_errors: list[str] | None = None,
+) -> dict[str, Any]:
+    """What `decide` reports; `ids` (task, gap, decision, from) sit between human_check and written."""
+    head = {"ok": ok, "gate": gate, "status": status, "human_check": human_check}
+    return {**head, **ids, "written": written, "change_status": change_status, "gate_errors": gate_errors or []}
+
+
 def cancel_task(
     change_dir: Path,
     task: str,
@@ -159,8 +214,7 @@ def cancel_task(
     The Worker cannot (`deltafuse state` refuses `cancelled`); a task it cannot do it marks
     `blocked`, and this is one of the human's answers to that halt.
     """
-    if not (change_dir / "change.yaml").is_file():
-        raise DecideError("--task requires a Change directory (path to change.yaml)")
+    _require_change_dir(change_dir, "--task")
     product_root = find_repo_root(change_dir)
     human_check = _check_password(product_root, password_prompt)
     try:
@@ -171,30 +225,15 @@ def cancel_task(
     rel = _rel(product_root, task_file)
     if not moved.get("unchanged"):
         with ProductMutationLock(product_root):
-            try:
-                gate_receipts.record_receipt(
-                    product_root,
-                    kind="task",
-                    status="cancelled",
-                    rel_path=rel,
-                    artifact_id=task_id,
-                    change=_change_id_from_dir(change_dir),
-                    artifact=task_file,
-                    human_check=human_check,
-                )
-            except (ReceiptError, OSError) as ex:
-                raise DecideError(f"task cancelled, but its Human Gate receipt was not recorded: {ex}") from ex
-    return {
-        "ok": True,
-        "gate": "task",
-        "status": "cancelled",
-        "human_check": human_check,
-        "task": task_id,
-        "from": moved.get("from"),
-        "written": [rel],
-        "change_status": None,
-        "gate_errors": [],
-    }
+            _record_task_verdict(
+                product_root,
+                task_file,
+                task_id,
+                status="cancelled",
+                change=_change_id_from_dir(change_dir),
+                human_check=human_check,
+            )
+    return _result("task", "cancelled", human_check, {"task": task_id, "from": moved.get("from")}, [rel])
 
 
 REOPEN_NOTE_MAX = 4000
@@ -206,16 +245,20 @@ def reopened_dir(change_dir: Path) -> Path:
     return change_dir / "reopened"
 
 
-def latest_reopen(change_dir: Path, task_id: str) -> dict[str, Any] | None:
-    """The newest archive of a reopened task, with its `path` relative to the Change, or None."""
-    root = reopened_dir(change_dir)
+def _numbered_runs(root: Path, prefix: str) -> list[tuple[int, Path]]:
     if not root.is_dir():
-        return None
-    runs = []
-    for entry in root.glob(f"{task_id}.*"):
-        suffix = entry.name[len(task_id) + 1 :]
-        if entry.is_dir() and suffix.isdigit():
-            runs.append((int(suffix), entry))
+        return []
+    out = []
+    for p in root.glob(f"{prefix}.*"):
+        suffix = p.name[len(prefix) + 1 :]
+        if p.is_dir() and suffix.isdigit():
+            out.append((int(suffix), p))
+    return out
+
+
+def _latest_run(change_dir: Path, prefix: str) -> dict[str, Any] | None:
+    """The newest `reopened/<prefix>.<n>/reopen.yaml`, with its `path` relative to the Change."""
+    runs = _numbered_runs(reopened_dir(change_dir), prefix)
     if not runs:
         return None
     _, newest = max(runs)
@@ -226,6 +269,34 @@ def latest_reopen(change_dir: Path, task_id: str) -> dict[str, Any] | None:
     info = dict(data) if isinstance(data, dict) else {}
     info["path"] = newest.relative_to(change_dir).as_posix()
     return info
+
+
+def _new_archive(change_dir: Path, prefix: str) -> Path:
+    """`reopened/<prefix>.<n>/`, numbered one past the highest archive there."""
+    root = reopened_dir(change_dir)
+    number = max((n for n, _ in _numbered_runs(root, prefix)), default=0) + 1
+    archive = root / f"{prefix}.{number}"
+    archive.mkdir(parents=True, exist_ok=False)
+    return archive
+
+
+def _move_into(archive: Path, pairs: list[tuple[Path, str]]) -> list[str]:
+    """Move each existing source file into the archive under its name; return the names moved."""
+    moved: list[str] = []
+    for source, name in pairs:
+        if source.is_file():
+            source.replace(archive / name)
+            moved.append(name)
+    return moved
+
+
+def _write_reopen_info(archive: Path, info: dict[str, Any]) -> None:
+    atomic_create(archive / "reopen.yaml", yaml.safe_dump(info, sort_keys=False, allow_unicode=True).encode("utf-8"))
+
+
+def latest_reopen(change_dir: Path, task_id: str) -> dict[str, Any] | None:
+    """The newest archive of a reopened task, with its `path` relative to the Change, or None."""
+    return _latest_run(change_dir, task_id)
 
 
 def reopen_task(
@@ -244,10 +315,8 @@ def reopen_task(
     `pending`, and records a `reopened` receipt; the Core then lets that task, and only it,
     be declared again while its Change is past Declare. `note` is what the human passes on.
     """
-    if not (change_dir / "change.yaml").is_file():
-        raise DecideError("--task requires a Change directory (path to change.yaml)")
-    if note is not None and len(note) > REOPEN_NOTE_MAX:
-        raise DecideError(f"--note is longer than {REOPEN_NOTE_MAX} characters")
+    _require_change_dir(change_dir, "--task")
+    _check_note(note)
     product_root = find_repo_root(change_dir)
     task_file, task_id = _artifact_file(change_dir / "tasks", task, "task")
     meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
@@ -256,8 +325,6 @@ def reopen_task(
             f"only a blocked task is reopened; {task_id} is "
             f"'{meta.get('status') if isinstance(meta, dict) else None}'"
         )
-    from deltafuse.core.task_snapshot import apply_restore, restore_plan
-
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     plan, problems = restore_plan(product_root, change_id, meta)
     if problems:
@@ -269,18 +336,11 @@ def reopen_task(
         raise DecideError(str(ex)) from ex
     rel = _rel(product_root, task_file)
     with ProductMutationLock(product_root):
-        previous = latest_reopen(change_dir, task_id)
-        number = 1
-        if previous is not None:
-            number = int(str(previous["path"]).rsplit(".", 1)[-1]) + 1
-        archive = reopened_dir(change_dir) / f"{task_id}.{number}"
-        archive.mkdir(parents=True, exist_ok=False)
-        archived: list[str] = []
-        for phase in EVIDENCE_PHASES:
-            record = change_dir / "evidence" / phase / f"{task_id}.yaml"
-            if record.is_file():
-                record.replace(archive / f"{phase}.yaml")
-                archived.append(f"{phase}.yaml")
+        archive = _new_archive(change_dir, task_id)
+        archived = _move_into(
+            archive,
+            [(change_dir / "evidence" / phase / f"{task_id}.yaml", f"{phase}.yaml") for phase in EVIDENCE_PHASES],
+        )
         # The task's product files go back to the declaring gate's copies: the corrected oracle
         # must fail on code this task has not yet changed (ref-m04-363-2).
         restored = apply_restore(product_root, plan)
@@ -292,50 +352,17 @@ def reopen_task(
             "restored": restored,
             "note": note or None,
         }
-        atomic_create(
-            archive / "reopen.yaml",
-            yaml.safe_dump(info, sort_keys=False, allow_unicode=True).encode("utf-8"),
+        _write_reopen_info(archive, info)
+        _record_task_verdict(
+            product_root, task_file, task_id, status="reopened", change=info["change"], human_check=human_check
         )
-        try:
-            gate_receipts.record_receipt(
-                product_root,
-                kind="task",
-                status="reopened",
-                rel_path=rel,
-                artifact_id=task_id,
-                change=info["change"],
-                artifact=task_file,
-                human_check=human_check,
-            )
-        except (ReceiptError, OSError) as ex:
-            raise DecideError(f"task reopened, but its Human Gate receipt was not recorded: {ex}") from ex
-    return {
-        "ok": True,
-        "gate": "task",
-        "status": "reopened",
-        "human_check": human_check,
-        "task": task_id,
-        "from": moved.get("from"),
-        "written": [rel, _rel(product_root, archive), *restored],
-        "change_status": None,
-        "gate_errors": [],
-    }
+    written = [rel, _rel(product_root, archive), *restored]
+    return _result("task", "reopened", human_check, {"task": task_id, "from": moved.get("from")}, written)
 
 
 # Gaps a human can send back today, and where to: spec-gap needs the slice bounds Analyze
 # writes (ref-m04-365-2: the missing catalogue row sat in a spec file no slice named).
-GAP_ROUTES = {"spec-gap": "analyzing"}
-
-
-def _numbered_runs(root: Path, prefix: str) -> list[tuple[int, Path]]:
-    if not root.is_dir():
-        return []
-    out = []
-    for p in root.glob(f"{prefix}.*"):
-        suffix = p.name[len(prefix) + 1 :]
-        if p.is_dir() and suffix.isdigit():
-            out.append((int(suffix), p))
-    return out
+GAP_ROUTES = {"spec-gap": GAP_REOPEN_TO}
 
 
 def reopen_gap(
@@ -355,17 +382,12 @@ def reopen_gap(
     then gets a pass that names the gap; once the specification is accepted again the Core walks
     the gates the tasks had already passed.
     """
-    from deltafuse.core.fsm import verification_gap
-    from deltafuse.core.transitions import GAP_REOPEN_FROM, GAP_REOPEN_KIND, record_change_status
-
     if gap not in GAP_ROUTES:
         raise DecideError(
             f"--gap takes {', '.join(sorted(GAP_ROUTES))}; the gap '{gap}' has no Core route back yet"
         )
-    if not (change_dir / "change.yaml").is_file():
-        raise DecideError("--gap requires a Change directory (path to change.yaml)")
-    if note is not None and len(note) > REOPEN_NOTE_MAX:
-        raise DecideError(f"--note is longer than {REOPEN_NOTE_MAX} characters")
+    _require_change_dir(change_dir, "--gap")
+    _check_note(note)
     product_root = find_repo_root(change_dir)
     data = _load_yaml_mapping(change_dir / "change.yaml")
     current = data.get("status")
@@ -378,18 +400,14 @@ def reopen_gap(
     human_check = _check_password(product_root, password_prompt)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     with ProductMutationLock(product_root):
-        root = reopened_dir(change_dir)
-        number = max((n for n, _ in _numbered_runs(root, "verify")), default=0) + 1
-        archive = root / f"verify.{number}"
-        archive.mkdir(parents=True, exist_ok=False)
-        archived: list[str] = []
-        for source, name in (
-            (change_dir / "verification.md", "verification.md"),
-            (change_dir / "evidence" / "verification" / "run.yaml", "run.yaml"),
-        ):
-            if source.is_file():
-                source.replace(archive / name)
-                archived.append(name)
+        archive = _new_archive(change_dir, "verify")
+        archived = _move_into(
+            archive,
+            [
+                (change_dir / "verification.md", "verification.md"),
+                (change_dir / "evidence" / "verification" / "run.yaml", "run.yaml"),
+            ],
+        )
         # Green and regression predate the specification change Analyze and Specify will make,
         # and every gate checks them against the current tree: they go with the verification,
         # and the tasks are declared again - Implement re-records them on the code already there.
@@ -447,10 +465,7 @@ def reopen_gap(
             "drafted": drafted,
             "note": note or None,
         }
-        atomic_create(
-            archive / "reopen.yaml",
-            yaml.safe_dump(info, sort_keys=False, allow_unicode=True).encode("utf-8"),
-        )
+        _write_reopen_info(archive, info)
         record_change_status(
             change_dir,
             status=GAP_ROUTES[gap],
@@ -459,32 +474,14 @@ def reopen_gap(
             gap=gap,
             archive=_rel(product_root, archive),
         )
-    return {
-        "ok": True,
-        "gate": "gap",
-        "status": "reopened",
-        "human_check": human_check,
-        "gap": gap,
-        "from": current,
-        "written": [_rel(product_root, archive), *drafted, _rel(product_root, change_dir / "change.yaml")],
-        "change_status": GAP_ROUTES[gap],
-        "gate_errors": [],
-    }
+    written = [_rel(product_root, archive), *drafted, _rel(product_root, change_dir / "change.yaml")]
+    ids = {"gap": gap, "from": current}
+    return _result("gap", "reopened", human_check, ids, written, change_status=GAP_ROUTES[gap])
 
 
 def latest_gap_reopen(change_dir: Path) -> dict[str, Any] | None:
     """The newest `reopened/verify.<n>/reopen.yaml`, with its `path` relative to the Change."""
-    runs = _numbered_runs(reopened_dir(change_dir), "verify")
-    if not runs:
-        return None
-    _, newest = max(runs)
-    try:
-        data = yaml.safe_load((newest / "reopen.yaml").read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        data = None
-    info = dict(data) if isinstance(data, dict) else {}
-    info["path"] = newest.relative_to(change_dir).as_posix()
-    return info
+    return _latest_run(change_dir, "verify")
 
 
 def _walk_gates_after_gap(change_dir: Path) -> list[str]:
@@ -495,8 +492,6 @@ def _walk_gates_after_gap(change_dir: Path) -> list[str]:
     and regression predate the specification change and are re-run in Implement, as the queue
     then says.
     """
-    from deltafuse.core.transitions import open_gap_reopen
-
     product_root = find_repo_root(change_dir)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     if open_gap_reopen(product_root, change_id, until_gate="converged") is None:
@@ -551,11 +546,9 @@ def apply_decision(
         raise DecideError("Pass exactly one of --decision or --spec")
     start_path = Path(start).resolve()
     if spec:
-        if (start_path / "change.yaml").is_file():
-            change_dir = start_path
-            product_root = find_repo_root(change_dir)
-        else:
-            raise DecideError("--spec requires a Change directory (path to change.yaml)")
+        _require_change_dir(start_path, "--spec")
+        change_dir = start_path
+        product_root = find_repo_root(change_dir)
         human_check = _check_password(product_root, password_prompt)
         with ProductMutationLock(product_root):
             delta = change_dir / "spec-delta.md"
@@ -610,8 +603,6 @@ def apply_decision(
             )
             change_status = None
             if status == "rejected" and proposed:
-                from deltafuse.core.transitions import record_change_status
-
                 # The rejected proposal returns to analyzed with a receipt, like
                 # every other Core status write (roadmap item 1: it was a bare
                 # write of change.yaml).
@@ -649,22 +640,19 @@ def apply_decision(
                     written.append(_rel(product_root, change_file))
                     walked = _walk_gates_after_gap(change_dir)
                     if walked:
-                        change_status = {
-                            "decomposed": "decomposed",
-                            "declaring": "declared",
-                            "implemented": "implemented",
-                        }[walked[-1]]
+                        change_status = GATE_TARGETS[walked[-1]]
             else:
                 gate_errors = check_gate(change_dir, "specified")
-        return {
-            "ok": not transition_failed,
-            "gate": "spec",
-            "status": status,
-            "human_check": human_check,
-            "written": written,
-            "change_status": change_status,
-            "gate_errors": gate_errors,
-        }
+        return _result(
+            "spec",
+            status,
+            human_check,
+            {},
+            written,
+            ok=not transition_failed,
+            change_status=change_status,
+            gate_errors=gate_errors,
+        )
 
     product_root = load_product_root(start_path)
     human_check = _check_password(product_root, password_prompt)
@@ -710,13 +698,4 @@ def apply_decision(
             change_status = _unblock_change_if_decisions_resolved(product_root, change_id, change_dir)
             if change_status:
                 written.append(_rel(product_root, change_dir / "change.yaml"))
-        return {
-            "ok": True,
-            "gate": "decision",
-            "status": status,
-            "human_check": human_check,
-            "decision": dec_id,
-            "written": written,
-            "change_status": change_status,
-            "gate_errors": [],
-        }
+        return _result("decision", status, human_check, {"decision": dec_id}, written, change_status=change_status)
