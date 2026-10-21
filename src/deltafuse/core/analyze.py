@@ -652,3 +652,130 @@ def write_coverage(change_path: Path | str) -> Path:
 
     return dest
 
+
+
+# --- A new name in a family another capability specifies (q4: under-routing at Analyze) ---------
+
+_BACKTICKED = re.compile(r"`([^`\n]+)`")
+_DOTTED_NAME = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+_FILE_SUFFIXES = frozenset({"py", "md", "yaml", "yml", "json", "toml", "txt", "cfg", "ini", "java", "kt", "js", "ts"})
+_CLAIM_ID = re.compile(r"\bCR-\d{3}\b")
+
+
+def catalog_capability_specs(catalog: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Capability id (`domain.name`) -> the live spec files the catalog names for it."""
+    out: dict[str, list[str]] = {}
+    domains = (catalog or {}).get("domains") if isinstance(catalog, dict) else None
+    for dname, dobj in (domains or {}).items() if isinstance(domains, dict) else []:
+        caps = dobj.get("capabilities") if isinstance(dobj, dict) else None
+        for cname, cobj in (caps or {}).items() if isinstance(caps, dict) else []:
+            specs = cobj.get("spec") if isinstance(cobj, dict) else None
+            out[f"{dname}.{cname}"] = [s for s in specs or [] if isinstance(s, str)] if isinstance(specs, list) else []
+    return out
+
+
+def claim_texts(request_text: str, routing_claims: dict[str, Any]) -> dict[str, str]:
+    """Claim id -> its lines of request.md (from the line naming it to the next claim) and its summary."""
+    texts: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in request_text.splitlines():
+        found = _CLAIM_ID.search(line)
+        if found:
+            current = found.group(0)
+        if current:
+            texts.setdefault(current, []).append(line)
+    for cid, row in routing_claims.items():
+        if isinstance(cid, str) and isinstance(row, dict) and isinstance(row.get("summary"), str):
+            texts.setdefault(cid, []).append(row["summary"])
+    return {cid: "\n".join(lines) for cid, lines in texts.items()}
+
+
+def _named_identifiers(text: str, capability_ids: set[str]) -> list[str]:
+    names: list[str] = []
+    for span in _BACKTICKED.findall(text):
+        token = span.strip()
+        if not _DOTTED_NAME.match(token) or token in capability_ids:
+            continue
+        if token.rsplit(".", 1)[1] in _FILE_SUFFIXES:
+            continue
+        if token not in names:
+            names.append(token)
+    return names
+
+
+def new_name_family_errors(
+    routing_claims: dict[str, Any], texts: dict[str, str], spec_texts: dict[str, dict[str, str]]
+) -> list[str]:
+    """Claims that add a new name to a family of names another capability's spec lists, unrouted.
+
+    Bench case M04 (ref-m04-344, -363-2, -365-2, -368, ref-v339-b, 2026-10-04..21): the request asks
+    that security operations see a new event, `ratelimit.penalty_started`; the audit event
+    catalogue - `ratelimit.rejected` among its rows - is monitoring.audit's specification. In every
+    failed run Analyze made security.ratelimit the claim's primary capability and listed
+    monitoring.audit as related only, so it got no slice, Specify never added the event to the
+    catalogue and Implement never to its code; every run that routed the claim to
+    monitoring.audit got both. A related capability takes no slice: a claim that adds to what
+    another capability lists changes that capability. The rule reads only names in backticks
+    with a dot (`family.member`), a member no live spec holds yet, and specs that hold others of
+    its family.
+
+    `spec_texts` maps capability id -> {spec path: text}.
+    """
+    capability_ids = set(spec_texts)
+    primaries = {
+        row.get("primary_capability")
+        for row in routing_claims.values()
+        if isinstance(row, dict) and isinstance(row.get("primary_capability"), str)
+    }
+    every_spec = "\n".join(text for files in spec_texts.values() for text in files.values())
+    errors: list[str] = []
+    for cid in sorted(texts):
+        for name in _named_identifiers(texts[cid], capability_ids):
+            if re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", every_spec):
+                continue  # not new: some specification already names it
+            family = name.split(".", 1)[0]
+            member = re.compile(rf"(?<![\w.]){re.escape(family)}\.[a-z][a-z0-9_]*")
+            for cap in sorted(spec_texts):
+                if cap in primaries:
+                    continue
+                example = next(
+                    (
+                        (path, m.group(0))
+                        for path, text in sorted(spec_texts[cap].items())
+                        for m in member.finditer(text)
+                        if m.group(0) not in capability_ids
+                    ),
+                    None,
+                )
+                if example is None:
+                    continue
+                errors.append(
+                    f"Gate analyzed: {cid} adds the name `{name}`, and names of the `{family}.` family "
+                    f"are listed in {cap}'s specification ({example[0]}: `{example[1]}`), but no claim "
+                    f"routes to {cap} as its primary capability - so it gets no slice, and neither its "
+                    f"specification nor its code would change. Route {cid} to {cap} as primary "
+                    "(the capability that only uses the name goes to related_capabilities), and write "
+                    f"its slice"
+                )
+    return errors
+
+
+def unrouted_name_family_errors(change_path: Path | str, product_root: Path | str) -> list[str]:
+    """new_name_family_errors on a Change and its product's live specification."""
+    change_path, root = Path(change_path), Path(product_root)
+    routing = _load_yaml_mapping(change_path / "routing.yaml") or {}
+    claims = routing.get("claims") if isinstance(routing.get("claims"), dict) else {}
+    request = change_path / "request.md"
+    if not claims or not request.is_file():
+        return []
+    catalog, _ = load_capability_catalog(root)
+    spec_texts: dict[str, dict[str, str]] = {}
+    for cap, paths in catalog_capability_specs(catalog).items():
+        files: dict[str, str] = {}
+        for rel in paths:
+            path = root / rel
+            if path.is_file():
+                files[rel] = path.read_text(encoding="utf-8", errors="replace")
+        spec_texts[cap] = files
+    texts = claim_texts(request.read_text(encoding="utf-8", errors="replace"), claims)
+    return new_name_family_errors(claims, texts, spec_texts)

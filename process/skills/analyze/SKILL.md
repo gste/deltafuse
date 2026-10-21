@@ -34,7 +34,7 @@ Every artifact below is written with `deltafuse artifact write --kind <kind> --c
 
 ## Procedure
 
-1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies, and write `routing.yaml` (kind `routing`). `claims` is a map, not a list; a claim takes only these keys. When a claim's implementation must change code another capability owns (its `code_roots` in the catalog), list that capability in `related_capabilities`.
+1. Assign every `CR-001`-style claim (three digits, not `CR-01`) one `primary_capability` plus optional related capabilities and policies, and write `routing.yaml` (kind `routing`). `claims` is a map, not a list; a claim takes only these keys. When a claim changes what another capability owns - adds to its specification or its code (`code_roots` in the catalog) - route the claim to that capability as primary and list the capability that only uses it in `related_capabilities`: a related capability gets no slice, so nothing it owns would change.
 
    ```json
    {

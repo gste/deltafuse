@@ -105,6 +105,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 ### Gate
 - `change.yaml` status transitioned to `analyzed` (or `blocked-on-decision`).
 - `routing.yaml` validates against `routing.schema.yaml`.
+- A claim that adds a new name to a family another capability's specification lists - a name in backticks with a dot, `family.member`, that no live spec holds yet, while that capability's spec holds others of the family - routes to that capability as its primary: the gate refuses the routing otherwise and names the claim, the name and the spec line. A related capability gets no slice, so nothing it owns would change (bench case M04: the audit event catalogue).
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.

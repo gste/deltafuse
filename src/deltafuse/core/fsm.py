@@ -20,7 +20,7 @@ from deltafuse.core.context import (
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
-from deltafuse.core.analyze import uncovered_primary_capabilities
+from deltafuse.core.analyze import uncovered_primary_capabilities, unrouted_name_family_errors
 from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
     extract_claims_from_request,
@@ -1515,6 +1515,7 @@ def _check_gate(
             errors.append(
                 f"Gate analyzed: routing capability '{cap}' has no slice"
             )
+        errors.extend(unrouted_name_family_errors(change_path, repo_root))
         errors.extend(_uncharacterized_draft_errors(change_path, repo_root))
 
         errors.extend(

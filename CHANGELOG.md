@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The `analyzed` gate routes a claim that adds to another capability's list to that capability.**
+  Bench case M04 (2026-10-04..21): every failed run made security.ratelimit the primary of the
+  claim asking for a new audit event, `ratelimit.penalty_started`, and listed monitoring.audit as
+  related only; a related capability gets no slice, so the event never reached the audit catalogue
+  in the spec or the code, and Verify said `converged`. The analyze skill even said to list such a
+  capability as related. Now a claim naming a new `family.member` in backticks - absent from every
+  live spec, while another capability's spec lists members of that family - must route to that
+  capability as primary; the gate names the claim, the name and the spec line, and the skill says a
+  claim that changes what another capability owns routes there. Over the 126 bench runs on disk the
+  rule flags the 9 M04 runs routed that way and no other run of M01-M04.
+
 ### Fixed
 
 - **The leash takes what the human's `decide` wrote as the human's, before anyone commits it.**
