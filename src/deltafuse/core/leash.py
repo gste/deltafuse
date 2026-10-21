@@ -341,22 +341,41 @@ def structural_kind(rel_path: str) -> str | None:
     return None
 
 
+def _git(root: Path, *args: str, text: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=text, check=False)
+
+
+def _git_bytes(product_root: Path, ref: str, rel_path: str) -> bytes | None:
+    """File bytes at a revision; None when the file (or the revision) is absent."""
+    proc = _git(product_root, "show", f"{ref}:{rel_path}", text=False)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def _git_show(product_root: Path, ref: str, rel_path: str) -> str | None:
+    """File content at a revision, undecodable bytes replaced; None when absent."""
+    data = _git_bytes(product_root, ref, rel_path)
+    return None if data is None else data.decode("utf-8", errors="replace")
+
+
 def _bytes_at(product_root: Path, rel_path: str, *, head: str | None) -> bytes | None:
     if head:
-        proc = subprocess.run(
-            ["git", "show", f"{head}:{rel_path}"], cwd=product_root, capture_output=True, check=False
-        )
-        return proc.stdout if proc.returncode == 0 else None
+        return _git_bytes(product_root, head, rel_path)
     path = product_root / rel_path
     return path.read_bytes() if path.is_file() else None
+
+
+def _content_at(product_root: Path, rel_path: str, *, head: str | None) -> str | None:
+    """Text at ``head`` (lenient decode), else in the working tree (strict UTF-8)."""
+    if head:
+        return _git_show(product_root, head, rel_path)
+    path = product_root / rel_path
+    return path.read_text(encoding="utf-8") if path.is_file() else None
 
 
 CATALOG_REL = "docs/spec/_capabilities.yaml"
 
 
 def _bytes_digest(product_root: Path, rel: str, *, head: str | None = None) -> str:
-    import hashlib
-
     data = _bytes_at(product_root, posix_relpath(rel), head=head)
     return hashlib.sha256(data).hexdigest() if data is not None else ""
 
@@ -380,10 +399,7 @@ def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str,
 
     receipt_names: list[str] = []
     if head:
-        listing = subprocess.run(
-            ["git", "ls-tree", "-r", "--name-only", head, ".deltafuse/receipts"],
-            cwd=root, capture_output=True, text=True, check=False,
-        )
+        listing = _git(root, "ls-tree", "-r", "--name-only", head, ".deltafuse/receipts")
         receipt_names = [line for line in listing.stdout.splitlines() if line.endswith(".json")]
     else:
         folder = root / ".deltafuse" / "receipts"
@@ -585,19 +601,6 @@ def unreachable_green_errors(change_path: Path) -> list[str]:
     return errors
 
 
-def _git_show(product_root: Path, ref: str, rel_path: str) -> str | None:
-    """File content at a revision; None when the file (or the revision) is absent."""
-    proc = subprocess.run(
-        ["git", "show", f"{ref}:{rel_path}"],
-        cwd=product_root,
-        capture_output=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        return None
-    return proc.stdout.decode("utf-8", errors="replace")
-
-
 def _nonempty_lines(text: str | None) -> list[str]:
     return [line.strip() for line in (text or "").splitlines() if line.strip()]
 
@@ -606,12 +609,7 @@ def _journal_lines(
     product_root: Path, rel_path: str, *, base: str | None, head: str | None
 ) -> tuple[list[str], list[str]]:
     old = _nonempty_lines(_git_show(product_root, base or "HEAD", rel_path))
-    if head:
-        new = _nonempty_lines(_git_show(product_root, head, rel_path))
-    else:
-        path = product_root / rel_path
-        new = _nonempty_lines(path.read_text(encoding="utf-8") if path.is_file() else None)
-    return old, new
+    return old, _nonempty_lines(_content_at(product_root, rel_path, head=head))
 
 
 def _change_dirs(product_root: Path) -> dict[str, Path]:
@@ -699,13 +697,6 @@ def core_journal_errors(
             return errors
         return gate_receipts.journal_errors(root)
     return [f"unknown Core journal '{name}'"]
-
-
-def _content_at(product_root: Path, rel_path: str, *, head: str | None) -> str | None:
-    if head:
-        return _git_show(product_root, head, rel_path)
-    path = product_root / rel_path
-    return path.read_text(encoding="utf-8") if path.is_file() else None
 
 
 def core_status_writes(
@@ -1000,17 +991,11 @@ def git_dirty_paths(
     judge the committed range. Untracked files remain a separate always-on check.
     """
     root = product_root.resolve()
-    probe = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    probe = _git(root, "rev-parse", "--show-toplevel")
     if probe.returncode != 0:
         err = (probe.stderr or probe.stdout or "git rev-parse failed").strip()
         raise LeashError(f"leash needs a git repository: {err}")
-    diff_args = ["git", "diff", "--name-only"]
+    diff_args = ["diff", "--name-only"]
     if base:
         diff_args.append(f"{base}..{head or 'HEAD'}")
     else:
@@ -1019,14 +1004,7 @@ def git_dirty_paths(
         # state of every freshly inited product at the moment run/SKILL.md tells
         # the Worker to run leash. Diffing the empty tree instead would list the
         # whole scaffold as the Worker's writes and bury the real answer under it.
-        unborn = subprocess.run(
-            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if unborn.returncode != 0:
+        if _git(root, "rev-parse", "--verify", "--quiet", "HEAD").returncode != 0:
             raise LeashError(
                 "leash needs one commit to diff against and this repository has no commit yet, "
                 "so there is no baseline a write envelope can be judged against. Make an initial "
@@ -1034,34 +1012,16 @@ def git_dirty_paths(
                 "`deltafuse leash` again"
             )
         diff_args.append("HEAD")
-    tracked = subprocess.run(
-        diff_args,
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    tracked = _git(root, *diff_args)
     if tracked.returncode != 0:
         err = (tracked.stderr or tracked.stdout or "git diff failed").strip()
         raise LeashError(f"leash could not read git diff: {err}")
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    untracked = _git(root, "ls-files", "--others", "--exclude-standard")
     if untracked.returncode != 0:
         err = (untracked.stderr or untracked.stdout or "git ls-files failed").strip()
         raise LeashError(f"leash could not list untracked files: {err}")
-    names = (tracked.stdout or "").splitlines() + (untracked.stdout or "").splitlines()
-    out: list[str] = []
-    for raw in names:
-        text = raw.strip().replace("\\", "/")
-        if not text:
-            continue
-        out.append(text)
-    return _unique(out)
+    # _unique normalizes slashes and drops blank lines.
+    return _unique((tracked.stdout or "").splitlines() + (untracked.stdout or "").splitlines())
 
 
 def _chmod_exec(path: Path) -> None:
