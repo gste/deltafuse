@@ -33,6 +33,7 @@ from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.artifact_transactions import (
     ArtifactTransactionError,
     TransactionManager,
+    recover_pending_transactions,
 )
 
 
@@ -338,6 +339,7 @@ class ArtifactService:
 
         with ProductMutationLock(self.product_root):
             revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
+            recover_pending_transactions(self.product_root)
 
             existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
             if existing_tx is not None:
@@ -466,6 +468,7 @@ class ArtifactService:
         if request_id:
             with ProductMutationLock(self.product_root):
                 revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
+                recover_pending_transactions(self.product_root)
                 existing_tx = self.transaction_mgr.find_transaction_by_request_id(request_id)
                 if existing_tx is not None:
                     if existing_tx.get("raw_request_hash") != raw_req_hash:
@@ -557,6 +560,7 @@ class ArtifactService:
 
         with ProductMutationLock(self.product_root):
             revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
+            recover_pending_transactions(self.product_root)
 
             existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
             if existing_tx is not None:

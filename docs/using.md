@@ -179,7 +179,7 @@ Existing artifacts are never automatically rewritten or bulk-migrated; the Write
 Noncanonical metadata of an existing artifact is not reformatted without explicit consent: the service API (`ArtifactService.update`) takes a `canonicalize_metadata` opt-in together with the expected target hash. The CLI exposes no such option.
 
 ### Transaction Recovery Procedure
-In the event of process interruption during creation or update operations, the Core checks `.deltafuse/journal/` under `ProductMutationLock`. Pending transactions marked `prepared` are restored to their previous target state, while transactions marked `published` complete receipt finalization and output publication cleanly.
+Every Writer operation (`artifact write`) first finishes what an interrupted one left in `.deltafuse/journal/`, under `ProductMutationLock`, judged by the target's bytes: a target that already holds the expected result gets its receipt and the transaction is `committed`; one that still holds the previous bytes has its transaction `cancelled` (the file was never replaced); anything else - say, the file was edited by hand after the crash - is marked `ambiguous_stopped` and left for the human. A corrupt journal record stops the write.
 
 
 

@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Core recovers an interrupted Writer transaction.** `recover_pending_transactions` had no
+  caller, though docs/using said the Core ran it. Every Writer operation now runs it first, under
+  the mutation lock: a write cut after its file was published gets its receipt, one cut before is
+  cancelled, anything else is marked `ambiguous_stopped`. docs/using (en, ru) now say what it does
+  (it never restored a file: a `prepared` transaction had not replaced one).
 - **`artifact write` exits 3 for a stage refusal** (`unauthorized_stage`, `stage_halted`), as the
   retired `artifact create` did: 3 is a policy refusal, 2 a malformed request. It exited 2.
 - **`deltafuse next` names `advance --gate <gate>`, never `check-gate`.** Every step skill closes a
