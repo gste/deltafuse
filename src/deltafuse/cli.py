@@ -647,21 +647,15 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"advance: leash ({result['leash']['mode']}): {finding}", file=sys.stderr)
             if (result.get("leash") or {}).get("checked") is False:
                 print(f"advance: leash not checked: {result['leash']['reason']}", file=sys.stderr)
-            print(
-                f"advance: gate '{result['gate']}' applied: "
-                f"{result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"advance: gate '{result['gate']}' applied: {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "state":
         target = Path(args.change_path)
         try:
             result = set_artifact_status(
-                target,
-                status=args.status,
-                task_id=args.task,
-                slice_id=args.slice_id,
+                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
                 change_status=args.change,
             )
         except TransitionError as te:
@@ -672,10 +666,8 @@ def _main(argv: list[str] | None = None) -> int:
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
-            print(
-                f"state: {result['artifact']} status {result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"state: {result['artifact']} status {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "new":
@@ -683,10 +675,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         try:
             change_dir = scaffold_change(
-                Path(args.product_path),
-                args.change_id,
-                route=args.route,
-                title=args.title,
+                Path(args.product_path), args.change_id, route=args.route, title=args.title
             )
         except ScaffoldError as se:
             print(f"new failed: {se}", file=sys.stderr)
@@ -812,13 +801,8 @@ def _main(argv: list[str] | None = None) -> int:
                  else f"--gap {args.gap}" if args.gap else "--spec")
         try:
             result = apply_decision(
-                target,
-                status=args.status,
-                decision=args.decision,
-                spec=args.spec,
-                task=args.task,
-                gap=args.gap,
-                note=args.note,
+                target, status=args.status, decision=args.decision, spec=args.spec, task=args.task,
+                gap=args.gap, note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} {which} --status {args.status}"
                 ),
@@ -865,14 +849,8 @@ def _main(argv: list[str] | None = None) -> int:
             errors = payload["violations"]
             mode = payload["mode"]
             skipped = payload["skipped"]
-            _journal(
-                root,
-                cmd="leash",
-                ok=payload["ok"],
-                errors=errors,
-                n_errors=len(errors),
-                skipped=skipped,
-            )
+            _journal(root, cmd="leash", ok=payload["ok"], errors=errors, n_errors=len(errors),
+                     skipped=skipped)
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif skipped:
@@ -898,10 +876,7 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "board":
         target = Path(args.product_path)
         try:
-            snapshot = build_board_snapshot(
-                target,
-                include_archive=args.archive,
-            )
+            snapshot = build_board_snapshot(target, include_archive=args.archive)
         except BoardError as ex:
             return _fail(target, "Board failed", ex, 2, cmd="board")
         _journal(target, cmd="board", ok=True)
@@ -935,10 +910,7 @@ def _main(argv: list[str] | None = None) -> int:
                     meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
-                        ref_files: list[Path] = []
-                        for sref in meta.get("spec_refs", []):
-                            sp_rel = sref.split("#")[0]
-                            ref_files.append(repo_root / sp_rel)
+                        ref_files = [repo_root / sref.split("#")[0] for sref in meta.get("spec_refs", [])]
                         b_errs = validate_context_budget(
                             budget, ref_files, repo_root=repo_root, receipt=token_receipt
                         )
@@ -953,10 +925,7 @@ def _main(argv: list[str] | None = None) -> int:
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
                         b_errs = validate_task_context_budget(
-                            budget,
-                            meta.get("spec_refs") or [],
-                            meta.get("allowed_paths") or [],
-                            repo_root,
+                            budget, meta.get("spec_refs") or [], meta.get("allowed_paths") or [], repo_root,
                             receipt=token_receipt,
                         )
                         errors.extend(f"{tf.name}: {e}" for e in b_errs)
@@ -986,10 +955,7 @@ def _main(argv: list[str] | None = None) -> int:
         try:
             if args.bench_cmd == "init":
                 meta = init_bench_product(
-                    args.case_id,
-                    args.product_dir,
-                    pack_root=args.pack,
-                    force=args.force,
+                    args.case_id, args.product_dir, pack_root=args.pack, force=args.force
                 )
                 product = Path(args.product_dir).resolve()
                 print(f"Bench {meta['case']} ready in {product}")
