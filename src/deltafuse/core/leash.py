@@ -7,7 +7,7 @@ import json
 import re
 from pathlib import Path
 import subprocess
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -85,8 +85,9 @@ CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this prod
 # Receipt kinds the Core appends to transitions.jsonl: `advance` (transition),
 # `decide` unblocking a Change (unblock), `deltafuse state` (artifact-status).
 # `capability-draft`: `deltafuse capability propose` adding a draft to the
-# catalog in Analyze (q8 decision).
-CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft"})
+# catalog in Analyze (q8 decision). `gap-reopen`: `decide --gap` sending a Change
+# back to Analyze (transitions.GAP_REOPEN_KIND; 3.3.8 wrote it and left it out here).
+CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft", "gap-reopen"})
 
 
 
@@ -234,6 +235,61 @@ def is_exempt_path(rel_path: str) -> bool:
 
 REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
 _REOPEN_ARCHIVE = re.compile(r"^docs/changes/[^/]+/reopened/(?P<task>[^/]+)\.\d+/(?P<name>[^/]+)$")
+
+
+# Gate-journal kinds of a human `decide` that rewrites Change files: a task cancelled or
+# reopened, a Verify gap reopened.
+_HUMAN_REWRITE_KINDS = frozenset({"task", "gap"})
+
+
+def human_decision_judge(
+    product_root: Path, *, base: str | None = None, head: str | None = None
+) -> Callable[[str], bool]:
+    """Whether a dirty path is what a human `decide` wrote, judged by its bytes, before a commit.
+
+    Fuse-Back, Maven J01 (2026-10-21): after `decide --gap` the enforce leash refused `advance`
+    until the human committed - the Green/regression records `decide` moved to its archive and
+    the spec-delta.md it set back to `proposed` read as the Worker's writes. A path is the
+    human's when its bytes are what a `decide` receipt in the gate journal vouches for; a deleted
+    record when its bytes at the base lie in a receipted reopen archive; a product file a task
+    reopen restored when its bytes are the `declaring` snapshot's for that path. Any other bytes
+    are judged as before.
+    """
+    from deltafuse.core.task_snapshot import declaring_snapshot
+
+    root = Path(product_root)
+    decided: dict[str, set[str]] = {}
+    journal = _bytes_at(root, ".deltafuse/gate-journal.jsonl", head=head) or b""
+    for entry in _json_rows(journal.decode("utf-8", errors="replace").splitlines()):
+        if entry.get("kind") in _HUMAN_REWRITE_KINDS and isinstance(entry.get("path"), str):
+            digest = str(entry.get("artifact_sha256") or "").removeprefix("sha256:").lower()
+            if digest:
+                decided.setdefault(posix_relpath(entry["path"]), set()).add(digest)
+    archived: set[str] = set()
+    restored: dict[str, str] = {}
+    for change_id, change_dir in _change_dirs(root).items():
+        reopened = change_dir / "reopened"
+        if not reopened.is_dir():
+            continue
+        task_reopened = False
+        for path in reopened.rglob("*"):
+            rel = path.relative_to(root).as_posix()
+            if path.is_file() and reopen_archive_path(root, rel):
+                archived.add(hashlib.sha256(path.read_bytes()).hexdigest())
+                task_reopened = task_reopened or _REOPEN_ARCHIVE.match(rel) is not None
+        if task_reopened:
+            restored.update((declaring_snapshot(root, change_id) or {}).items())
+
+    def judge(raw: str) -> bool:
+        rel = posix_relpath(raw)
+        data = _bytes_at(root, rel, head=head)
+        if data is None:
+            before = _bytes_at(root, rel, head=base or "HEAD")
+            return before is not None and hashlib.sha256(before).hexdigest() in archived
+        digest = hashlib.sha256(data).hexdigest()
+        return digest in decided.get(rel, set()) or restored.get(rel) == digest
+
+    return judge
 
 
 def reopen_archive_path(product_root: Path, rel_path: str) -> bool:
@@ -868,6 +924,7 @@ def check_paths(
         core_status_writes(product_root, base=base, head=head) if product_root is not None else {}
     )
     vouched = vouched_digests(product_root, head=head) if product_root is not None else {}
+    human = human_decision_judge(product_root, base=base, head=head) if product_root is not None else None
     for raw in _unique(rel_paths):
         # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
         # whole, so checking it second would make the Core-owned guard dead code.
@@ -889,6 +946,8 @@ def check_paths(
             continue
         if raw.startswith(".git/") or is_exempt_path(raw):
             continue
+        if human is not None and human(raw):
+            continue  # written by the human's `deltafuse decide`, as its receipt or archive shows
         if _covered_by(raw, env_list) is not None:
             if product_root is not None:
                 errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))

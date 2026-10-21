@@ -31,6 +31,10 @@
 - [ ] [q6: `deltafuse evidence` не находит `mvn` на Windows](roadmap/q6-fuse-back/EVIDENCE-RUNNER-WINDOWS.md) —
   постановка 2026-10-08: `subprocess.run` без `shutil.which`, `mvn.cmd` не находится; Red/Green для Java на
   Windows — `fixture-error`.
+- [x] [q6: после `decide --gap` шлюз `analyzed` отказывает до коммита](roadmap/q6-fuse-back/GAP-REOPEN-COMMIT.md) —
+  наблюдение 2026-10-21: leash называет запись `gap-reopen` «not a Core transition receipt».
+- [x] [q6: снимок `declaring` удлиняет пути на Windows](roadmap/q6-fuse-back/SNAPSHOT-LONG-PATHS.md) —
+  наблюдение 2026-10-21: `.deltafuse/snapshots/...` + путь теста Fuse-Back, `git add` без `core.longpaths` падает.
 
 ## Прочее
 

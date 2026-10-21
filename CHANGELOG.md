@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The leash takes what the human's `decide` wrote as the human's, before anyone commits it.**
+  Fuse-Back, Maven J01 (2026-10-21): after `decide --gap spec-gap --status reopened` the enforce
+  leash refused `advance --gate analyzed` - the `gap-reopen` receipt 3.3.8 appends to
+  `transitions.jsonl` was missing from the receipt kinds the leash knows ("not a Core transition
+  receipt"), and the Green/regression records `decide` archived and the spec-delta.md it set back to
+  `proposed` read as the Worker's writes outside the envelope. Committing made the advance pass;
+  the bench commits after every human decision and never saw it. Now a file whose bytes a `decide`
+  receipt vouches for, a deleted record whose bytes lie in a receipted reopen archive, and a product
+  file a task reopen restored to its `declaring` snapshot pass; a reopened task had the same gap.
+  Other bytes are judged as before. `decide` says to commit after a reopen. docs/contracts/leash
+  (en, ru) updated.
 - **The `declaring` snapshot names a copy by its content, so a deep path stays short.** Fuse-Back,
   Gradle J01 (2026-10-21): 3.3.8 mirrored each task's product files under
   `.deltafuse/snapshots/<change>/<path>`, ~45 characters on top of a 104-character test path, and

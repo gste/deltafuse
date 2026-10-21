@@ -828,6 +828,10 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"change_status: {result['change_status']}")
             for rel in result.get("written") or []:
                 print(f"wrote: {rel}")
+            if result.get("ok") and result.get("status") == "reopened":
+                # GAP-REOPEN-COMMIT (Fuse-Back, 2026-10-21): the leash knows these writes are the
+                # human's, but a step's diff reads clearest against a commit that holds them.
+                print("next: commit these changes before the next step")
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0 if result.get("ok") else 1
