@@ -90,8 +90,8 @@ def _chain_hash(entry: dict[str, Any]) -> str:
     )
 
 
-def load_receipts(product_root: Path) -> list[dict[str, Any]]:
-    path = journal_path(product_root)
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """The mapping rows of a JSONL journal, oldest first; blank and unreadable lines skipped."""
     if not path.is_file():
         return []
     out: list[dict[str, Any]] = []
@@ -106,6 +106,10 @@ def load_receipts(product_root: Path) -> list[dict[str, Any]]:
         if isinstance(row, dict):
             out.append(row)
     return out
+
+
+def load_receipts(product_root: Path) -> list[dict[str, Any]]:
+    return read_jsonl(journal_path(product_root))
 
 
 def record_receipt(

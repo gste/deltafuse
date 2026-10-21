@@ -46,13 +46,10 @@ def spec_snapshot(product_root: Path) -> dict[str, str]:
 
 def accepted_spec_snapshot(product_root: Path, change_id: str) -> dict[str, str]:
     """The snapshot of the Change's latest `specified` transition, or nothing."""
-    from deltafuse.core.transitions import load_receipts
+    from deltafuse.core.transitions import latest_transition_field
 
-    for row in reversed(load_receipts(product_root, change_id)):
-        if row.get("kind") == "transition" and row.get("gate") == "specified":
-            snapshot = row.get("spec_snapshot")
-            return dict(snapshot) if isinstance(snapshot, dict) else {}
-    return {}
+    snapshot = latest_transition_field(product_root, change_id, "specified", "spec_snapshot")
+    return dict(snapshot) if isinstance(snapshot, dict) else {}
 
 
 def unchanged_since_specified(product_root: Path, change_id: str) -> set[str]:

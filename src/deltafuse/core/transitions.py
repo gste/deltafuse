@@ -18,6 +18,7 @@ import yaml
 
 from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.artifact_storage import atomic_write
+from deltafuse.core.gate_receipts import read_jsonl
 from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
@@ -211,26 +212,20 @@ def record_change_status(
 
 def load_receipts(product_root: Path, change_id: str) -> list[dict[str, Any]]:
     """All recorded receipts for one Change, oldest first."""
-    path = transitions_path(product_root)
-    if not path.is_file():
-        return []
-    out: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            row = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict) and row.get("change") == change_id:
-            out.append(row)
-    return out
+    return [row for row in read_jsonl(transitions_path(product_root)) if row.get("change") == change_id]
 
 
 def last_receipt(product_root: Path, change_id: str) -> dict[str, Any] | None:
     rows = load_receipts(product_root, change_id)
     return rows[-1] if rows else None
+
+
+def latest_transition_field(product_root: Path | str, change_id: str, gate: str, field: str) -> Any:
+    """`field` of the Change's latest `gate` transition receipt; None when there is none."""
+    for row in reversed(load_receipts(Path(product_root), change_id)):
+        if row.get("kind") == "transition" and row.get("gate") == gate:
+            return row.get(field)
+    return None
 
 
 # The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
