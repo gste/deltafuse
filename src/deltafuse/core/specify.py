@@ -88,8 +88,6 @@ def spec_delta_outside_slice_files(
         meta, _ = parse_frontmatter(delta_file.read_text(encoding="utf-8"))
     except Exception:
         return []
-    if not isinstance(meta, dict):
-        return []
     allow = allowed_live_spec_files(change_path, product_root)
     errors: list[str] = []
     for kind in ("added", "modified"):

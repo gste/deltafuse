@@ -26,7 +26,7 @@ from deltafuse.core.context import (
     posix_relpath,
 )
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.queue import WorkItem
 
 DEFAULT_LEASH_MODE = "enforce"
@@ -160,8 +160,6 @@ def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], lis
     try:
         meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
     except Exception:
-        return [], []
-    if not isinstance(meta, dict):
         return [], []
     allowed = [row for row in (meta.get("allowed_paths") or []) if isinstance(row, str)]
     forbidden = [row for row in (meta.get("forbidden_paths") or []) if isinstance(row, str)]
@@ -504,22 +502,14 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     """SEC-04 / DF3-006: task allowed_paths must stay inside their slice
     target_paths (or the capability-catalog roots when the slice declares
     none). A task cannot widen its write envelope by editing YAML."""
-    from deltafuse.core.frontmatter import parse_frontmatter
-
     tasks_dir = change_path / "tasks"
     if not tasks_dir.is_dir():
         return []
     slice_bounds: dict[str, list[str]] = {}
-    slices_dir = change_path / "slices"
-    if slices_dir.is_dir():
-        for sf in sorted(list(slices_dir.glob("*.md")) + list(slices_dir.glob("*.yaml"))):
-            try:
-                meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            bounds = [str(g) for g in meta.get("target_paths") or []]
-            if bounds:
-                slice_bounds[str(meta.get("id") or sf.stem)] = bounds
+    for sf, meta in iter_frontmatter(change_path / "slices", "*.md", "*.yaml"):
+        bounds = [str(g) for g in meta.get("target_paths") or []]
+        if bounds:
+            slice_bounds[str(meta.get("id") or sf.stem)] = bounds
 
     # A slice that declares no target_paths is bounded by the capability roots
     # plus what the Change's route may write in Declare and Implement. The
@@ -538,11 +528,7 @@ def task_envelope_errors(change_path: Path, task_id: str | None = None) -> list[
     default_bounds = list(dict.fromkeys(list(capability_roots(product_root)) + route_globs))
 
     errors: list[str] = []
-    for tf in sorted(tasks_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+    for tf, meta in iter_frontmatter(tasks_dir):
         tid = str(meta.get("id") or tf.stem)
         if task_id is not None and tid != task_id:
             continue
@@ -571,8 +557,6 @@ def unreachable_green_errors(change_path: Path) -> list[str]:
     only by writing src/ outside the task's allowed_paths. A delta task that may change no
     product file is fine only after a task that may - so it must depend on one.
     """
-    from deltafuse.core.frontmatter import parse_frontmatter
-
     route, _ = load_change_route(change_path)
     if (route or DEFAULT_CHANGE_ROUTE) != "code":
         return []
@@ -590,14 +574,7 @@ def unreachable_green_errors(change_path: Path) -> list[str]:
             g for g in phase_write_globs("implement", "code")
             if g not in declare and not g.replace("\\", "/").startswith("docs/")
         ]
-    tasks: dict[str, dict] = {}
-    for tf in sorted(tasks_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict):
-            tasks[str(meta.get("id") or tf.stem)] = meta
+    tasks = {str(meta.get("id") or tf.stem): meta for tf, meta in iter_frontmatter(tasks_dir)}
 
     def owns_product(tid: str) -> bool:
         paths = [str(p) for p in tasks.get(tid, {}).get("allowed_paths") or []]
@@ -891,7 +868,7 @@ def collect_chain_envelopes(
                 # dirty yet, so its own evidence was judged against the step after it.
                 # A task whose evidence for this step is dirty is the step's task too.
                 phases = {"declare": ("red",), "implement": ("green", "regression")}[step]
-                for task_id, _, task_file in _load_tasks(change_dir):
+                for task_id, _, task_file, _ in _load_tasks(change_dir):
                     task_rel = task_file.relative_to(root).as_posix()
                     wrote_evidence = any(
                         f"{rel_dir}/evidence/{phase}/{task_id}.yaml" in changed for phase in phases

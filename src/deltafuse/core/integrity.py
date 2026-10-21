@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 
 
 _PRIVATE_ATTR = re.compile(r"\._[A-Za-z_]")
@@ -346,15 +346,8 @@ def validate_catalog_capability_specs(
 
 def list_proposed_decisions_for_change(change_id: str, repo_root: Path) -> list[dict[str, str]]:
     """Proposed DEC-* records for a Change: id, path (relative), title, filename."""
-    dec_dir = repo_root / "docs" / "decisions"
-    if not dec_dir.is_dir():
-        return []
     found: list[dict[str, str]] = []
-    for dec_file in sorted(dec_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(dec_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+    for dec_file, meta in iter_frontmatter(repo_root / "docs" / "decisions"):
         if meta.get("change") != change_id or meta.get("status") != "proposed":
             continue
         dec_id = meta.get("id")
@@ -380,15 +373,8 @@ def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> lis
 
 def find_unrecorded_terminal_decisions_for_change(change_id: str, repo_root: Path) -> list[str]:
     """accepted/rejected DEC-* for this Change that were not written by deltafuse decide."""
-    dec_dir = repo_root / "docs" / "decisions"
-    if not dec_dir.is_dir():
-        return []
     found: list[str] = []
-    for dec_file in sorted(dec_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(dec_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+    for dec_file, meta in iter_frontmatter(repo_root / "docs" / "decisions"):
         if meta.get("change") != change_id:
             continue
         status = meta.get("status")

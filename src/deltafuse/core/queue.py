@@ -10,7 +10,7 @@ import yaml
 
 from deltafuse.core.analyze import AnalyzeCursor, next_analyze_pass
 from deltafuse.core.specify import SpecifyCursor, next_specify_pass
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
@@ -276,22 +276,13 @@ def _load_change(change_path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _load_tasks(change_path: Path) -> list[tuple[str, str, Path]]:
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return []
-    found: list[tuple[str, str, Path]] = []
-    for task_file in tasks_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
-        tid = meta.get("id")
-        status = meta.get("status")
-        if isinstance(tid, str) and isinstance(status, str):
-            found.append((tid, status, task_file))
+def _load_tasks(change_path: Path) -> list[tuple[str, str, Path, dict[str, Any]]]:
+    """(id, status, file, frontmatter) of each readable task, in task-number order."""
+    found = [
+        (meta["id"], meta["status"], task_file, meta)
+        for task_file, meta in iter_frontmatter(change_path / "tasks")
+        if isinstance(meta.get("id"), str) and isinstance(meta.get("status"), str)
+    ]
     found.sort(key=lambda row: _task_sort_key(row[0]))
     return found
 
@@ -415,7 +406,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # fix them, and the run looped for twenty minutes.
     phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
 
-    for tid, tstatus, tfile in phase_tasks:
+    for tid, tstatus, tfile, meta in phase_tasks:
         if tstatus == "blocked":
             return _halt(
                 change_id,
@@ -443,9 +434,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             # implemented gate refuses such a Red. Without this the task was selected
             # for declare again and again, and a new step's conversation no longer
             # had the evidence command's advice (cls-g31g-m02b, 2026-10-04).
-            meta, _ = parse_frontmatter(tfile.read_text(encoding="utf-8"))
             red_rel = f"{rel}/evidence/red/{tid}.yaml"
-            if not supersede_errors(change_path, tid, meta if isinstance(meta, dict) else {}):
+            if not supersede_errors(change_path, tid, meta):
                 return [
                     _item_for_step(
                         "declare",
@@ -465,7 +455,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 change_id,
                 rel,
                 f"Task {tid}: its Red is already-green, yet it promises "
-                f"requirement_delta '{meta.get('requirement_delta') if isinstance(meta, dict) else None}'. "
+                f"requirement_delta '{meta.get('requirement_delta')}'. "
                 "The human decides: cancel it (deltafuse decide "
                 f"{rel} --task {tid} --status cancelled) if the behavior already "
                 f"exists, or delete {red_rel} and have it declared again",
@@ -500,7 +490,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # declaring gate was still closed, and to verify with the Change at
     # 'decomposed' (q0 run 20260921T081038Z).
     if tasks and status in DECLARE_PHASE:
-        ahead = [(tid, s) for tid, s, _ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
+        ahead = [(tid, s) for tid, s, *_ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
         if ahead:
             tid, tstatus = ahead[0]
             return _halt(
@@ -510,7 +500,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 "the task ran ahead of the declaring gate",
                 task=tid,
             )
-        declared = [(tid, tfile) for tid, s, tfile in tasks if s in TASK_IMPLEMENT]
+        declared = [(tid, tfile) for tid, s, tfile, _ in tasks if s in TASK_IMPLEMENT]
         if declared:
             tid, tfile = declared[-1]
             return [
@@ -525,8 +515,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 )
             ], []
     if tasks and status in IMPLEMENT_PHASE:
-        implemented = [(tid, tfile) for tid, s, tfile in tasks if s == "implemented"]
-        if implemented and all(s in TASK_DONE for _, s, _ in tasks):
+        implemented = [(tid, tfile) for tid, s, tfile, _ in tasks if s == "implemented"]
+        if implemented and all(s in TASK_DONE for _, s, *_ in tasks):
             stale = _stale_task_evidence(product_root, change_path, [tid for tid, _ in implemented])
             if stale:
                 # Green and regression are stamped with the spec/src tree. A
@@ -582,7 +572,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 f"so it does not converge and is not repaired silently. {route}",
             )
 
-    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, _ in phase_tasks) and status not in (
+    if phase_tasks and all(tstatus in TASK_DONE for _, tstatus, *_ in phase_tasks) and status not in (
         DECLARE_PHASE | IMPLEMENT_PHASE
     ):
         return [

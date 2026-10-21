@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import re
+from pathlib import Path
 from typing import Any
 import yaml
 
@@ -51,6 +52,23 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
         return data, body
     except yaml.YAMLError as e:
         raise FrontmatterParseError(f"YAML parsing error in frontmatter: {e}{yaml_error_hint(e)}") from e
+
+
+def iter_frontmatter(directory: Path, *patterns: str) -> list[tuple[Path, dict[str, Any]]]:
+    """(path, metadata) of each file in *directory* matching *patterns* (default `*.md`), in path order.
+
+    A missing directory gives nothing; a file that cannot be read or parsed is skipped.
+    """
+    if not directory.is_dir():
+        return []
+    found: list[tuple[Path, dict[str, Any]]] = []
+    for path in sorted(p for pattern in patterns or ("*.md",) for p in directory.glob(pattern)):
+        try:
+            meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - every caller skips an unreadable file
+            continue
+        found.append((path, meta))
+    return found
 
 
 def replace_frontmatter(content: str, updates: dict[str, Any]) -> str:

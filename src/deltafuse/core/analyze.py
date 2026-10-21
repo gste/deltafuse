@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.integrity import (
     extract_claims_from_request,
     load_capability_catalog,
@@ -126,17 +126,8 @@ def routing_primary_capabilities(change_path: Path | str) -> list[str]:
 
 def slice_primary_capabilities(change_path: Path | str) -> dict[str, str]:
     """Map SLICE-NN -> primary_capability for readable slice files."""
-    slices_dir = Path(change_path) / "slices"
     found: dict[str, str] = {}
-    if not slices_dir.is_dir():
-        return found
-    for slice_file in sorted(slices_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
+    for _, meta in iter_frontmatter(Path(change_path) / "slices"):
         slice_id = meta.get("id")
         cap = meta.get("primary_capability")
         if isinstance(slice_id, str) and isinstance(cap, str) and cap:
@@ -316,16 +307,7 @@ def routing_claim_capabilities(change_path: Path | str) -> dict[str, str]:
 
 def load_slice_records(change_path: Path | str) -> list[SliceRecord]:
     records: list[SliceRecord] = []
-    slices_dir = Path(change_path) / "slices"
-    if not slices_dir.is_dir():
-        return records
-    for slice_file in sorted(slices_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
+    for _, meta in iter_frontmatter(Path(change_path) / "slices"):
         slice_id = meta.get("id")
         cap = meta.get("primary_capability")
         if not isinstance(slice_id, str) or not isinstance(cap, str) or not cap:
@@ -375,15 +357,8 @@ def _change_id(change_path: Path) -> str:
 def _slice_tasks(change_path: Path) -> dict[str, list[str]]:
     """Task ids per slice, from task frontmatter, in id order."""
     out: dict[str, list[str]] = {}
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return out
-    for task_file in sorted(tasks_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict) and isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
+    for _, meta in iter_frontmatter(change_path / "tasks"):
+        if isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
             out.setdefault(meta["slice"], []).append(meta["id"])
     for ids in out.values():
         ids.sort()
