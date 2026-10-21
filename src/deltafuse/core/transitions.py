@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 from deltafuse.core.artifact_lock import ProductMutationLock
+from deltafuse.core.artifact_storage import atomic_write
 from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
@@ -150,15 +151,11 @@ def _load_change_yaml(change_path: Path) -> dict[str, Any]:
 
 
 def _write_change_status(change_path: Path, data: dict[str, Any], status: str) -> None:
-    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     data["status"] = status
-    change_file = change_path / "change.yaml"
-    content_bytes = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
-    if change_file.is_file():
-        atomic_replace(change_file, content_bytes)
-    else:
-        atomic_create(change_file, content_bytes)
-
+    atomic_write(
+        change_path / "change.yaml",
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8"),
+    )
 
 
 def _receipt(entry: dict[str, Any]) -> str:
@@ -424,19 +421,15 @@ def _record_trace_warnings(change_path: Path) -> None:
     empty list) every time the gate closes while `warn` is set, so a claim fixed since the
     last pass does not leave a stale finding on record; not written at all when off."""
     from deltafuse.core.analyze import claim_trace_warnings
-    from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     from deltafuse.core.config import load_trace_claims_mode
 
     if load_trace_claims_mode(find_repo_root(change_path)) != "warn":
         return
     warnings = claim_trace_warnings(change_path)
-    dest = change_path / "evidence" / "verification" / "trace_warnings.yaml"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    content = yaml.safe_dump({"warnings": warnings}, sort_keys=False).encode("utf-8")
-    if dest.is_file():
-        atomic_replace(dest, content)
-    else:
-        atomic_create(dest, content)
+    atomic_write(
+        change_path / "evidence" / "verification" / "trace_warnings.yaml",
+        yaml.safe_dump({"warnings": warnings}, sort_keys=False).encode("utf-8"),
+    )
 
 
 def advance_change(
@@ -924,13 +917,7 @@ def set_artifact_status(
                         f"first with deltafuse advance)"
                     )
             meta["status"] = status
-            content_bytes = f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8")
-            from deltafuse.core.artifact_storage import atomic_create, atomic_replace
-            if file.is_file():
-                atomic_replace(file, content_bytes)
-            else:
-                atomic_create(file, content_bytes)
-
+            atomic_write(file, f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8"))
 
         entry: dict[str, Any] = {
             "kind": "artifact-status",
