@@ -575,19 +575,44 @@ def validate_change_package(
     return errors
 
 
+def _load_mapping(path: Path) -> dict[str, Any] | None:
+    """A YAML record as a mapping; None when it is missing, unreadable or not a mapping."""
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _load_record(path: Path) -> dict[str, Any]:
+    return _load_mapping(path) or {}
+
+
+def _record_test_list(data: dict[str, Any], outcome: str) -> list[str]:
+    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
+    return [str(t) for t in tests.get(outcome) or []]
+
+
+def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
+    return set(_record_test_list(data, outcome))
+
+
+def _frontmatter(path: Path) -> dict[str, Any] | None:
+    """A Markdown artifact's frontmatter; None when it cannot be read or is not a mapping."""
+    try:
+        meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unreadable artifact is the validator's finding
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _frontmatters(folder: Path) -> list[tuple[Path, dict[str, Any]]]:
+    """(file, frontmatter) of every readable `*.md` in *folder*, in glob order."""
+    return [(f, meta) for f in folder.glob("*.md") if (meta := _frontmatter(f)) is not None]
+
+
 def _iter_slice_frontmatter(change_path: Path) -> list[tuple[str, dict[str, Any]]]:
-    slices_dir = change_path / "slices"
-    result: list[tuple[str, dict[str, Any]]] = []
-    if not slices_dir.is_dir():
-        return result
-    for slice_file in slices_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict):
-            result.append((slice_file.name, meta))
-    return result
+    return [(f.name, meta) for f, meta in _frontmatters(change_path / "slices")]
 
 
 def _validate_specified_live_spec(
@@ -673,18 +698,11 @@ def _validate_specified_live_spec(
 
 
 def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
-    tasks: dict[str, dict[str, Any]] = {}
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return tasks
-    for task_file in tasks_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict) and isinstance(meta.get("id"), str):
-            tasks[meta["id"]] = meta
-    return tasks
+    return {
+        meta["id"]: meta
+        for _, meta in _frontmatters(change_path / "tasks")
+        if isinstance(meta.get("id"), str)
+    }
 
 
 _TASKS_CLOSED = frozenset({"cancelled", "superseded"})
@@ -802,12 +820,7 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
     from deltafuse.core.hasher import compute_red_oracle_digest, oracle_paths
     from deltafuse.core.oracle import red_oracle_changes
 
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict):
-        return []
+    red = _load_record(red_file)
     paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
     per_test = red.get("red_oracle_tests")
     if isinstance(per_test, dict):
@@ -845,19 +858,12 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     """
     from deltafuse.core.oracle import frozen_test_ids
 
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict) or not isinstance(green, dict):
-        return []
+    red = _load_record(red_file)
+    green = _load_record(green_file)
     frozen = red.get("red_oracle_tests")
     if not isinstance(frozen, dict) or frozen.get("version") is None:
         return []
-    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
-    expected = frozen_test_ids(frozen, [str(t) for t in red_tests.get("failed") or []])
-    if not expected:
+    if not frozen_test_ids(frozen, _record_test_list(red, "failed")):
         return []
     isolation = green.get("oracle_isolation")
     if not isinstance(isolation, dict):
@@ -870,9 +876,7 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     not_passing = [str(t) for t in isolation.get("not_passing") or []]
     if not not_passing:
         return []
-    green_tests = green.get("tests") if isinstance(green.get("tests"), dict) else {}
-    passed_in_green = {str(t) for t in green_tests.get("passed") or []}
-    if not passed_in_green & set(not_passing):
+    if not _record_tests(green, "passed") & set(not_passing):
         # Green's own run did not pass them either (it ran other tests), so
         # nothing "helped" them - they simply do not pass yet.
         return [
@@ -896,26 +900,21 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
     closed this gate. The isolated run covers Reds frozen per test; a JVM Red
     (frozen per file, no isolated run) had nothing else.
     """
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+    red = _load_record(red_file)
+    green = _load_mapping(green_file)
+    if green is None or red.get("result") != "expected-failure":
         return []
-    if not isinstance(red, dict) or not isinstance(green, dict) or red.get("result") != "expected-failure":
-        return []
-    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
-    failed = [str(t) for t in red_tests.get("failed") or []]
+    failed = _record_test_list(red, "failed")
     if not failed:
         return []
-    green_tests = green.get("tests")
-    if no_test_ran(green.get("command"), green_tests, str(green.get("summary") or "")):
+    if no_test_ran(green.get("command"), green.get("tests"), str(green.get("summary") or "")):
         return []  # the evidence check names it, and why: this run ran no test
-    if not isinstance(green_tests, dict):
+    if not isinstance(green.get("tests"), dict):
         return [
             f"{label} has no runner report, so it does not show the tests Red recorded as failing "
             f"now passing ({failed[:5]}); record Green with the runner Red used"
         ]
-    passed = {str(t) for t in green_tests.get("passed") or []}
+    passed = _record_tests(green, "passed")
     missing = [t for t in failed if t not in passed]
     if not missing:
         return []
@@ -923,19 +922,6 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
         f"{label} did not pass the tests Red recorded as failing: {missing[:5]}. Run the "
         "Red tests in Green and make the product pass them"
     ]
-
-
-def _load_record(path: Path) -> dict[str, Any]:
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
-    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
-    return {str(t) for t in tests.get(outcome) or []}
 
 
 def change_test_ids(change_path: Path) -> set[str]:
@@ -946,13 +932,8 @@ def change_test_ids(change_path: Path) -> set[str]:
     tests.
     """
     ids: set[str] = set()
-    tasks_dir = change_path / "tasks"
-    for task_file in sorted(tasks_dir.glob("*.md")) if tasks_dir.is_dir() else []:
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - an unreadable task is the status check's finding
-            continue
-        if not isinstance(meta, dict) or meta.get("status") == "cancelled":
+    for task_file, meta in _frontmatters(change_path / "tasks"):
+        if meta.get("status") == "cancelled":
             continue
         tid = str(meta.get("id") or task_file.stem)
         red = _load_record(change_path / "evidence" / "red" / f"{tid}.yaml")
@@ -1064,11 +1045,7 @@ def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     modified, and nothing downstream could tell. Declare may still record the
     observation - it is a legal Declare outcome, and a stopping one.
     """
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict) or red.get("result") != "already-green":
+    if _load_record(red_file).get("result") != "already-green":
         return []
     return [
         f"Gate implemented: green evidence '{label}' answers an already-green Red - the "
@@ -1347,15 +1324,7 @@ def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
 
 
 def _spec_delta_status(spec_delta_file: Path) -> str | None:
-    if not spec_delta_file.is_file():
-        return None
-    try:
-        meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(meta, dict):
-        return None
-    raw = meta.get("status")
+    raw = (_frontmatter(spec_delta_file) or {}).get("status")
     return raw if isinstance(raw, str) else None
 
 

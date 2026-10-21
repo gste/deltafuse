@@ -17,7 +17,13 @@ from typing import Any
 import yaml
 
 from deltafuse.core.context import load_change_route, posix_relpath
-from deltafuse.core.fsm import find_repo_root, frozen_oracle_errors, isolation_errors
+from deltafuse.core.fsm import (
+    _frontmatters,
+    _load_record,
+    find_repo_root,
+    frozen_oracle_errors,
+    isolation_errors,
+)
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
@@ -224,14 +230,7 @@ def _red_failed_tests(change_path: Path, task: str | None) -> list[str]:
     """The tests the Red record of this task says failed."""
     if not task:
         return []
-    record = change_path / "evidence" / "red" / f"{task}.yaml"
-    if not record.is_file():
-        return []
-    try:
-        data = yaml.safe_load(record.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return []
-    tests = data.get("tests") if isinstance(data, dict) else None
+    tests = _load_record(change_path / "evidence" / "red" / f"{task}.yaml").get("tests")
     failed = tests.get("failed") if isinstance(tests, dict) else None
     return [str(name) for name in failed or [] if str(name).strip()]
 
@@ -247,16 +246,9 @@ def _isolated_oracle_run(
     selection replaced by the frozen tests and `-p` dropped; PYTEST_ADDOPTS and
     PYTEST_PLUGINS, which load code the same way, are cleared.
     """
-    import os
-
     if not task:
         return None
-    record = change_path / "evidence" / "red" / f"{task}.yaml"
-    try:
-        red = yaml.safe_load(record.read_text(encoding="utf-8")) if record.is_file() else None
-    except (OSError, yaml.YAMLError):
-        return None
-    frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
+    frozen = _load_record(change_path / "evidence" / "red" / f"{task}.yaml").get("red_oracle_tests")
     if not isinstance(frozen, dict) or frozen.get("version") is None:
         return None
     plan = isolation_plan(argv, frozen, _red_failed_tests(change_path, task), repo_root)
@@ -459,6 +451,20 @@ RED_TAKEN_STATUSES = frozenset({"declared", "implementing", "implemented", "veri
 DECLARE_CHANGE_STATUSES = frozenset({"decomposed", "declaring"})
 
 
+def _task_status(change_path: Path, task: str) -> tuple[str, Any] | None:
+    """(task id, status) of *task*; None when the task is unknown or unreadable, which is
+    refused where it always was."""
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+    return task_id, (meta.get("status") if isinstance(meta, dict) else None)
+
+
 def _refuse_red_after_declare(change_path: Path, task: str) -> None:
     """Red belongs to Declare; past it, retaking Red would re-freeze the oracle.
 
@@ -467,15 +473,10 @@ def _refuse_red_after_declare(change_path: Path, task: str) -> None:
     three times, each accepted as authentic. A Red retaken there freezes whatever the tests
     are at that moment, so the frozen-oracle check no longer guards the declared one.
     """
-    from deltafuse.core.frontmatter import parse_frontmatter
-    from deltafuse.core.transitions import _artifact_file
-
-    try:
-        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
-        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001 - an unknown or unreadable task is refused where it always was
+    found = _task_status(change_path, task)
+    if found is None:
         return
-    status = meta.get("status") if isinstance(meta, dict) else None
+    task_id, status = found
     if status == "declared":
         try:
             change = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
@@ -503,27 +504,16 @@ def _refuse_red_over_a_siblings_oracle(change_path: Path, task: str, repo_root: 
     """
     from deltafuse.core.oracle import red_oracle_changes
 
-    tasks_dir = change_path / "tasks"
-    closed: set[str] = set()
-    if tasks_dir.is_dir():
-        from deltafuse.core.frontmatter import parse_frontmatter
-
-        for tf in tasks_dir.glob("*.md"):
-            try:
-                meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001 - an unreadable task is reported by the gates
-                continue
-            if isinstance(meta, dict) and meta.get("status") == "cancelled":
-                closed.add(str(meta.get("id") or tf.stem))
+    closed = {
+        str(meta.get("id") or tf.stem)
+        for tf, meta in _frontmatters(change_path / "tasks")
+        if meta.get("status") == "cancelled"
+    }
     for record in sorted((change_path / "evidence" / "red").glob("*.yaml")):
         sibling = record.stem
         if sibling == task or sibling in closed:
             continue
-        try:
-            red = yaml.safe_load(record.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError):
-            continue
-        frozen = red.get("red_oracle_tests") if isinstance(red, dict) else None
+        frozen = _load_record(record).get("red_oracle_tests")
         if not isinstance(frozen, dict):
             continue
         changes = red_oracle_changes(repo_root, frozen)
@@ -542,15 +532,10 @@ def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
     ref-m03-346 (2026-10-07): a Green recorded for a task superseded on an already-green Red
     was accepted here and then refused by the implemented gate, with no step left to clear it.
     """
-    from deltafuse.core.frontmatter import parse_frontmatter
-    from deltafuse.core.transitions import _artifact_file
-
-    try:
-        task_file, task_id = _artifact_file(change_path / "tasks", task, "task")
-        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001 - an unknown task is refused where it always was
+    found = _task_status(change_path, task)
+    if found is None:
         return
-    status = meta.get("status") if isinstance(meta, dict) else None
+    task_id, status = found
     if status in {"superseded", "cancelled"}:
         raise EvidenceRunError(
             f"{task_id} is '{status}': it is not implemented, so it has no Green - "
