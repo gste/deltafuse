@@ -70,11 +70,16 @@ def _strip_runner_suffix(name: str) -> str:
     return name
 
 
+def runner_head(program: object) -> str:
+    """The runner's bare name: no directory, no `.exe`/`.cmd`/`.bat`, lower case."""
+    return _strip_runner_suffix(Path(str(program).replace("\\", "/")).name).lower()
+
+
 def runner_family(argv: list[str]) -> str:
     """`pytest`, `jvm`, or `` when the Core has no reader for this runner."""
     if not argv:
         return ""
-    head = _strip_runner_suffix(Path(str(argv[0]).replace("\\", "/")).name).lower()
+    head = runner_head(argv[0])
     if head in PYTEST_RUNNERS:
         return "pytest"
     if head in JVM_RUNNERS:
