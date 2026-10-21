@@ -972,6 +972,7 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
     """
     current = compute_product_baseline_revision(repo_root)
     evidence = change_path / "evidence"
+    code_route = load_change_route(change_path)[0] == "code"
     summary: dict[str, dict[str, Any]] = {}
     for tid, meta in sorted(_task_frontmatter_by_id(change_path).items()):
         row: dict[str, Any] = {"status": str(meta.get("status") or "unknown")}
@@ -993,6 +994,12 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
             if green:
                 label = f"green of {tid}"
                 problems += _ran_no_test(green, label)
+                if not red_file.is_file():
+                    # The implemented gate's own refusals, so the summary holds what it holds
+                    # (codebase audit 2026-10-21).
+                    problems.append(f"{label} has no matching Red evidence")
+                elif code_route:
+                    problems += _already_green_red_errors(red_file, f"{tid}.yaml")
                 if red_file.is_file():
                     problems += green_coverage_errors(red_file, green_file, label)
                     problems += frozen_oracle_errors(red_file, repo_root, label)

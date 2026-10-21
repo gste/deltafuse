@@ -229,3 +229,20 @@ def test_the_advice_finds_a_task_file_named_with_a_slug(tmp_path: Path, repo_roo
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.rename(task.with_name("TASK-001-penalty-window.md"))
     assert "--status superseded`" in already_green_advice(builder.change_dir, "TASK-001")
+
+
+def test_the_coverage_summary_names_what_the_implemented_gate_refuses(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: task_evidence_summary promised the implemented gate's checks but
+    left out a Green with no Red and a Green over an already-green Red."""
+    from deltafuse.core.fsm import task_evidence_summary
+    from tests.fixtures.change_builder import record_green_attempt
+
+    builder = _decomposed(tmp_path, repo_root, delta="added")
+    _already_green_red(tmp_path, builder)
+    record_green_attempt(builder.change_dir, "TASK-001")
+    problems = task_evidence_summary(builder.change_dir, tmp_path)["TASK-001"]["problems"]
+    assert any("answers an already-green Red" in p for p in problems), problems
+
+    (builder.change_dir / "evidence" / "red" / "TASK-001.yaml").unlink()
+    problems = task_evidence_summary(builder.change_dir, tmp_path)["TASK-001"]["problems"]
+    assert any("has no matching Red evidence" in p for p in problems), problems
