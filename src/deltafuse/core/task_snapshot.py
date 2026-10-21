@@ -84,13 +84,10 @@ def record_declaring_snapshot(product_root: Path, change_path: Path, change_id: 
 
 def declaring_snapshot(product_root: Path, change_id: str) -> dict[str, str] | None:
     """The digests the Change's latest `declaring` transition recorded, or None."""
-    from deltafuse.core.transitions import load_receipts
+    from deltafuse.core.transitions import latest_transition_field
 
-    for row in reversed(load_receipts(Path(product_root), change_id)):
-        if row.get("kind") == "transition" and row.get("gate") == "declaring":
-            snap = row.get("product_snapshot")
-            return dict(snap) if isinstance(snap, dict) else None
-    return None
+    snap = latest_transition_field(product_root, change_id, "declaring", "product_snapshot")
+    return dict(snap) if isinstance(snap, dict) else None
 
 
 def restore_plan(product_root: Path, change_id: str, meta: dict[str, Any]) -> tuple[list[tuple[str, bytes | None]], list[str]]:

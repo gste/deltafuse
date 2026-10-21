@@ -201,6 +201,15 @@ def atomic_replace(
     return digest
 
 
+def atomic_write(target_path: Path, content_bytes: bytes) -> str:
+    """Create or replace `target_path` atomically, making its parent directory first."""
+    target_path = Path(target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    if target_path.is_file():
+        return atomic_replace(target_path, content_bytes)
+    return atomic_create(target_path, content_bytes)
+
+
 def cleanup_orphaned_staging(directory: Path, max_age_seconds: float = 3600.0) -> int:
     """Clean up orphaned staging files (.tmp.*) in directory older than max_age_seconds."""
     directory = Path(directory)
