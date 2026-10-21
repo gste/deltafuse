@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the "valid" line, and exited 0 whatever the errors.
 - **The coverage summary names what the `implemented` gate refuses**: a Green with no Red, and on
   the code route a Green over an already-green Red.
-- **A dead legacy-vocabulary text search is gone.** Its pattern held backspace bytes where `` was
+- **A dead legacy-vocabulary text search is gone.** Its pattern held backspace bytes where `\b` was
   meant and matched nothing; the v2 statuses it meant to catch are refused by the schemas' status
   enums, and fixed it would have refused prose that says "targeting".
 - **The analyze gap pass closes the `analyzed` gate.** After `decide --gap spec-gap`, the skill's
