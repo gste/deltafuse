@@ -582,7 +582,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason="Every task is declared; close the declaring gate "
-                    "(check-gate, then advance --gate declaring)",
+                    "with advance --gate declaring",
                 )
             ], []
     if tasks and status in IMPLEMENT_PHASE:
@@ -619,7 +619,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                     task=tid,
                     task_path=_rel(product_root, tfile),
                     reason="Every task is implemented; close the implemented gate "
-                    "(check-gate, then advance --gate implemented)",
+                    "with advance --gate implemented",
                 )
             ], []
 
@@ -703,7 +703,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
                 path=rel,
                 reason=(
                     "Task files are on disk but the decomposed gate has not passed; fix what "
-                    "check-gate decomposed reports, then advance --gate decomposed"
+                    "advance --gate decomposed reports, then run it again"
                     if tasks
                     else "Change is specified; next is Decompose"
                 ),
@@ -1114,12 +1114,14 @@ def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
     if item.analyze_pass in {"routing", "slice"} or item.specify_pass == "slice":
         gate_name = "analyzed" if item.analyze_pass else "specified"
         lines.append(
-            f"Do not run `check-gate --gate {gate_name}` yet. Write only this pass, then `deltafuse next`."
+            f"Do not run `advance --gate {gate_name}` yet. Write only this pass, then `deltafuse next`."
         )
-    elif item.path and item.gate:
-        lines.append(f"`deltafuse check-gate {item.path} --gate {item.gate}`")
     elif item.gate:
-        lines.append(f"`deltafuse check-gate <change-dir> --gate {item.gate}`")
+        close = f"`deltafuse advance {item.path or '<change-dir>'} --gate {item.gate}`"
+        if item.task and item.step in {"declare", "implement"}:
+            # The gate covers every task; the skill says not to check it after each one.
+            close = f"Once `deltafuse next` names no other task of this Change: {close}"
+        lines.append(close)
     lines.append("")
     lines.append("Then: `deltafuse next`")
     return "\n".join(lines)

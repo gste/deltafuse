@@ -138,7 +138,7 @@ def next_specify_pass(
         )
     return SpecifyCursor(
         pass_name="close",
-        reason="All slices specified; check-gate specified and set Change status",
+        reason="All slices specified; propose the specification, then advance --gate specified",
         allowed_read=list(_CLOSE_READ),
         allowed_write=list(_CLOSE_WRITE),
     )

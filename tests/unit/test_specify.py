@@ -139,6 +139,6 @@ def test_next_human_specify_slice_skips_specified_gate(tmp_path: Path, repo_root
     assert ret == 0
     assert "specify_pass: slice" in out
     assert "slice_id: SLICE-01" in out
-    assert "Do not run `check-gate --gate specified` yet" in out
+    assert "Do not run `advance --gate specified` yet" in out
     assert "docs/spec/**" not in out
     assert "docs/spec/core.md" in out

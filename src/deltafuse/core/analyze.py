@@ -248,7 +248,7 @@ def next_analyze_pass(
     if not (path / "coverage.yaml").is_file():
         return AnalyzeCursor(
             pass_name="coverage",
-            reason="Run deltafuse coverage, then check-gate analyzed",
+            reason="Run deltafuse coverage, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
             allowed_write=analyze_allowed_write("coverage"),
         )
@@ -256,7 +256,7 @@ def next_analyze_pass(
     if status in {"normalized", "analyzing"}:
         return AnalyzeCursor(
             pass_name="coverage",
-            reason="Run deltafuse coverage if needed, then check-gate analyzed",
+            reason="Run deltafuse coverage if needed, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
             allowed_write=analyze_allowed_write("coverage"),
         )
@@ -290,8 +290,8 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | No
             f"Verify recorded '{info.get('gap') or 'a gap'}' and the human reopened the Change for "
             f"Analyze; the verification is archived in {where}. Bound the slices so Specify can "
             "write what the gap names: add the specification file to a slice's spec_refs, or route "
-            "the capability that owns it and write its slice. Then check-gate analyzed and "
-            "advance --gate analyzed; every slice is back to draft, and Specify follows"
+            "the capability that owns it and write its slice. Then advance --gate analyzed; "
+            "every slice is back to draft, and Specify follows"
             + (f". The human's note: {note}" if note else "")
         ),
         allowed_read=[*_ROUTING_READ, *_SLICE_READ, "docs/spec/**", f"docs/changes/*/{info.get('path', 'reopened')}/**"],
