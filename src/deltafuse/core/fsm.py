@@ -35,7 +35,7 @@ from deltafuse.core.integrity import (
     validate_catalog_capability_specs,
     scan_changed_paths_for_private_test_access,
 )
-from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
+from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.schemas import SchemaRegistry, default_registry
 from deltafuse.core.test_reports import no_test_ran
 
@@ -109,14 +109,6 @@ def find_repo_root(start_path: Path) -> Path:
         idx = resolved.parts.index("docs")
         return Path(*resolved.parts[:idx])
     return start_path.parent
-
-
-class GateValidationError(Exception):
-    def __init__(self, gate: str, errors: list[str]):
-        err_list = "\n".join(f"  - {e}" for e in errors)
-        super().__init__(f"Gate {gate} validation failed with {len(errors)} error(s):\n{err_list}")
-        self.gate = gate
-        self.errors = errors
 
 
 CONTRACT_VERSION = 3

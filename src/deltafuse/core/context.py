@@ -125,7 +125,6 @@ DEFAULT_CHANGE_ROUTE = "code"
 # Where a `code`-route Change keeps its code and tests when the product does not say
 # (`workflow.code_roots` in .deltafuse/config.yaml). See code_write_globs.
 DEFAULT_CODE_WRITE_GLOBS = ("src/**", "tests/**")
-_PRODUCT_CODE_GLOBS = DEFAULT_CODE_WRITE_GLOBS
 # Phases whose contracts name the code roots; the others work on docs/ only.
 _CODE_ROOT_PHASES = frozenset({"declare", "implement", "verify"})
 _ROUTE_TARGET_EVIDENCE = [

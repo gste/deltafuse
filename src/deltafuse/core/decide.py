@@ -14,7 +14,7 @@ from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter,
 
 from deltafuse.core.fsm import check_gate, find_repo_root
 from deltafuse.core import gate_password, gate_receipts
-from deltafuse.core.gate_receipts import ReceiptError, TERMINAL_STATUSES
+from deltafuse.core.gate_receipts import ReceiptError
 from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 from deltafuse.core.transitions import TransitionError, _artifact_file, advance_change, set_artifact_status

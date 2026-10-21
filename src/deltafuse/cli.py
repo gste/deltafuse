@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any, NoReturn
 
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
@@ -30,15 +31,7 @@ from deltafuse.core.queue import (
 from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core import gate_password
 from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
-from deltafuse.core.leash import (
-    LeashError,
-    check_paths,
-    collect_chain_envelopes,
-    collect_ready_envelopes,
-    git_dirty_paths,
-    load_baseline,
-    load_leash_mode,
-)
+from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import (
@@ -48,7 +41,6 @@ from deltafuse.core.context import (
     validate_task_context_budget,
 )
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 
 
 class _HintingParser(argparse.ArgumentParser):

@@ -9,7 +9,6 @@ silently disabling a contract.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -35,10 +34,6 @@ LEASH_MODES = {"off", "advisory", "enforce"}
 TRACE_CLAIMS_MODES = {"off", "warn"}
 BASELINES = {"draft", "accepted"}
 KNOWN_PROJECT_KEYS = {"baseline", "capability_catalog"}
-
-
-class ConfigError(Exception):
-    """Invalid or unknown product config content."""
 
 
 def validate_active_code_roots(product_root: Path | str) -> list[str]:

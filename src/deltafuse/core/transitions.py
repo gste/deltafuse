@@ -58,21 +58,10 @@ TRANSITION_JOURNAL = "transitions.jsonl"
 # entry state written by `deltafuse init` / scaffold_change.
 INITIAL_STATUS = "normalized"
 
-# Canonical chain of Core receipted transitions, in order (V3-FIX-009). A
-# Change past the initial state must carry the full receipt prefix for its
-# status; hand-edited statuses are never evidence.
-RECEIPT_CHAIN: list[tuple[str, str]] = [
-    ("intake", "analyzing"),
-    ("analyzed", "analyzed"),
-    ("specified", "specified"),
-    ("decomposed", "decomposed"),
-    ("declaring", "declared"),
-    ("implemented", "implemented"),
-    ("converged", "converged"),
-]
-
-# Statuses the journal must confirm explicitly: the gate targets themselves.
-RECEIPTED_TARGETS = {target for _, target in RECEIPT_CHAIN}
+# Statuses the journal must confirm explicitly: the gate targets themselves (V3-FIX-009). A
+# Change past the initial state must carry the full receipt prefix for its status;
+# hand-edited statuses are never evidence.
+RECEIPTED_TARGETS = set(GATE_TARGETS.values())
 
 # Statuses a Change may hold between receipts (Worker-held in-flight states);
 # each must be one legal fsm step away from the last receipted status.

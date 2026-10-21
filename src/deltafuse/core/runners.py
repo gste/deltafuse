@@ -121,11 +121,3 @@ def runner_is_authorized(
         )
     return _match(argv, DEFAULT_ROUTE_PREFIXES.get(route, CODE_RUNNER_PREFIXES))
 
-
-def runner_profile(argv: list[str]) -> str:
-    """Short structured runner identity for retry diagnostics (no full logs)."""
-    if argv:
-        head = " ".join(argv[:3])
-    else:
-        head = ""
-    return head

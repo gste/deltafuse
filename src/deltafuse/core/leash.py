@@ -47,7 +47,6 @@ CODE_WRITE_GLOBS = (
     "ops/**",
 )
 SPEC_WRITE_GLOBS = ("docs/spec/**",)
-PRODUCT_WRITE_GLOBS = CODE_WRITE_GLOBS + SPEC_WRITE_GLOBS
 EXEMPT_EXACT = frozenset(
     {
         "AGENTS.md",

@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 import jsonschema
 
-from deltafuse.core.assets import AssetError, bundle_root, source_assets_root, verify_manifest
+from deltafuse.core.assets import bundle_root, source_assets_root, verify_manifest
 from deltafuse.core.schemas import SchemaRegistry
 
 

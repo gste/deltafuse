@@ -18,8 +18,6 @@ from deltafuse.core.integrity import (
     path_is_inside_repo,
 )
 
-ANALYZE_PASSES = ("routing", "slice", "coverage")
-
 _COVERAGE_STATUSES = {
     "pending",
     "analyzing",

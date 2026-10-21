@@ -15,23 +15,20 @@ from typing import Any
 
 from deltafuse.core.artifact_codec import ArtifactCodecError, serialize_artifact
 from deltafuse.core.artifact_lock import (
-    ArtifactLockError,
     ProductMutationLock,
     check_noop_mutation,
     revalidate_authority,
     validate_expected_hash,
 )
-from deltafuse.core.artifact_patch import ArtifactPatchError, apply_artifact_patch
+from deltafuse.core.artifact_patch import apply_artifact_patch
 from deltafuse.core.artifact_policy import (
-    _INTERNAL_CORE_SECRET,
     ArtifactPolicyError,
     AuthorizationContext,
-    create_authorization_context,
     resolve_artifact_path,
     validate_artifact_policy,
 )
 from deltafuse.core.artifact_reader import strict_read_artifact
-from deltafuse.core.artifact_registry import ArtifactRegistry, ValidationDiagnostic
+from deltafuse.core.artifact_registry import ArtifactRegistry
 from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.artifact_transactions import (
     ArtifactTransactionError,

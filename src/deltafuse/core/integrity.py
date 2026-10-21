@@ -9,11 +9,6 @@ from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
 from deltafuse.core.frontmatter import parse_frontmatter
 
 
-class IntegrityViolation(Exception):
-    """Raised when link integrity or coverage traceability invariants are violated."""
-    pass
-
-
 _PRIVATE_ATTR = re.compile(r"\._[A-Za-z_]")
 
 
