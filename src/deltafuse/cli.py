@@ -30,6 +30,7 @@ from deltafuse.core.queue import (
 from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core import gate_password
 from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
+from deltafuse.core.transitions import already_green_advice, set_artifact_status
 from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
@@ -378,7 +379,6 @@ def _main(argv: list[str] | None = None) -> int:
     state_parser.add_argument("--status", required=True, help="New status")
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
-    # validate-layout command (P6.1)
     # new command (DF3-005 / C-03): deterministic Change scaffolding
     new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
     new_parser.add_argument("product_path", nargs="?", default=".", help="Product root (default: current dir)")
@@ -537,7 +537,6 @@ def _main(argv: list[str] | None = None) -> int:
         help="Include archived Change cards",
     )
 
-    # lint-context command (P7.6)
     # validate-config (DF3-009 item 5): one validator for config contracts
     cfg_parser = subparsers.add_parser(
         "validate-config", help="Validate .deltafuse/config.yaml as one contract"
@@ -736,11 +735,6 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "state":
-        # TransitionError is already imported at module scope; re-importing it
-        # here would make it a function-local name and leave the `advance`
-        # branch above referencing it before assignment.
-        from deltafuse.core.transitions import set_artifact_status
-
         target = Path(args.change_path)
         try:
             result = set_artifact_status(
@@ -840,8 +834,6 @@ def _main(argv: list[str] | None = None) -> int:
                 # the implemented gate refuses an already-green Red. "Return it
                 # upstream" named no command, and the Worker declared the task seven
                 # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
-                from deltafuse.core.transitions import already_green_advice
-
                 print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
         print("Evidence is not authentic:", file=sys.stderr)
@@ -1133,7 +1125,6 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     elif args.command == "bench":
-        from deltafuse.bench import BenchError
         from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
 
         try:
@@ -1163,10 +1154,7 @@ def _main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        except BenchError as ex:
-            print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
-        except Exception as ex:
+        except Exception as ex:  # BenchError included: same text, same code
             print(f"Bench failed: {ex}", file=sys.stderr)
             return 2
 
