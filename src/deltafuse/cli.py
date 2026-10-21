@@ -106,6 +106,30 @@ def _journal(start: Path | str, **event: object) -> None:
     record_event(start, **event)
 
 
+def _fail(start: Path, what: str, error: object, code: int, **event: object) -> int:
+    """Journal a refused command, print `<what>: <error>` on stderr, return `code`."""
+    event.setdefault("ok", False)  # a caller that places `ok` itself keeps its journal key order
+    _journal(start, **event, errors=[str(error)])
+    print(f"{what}: {error}", file=sys.stderr)
+    return code
+
+
+def _print_errors(header: str, errors: list[str]) -> None:
+    print(header, file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+
+
+def _report(cmd: str, target: Path, errors: list[str], failed: str, valid: str, **event: object) -> int:
+    """Journal a validator's verdict; list the errors on stderr (exit 1) or print `valid` (exit 0)."""
+    _journal(target, cmd=cmd, ok=not errors, errors=errors, n_errors=len(errors), **event)
+    if errors:
+        _print_errors(f"{failed} for {target} with {len(errors)} error(s):", errors)
+        return 1
+    print(valid)
+    return 0
+
+
 def _read_secret(prompt: str, hint: str = "") -> str:
     """Read a secret from the terminal; refuse when no human is at one."""
     import getpass
@@ -644,14 +668,7 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate":
         target = Path(args.change_path)
         errors = validate_change_package(target)
-        _journal(target, cmd="validate", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"Change package {target} is valid.")
-        return 0
+        return _report("validate", target, errors, "Validation failed", f"Change package {target} is valid.")
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
@@ -677,9 +694,7 @@ def _main(argv: list[str] | None = None) -> int:
             token_heuristic=tokenizer["heuristic"],
         )
         if errors:
-            print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
+            _print_errors(f"Gate {args.gate} check failed for {target}:", errors)
             return 1
         for warning in warnings:
             print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
@@ -694,22 +709,16 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Change package {target.name} successfully archived to {dest}")
             return 0
         except ArchivalError as ae:
-            _journal(target, cmd="archive", ok=False, errors=[str(ae)])
-            print(f"Archival failed: {ae}", file=sys.stderr)
-            return 1
+            return _fail(target, "Archival failed", ae, 1, cmd="archive")
         except Exception as ex:
-            _journal(target, cmd="archive", ok=False, errors=[str(ex)])
-            print(f"Unexpected error during archival: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Unexpected error during archival", ex, 2, cmd="archive")
 
     elif args.command == "advance":
         target = Path(args.change_path)
         try:
             result = advance_change(target, args.gate)
         except TransitionError as te:
-            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=[str(te)])
-            print(f"advance failed: {te}", file=sys.stderr)
-            return 1
+            return _fail(target, "advance failed", te, 1, cmd="advance", gate=args.gate)
         receipt = dict(result)
         receipt.pop("ok", None)
         # P12: `advance --gate converged` is the one call a Worker makes now, so the
@@ -745,9 +754,7 @@ def _main(argv: list[str] | None = None) -> int:
                 change_status=args.change,
             )
         except TransitionError as te:
-            _journal(target, cmd="state", status=args.status, ok=False, errors=[str(te)])
-            print(f"state failed: {te}", file=sys.stderr)
-            return 1
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
         _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -783,45 +790,22 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
-        _journal(target, cmd="validate-layout", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"DeltaFuse product layout at {target} is valid.")
-        return 0
+        valid = f"DeltaFuse product layout at {target} is valid."
+        return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
+        target = Path(args.change_path)
         try:
             outcome = run_evidence(
-                Path(args.change_path),
-                phase=args.phase,
-                task=args.task,
-                argv=evidence_argv,
-                changed_paths=args.changed_paths,
-                timeout=args.timeout,
+                target, phase=args.phase, task=args.task, argv=evidence_argv,
+                changed_paths=args.changed_paths, timeout=args.timeout,
             )
         except EvidenceRunError as ex:
-            _journal(
-                Path(args.change_path),
-                cmd="evidence",
-                phase=args.phase,
-                task=args.task,
-                ok=False,
-                errors=[str(ex)],
-            )
-            print(f"Evidence run failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(
-            Path(args.change_path),
-            cmd="evidence",
-            phase=args.phase,
-            task=args.task,
-            ok=bool(outcome.authentic),
-            errors=list(outcome.errors or []),
-            n_errors=len(outcome.errors or []),
-        )
+            return _fail(target, "Evidence run failed", ex, 2, cmd="evidence", phase=args.phase,
+                         task=args.task)
+        errors = list(outcome.errors or [])
+        _journal(target, cmd="evidence", phase=args.phase, task=args.task, ok=bool(outcome.authentic),
+                 errors=errors, n_errors=len(errors))
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
@@ -836,23 +820,17 @@ def _main(argv: list[str] | None = None) -> int:
                 # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
                 print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
-        print("Evidence is not authentic:", file=sys.stderr)
-        for err in outcome.errors:
-            print(f"  - {err}", file=sys.stderr)
+        _print_errors("Evidence is not authentic:", outcome.errors)
         return 1
 
     elif args.command == "coverage":
+        target = Path(args.change_path)
         try:
-            dest = write_coverage(Path(args.change_path))
-        except CoverageError as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 1
+            dest = write_coverage(target)
         except Exception as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(Path(args.change_path), cmd="coverage", ok=True)
+            code = 1 if isinstance(ex, CoverageError) else 2
+            return _fail(target, "Coverage failed", ex, code, cmd="coverage")
+        _journal(target, cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
@@ -863,9 +841,7 @@ def _main(argv: list[str] | None = None) -> int:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
             queue = build_work_queue(target, only_change=only)
         except QueueError as ex:
-            _journal(target, cmd="next", ok=False, mode=mode, errors=[str(ex)])
-            print(f"Next failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Next failed", ex, 2, cmd="next", ok=False, mode=mode)
         selected = select_next(queue, step=args.step)
         had_item = selected is not None
         if (
@@ -883,8 +859,9 @@ def _main(argv: list[str] | None = None) -> int:
             # ready step, and the reference opened CHG-002 from the request CHG-001 had just
             # delivered. With no intake waiting there is no ready step to name.
             selected = None
+        scope = target if only is None else only
         _journal(
-            target if only is None else only,
+            scope,
             cmd="next",
             ok=True if mode in {"list", "json"} else selected is not None,
             mode=mode,
@@ -894,16 +871,12 @@ def _main(argv: list[str] | None = None) -> int:
             empty=selected is None,
         )
         guide = (
-            format_human_guide(selected, load_product_root(target if only is None else only))
+            format_human_guide(selected, load_product_root(scope))
             if selected is not None
             else format_human_blocked_queue(queue)
         )
         if args.json:
-            payload = queue_snapshot(
-                queue,
-                selected=selected,
-                product_root=load_product_root(target if only is None else only),
-            )
+            payload = queue_snapshot(queue, selected=selected, product_root=load_product_root(scope))
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -924,6 +897,8 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "decide":
         target = Path(args.path)
+        which = (f"--decision {args.decision}" if args.decision else f"--task {args.task}" if args.task
+                 else f"--gap {args.gap}" if args.gap else "--spec")
         try:
             result = apply_decision(
                 target,
@@ -934,27 +909,11 @@ def _main(argv: list[str] | None = None) -> int:
                 gap=args.gap,
                 note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
-                    f"deltafuse decide {args.path} "
-                    + (
-                        f"--decision {args.decision}"
-                        if args.decision
-                        else (
-                            f"--task {args.task}"
-                            if args.task
-                            else (f"--gap {args.gap}" if args.gap else "--spec")
-                        )
-                    )
-                    + f" --status {args.status}"
+                    f"deltafuse decide {args.path} {which} --status {args.status}"
                 ),
             )
-        except DecideError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 1
-        except QueueError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 2
+        except (DecideError, QueueError) as ex:
+            return _fail(target, "Decide failed", ex, 1 if isinstance(ex, DecideError) else 2, cmd="decide")
         _journal(
             target,
             cmd="decide",
@@ -1008,9 +967,7 @@ def _main(argv: list[str] | None = None) -> int:
             elif skipped:
                 print("leash: no write envelope (no ready Worker step)")
             elif errors:
-                print(f"leash: {len(errors)} path(s) outside the write envelope", file=sys.stderr)
-                for err in errors:
-                    print(f"  - {err}", file=sys.stderr)
+                _print_errors(f"leash: {len(errors)} path(s) outside the write envelope", errors)
             else:
                 print("leash: diff is inside the write envelope")
             if errors and mode != "advisory":
@@ -1035,9 +992,7 @@ def _main(argv: list[str] | None = None) -> int:
                 include_archive=args.archive,
             )
         except BoardError as ex:
-            _journal(target, cmd="board", ok=False, errors=[str(ex)])
-            print(f"Board failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Board failed", ex, 2, cmd="board")
         _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
@@ -1103,26 +1058,16 @@ def _main(argv: list[str] | None = None) -> int:
                     errors.append(f"{tf.name}: {ex}")
         if not token_receipt:
             token_receipt = token_count_receipt()
-        _journal(
+        return _report(
+            "lint-context",
             target,
-            cmd="lint-context",
-            ok=not errors,
-            errors=errors,
-            n_errors=len(errors),
+            errors,
+            "Context budget validation failed",
+            f"Context budget for {target} is within limits (tokens counted by {token_receipt.get('mode')}).",
             token_mode=token_receipt.get("mode"),
             token_measured=token_receipt.get("measured"),
             token_heuristic=token_receipt.get("heuristic"),
         )
-        if errors:
-            print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(
-            f"Context budget for {target} is within limits "
-            f"(tokens counted by {token_receipt.get('mode')})."
-        )
-        return 0
 
     elif args.command == "bench":
         from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
