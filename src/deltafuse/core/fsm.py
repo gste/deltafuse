@@ -112,11 +112,16 @@ def find_repo_root(start_path: Path) -> Path:
 
 
 CONTRACT_VERSION = 3
-LEGACY_TOKENS = ("target-confirmed", "targeting")  # v2 vocabulary, never auto-converted
 
 
 def _contract_version_errors(change_path: Path) -> list[str]:
-    """DF3-008: unknown or partial versions stop with exact diagnostics."""
+    """DF3-008: unknown or partial versions stop with exact diagnostics.
+
+    v2's statuses (`targeting`, `target-confirmed`) are refused by the v3 schemas' status enums.
+    A text search for those words here never ran - its pattern held backspace bytes where `\\b`
+    was meant - and, fixed, it would have refused prose that merely says "targeting"
+    (codebase audit 2026-10-21); it is gone.
+    """
     errors: list[str] = []
     try:
         data = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
@@ -129,22 +134,6 @@ def _contract_version_errors(change_path: Path) -> list[str]:
             f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
             "automatic conversion is performed"
         )
-    legacy_files = ["change.yaml"] + [
-        str(p.relative_to(change_path)).replace("\\", "/")
-        for folder in ("tasks", "slices")
-        for p in sorted((change_path / folder).glob("*.md"))
-    ]
-    for rel in legacy_files:
-        path = change_path / rel
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        for token in LEGACY_TOKENS:
-            if re.search(rf"{token}", text):
-                errors.append(
-                    f"{rel}: legacy v2 vocabulary '{token}' is not valid in v3; "
-                    "rewrite the artifact for schema v3 (no automatic conversion)"
-                )
     return errors
 
 
