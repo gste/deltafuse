@@ -1359,3 +1359,12 @@ def test_implemented_gate_names_unfinished_tasks_before_stale_evidence(tmp_path:
     errors = check_gate(builder.change_dir, "implemented")
     assert "task TASK-002 is 'declared'" in errors[0], errors
     assert not any("stale evidence" in e for e in errors), errors
+
+
+def test_check_gate_refuses_an_unknown_gate_as_advance_does(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: `check-gate --gate convreged` printed "passed" and exited 0."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-990", title="Typo").step_intake()
+    errors = check_gate(builder.change_dir, "convreged")
+    assert len(errors) == 1 and "unknown gate 'convreged'" in errors[0] and "converged" in errors[0]
+    assert check_gate(builder.change_dir, "Intake") == []  # a known gate in any case still works

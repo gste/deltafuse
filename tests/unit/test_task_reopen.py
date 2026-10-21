@@ -281,3 +281,20 @@ def test_a_copy_taken_by_3_3_8_in_the_mirrored_layout_is_still_restored(tmp_path
     copy.unlink()
     plan, problems = restore_plan(tmp_path, "CHG-180", {"allowed_paths": ["src/core.py"]})
     assert problems == [] and plan == [("src/core.py", data)]
+
+
+def test_a_reopen_counts_only_for_the_task_of_its_own_change(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: the leash looked the reopen up by task id alone, so reopening
+    TASK-001 of one Change let a Red record or an archive of TASK-001 in another Change through."""
+    from deltafuse.core.leash import reopen_archive_path, reopened_red_path
+
+    builder = _blocked_in_implement(tmp_path, repo_root)
+    apply_decision(builder.change_dir, status="reopened", task="TASK-001", note="wrong oracle")
+    other = tmp_path / "docs" / "changes" / "CHG-181"
+    other.mkdir(parents=True)
+    (other / "change.yaml").write_text("id: CHG-181\nstatus: implementing\n", encoding="utf-8")
+
+    assert reopened_red_path(tmp_path, "docs/changes/CHG-180/evidence/red/TASK-001.yaml")
+    assert reopen_archive_path(tmp_path, "docs/changes/CHG-180/reopened/TASK-001.1/red.yaml")
+    assert not reopened_red_path(tmp_path, "docs/changes/CHG-181/evidence/red/TASK-001.yaml")
+    assert not reopen_archive_path(tmp_path, "docs/changes/CHG-181/reopened/TASK-001.1/red.yaml")

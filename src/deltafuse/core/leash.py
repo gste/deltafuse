@@ -28,7 +28,6 @@ from deltafuse.core.context import (
 from deltafuse.core.config import config_section
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
-from deltafuse.core.gate_receipts import has_click
 from deltafuse.core.queue import WorkItem, _item_for_step, _load_tasks
 from deltafuse.core.steps import STEP_CONTRACTS, STEP_ORDER
 
@@ -308,7 +307,7 @@ def reopen_archive_path(product_root: Path, rel_path: str) -> bool:
     match = _REOPEN_ARCHIVE.match(rel)
     if not match or match["name"] not in REOPEN_ARCHIVE_FILES:
         return False
-    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+    return _task_reopened_in(product_root, rel, match["task"])
 
 
 GAP_ARCHIVE_FILES = frozenset({"reopen.yaml", "verification.md", "run.yaml"})
@@ -345,10 +344,28 @@ _RED_RECORD = re.compile(r"^docs/changes/[^/]+/evidence/red/(?P<task>[^/]+)\.yam
 
 def reopened_red_path(product_root: Path, rel_path: str) -> bool:
     """The Red record of a task the human reopened: Declare writes it after the Change left Declare."""
-    match = _RED_RECORD.match(posix_relpath(rel_path))
+    rel = posix_relpath(rel_path)
+    match = _RED_RECORD.match(rel)
     if not match:
         return False
-    return has_click(product_root, kind="task", status="reopened", artifact_id=match["task"])
+    return _task_reopened_in(product_root, rel, match["task"])
+
+
+def _task_reopened_in(product_root: Path, rel: str, task: str) -> bool:
+    """The human's latest verdict on this task of the Change the path lies in is `reopened`.
+
+    Codebase audit 2026-10-21: the check named the task id only, so reopening TASK-001 of one
+    Change let a Red record or an archive of TASK-001 in any other Change through.
+    """
+    from deltafuse.core import gate_receipts
+
+    change_dir = Path(product_root) / "/".join(rel.split("/")[:3])
+    try:
+        data = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        data = {}
+    change_id = data.get("id") if isinstance(data, dict) and isinstance(data.get("id"), str) else change_dir.name
+    return gate_receipts.task_reopened(Path(product_root), change=change_id, task=task)
 
 
 def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:

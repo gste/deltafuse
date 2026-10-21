@@ -1396,6 +1396,12 @@ def check_gate(
     human: bool = True,
 ) -> list[str]:
     """Gate errors for a Change, with the cause first when a file was written by hand."""
+    from deltafuse.core.transitions import GATE_TARGETS
+
+    if str(gate).lower() not in GATE_TARGETS:
+        # Codebase audit 2026-10-21: an unknown gate fell through every branch and "passed",
+        # while `advance` refuses the same name.
+        return [f"unknown gate '{gate}'; expected one of {sorted(GATE_TARGETS)}"]
     errors = _check_gate(change_dir, gate, registry, assume_status=assume_status, human=human)
     if not errors:
         return errors
