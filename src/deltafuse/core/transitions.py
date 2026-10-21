@@ -18,13 +18,15 @@ import yaml
 
 from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.artifact_storage import atomic_write
-from deltafuse.core.gate_receipts import read_jsonl
+from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
     can_transition,
     find_repo_root,
+    frozen_oracle_errors,
 )
+from deltafuse.core.gate_receipts import read_jsonl, task_reopened
 
 # Gate -> target status. Human Gates (intake via decide, specified via decide
 # spec) are journaled by check_gate's own human-gate replay.
@@ -107,8 +109,6 @@ def _artifact_file(folder: Path, artifact_id: str, kind: str) -> tuple[Path, str
     20260921T111852Z: `state --task TASK-002` was refused for
     `TASK-002-penalty-window.md` because only `<id>.md` was looked up.
     """
-    from deltafuse.core.frontmatter import parse_frontmatter
-
     known: dict[str, list[Path]] = {}
     for candidate in sorted(folder.glob("*.md")) if folder.is_dir() else []:
         try:
@@ -256,12 +256,10 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     the journal does not reach is an error. Hand-edited statuses are never
     evidence.
     """
-    if not (change_path / "change.yaml").is_file():
-        return []  # package validation reports the missing change.yaml
     try:
         data = _load_change_yaml(change_path)
     except TransitionError:
-        return []
+        return []  # package validation reports a missing or unreadable change.yaml
     change_id = data.get("id") or change_path.name
     status = data.get("status")
     if status == INITIAL_STATUS:
@@ -324,33 +322,28 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     if errors:
         return errors
 
+    # The early return above leaves only receipted and in-flight statuses here.
     if status in RECEIPTED_TARGETS:
         if current != status:
             errors.append(
                 f"status '{status}' does not match the Core transition chain, "
                 f"which ends at '{current}'; re-run: deltafuse advance"
             )
-    elif status in _INFLIGHT_STATUSES:
-        if status not in ALLOWED_CHANGE_TRANSITIONS.get(current, set()) and current != status:
-            errors.append(
-                f"status '{status}' is not reachable from the Core transition "
-                f"chain, which ends at '{current}'"
-            )
-    else:
+    elif status not in ALLOWED_CHANGE_TRANSITIONS.get(current, set()) and current != status:
         errors.append(
-            f"status '{status}' is not a receipted or in-flight state and must "
-            "not be set by hand"
+            f"status '{status}' is not reachable from the Core transition "
+            f"chain, which ends at '{current}'"
         )
     status_receipts = [
         r for r in all_receipts if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND)
     ]
-    if status_receipts and status_receipts[-1].get("to") not in (status, current):
-        if status in RECEIPTED_TARGETS:
-            errors.append(
-                f"status '{status}' does not match the last transition "
-                f"receipt '{status_receipts[-1].get('to')}' "
-                f"({status_receipts[-1].get('receipt', '')[:12]}); re-run: deltafuse advance"
-            )
+    last = status_receipts[-1] if status_receipts else None
+    if status in RECEIPTED_TARGETS and last is not None and last.get("to") not in (status, current):
+        errors.append(
+            f"status '{status}' does not match the last transition "
+            f"receipt '{last.get('to')}' "
+            f"({last.get('receipt', '')[:12]}); re-run: deltafuse advance"
+        )
     return errors
 
 
@@ -427,6 +420,19 @@ def _record_trace_warnings(change_path: Path) -> None:
     )
 
 
+def _change_dir(start: Path | str) -> tuple[Path, Path]:
+    """The resolved Change directory and its product root."""
+    change_path = Path(start).resolve()
+    if not change_path.is_dir():
+        raise TransitionError(f"Change directory not found: {change_path}")
+    return change_path, find_repo_root(change_path)
+
+
+def _advanced(entry: dict[str, Any], *, resumed: bool) -> dict[str, Any]:
+    keys = ("gate", "from", "to", "receipt")
+    return {"ok": True, **{k: entry[k] for k in keys}, "resumed": resumed}
+
+
 def advance_change(
     start: Path | str,
     gate: str,
@@ -445,10 +451,7 @@ def advance_change(
         raise TransitionError(
             f"unknown gate '{gate}'; expected one of {sorted(GATE_TARGETS)}"
         )
-    change_path = Path(start).resolve()
-    if not change_path.is_dir():
-        raise TransitionError(f"Change directory not found: {change_path}")
-    product_root = find_repo_root(change_path)
+    change_path, product_root = _change_dir(start)
 
     if gate in COVERAGE_GATES:
         _refresh_coverage(change_path)
@@ -458,14 +461,7 @@ def advance_change(
         # so finishing the pending write completes the transition.
         resumed = resume_incomplete(product_root, change_path)
         if resumed is not None:
-            return {
-                "ok": True,
-                "gate": resumed["gate"],
-                "from": resumed["from"],
-                "to": resumed["to"],
-                "receipt": resumed["receipt"],
-                "resumed": True,
-            }
+            return _advanced(resumed, resumed=True)
 
         data = _load_change_yaml(change_path)
         change_id = data.get("id") or change_path.name
@@ -516,7 +512,6 @@ def advance_change(
             "gate": gate,
             "from": current,
             "to": target,
-            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         if gate == "declaring":
             # The tasks' product files before Implement: a reopened task is declared again
@@ -538,14 +533,7 @@ def advance_change(
 
         _write_change_status(change_path, data, target)
 
-        result = {
-            "ok": True,
-            "gate": gate,
-            "from": current,
-            "to": target,
-            "receipt": entry["receipt"],
-            "resumed": resumed is not None,
-        }
+        result = _advanced(entry, resumed=False)
         if leash is not None:
             result["leash"] = leash
         return result
@@ -591,6 +579,16 @@ def human_unblock_hint(change_path: Path | str, task_id: str) -> str:
     )
 
 
+def _evidence_record(change_path: Path, phase: str, task_id: str) -> dict[str, Any] | None:
+    """A task's evidence record for `phase` as a mapping, or None when unreadable or not one."""
+    record = Path(change_path) / "evidence" / phase / f"{task_id}.yaml"
+    try:
+        data = yaml.safe_load(record.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def green_attempt_error(change_path: Path, product_root: Path, task_id: str) -> str | None:
     """Why the Worker may not block this task yet: no Green was tried against its Red.
 
@@ -605,21 +603,14 @@ def green_attempt_error(change_path: Path, product_root: Path, task_id: str) -> 
         f"--task {task_id} -- <test command>`; block only if that run shows the declared oracle itself "
         "is wrong - the Core keeps the failed Green record for the human"
     )
-    evidence = Path(change_path) / "evidence"
-    try:
-        red = yaml.safe_load((evidence / "red" / f"{task_id}.yaml").read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        red = None
-    if not isinstance(red, dict):
+    red = _evidence_record(change_path, "red", task_id)
+    if red is None:
         return (
             f"task {task_id} cannot be marked blocked: it has no Red record, so there is no declared "
             f"oracle to be wrong. Declare it first; then {retry}"
         )
-    try:
-        green = yaml.safe_load((evidence / "green" / f"{task_id}.yaml").read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        green = None
-    if isinstance(green, dict):
+    green = _evidence_record(change_path, "green", task_id)
+    if green is not None:
         from deltafuse.core.evidence import evidence_stamp_error
 
         if evidence_stamp_error(green, Path(product_root)) is None and str(green.get("timestamp") or "") >= str(
@@ -636,12 +627,7 @@ REOPENED_CHANGE_STATUSES = frozenset({"declared", "implementing"})
 
 def red_result(change_path: Path, task_id: str) -> str | None:
     """The `result` of a task's Red record, or None when it has none."""
-    red = Path(change_path) / "evidence" / "red" / f"{task_id}.yaml"
-    try:
-        data = yaml.safe_load(red.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return None
-    result = data.get("result") if isinstance(data, dict) else None
+    result = (_evidence_record(change_path, "red", task_id) or {}).get("result")
     return str(result) if result else None
 
 
@@ -679,8 +665,6 @@ def already_green_advice(change_path: Path | str, task_id: str) -> str:
 
     "Return this outcome upstream" named no command (cls-g31g-m02b, 2026-10-04).
     """
-    from deltafuse.core.frontmatter import parse_frontmatter
-
     change_dir = Path(change_path)
     try:
         # Found as every other Core step finds it: `TASK-NNN-<slug>.md` is allowed.
@@ -719,21 +703,21 @@ TASK_PHASE_CHANGE_STATUSES: dict[str, tuple[set[str], str]] = {
     "verified": ({"implemented", "verifying"}, "implemented"),
 }
 
-# Rank of every forward Change status, in-flight ones between their neighbours.
-_STATUS_RANK: dict[str, float] = {
-    "normalized": 0,
-    "analyzing": 1,
-    "analyzed": 2,
-    "specification-proposed": 2.5,
-    "specified": 3,
-    "decomposed": 4,
-    "declaring": 4.5,
-    "declared": 5,
-    "implementing": 5.5,
-    "implemented": 6,
-    "verifying": 6.5,
-    "converged": 7,
-}
+# Every forward Change status in order, in-flight ones between their neighbours.
+_FORWARD_STATUSES = (
+    "normalized",
+    "analyzing",
+    "analyzed",
+    "specification-proposed",
+    "specified",
+    "decomposed",
+    "declaring",
+    "declared",
+    "implementing",
+    "implemented",
+    "verifying",
+    "converged",
+)
 
 
 def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
@@ -754,9 +738,8 @@ def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
         return []
     if current in GATE_ALLOWED_FROM[gate]:
         return []
-    rank_current = _STATUS_RANK.get(str(current))
-    rank_target = _STATUS_RANK.get(GATE_TARGETS[gate])
-    if rank_current is None or rank_target is None or rank_current >= rank_target:
+    order = _FORWARD_STATUSES
+    if str(current) not in order or order.index(str(current)) >= order.index(GATE_TARGETS[gate]):
         return []  # not a forward status, or the gate is already passed
     return [
         f"Gate {gate}: not this Change's turn - status is '{current}', and this gate "
@@ -784,10 +767,7 @@ def set_artifact_status(
     """
     if sum(bool(x) for x in (task_id, slice_id, change_status)) != 1:
         raise TransitionError("choose exactly one of --task, --slice, or --change")
-    change_path = Path(start).resolve()
-    if not change_path.is_dir():
-        raise TransitionError(f"Change directory not found: {change_path}")
-    product_root = find_repo_root(change_path)
+    change_path, product_root = _change_dir(start)
 
     with ProductMutationLock(product_root):
         chain_errors = receipt_chain_errors(product_root, change_path)
@@ -795,18 +775,13 @@ def set_artifact_status(
             raise TransitionError(f"transition chain invalid: {'; '.join(chain_errors)}")
 
         if task_id:
-            allowed = TASK_STATUS_TRANSITIONS
             file, task_id = _artifact_file(change_path / "tasks", task_id, "task")
         elif slice_id:
-            allowed = SLICE_STATUS_TRANSITIONS
             file, slice_id = _artifact_file(change_path / "slices", slice_id, "slice")
-        else:
-            allowed = None  # change-level, handled below
-            file = change_path / "change.yaml"
+        data = _load_change_yaml(change_path)
+        change_id = data.get("id") or change_path.name
 
-        if file.name == "change.yaml":
-            data = _load_change_yaml(change_path)
-            change_id = data.get("id") or change_path.name
+        if change_status:
             current = data.get("status")
             if status not in CHANGE_INFLIGHT_STATUSES:
                 raise TransitionError(
@@ -819,32 +794,25 @@ def set_artifact_status(
                 raise TransitionError(
                     f"cannot set Change status '{status}' from '{current}'"
                 )
-            if status == "specification-proposed":
-                # Proposing hands the spec to the Human Gate. A spec delta that
-                # fails the machine checks is the Worker's to fix: letting it
-                # through put a format error in front of the human, who can
-                # neither accept it (the gate still fails) nor fix it, and the
-                # run died on specify. Everything the Worker can fix must pass
-                # first; the errors go back to the Worker. `human=False` also
-                # leaves out a capability still in `draft`, which is the human's
-                # to accept together with the specification - requiring it here
-                # deadlocked specify, because `decide --spec` needs this status.
-                from deltafuse.core.fsm import check_gate
-
-                gate_errors = check_gate(
-                    change_path, "specified", assume_status=status, human=False
+            # The only status left here is `specification-proposed`.
+            # Proposing hands the spec to the Human Gate. A spec delta that
+            # fails the machine checks is the Worker's to fix: letting it
+            # through put a format error in front of the human, who can
+            # neither accept it (the gate still fails) nor fix it, and the
+            # run died on specify. Everything the Worker can fix must pass
+            # first; the errors go back to the Worker. `human=False` also
+            # leaves out a capability still in `draft`, which is the human's
+            # to accept together with the specification - requiring it here
+            # deadlocked specify, because `decide --spec` needs this status.
+            gate_errors = check_gate(change_path, "specified", assume_status=status, human=False)
+            if gate_errors:
+                raise TransitionError(
+                    "spec delta is not ready for the Human Gate; fix and propose again: "
+                    + "; ".join(gate_errors)
                 )
-                if gate_errors:
-                    raise TransitionError(
-                        "spec delta is not ready for the Human Gate; fix and propose again: "
-                        + "; ".join(gate_errors)
-                    )
             _write_change_status(change_path, data, status)
         else:
-            data = _load_change_yaml(change_path)
-            change_id = data.get("id") or change_path.name
-            from deltafuse.core.frontmatter import parse_frontmatter
-
+            allowed = TASK_STATUS_TRANSITIONS if task_id else SLICE_STATUS_TRANSITIONS
             meta, body = parse_frontmatter(file.read_text(encoding="utf-8"))
             current = meta.get("status")
             if current == status:
@@ -878,8 +846,6 @@ def set_artifact_status(
                 # can pass. Blocked is judged on the oracle as declared.
                 red_file = change_path / "evidence" / "red" / f"{task_id}.yaml"
                 if red_file.is_file():
-                    from deltafuse.core.fsm import frozen_oracle_errors
-
                     changed = frozen_oracle_errors(red_file, product_root, f"Red of {task_id}")
                     if changed:
                         raise TransitionError(
@@ -887,19 +853,17 @@ def set_artifact_status(
                             f"changed ({'; '.join(changed)}): restore the tests as Red froze them, "
                             "then block only if that declared oracle itself is wrong"
                         )
-            if task_id and status == "blocked" and not human:
-                no_attempt = green_attempt_error(change_path, product_root, task_id)
-                if no_attempt:
-                    raise TransitionError(no_attempt)
+                if not human:
+                    no_attempt = green_attempt_error(change_path, product_root, task_id)
+                    if no_attempt:
+                        raise TransitionError(no_attempt)
             if task_id and status in TASK_PHASE_CHANGE_STATUSES:
                 owners, gate = TASK_PHASE_CHANGE_STATUSES[status]
                 change_status_now = data.get("status")
-                from deltafuse.core import gate_receipts
-
                 if (
                     status in REOPENED_DECLARE_STATUSES
                     and change_status_now in REOPENED_CHANGE_STATUSES
-                    and gate_receipts.task_reopened(product_root, change=data.get("id"), task=task_id)
+                    and task_reopened(product_root, change=data.get("id"), task=task_id)
                 ):
                     # The human reopened this task after its oracle proved wrong
                     # (ref-m01-352): it is declared again while its siblings implement.
@@ -921,9 +885,8 @@ def set_artifact_status(
             "artifact_id": task_id or slice_id,
             "from": current,
             "to": status,
-            "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        if file.name != "change.yaml":
+        if not change_status:
             # The file name need not be the id (TASK-NNN-<slug>.md): the leash
             # reads the rewritten file from here, not from the id.
             entry["path"] = file.relative_to(product_root).as_posix()
