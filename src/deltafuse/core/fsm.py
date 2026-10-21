@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import re
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
@@ -180,6 +180,19 @@ def validate_change_package(
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
     draft_specs = draft_spec_files(repo_root)
 
+    def spec_ref_errors(label: str, srefs: Any, *, delta: bool = False) -> Iterator[str]:
+        """The spec_refs (or a spec delta's added/modified) that do not resolve."""
+        if not spec_dir_exists:
+            yield f"{label}: Specification root directory 'docs/spec' not found"
+            return
+        for sref in srefs:
+            if delta and not isinstance(sref, str):
+                yield f"{label}: added/modified entries must be strings"
+            elif delta and not spec_ref_is_under_docs_spec(sref, repo_root):
+                yield f"{label}: '{sref}' must resolve under docs/spec/"
+            elif s_err := validate_spec_ref(sref, repo_root, drafts=draft_specs):
+                yield f"{label}: {s_err}"
+
     change_id: str | None = None
     change_status: str | None = None
 
@@ -284,13 +297,7 @@ def validate_change_package(
                 if isinstance(meta, dict):
                     srefs = meta.get("spec_refs", [])
                     if srefs:
-                        if not spec_dir_exists:
-                            errors.append(f"{slice_file.name}: Specification root directory 'docs/spec' not found")
-                        else:
-                            for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                                if s_err:
-                                    errors.append(f"{slice_file.name}: {s_err}")
+                        errors.extend(spec_ref_errors(slice_file.name, srefs))
 
                     context_budget = meta.get("context_budget")
                     if context_budget and isinstance(context_budget, dict):
@@ -327,13 +334,7 @@ def validate_change_package(
                     # Validate spec_refs anchors (P4 / T7, N10)
                     srefs = meta.get("spec_refs", [])
                     if srefs:
-                        if not spec_dir_exists:
-                            errors.append(f"{task_file.name}: Specification root directory 'docs/spec' not found")
-                        else:
-                            for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                                if s_err:
-                                    errors.append(f"{task_file.name}: {s_err}")
+                        errors.extend(spec_ref_errors(task_file.name, srefs))
 
                     # Validate design_ref (P3)
                     design_ref = meta.get("design_ref")
@@ -419,21 +420,7 @@ def validate_change_package(
             if isinstance(meta, dict):
                 added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
-                    if not spec_dir_exists:
-                        errors.append("spec-delta.md: Specification root directory 'docs/spec' not found")
-                    else:
-                        for sref in added_mod:
-                            if not isinstance(sref, str):
-                                errors.append("spec-delta.md: added/modified entries must be strings")
-                                continue
-                            if not spec_ref_is_under_docs_spec(sref, repo_root):
-                                errors.append(
-                                    f"spec-delta.md: '{sref}' must resolve under docs/spec/"
-                                )
-                                continue
-                            s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                            if s_err:
-                                errors.append(f"spec-delta.md: {s_err}")
+                    errors.extend(spec_ref_errors("spec-delta.md", added_mod, delta=True))
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
             errors.append(
@@ -444,20 +431,22 @@ def validate_change_package(
     # 7. Validate evidence/ (Semantic Validation - P0 / T1, T2, T4)
     evidence_dir = change_path / "evidence"
     if evidence_dir.is_dir():
+        from deltafuse.core.evidence import evidence_stamp_error
+
+        current: str | None = None  # the tree's revision, computed once
         for ev_file in evidence_dir.rglob("*.yaml"):
+            rel_ev = ev_file.relative_to(change_path)
             try:
                 ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
                 errs = registry.validate("evidence", ev_data)
-                errors.extend(f"{ev_file.relative_to(change_path)}: {e}" for e in errs)
+                errors.extend(f"{rel_ev}: {e}" for e in errs)
 
                 if not isinstance(ev_data, dict):
                     continue
 
-                from deltafuse.core.evidence import evidence_stamp_error
-
                 stamp_err = evidence_stamp_error(ev_data, repo_root)
                 if stamp_err:
-                    errors.append(f"{ev_file.relative_to(change_path)}: {stamp_err}")
+                    errors.append(f"{rel_ev}: {stamp_err}")
 
                 rel_path = ev_file.relative_to(evidence_dir)
                 parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
@@ -471,84 +460,72 @@ def validate_change_package(
                 # Cross-check Change ID
                 if ev_change and change_id and ev_change != change_id:
                     errors.append(
-                        f"{ev_file.relative_to(change_path)}: change id mismatch (evidence has '{ev_change}', expected '{change_id}')"
+                        f"{rel_ev}: change id mismatch (evidence has '{ev_change}', expected '{change_id}')"
                     )
 
                 # Cross-check Task ID (T4)
                 if ev_task:
                     if ev_task not in existing_task_ids:
-                        errors.append(
-                            f"{ev_file.relative_to(change_path)}: references nonexistent task '{ev_task}'"
-                        )
+                        errors.append(f"{rel_ev}: references nonexistent task '{ev_task}'")
                 elif phase in {"red", "green", "regression"}:
-                    errors.append(
-                        f"{ev_file.relative_to(change_path)}: missing required 'task' field for phase '{phase}'"
-                    )
+                    errors.append(f"{rel_ev}: missing required 'task' field for phase '{phase}'")
 
                 # Phase directory alignment (T1)
                 if parent_phase_dir in {"red", "green", "regression", "verification"}:
                     if phase != parent_phase_dir:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: phase mismatch (file in '{parent_phase_dir}/' has phase '{phase}')"
+                            f"{rel_ev}: phase mismatch (file in '{parent_phase_dir}/' has phase '{phase}')"
                         )
 
                 # Phase-specific result & exit_code rules (T2)
                 if phase == "red":
                     if result not in {"expected-failure", "not-reproduced", "already-green"}:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have result "
+                            f"{rel_ev}: red evidence must have result "
                             f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
                         )
                     if result == "already-green":
                         if exit_code != 0:
-                            errors.append(
-                                f"{ev_file.relative_to(change_path)}: already-green evidence "
-                                f"must have exit_code 0 (got {exit_code})"
-                            )
+                            errors.append(f"{rel_ev}: already-green evidence must have exit_code 0 (got {exit_code})")
                     elif exit_code == 0 and result != "not-reproduced":
-                        errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have "
-                            f"non-zero exit_code (got 0)"
-                        )
+                        errors.append(f"{rel_ev}: red evidence must have non-zero exit_code (got 0)")
                     if result == "expected-failure" and route == "code":
                         category = ev_data.get("failure_category")
                         if category != "behavioral-mismatch":
                             errors.append(
-                                f"{ev_file.relative_to(change_path)}: red expected-failure "
+                                f"{rel_ev}: red expected-failure "
                                 f"must have failure_category 'behavioral-mismatch' "
                                 f"(got '{category}')" + _red_category_hint(ev_data)
                             )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
                             errors.extend(
-                                f"{ev_file.relative_to(change_path)}: {pe}"
-                                for pe in scan_changed_paths_for_private_test_access(
-                                    repo_root, changed
-                                )
+                                f"{rel_ev}: {pe}"
+                                for pe in scan_changed_paths_for_private_test_access(repo_root, changed)
                             )
                 elif phase in {"green", "regression"}:
                     if result != "passed":
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have result 'passed' (got '{result}')"
+                            f"{rel_ev}: {phase} evidence must have result 'passed' (got '{result}')"
                         )
                     if exit_code != 0:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have exit_code 0 (got {exit_code})"
+                            f"{rel_ev}: {phase} evidence must have exit_code 0 (got {exit_code})"
                         )
                 elif phase == "verification":
                     if exit_code != 0:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
+                            f"{rel_ev}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
                 if phase in {"green", "regression", "verification"} and route == "code":
                     # The record is written even when `deltafuse evidence` refused it,
                     # so the gate asks again whether the run ran any test.
-                    errors.extend(_ran_no_test(ev_data, f"{ev_file.relative_to(change_path)}: {phase}"))
+                    errors.extend(_ran_no_test(ev_data, f"{rel_ev}: {phase}"))
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
-                    current = compute_product_baseline_revision(repo_root)
-                    rel_ev = ev_file.relative_to(change_path)
+                    if current is None:
+                        current = compute_product_baseline_revision(repo_root)
                     if not recorded:
                         errors.append(
                             f"{rel_ev}: missing base_revision; Green/regression/verification "
@@ -566,7 +543,7 @@ def validate_change_package(
                             f"change moved the tree - re-run it on the current tree: {rerun}"
                         )
             except Exception as ex:
-                errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
+                errors.append(f"{rel_ev} parsing error: {ex}")
 
     return errors
 
