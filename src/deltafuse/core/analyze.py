@@ -10,8 +10,10 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.config import load_trace_claims_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.integrity import (
+    extract_claim_kinds_from_request,
     extract_claims_from_request,
     load_capability_catalog,
     lookup_capability,
@@ -452,7 +454,6 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
 
     # P12 (workflow.trace_claims: warn, default off): costs one config read and, only when
     # asked for, a scan of each claim's own test files. `off` changes nothing below.
-    from deltafuse.core.config import load_trace_claims_mode
     from deltafuse.core.fsm import find_repo_root
 
     trace_repo_root: Path | None = None
@@ -592,9 +593,7 @@ def claim_trace_warnings(change_path: Path | str) -> list[str]:
     detectable here; that stays the judge's job until this has run on enough models to
     trust promoting it.
     """
-    from deltafuse.core.config import load_trace_claims_mode
     from deltafuse.core.fsm import find_repo_root
-    from deltafuse.core.integrity import extract_claim_kinds_from_request
 
     path = Path(change_path)
     repo_root = find_repo_root(path)

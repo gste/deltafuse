@@ -12,11 +12,11 @@ from deltafuse.core.analyze import PassCursor, next_analyze_pass
 from deltafuse.core.specify import next_specify_pass
 from deltafuse.core.config import config_section
 from deltafuse.core.frontmatter import iter_frontmatter
-from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
 from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
-from deltafuse.core.context import PHASE_CONTRACTS, posix_relpath
+from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
 TERMINAL_CHANGE = {
@@ -507,8 +507,6 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             ], []
 
     if status in {"implemented", "verifying"}:
-        from deltafuse.core.fsm import verification_gap
-
         gap = verification_gap(change_path)
         if gap is not None:
             # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2
@@ -895,8 +893,6 @@ def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
     """Checklist from the step contract. Same Change files as llm/script; not a second process."""
     if item.kind != "ready" or not item.step or item.step not in PHASE_CONTRACTS:
         return format_human_blocked_item(item)
-    from deltafuse.core.context import phase_allowed_paths
-
     phase = {
         "allowed_read": phase_allowed_paths(item.step, "read", product_root),
         "allowed_write": phase_allowed_paths(item.step, "write", product_root),
