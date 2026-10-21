@@ -150,27 +150,9 @@ deltafuse leash <product-root> --file src/foo.py
 
 Ядро предоставляет управляемую схемам службу сериализации и валидации для артефактов пакетов Change ([artifact-writer.ru.md](./contracts/artifact-writer.ru.md)).
 
-### Практические примеры использования
-
-```text
-# Проверить поддерживаемые свойства и схемы через инспекцию возможностей
-deltafuse artifact describe --kind task --operation create
-
-# Создать новый артефакт Change из JSON-структуры
-deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
-
-# Атомарно обновить артефакт через JSON Pointer patch с проверкой SHA256 целого файла
-deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
-
-# Выполнить read-only валидацию схемы и ссылок без изменения диска
-deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
-
-# Обновить дочерний индекс родительского Change после создания/обновления задачи/среза
-deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
-```
-
-### Обнаружение возможностей и совместимость
-Клиенты определяют доступность Artifact Writer с помощью `deltafuse artifact describe --kind <kind> --operation <op>`.
+`artifact write` — единственная команда Writer: прежние подкоманды `describe`, `create`, `update`,
+`validate` и `update-index` удалены в 3.3.9 - ни один навык ими не пользовался, а `write` сам
+создаёт или обновляет и ведёт индекс в `change.yaml`.
 
 **Путь воркера — `artifact write`** (п. 1 роадмапа). Воркер пишет структуру только через Writer: прозу (тело) и поля, а `id`, `change`, `status`, `context_budget` задачи, сам файл и индекс в `change.yaml` пишет ядро: `deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.json`, где `task.json` — `{"identity": "TASK-001", "fields": {...}, "body": "проза"}`. Файла нет — создаётся; есть — меняются только названные поля, ожидаемый sha256 ядро берёт само. Списки `spec-delta` сливаются по слайсам, проза дописывается. Хост с вызовом функций отдаёт тот же вход как типизированный инструмент. Виды: `task`, `slice`, `routing`, `spec-delta`, `change`. Leash отвергает `routing.yaml`, `spec-delta.md`, слайс или задачу, байты которых не породили ни Writer, ни ядро (`deltafuse state`, `decide`).
 
@@ -178,7 +160,7 @@ deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task 
 Существующие артефакты никогда автоматически не перезаписываются и не мигрируют массово; Writer читает файлы, созданные вручную. Новые записи `routing.yaml`, `spec-delta.md`, слайсов и задач идут через Writer: leash судит только то, что изменилось с его базы, поэтому уже закоммиченные артефакты не затронуты.
 
 ### Явное подтверждение каноникализации
-Для переформатирования или нормализации метаданных неканоничных артефактов требуется явный флаг `--canonicalize-metadata` вместе с проверкой хэша файла. Без явного согласия формативные правки метаданных не применяются.
+Неканоничные метаданные существующего артефакта без явного согласия не переформатируются: служебный API (`ArtifactService.update`) принимает `canonicalize_metadata` вместе с ожидаемым хэшем файла. У CLI такого параметра нет.
 
 ### Процедура восстановления транзакций
 В случае сбоя или прерывания процесса при операциях создания/обновления Ядро проверяет `.deltafuse/journal/` под блокировкой `ProductMutationLock`. Незавершённые транзакции со статусом `prepared` восстанавливают исходный файл, а транзакции со статусом `published` завершают запись чека receipt и публикации.

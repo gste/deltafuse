@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **The legacy `artifact describe|create|update|validate|update-index` subcommands** (owner
+  decision, codebase audit 2026-10-21). No skill and no bench run used them: `artifact write` is
+  the Worker's path, creates or updates, and keeps the `change.yaml` index itself. With them went
+  `export_tool_schemas`, `ArtifactService.validate`/`describe` and the request-envelope helpers of
+  `ArtifactRegistry` (`get_envelope_schema*`, `validate_operation_envelope`,
+  `validate_operation_input`), about 900 lines; their CLI tests' properties (stdin input, a
+  Core-owned field refused with exit 3, a duplicate JSON key refused before anything is written)
+  are now tested on `artifact write`. docs/using (en, ru) updated. The request-envelope contract
+  `docs/contracts/artifact-writer.schema.yaml` stays for now; nothing reads it at run time.
+
+### Changed
+
+- **`artifact write` exits 3 for a stage refusal** (`unauthorized_stage`, `stage_halted`), as the
+  retired `artifact create` did: 3 is a policy refusal, 2 a malformed request. It exited 2.
+- **`deltafuse next` names `advance --gate <gate>`, never `check-gate`.** Every step skill closes a
+  gate with `advance` alone (one decision, one call), and the reasons and envelopes `next` wrote
+  said `check-gate`. For a Declare or Implement task the envelope now says to advance once `next`
+  names no other task, as the skills say.
+
+### Fixed
+
+- **The analyze gap pass closes the `analyzed` gate.** After `decide --gap spec-gap`, the skill's
+  step 3 closed the gate only for the `coverage` pass, so a literal Worker could finish the gap pass
+  and never advance. It now reads "`coverage` or `gap`".
+- **The record-time `changed_paths` check names a forbidden path and docs/ops product code.**
+  `deltafuse evidence` kept only gate messages holding "<record>.yaml:", and those two messages have
+  no colon after the record's name: the record read authentic and the gate refused it a step later.
+- **Green's isolated run reads `pytest.cmd` as pytest.** The oracle stripped only `.exe` from the
+  runner's name and raised `ValueError` on a Windows batch shim.
+- **The already-green advice finds `TASK-NNN-<slug>.md`.** It read `tasks/<id>.md` only, lost
+  `requirement_delta`, and sent a task that could close as superseded to the human.
+
 ## [3.3.8] - 2026-10-21
 
 ### Fixed

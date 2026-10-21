@@ -168,33 +168,15 @@ Kinds: `task`, `slice`, `routing`, `spec-delta`, `change`. The leash refuses a
 `routing.yaml`, `spec-delta.md`, slice or task file whose bytes neither the Writer
 nor the Core (`deltafuse state`, `decide`) produced.
 
-### Practical Usage & Examples
-
-```text
-# Detect capabilities and schemas supported by the installed writer
-deltafuse artifact describe --kind task --operation create
-
-# Create a new Change artifact via JSON payload
-deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
-
-# Update an existing artifact atomically using JSON Pointer patch with target SHA assertion
-deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
-
-# Perform a read-only schema and reference validation pass without modifying files
-deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
-
-# Update parent Change child index after adding or updating a task/slice
-deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
-```
-
-### Capability Detection & Compatibility
-Clients detect Artifact Writer availability using `deltafuse artifact describe --kind <kind> --operation <op>`.
+`artifact write` is the Writer's only command: the earlier `describe`, `create`, `update`,
+`validate` and `update-index` subcommands were removed in 3.3.9 - no skill used them, and
+`write` creates or updates and keeps the `change.yaml` index itself.
 
 ### Legacy Artifacts
 Existing artifacts are never automatically rewritten or bulk-migrated; the Writer reads manually authored ones. New writes of `routing.yaml`, `spec-delta.md`, slices and tasks go through the Writer: the leash judges only what changed since its base, so artifacts already committed are not affected.
 
 ### Canonicalization Opt-in
-To reformat or normalize metadata on existing noncanonical artifacts, an explicit `--canonicalize-metadata` opt-in is required alongside expected target hash verification. Noncanonical metadata will not be reformatted without explicit consent.
+Noncanonical metadata of an existing artifact is not reformatted without explicit consent: the service API (`ArtifactService.update`) takes a `canonicalize_metadata` opt-in together with the expected target hash. The CLI exposes no such option.
 
 ### Transaction Recovery Procedure
 In the event of process interruption during creation or update operations, the Core checks `.deltafuse/journal/` under `ProductMutationLock`. Pending transactions marked `prepared` are restored to their previous target state, while transactions marked `published` complete receipt finalization and output publication cleanly.

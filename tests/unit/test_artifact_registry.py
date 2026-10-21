@@ -7,7 +7,6 @@ import pytest
 from deltafuse.core.artifact_registry import (
     ArtifactRegistry,
     ArtifactRegistryError,
-    ValidationResult,
 )
 
 
@@ -17,32 +16,6 @@ def test_registry_initialization_and_descriptors():
     assert desc["kind"] == "task"
     assert "create" in desc["allowed_operations"]
     assert "status" in desc["core_owned_fields"]
-
-
-def test_core_owned_field_in_create_payload_rejected():
-    registry = ArtifactRegistry()
-    res = registry.validate_operation_input(
-        kind="task",
-        operation="create",
-        semantic_payload={"status": "verified", "title": "Sneaky Task"},
-    )
-    assert not res.valid
-    assert any(d.code == "core_owned_field" for d in res.diagnostics)
-
-
-def test_update_patch_core_owned_field_rejected():
-    registry = ArtifactRegistry()
-    res = registry.validate_operation_input(
-        kind="task",
-        operation="update",
-        patch={
-            "set": [{"path": "/status", "value": "verified"}],
-            "remove": ["/id"],
-        },
-    )
-    assert not res.valid
-    assert len(res.diagnostics) == 2
-    assert all(d.code == "core_owned_field" for d in res.diagnostics)
 
 
 def test_unsupported_kind_rejected():
