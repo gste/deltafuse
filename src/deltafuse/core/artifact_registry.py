@@ -64,6 +64,7 @@ class ArtifactRegistry:
     def __init__(self, product_root: Path | str | None = None):
         self.product_root = Path(product_root).resolve() if product_root else None
         self._schema_registry = SchemaRegistry()
+        self._storage_validators: dict[str, Any] = {}
         self._descriptors_cache: dict[str, dict[str, Any]] = {}
         self._manifest: dict[str, Any] | None = None
         self._operations_dir: Path | None = None
@@ -258,8 +259,10 @@ class ArtifactRegistry:
                 scopes=[{"scope": "schema", "status": "invalid", "details": [str(ex)]}],
             )
 
-        validator_cls = jsonschema.validators.validator_for(schema)
-        validator = validator_cls(schema)
+        validator = self._storage_validators.get(kind)
+        if validator is None:
+            validator = jsonschema.validators.validator_for(schema)(schema)
+            self._storage_validators[kind] = validator
         raw_errors = list(validator.iter_errors(payload))
 
         if not raw_errors:
