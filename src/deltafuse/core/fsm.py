@@ -162,6 +162,14 @@ def validate_change_package(
     change_dir: Path | str,
     registry: SchemaRegistry | None = None,
 ) -> list[str]:
+    return _validate_package(change_dir, registry)[0]
+
+
+def _validate_package(
+    change_dir: Path | str, registry: SchemaRegistry | None
+) -> tuple[list[str], tuple[str, list[str]] | None]:
+    """The package's errors, and its route as load_change_route read it (None when the
+    package was refused before the route was read)."""
     if registry is None:
         registry = default_registry
 
@@ -169,12 +177,12 @@ def validate_change_package(
     errors: list[str] = []
 
     if not change_path.is_dir():
-        return [f"Change package directory not found: {change_path}"]
+        return [f"Change package directory not found: {change_path}"], None
 
     # DF3-008: fail-closed contract version and legacy-vocabulary checks.
     version_errors = _contract_version_errors(change_path)
     if version_errors:
-        return version_errors
+        return version_errors, None
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
@@ -243,7 +251,7 @@ def validate_change_package(
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
-    route, route_errs = load_change_route(change_path)
+    route, route_errs = loaded_route = load_change_route(change_path)
     errors.extend(route_errs)
 
     # 1b. Validate request.md presence (P7.5)
@@ -545,7 +553,7 @@ def validate_change_package(
             except Exception as ex:
                 errors.append(f"{rel_ev} parsing error: {ex}")
 
-    return errors
+    return errors, loaded_route
 
 
 def _load_mapping(path: Path) -> dict[str, Any] | None:
@@ -1446,7 +1454,7 @@ def _check_gate(
     a capability catalog still in ``draft`` - and is only for checking whether a
     spec delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
-    errors = validate_change_package(change_path, registry=registry)
+    errors, loaded_route = _validate_package(change_path, registry)
 
     repo_root = find_repo_root(change_path)
 
@@ -1475,6 +1483,12 @@ def _check_gate(
         change_status = assume_status
 
     gate_lower = gate.lower()
+    if loaded_route is None:
+        # The package was refused before its route was read; the gates that use it read it.
+        loaded_route = load_change_route(change_path)
+        if gate_lower in {"declaring", "implemented", "converged"}:
+            errors.extend(loaded_route[1])
+    route = loaded_route[0]
 
     if gate_lower == "intake":
         if not req_file.is_file():
@@ -1551,8 +1565,6 @@ def _check_gate(
         errors.extend(f"Gate decomposed: {e}" for e in unreachable_green_errors(change_path))
 
     elif gate_lower == "declaring":
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
@@ -1571,8 +1583,6 @@ def _check_gate(
         )
 
     elif gate_lower == "implemented":
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         green_dir = change_path / "evidence" / "green"
         reg_dir = change_path / "evidence" / "regression"
         if not green_dir.is_dir() or not list(green_dir.glob("*.yaml")):
@@ -1658,7 +1668,7 @@ def _check_gate(
             errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
-        elif load_change_route(change_path)[0] == "code":
+        elif route == "code":
             errors.extend(verification_coverage_errors(change_path))
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))
 
@@ -1681,8 +1691,6 @@ def _check_gate(
         # docs/ops routes keep their own green oracle and are not required to
         # carry product-source regression evidence.
         cov_file = change_path / "coverage.yaml"
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         derived = _derived_coverage(change_path)
         if derived is not None or cov_file.is_file():
             try:
