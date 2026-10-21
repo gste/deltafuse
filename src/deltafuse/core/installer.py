@@ -127,8 +127,7 @@ def _bridge_agents(path: Path) -> None:
 
 
 def _select_agents_mode(target_root: Path, requested: str | None) -> tuple[str, Path | None]:
-    if requested is not None and requested not in {"prompt", "bridge", "preserve", "replace"}:
-        raise InstallationError("Invalid --agents-md value; expected prompt, bridge, preserve, or replace.")
+    # `install` refuses an unknown `requested` before it touches the disk.
     effective = _effective_agents_path(target_root)
     mode = requested
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
@@ -292,13 +291,8 @@ def install(
         ".cursor/skills/",
         ".gemini/skills/",
     ]
-    gitignore_content = ""
-    if gitignore_path.is_file():
-        gitignore_content = gitignore_path.read_text(encoding="utf-8")
-    new_entries = []
-    for entry in gitignore_entries:
-        if entry not in gitignore_content:
-            new_entries.append(entry)
+    gitignore_content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.is_file() else ""
+    new_entries = [entry for entry in gitignore_entries if entry not in gitignore_content]
     if new_entries:
         gitignore_path.write_text(
             gitignore_content.rstrip() + "\n" + "\n".join(new_entries) + "\n",
@@ -322,11 +316,13 @@ def install(
             src_rel = src_rel.replace('process/templates/', 'templates/', 1)
         _copy_template_file(framework_root, target_root, src_rel, dst_rel, version)
 
+    # Read once: nothing below writes config.yaml before the version/source update.
+    config_text = config_path.read_text(encoding="utf-8") if config_path.is_file() else None
     adapter_roots: list[str] = []
     config_dict: dict = {}
-    if config_path.is_file():
+    if config_text is not None:
         try:
-            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            loaded = yaml.safe_load(config_text) or {}
             if isinstance(loaded, dict):
                 config_dict = loaded
             adapters_section = config_dict.get("adapters", {})
@@ -354,12 +350,8 @@ def install(
             "(use a git submodule or vendor path, or set adapters.mode to copy)."
         )
 
-    config_source = None
-    if config_path.is_file():
-        config_text = config_path.read_text(encoding="utf-8")
-        source_match = re.search(r"(?m)^\s{2}source:\s*(\S+)\s*$", config_text)
-        if source_match:
-            config_source = source_match.group(1)
+    source_match = re.search(r"(?m)^\s{2}source:\s*(\S+)\s*$", config_text or "")
+    config_source = source_match.group(1) if source_match else None
 
     if adapter_mode == "link" and nested_relposix:
         effective_source = nested_relposix
@@ -368,8 +360,8 @@ def install(
     else:
         effective_source = f"deltafuse://v{version}"
 
-    if config_path.is_file():
-        config_content = config_path.read_text(encoding="utf-8")
+    if config_text is not None:
+        config_content = config_text
         dirty = False
         if not config_existed or force:
             if not re.search(r"(?m)^\s{2}version:\s*\S+\s*$", config_content):
@@ -391,15 +383,13 @@ def install(
         if dirty:
             config_path.write_text(config_content, encoding="utf-8")
 
-    lock_path.write_text(
-        format_lock_yaml(
-            version=version,
-            source=effective_source,
-            content_hash=content_hash,
-            auto_accept_decisions=auto_accept,
-        ),
-        encoding="utf-8",
-    )
+    def write_lock(source: str) -> None:
+        lock_yaml = format_lock_yaml(
+            version=version, source=source, content_hash=content_hash, auto_accept_decisions=auto_accept
+        )
+        lock_path.write_text(lock_yaml, encoding="utf-8")
+
+    write_lock(effective_source)
 
     if not adapter_roots:
         adapter_roots = [".agents/skills", ".cursor/skills", ".gemini/skills"]
@@ -433,15 +423,8 @@ def install(
                 _replace_config_source(config_path.read_text(encoding="utf-8"), effective_source),
                 encoding="utf-8",
             )
-        lock_path.write_text(
-            format_lock_yaml(
-                version=version,
-                source=effective_source,
-                content_hash=content_hash,
-                auto_accept_decisions=auto_accept,
-            ),
-            encoding="utf-8",
-        )
+        # The lock written above named the link source; the fallback copies, so re-pin it.
+        write_lock(effective_source)
 
     sync_leash_hook(target_root, load_leash_mode(target_root, missing="off"))
 
