@@ -198,11 +198,12 @@ def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) 
     from deltafuse.core.fsm import _validate_evidence_changed_paths_contract
 
     contract, gate = _CONTRACT_GATES[phase]
-    mine = f"{dest.name}:"
     out: list[str] = []
-    for msg in _validate_evidence_changed_paths_contract(change_path, phase, contract, gate=gate, route=route):
-        if mine not in msg:
-            continue
+    # Selected by file, not by the message text: the forbidden_paths and docs/ops messages name
+    # the record without a colon after it, and a text filter dropped both at record time.
+    for msg in _validate_evidence_changed_paths_contract(
+        change_path, phase, contract, gate=gate, route=route, only_file=dest.name
+    ):
         if "'docs/spec/" in msg:
             msg += (
                 " - the specification changed after the `specified` gate accepted it, and "

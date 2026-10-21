@@ -78,3 +78,30 @@ def test_a_spec_changed_after_acceptance_is_named_at_once(tmp_path: Path, repo_r
     named = [e for e in outcome.errors if SPEC in e]
     assert named and "outside the phase contract" in named[0]
     assert "after the `specified` gate" in named[0]
+
+
+def test_a_forbidden_path_in_red_is_named_when_recorded_not_a_step_later(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: the record-time check kept only gate messages holding
+    "<record>.yaml:", and the forbidden_paths message has no colon after the name - so the
+    record read authentic and only the `declaring` gate refused it."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-211", title="Forbidden")
+        .step_intake().step_analyze().step_specify().step_decompose()
+    )
+    task = builder.change_dir / "tasks" / "TASK-001.md"
+    text = task.read_text(encoding="utf-8")
+    task.write_text(
+        text.replace("forbidden_paths: [src/secret.py]", "forbidden_paths: [src/secret.py, tests/fixtures_shared.py]"),
+        encoding="utf-8",
+    )
+    (tmp_path / "tests").mkdir(exist_ok=True)
+    (tmp_path / "tests" / "fixtures_shared.py").write_text("SHARED = 1\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_task-001.py").write_text("def test_x():\n    assert 1 == 2\n", encoding="utf-8")
+    outcome = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=[sys.executable, "-m", "pytest", "tests/test_task-001.py"],
+        changed_paths=["tests/test_task-001.py", "tests/fixtures_shared.py"],
+    )
+    assert not outcome.authentic
+    assert any("forbidden_paths" in e for e in outcome.errors), outcome.errors

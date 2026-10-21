@@ -1094,8 +1094,12 @@ def _validate_evidence_changed_paths_contract(
     *,
     gate: str,
     route: str = "code",
+    only_file: str | None = None,
 ) -> list[str]:
     """RM-002: evidence changed_paths must stay inside route write globs.
+
+    `only_file` limits the check to one record (`deltafuse evidence` asks about the one it
+    just wrote).
 
     Declare additionally honours the task's own `allowed_paths`: on a compiled
     language the test cannot reference a symbol that does not exist yet, so the
@@ -1120,6 +1124,8 @@ def _validate_evidence_changed_paths_contract(
         if isinstance(p, str)
     ]
     for ev_file in ev_dir.glob("*.yaml"):
+        if only_file is not None and ev_file.name != only_file:
+            continue
         try:
             ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
         except Exception:
