@@ -118,31 +118,21 @@ LEGACY_TOKENS = ("target-confirmed", "targeting")  # v2 vocabulary, never auto-c
 def _contract_version_errors(change_path: Path) -> list[str]:
     """DF3-008: unknown or partial versions stop with exact diagnostics."""
     errors: list[str] = []
-    for rel in ("change.yaml",):
-        path = change_path / rel
-        if not path.is_file():
-            continue
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        version = data.get("schema_version")
-        if version is not None and version != CONTRACT_VERSION:
-            errors.append(
-                f"change.yaml: schema_version {version!r} is not supported by this "
-                f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
-                "automatic conversion is performed"
-            )
+    try:
+        data = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - a missing or broken change.yaml is reported elsewhere
+        data = None
+    version = data.get("schema_version") if isinstance(data, dict) else None
+    if version is not None and version != CONTRACT_VERSION:
+        errors.append(
+            f"change.yaml: schema_version {version!r} is not supported by this "
+            f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
+            "automatic conversion is performed"
+        )
     legacy_files = ["change.yaml"] + [
         str(p.relative_to(change_path)).replace("\\", "/")
-        for p in sorted((change_path / "tasks").glob("*.md"))
-        if (change_path / "tasks").is_dir()
-    ] + [
-        str(p.relative_to(change_path)).replace("\\", "/")
-        for p in sorted((change_path / "slices").glob("*.md"))
-        if (change_path / "slices").is_dir()
+        for folder in ("tasks", "slices")
+        for p in sorted((change_path / folder).glob("*.md"))
     ]
     for rel in legacy_files:
         path = change_path / rel
@@ -990,36 +980,33 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
         green_file = evidence / "green" / f"{tid}.yaml"
         reg_file = evidence / "regression" / f"{tid}.yaml"
         red = _load_record(red_file)
-        if red:
-            failed = len(_record_tests(red, "failed"))
-            row["red"] = f"{red.get('result')} ({red.get('failure_category') or '-'}), {failed} failing test(s)"
-        else:
-            row["red"] = "none"
+        row["red"] = (
+            f"{red.get('result')} ({red.get('failure_category') or '-'}), "
+            f"{len(_record_tests(red, 'failed'))} failing test(s)"
+            if red else "none"
+        )
         if row["status"] in _TASKS_CLOSED:
             row["green"] = row["regression"] = f"not owed ({row['status']})"
         else:
             green = _load_record(green_file)
+            row["green"] = str(green.get("result")) if green else "none"
             if green:
-                row["green"] = str(green.get("result"))
-                problems += _ran_no_test(green, f"green of {tid}")
+                label = f"green of {tid}"
+                problems += _ran_no_test(green, label)
                 if red_file.is_file():
-                    label = f"green of {tid}"
                     problems += green_coverage_errors(red_file, green_file, label)
                     problems += frozen_oracle_errors(red_file, repo_root, label)
                     problems += isolation_errors(red_file, green_file, label)
                 if green.get("base_revision") and green.get("base_revision") != current:
-                    problems.append(f"green of {tid} predates later changes to docs/spec/** or src/**")
-            else:
-                row["green"] = "none"
+                    problems.append(f"{label} predates later changes to docs/spec/** or src/**")
             reg = _load_record(reg_file)
+            row["regression"] = "none"
             if reg:
                 fresh = reg.get("base_revision") == current
                 row["regression"] = f"{reg.get('result')}, {'current tree' if fresh else 'STALE'}"
                 problems += _ran_no_test(reg, f"regression of {tid}")
                 if not fresh:
                     problems.append(f"regression of {tid} predates later changes to docs/spec/** or src/**")
-            else:
-                row["regression"] = "none"
         row["problems"] = problems
         summary[tid] = row
     return summary
