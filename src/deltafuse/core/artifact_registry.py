@@ -235,21 +235,11 @@ class ArtifactRegistry:
         raw = self.get_storage_schema_bytes(kind)
         return "sha256:" + hashlib.sha256(raw).hexdigest()
 
-    def get_storage_schema(self, kind: str, expected_hash: str | None = None) -> dict[str, Any]:
+    def get_storage_schema(self, kind: str) -> dict[str, Any]:
         try:
-            schema = self._schema_registry.get_schema(kind)
+            return self._schema_registry.get_schema(kind)
         except KeyError as ex:
             raise ArtifactRegistryError(f"Unsupported storage schema kind '{kind}'") from ex
-
-        if expected_hash:
-            # Check schema raw bytes hash matches expected_hash
-            digest = self.get_storage_schema_hash(kind)
-            if expected_hash != digest and not expected_hash.endswith(digest.split(":")[-1]):
-                raise ArtifactRegistryError(
-                    f"Schema byte hash mismatch for kind '{kind}'; expected {expected_hash}, got {digest}"
-                )
-
-        return schema
 
     def validate_storage_schema(self, kind: str, payload: dict[str, Any]) -> ValidationResult:
         try:

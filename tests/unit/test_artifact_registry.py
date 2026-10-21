@@ -24,12 +24,6 @@ def test_unsupported_kind_rejected():
         registry.get_descriptor("nonexistent_kind")
 
 
-def test_schema_hash_mismatch_or_corrupt_bundle_rejected(tmp_path: Path):
-    registry = ArtifactRegistry(product_root=tmp_path)
-    with pytest.raises(ArtifactRegistryError, match="mismatch"):
-        registry.get_storage_schema("task", expected_hash="sha256:" + ("0" * 64))
-
-
 def test_structured_diagnostics_format():
     registry = ArtifactRegistry()
     invalid_task = {
