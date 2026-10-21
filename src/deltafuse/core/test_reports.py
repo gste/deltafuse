@@ -244,6 +244,12 @@ def no_test_ran(command: object, tests: object, log: str = "") -> str | None:
     )
 
 
+def no_test_error(label: str, command: object, tests: object, log: str = "") -> list[str]:
+    """`<label> is not evidence: <why>` when the run ran no test (`no_test_ran`); else empty."""
+    why = no_test_ran(command, tests, log)
+    return [f"{label} is not evidence: {why}"] if why else []
+
+
 def red_is_authentic(report: TestReport) -> tuple[bool, str | None]:
     """Red: the named tests ran and none of them passed. Returns (ok, why not)."""
     if report.empty:

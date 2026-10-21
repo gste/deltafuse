@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import re
 import yaml
 from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
@@ -37,7 +37,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.schemas import SchemaRegistry, default_registry
-from deltafuse.core.test_reports import no_test_ran
+from deltafuse.core.test_reports import no_test_error, no_test_ran
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -118,31 +118,21 @@ LEGACY_TOKENS = ("target-confirmed", "targeting")  # v2 vocabulary, never auto-c
 def _contract_version_errors(change_path: Path) -> list[str]:
     """DF3-008: unknown or partial versions stop with exact diagnostics."""
     errors: list[str] = []
-    for rel in ("change.yaml",):
-        path = change_path / rel
-        if not path.is_file():
-            continue
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        version = data.get("schema_version")
-        if version is not None and version != CONTRACT_VERSION:
-            errors.append(
-                f"change.yaml: schema_version {version!r} is not supported by this "
-                f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
-                "automatic conversion is performed"
-            )
+    try:
+        data = yaml.safe_load((change_path / "change.yaml").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - a missing or broken change.yaml is reported elsewhere
+        data = None
+    version = data.get("schema_version") if isinstance(data, dict) else None
+    if version is not None and version != CONTRACT_VERSION:
+        errors.append(
+            f"change.yaml: schema_version {version!r} is not supported by this "
+            f"Core (v{CONTRACT_VERSION}); migrate the artifact manually — no "
+            "automatic conversion is performed"
+        )
     legacy_files = ["change.yaml"] + [
         str(p.relative_to(change_path)).replace("\\", "/")
-        for p in sorted((change_path / "tasks").glob("*.md"))
-        if (change_path / "tasks").is_dir()
-    ] + [
-        str(p.relative_to(change_path)).replace("\\", "/")
-        for p in sorted((change_path / "slices").glob("*.md"))
-        if (change_path / "slices").is_dir()
+        for folder in ("tasks", "slices")
+        for p in sorted((change_path / folder).glob("*.md"))
     ]
     for rel in legacy_files:
         path = change_path / rel
@@ -162,6 +152,14 @@ def validate_change_package(
     change_dir: Path | str,
     registry: SchemaRegistry | None = None,
 ) -> list[str]:
+    return _validate_package(change_dir, registry)[0]
+
+
+def _validate_package(
+    change_dir: Path | str, registry: SchemaRegistry | None
+) -> tuple[list[str], tuple[str, list[str]] | None]:
+    """The package's errors, and its route as load_change_route read it (None when the
+    package was refused before the route was read)."""
     if registry is None:
         registry = default_registry
 
@@ -169,16 +167,29 @@ def validate_change_package(
     errors: list[str] = []
 
     if not change_path.is_dir():
-        return [f"Change package directory not found: {change_path}"]
+        return [f"Change package directory not found: {change_path}"], None
 
     # DF3-008: fail-closed contract version and legacy-vocabulary checks.
     version_errors = _contract_version_errors(change_path)
     if version_errors:
-        return version_errors
+        return version_errors, None
 
     repo_root = find_repo_root(change_path)
     spec_dir_exists = (repo_root / "docs" / "spec").is_dir()
     draft_specs = draft_spec_files(repo_root)
+
+    def spec_ref_errors(label: str, srefs: Any, *, delta: bool = False) -> Iterator[str]:
+        """The spec_refs (or a spec delta's added/modified) that do not resolve."""
+        if not spec_dir_exists:
+            yield f"{label}: Specification root directory 'docs/spec' not found"
+            return
+        for sref in srefs:
+            if delta and not isinstance(sref, str):
+                yield f"{label}: added/modified entries must be strings"
+            elif delta and not spec_ref_is_under_docs_spec(sref, repo_root):
+                yield f"{label}: '{sref}' must resolve under docs/spec/"
+            elif s_err := validate_spec_ref(sref, repo_root, drafts=draft_specs):
+                yield f"{label}: {s_err}"
 
     change_id: str | None = None
     change_status: str | None = None
@@ -230,7 +241,7 @@ def validate_change_package(
         except Exception as ex:
             errors.append(f"change.yaml parsing error: {ex}{yaml_error_hint(ex)}")
 
-    route, route_errs = load_change_route(change_path)
+    route, route_errs = loaded_route = load_change_route(change_path)
     errors.extend(route_errs)
 
     # 1b. Validate request.md presence (P7.5)
@@ -284,13 +295,7 @@ def validate_change_package(
                 if isinstance(meta, dict):
                     srefs = meta.get("spec_refs", [])
                     if srefs:
-                        if not spec_dir_exists:
-                            errors.append(f"{slice_file.name}: Specification root directory 'docs/spec' not found")
-                        else:
-                            for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                                if s_err:
-                                    errors.append(f"{slice_file.name}: {s_err}")
+                        errors.extend(spec_ref_errors(slice_file.name, srefs))
 
                     context_budget = meta.get("context_budget")
                     if context_budget and isinstance(context_budget, dict):
@@ -327,13 +332,7 @@ def validate_change_package(
                     # Validate spec_refs anchors (P4 / T7, N10)
                     srefs = meta.get("spec_refs", [])
                     if srefs:
-                        if not spec_dir_exists:
-                            errors.append(f"{task_file.name}: Specification root directory 'docs/spec' not found")
-                        else:
-                            for sref in srefs:
-                                s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                                if s_err:
-                                    errors.append(f"{task_file.name}: {s_err}")
+                        errors.extend(spec_ref_errors(task_file.name, srefs))
 
                     # Validate design_ref (P3)
                     design_ref = meta.get("design_ref")
@@ -419,21 +418,7 @@ def validate_change_package(
             if isinstance(meta, dict):
                 added_mod = list(meta.get("added") or []) + list(meta.get("modified") or [])
                 if added_mod:
-                    if not spec_dir_exists:
-                        errors.append("spec-delta.md: Specification root directory 'docs/spec' not found")
-                    else:
-                        for sref in added_mod:
-                            if not isinstance(sref, str):
-                                errors.append("spec-delta.md: added/modified entries must be strings")
-                                continue
-                            if not spec_ref_is_under_docs_spec(sref, repo_root):
-                                errors.append(
-                                    f"spec-delta.md: '{sref}' must resolve under docs/spec/"
-                                )
-                                continue
-                            s_err = validate_spec_ref(sref, repo_root, drafts=draft_specs)
-                            if s_err:
-                                errors.append(f"spec-delta.md: {s_err}")
+                    errors.extend(spec_ref_errors("spec-delta.md", added_mod, delta=True))
         except Exception as ex:
             errors.append(f"spec-delta.md frontmatter error: {ex}")
             errors.append(
@@ -444,20 +429,22 @@ def validate_change_package(
     # 7. Validate evidence/ (Semantic Validation - P0 / T1, T2, T4)
     evidence_dir = change_path / "evidence"
     if evidence_dir.is_dir():
+        from deltafuse.core.evidence import evidence_stamp_error
+
+        current: str | None = None  # the tree's revision, computed once
         for ev_file in evidence_dir.rglob("*.yaml"):
+            rel_ev = ev_file.relative_to(change_path)
             try:
                 ev_data = yaml.safe_load(ev_file.read_text(encoding="utf-8"))
                 errs = registry.validate("evidence", ev_data)
-                errors.extend(f"{ev_file.relative_to(change_path)}: {e}" for e in errs)
+                errors.extend(f"{rel_ev}: {e}" for e in errs)
 
                 if not isinstance(ev_data, dict):
                     continue
 
-                from deltafuse.core.evidence import evidence_stamp_error
-
                 stamp_err = evidence_stamp_error(ev_data, repo_root)
                 if stamp_err:
-                    errors.append(f"{ev_file.relative_to(change_path)}: {stamp_err}")
+                    errors.append(f"{rel_ev}: {stamp_err}")
 
                 rel_path = ev_file.relative_to(evidence_dir)
                 parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
@@ -471,88 +458,72 @@ def validate_change_package(
                 # Cross-check Change ID
                 if ev_change and change_id and ev_change != change_id:
                     errors.append(
-                        f"{ev_file.relative_to(change_path)}: change id mismatch (evidence has '{ev_change}', expected '{change_id}')"
+                        f"{rel_ev}: change id mismatch (evidence has '{ev_change}', expected '{change_id}')"
                     )
 
                 # Cross-check Task ID (T4)
                 if ev_task:
                     if ev_task not in existing_task_ids:
-                        errors.append(
-                            f"{ev_file.relative_to(change_path)}: references nonexistent task '{ev_task}'"
-                        )
+                        errors.append(f"{rel_ev}: references nonexistent task '{ev_task}'")
                 elif phase in {"red", "green", "regression"}:
-                    errors.append(
-                        f"{ev_file.relative_to(change_path)}: missing required 'task' field for phase '{phase}'"
-                    )
+                    errors.append(f"{rel_ev}: missing required 'task' field for phase '{phase}'")
 
                 # Phase directory alignment (T1)
                 if parent_phase_dir in {"red", "green", "regression", "verification"}:
                     if phase != parent_phase_dir:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: phase mismatch (file in '{parent_phase_dir}/' has phase '{phase}')"
+                            f"{rel_ev}: phase mismatch (file in '{parent_phase_dir}/' has phase '{phase}')"
                         )
 
                 # Phase-specific result & exit_code rules (T2)
                 if phase == "red":
                     if result not in {"expected-failure", "not-reproduced", "already-green"}:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have result "
+                            f"{rel_ev}: red evidence must have result "
                             f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
                         )
                     if result == "already-green":
                         if exit_code != 0:
-                            errors.append(
-                                f"{ev_file.relative_to(change_path)}: already-green evidence "
-                                f"must have exit_code 0 (got {exit_code})"
-                            )
+                            errors.append(f"{rel_ev}: already-green evidence must have exit_code 0 (got {exit_code})")
                     elif exit_code == 0 and result != "not-reproduced":
-                        errors.append(
-                            f"{ev_file.relative_to(change_path)}: red evidence must have "
-                            f"non-zero exit_code (got 0)"
-                        )
+                        errors.append(f"{rel_ev}: red evidence must have non-zero exit_code (got 0)")
                     if result == "expected-failure" and route == "code":
                         category = ev_data.get("failure_category")
                         if category != "behavioral-mismatch":
                             errors.append(
-                                f"{ev_file.relative_to(change_path)}: red expected-failure "
+                                f"{rel_ev}: red expected-failure "
                                 f"must have failure_category 'behavioral-mismatch' "
                                 f"(got '{category}')" + _red_category_hint(ev_data)
                             )
                         changed = ev_data.get("changed_paths") or []
                         if isinstance(changed, list):
                             errors.extend(
-                                f"{ev_file.relative_to(change_path)}: {pe}"
-                                for pe in scan_changed_paths_for_private_test_access(
-                                    repo_root, changed
-                                )
+                                f"{rel_ev}: {pe}"
+                                for pe in scan_changed_paths_for_private_test_access(repo_root, changed)
                             )
                 elif phase in {"green", "regression"}:
                     if result != "passed":
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have result 'passed' (got '{result}')"
+                            f"{rel_ev}: {phase} evidence must have result 'passed' (got '{result}')"
                         )
                     if exit_code != 0:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: {phase} evidence must have exit_code 0 (got {exit_code})"
+                            f"{rel_ev}: {phase} evidence must have exit_code 0 (got {exit_code})"
                         )
                 elif phase == "verification":
                     if exit_code != 0:
                         errors.append(
-                            f"{ev_file.relative_to(change_path)}: verification evidence must have exit_code 0 (got {exit_code})"
+                            f"{rel_ev}: verification evidence must have exit_code 0 (got {exit_code})"
                         )
-                if phase in {"green", "regression", "verification"} and route == "code" and exit_code == 0:
+                if phase in {"green", "regression", "verification"} and route == "code":
                     # The record is written even when `deltafuse evidence` refused it,
                     # so the gate asks again whether the run ran any test.
-                    nothing_ran = no_test_ran(
-                        ev_data.get("command"), ev_data.get("tests"), str(ev_data.get("summary") or "")
-                    )
-                    if nothing_ran:
-                        errors.append(f"{ev_file.relative_to(change_path)}: {phase} is not evidence: {nothing_ran}")
+                    errors.extend(_ran_no_test(ev_data, f"{rel_ev}: {phase}"))
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
-                    current = compute_product_baseline_revision(repo_root)
-                    rel_ev = ev_file.relative_to(change_path)
+                    if current is None:
+                        current = compute_product_baseline_revision(repo_root)
                     if not recorded:
                         errors.append(
                             f"{rel_ev}: missing base_revision; Green/regression/verification "
@@ -570,24 +541,49 @@ def validate_change_package(
                             f"change moved the tree - re-run it on the current tree: {rerun}"
                         )
             except Exception as ex:
-                errors.append(f"{ev_file.relative_to(change_path)} parsing error: {ex}")
+                errors.append(f"{rel_ev} parsing error: {ex}")
 
-    return errors
+    return errors, loaded_route
+
+
+def _load_mapping(path: Path) -> dict[str, Any] | None:
+    """A YAML record as a mapping; None when it is missing, unreadable or not a mapping."""
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _load_record(path: Path) -> dict[str, Any]:
+    return _load_mapping(path) or {}
+
+
+def _record_test_list(data: dict[str, Any], outcome: str) -> list[str]:
+    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
+    return [str(t) for t in tests.get(outcome) or []]
+
+
+def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
+    return set(_record_test_list(data, outcome))
+
+
+def _frontmatter(path: Path) -> dict[str, Any] | None:
+    """A Markdown artifact's frontmatter; None when it cannot be read or is not a mapping."""
+    try:
+        meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unreadable artifact is the validator's finding
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _frontmatters(folder: Path) -> list[tuple[Path, dict[str, Any]]]:
+    """(file, frontmatter) of every readable `*.md` in *folder*, in glob order."""
+    return [(f, meta) for f in folder.glob("*.md") if (meta := _frontmatter(f)) is not None]
 
 
 def _iter_slice_frontmatter(change_path: Path) -> list[tuple[str, dict[str, Any]]]:
-    slices_dir = change_path / "slices"
-    result: list[tuple[str, dict[str, Any]]] = []
-    if not slices_dir.is_dir():
-        return result
-    for slice_file in slices_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict):
-            result.append((slice_file.name, meta))
-    return result
+    return [(f.name, meta) for f, meta in _frontmatters(change_path / "slices")]
 
 
 def _validate_specified_live_spec(
@@ -673,21 +669,19 @@ def _validate_specified_live_spec(
 
 
 def _task_frontmatter_by_id(change_path: Path) -> dict[str, dict[str, Any]]:
-    tasks: dict[str, dict[str, Any]] = {}
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return tasks
-    for task_file in tasks_dir.glob("*.md"):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict) and isinstance(meta.get("id"), str):
-            tasks[meta["id"]] = meta
-    return tasks
+    return {
+        meta["id"]: meta
+        for _, meta in _frontmatters(change_path / "tasks")
+        if isinstance(meta.get("id"), str)
+    }
 
 
 _TASKS_CLOSED = frozenset({"cancelled", "superseded"})
+_TASKS_IMPLEMENTED = frozenset({"implemented", "verified"})
+# Statuses whose Red is taken and its oracle frozen. A `declared` task may still retake Red
+# while the Change is in Declare: ref-m02-340 (2026-10-05) needed to, once this guard also
+# covered that phase - nothing has consumed the oracle yet.
+RED_TAKEN_STATUSES = frozenset({"declared", "implementing"}) | _TASKS_IMPLEMENTED
 
 
 def _tasks_behind_gate(
@@ -802,12 +796,7 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
     from deltafuse.core.hasher import compute_red_oracle_digest, oracle_paths
     from deltafuse.core.oracle import red_oracle_changes
 
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict):
-        return []
+    red = _load_record(red_file)
     paths = [p for p in (red.get("changed_paths") or []) if isinstance(p, str)]
     per_test = red.get("red_oracle_tests")
     if isinstance(per_test, dict):
@@ -845,19 +834,12 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     """
     from deltafuse.core.oracle import frozen_test_ids
 
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict) or not isinstance(green, dict):
-        return []
+    red = _load_record(red_file)
+    green = _load_record(green_file)
     frozen = red.get("red_oracle_tests")
     if not isinstance(frozen, dict) or frozen.get("version") is None:
         return []
-    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
-    expected = frozen_test_ids(frozen, [str(t) for t in red_tests.get("failed") or []])
-    if not expected:
+    if not frozen_test_ids(frozen, _record_test_list(red, "failed")):
         return []
     isolation = green.get("oracle_isolation")
     if not isinstance(isolation, dict):
@@ -870,9 +852,7 @@ def isolation_errors(red_file: Path, green_file: Path, label: str) -> list[str]:
     not_passing = [str(t) for t in isolation.get("not_passing") or []]
     if not not_passing:
         return []
-    green_tests = green.get("tests") if isinstance(green.get("tests"), dict) else {}
-    passed_in_green = {str(t) for t in green_tests.get("passed") or []}
-    if not passed_in_green & set(not_passing):
+    if not _record_tests(green, "passed") & set(not_passing):
         # Green's own run did not pass them either (it ran other tests), so
         # nothing "helped" them - they simply do not pass yet.
         return [
@@ -896,26 +876,21 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
     closed this gate. The isolated run covers Reds frozen per test; a JVM Red
     (frozen per file, no isolated run) had nothing else.
     """
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-        green = yaml.safe_load(green_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+    red = _load_record(red_file)
+    green = _load_mapping(green_file)
+    if green is None or red.get("result") != "expected-failure":
         return []
-    if not isinstance(red, dict) or not isinstance(green, dict) or red.get("result") != "expected-failure":
-        return []
-    red_tests = red.get("tests") if isinstance(red.get("tests"), dict) else {}
-    failed = [str(t) for t in red_tests.get("failed") or []]
+    failed = _record_test_list(red, "failed")
     if not failed:
         return []
-    green_tests = green.get("tests")
-    if no_test_ran(green.get("command"), green_tests, str(green.get("summary") or "")):
+    if no_test_ran(*_run_of(green)):
         return []  # the evidence check names it, and why: this run ran no test
-    if not isinstance(green_tests, dict):
+    if not isinstance(green.get("tests"), dict):
         return [
             f"{label} has no runner report, so it does not show the tests Red recorded as failing "
             f"now passing ({failed[:5]}); record Green with the runner Red used"
         ]
-    passed = {str(t) for t in green_tests.get("passed") or []}
+    passed = _record_tests(green, "passed")
     missing = [t for t in failed if t not in passed]
     if not missing:
         return []
@@ -923,19 +898,6 @@ def green_coverage_errors(red_file: Path, green_file: Path, label: str) -> list[
         f"{label} did not pass the tests Red recorded as failing: {missing[:5]}. Run the "
         "Red tests in Green and make the product pass them"
     ]
-
-
-def _load_record(path: Path) -> dict[str, Any]:
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _record_tests(data: dict[str, Any], outcome: str) -> set[str]:
-    tests = data.get("tests") if isinstance(data.get("tests"), dict) else {}
-    return {str(t) for t in tests.get(outcome) or []}
 
 
 def change_test_ids(change_path: Path) -> set[str]:
@@ -946,13 +908,8 @@ def change_test_ids(change_path: Path) -> set[str]:
     tests.
     """
     ids: set[str] = set()
-    tasks_dir = change_path / "tasks"
-    for task_file in sorted(tasks_dir.glob("*.md")) if tasks_dir.is_dir() else []:
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - an unreadable task is the status check's finding
-            continue
-        if not isinstance(meta, dict) or meta.get("status") == "cancelled":
+    for task_file, meta in _frontmatters(change_path / "tasks"):
+        if meta.get("status") == "cancelled":
             continue
         tid = str(meta.get("id") or task_file.stem)
         red = _load_record(change_path / "evidence" / "red" / f"{tid}.yaml")
@@ -976,7 +933,7 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     run = _load_record(change_path / "evidence" / "verification" / "run.yaml")
     if not run:
         return []  # a missing or unreadable run is reported on its own
-    if run.get("exit_code") == 0 and no_test_ran(run.get("command"), run.get("tests"), str(run.get("summary") or "")):
+    if run.get("exit_code") == 0 and no_test_ran(*_run_of(run)):
         return []  # the evidence check names it, and why: this run ran no test
     if not isinstance(run.get("tests"), dict):
         return [
@@ -995,11 +952,14 @@ def verification_coverage_errors(change_path: Path) -> list[str]:
     ]
 
 
+def _run_of(record: dict[str, Any]) -> tuple[object, object, str]:
+    """A record's run as `no_test_ran` reads it: command, runner report, summary."""
+    return record.get("command"), record.get("tests"), str(record.get("summary") or "")
+
+
 def _ran_no_test(record: dict[str, Any], label: str) -> list[str]:
-    if record.get("exit_code") != 0:
-        return []
-    why = no_test_ran(record.get("command"), record.get("tests"), str(record.get("summary") or ""))
-    return [f"{label} is not evidence: {why}"] if why else []
+    """`no_test_error` for a passing record."""
+    return no_test_error(label, *_run_of(record)) if record.get("exit_code") == 0 else []
 
 
 def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[str, Any]]:
@@ -1020,36 +980,33 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
         green_file = evidence / "green" / f"{tid}.yaml"
         reg_file = evidence / "regression" / f"{tid}.yaml"
         red = _load_record(red_file)
-        if red:
-            failed = len(_record_tests(red, "failed"))
-            row["red"] = f"{red.get('result')} ({red.get('failure_category') or '-'}), {failed} failing test(s)"
-        else:
-            row["red"] = "none"
-        if row["status"] in {"superseded", "cancelled"}:
+        row["red"] = (
+            f"{red.get('result')} ({red.get('failure_category') or '-'}), "
+            f"{len(_record_tests(red, 'failed'))} failing test(s)"
+            if red else "none"
+        )
+        if row["status"] in _TASKS_CLOSED:
             row["green"] = row["regression"] = f"not owed ({row['status']})"
         else:
             green = _load_record(green_file)
+            row["green"] = str(green.get("result")) if green else "none"
             if green:
-                row["green"] = str(green.get("result"))
-                problems += _ran_no_test(green, f"green of {tid}")
+                label = f"green of {tid}"
+                problems += _ran_no_test(green, label)
                 if red_file.is_file():
-                    label = f"green of {tid}"
                     problems += green_coverage_errors(red_file, green_file, label)
                     problems += frozen_oracle_errors(red_file, repo_root, label)
                     problems += isolation_errors(red_file, green_file, label)
                 if green.get("base_revision") and green.get("base_revision") != current:
-                    problems.append(f"green of {tid} predates later changes to docs/spec/** or src/**")
-            else:
-                row["green"] = "none"
+                    problems.append(f"{label} predates later changes to docs/spec/** or src/**")
             reg = _load_record(reg_file)
+            row["regression"] = "none"
             if reg:
                 fresh = reg.get("base_revision") == current
                 row["regression"] = f"{reg.get('result')}, {'current tree' if fresh else 'STALE'}"
                 problems += _ran_no_test(reg, f"regression of {tid}")
                 if not fresh:
                     problems.append(f"regression of {tid} predates later changes to docs/spec/** or src/**")
-            else:
-                row["regression"] = "none"
         row["problems"] = problems
         summary[tid] = row
     return summary
@@ -1064,11 +1021,7 @@ def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     modified, and nothing downstream could tell. Declare may still record the
     observation - it is a legal Declare outcome, and a stopping one.
     """
-    try:
-        red = yaml.safe_load(red_file.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return []
-    if not isinstance(red, dict) or red.get("result") != "already-green":
+    if _load_record(red_file).get("result") != "already-green":
         return []
     return [
         f"Gate implemented: green evidence '{label}' answers an already-green Red - the "
@@ -1079,17 +1032,26 @@ def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     ]
 
 
+# Evidence phase -> (the phase whose write contract its changed_paths must keep, its gate).
+CONTRACT_GATES = {
+    "red": ("declare", "declaring"),
+    "green": ("implement", "implemented"),
+    "regression": ("implement", "implemented"),
+}
+
+
 def _validate_evidence_changed_paths_contract(
     change_path: Path,
     evidence_phase: str,
-    contract_phase: str,
+    contract_phase: str | None = None,
     *,
-    gate: str,
+    gate: str | None = None,
     route: str = "code",
     only_file: str | None = None,
 ) -> list[str]:
     """RM-002: evidence changed_paths must stay inside route write globs.
 
+    `contract_phase` and `gate` default to the evidence phase's own (CONTRACT_GATES).
     `only_file` limits the check to one record (`deltafuse evidence` asks about the one it
     just wrote).
 
@@ -1106,6 +1068,8 @@ def _validate_evidence_changed_paths_contract(
     ev_dir = change_path / "evidence" / evidence_phase
     if not ev_dir.is_dir():
         return errors
+    contract_phase = contract_phase or CONTRACT_GATES[evidence_phase][0]
+    gate = gate or CONTRACT_GATES[evidence_phase][1]
     write_globs = phase_write_globs(contract_phase, route, product_root_of(change_path))
     tasks = _task_frontmatter_by_id(change_path)
     sibling_declared = [
@@ -1347,15 +1311,7 @@ def missing_analyze_artifacts(change_path: Path | str) -> list[str]:
 
 
 def _spec_delta_status(spec_delta_file: Path) -> str | None:
-    if not spec_delta_file.is_file():
-        return None
-    try:
-        meta, _ = parse_frontmatter(spec_delta_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(meta, dict):
-        return None
-    raw = meta.get("status")
+    raw = (_frontmatter(spec_delta_file) or {}).get("status")
     return raw if isinstance(raw, str) else None
 
 
@@ -1501,7 +1457,7 @@ def _check_gate(
     a capability catalog still in ``draft`` - and is only for checking whether a
     spec delta is ready to be put in front of the human at all."""
     change_path = Path(change_dir).resolve()
-    errors = validate_change_package(change_path, registry=registry)
+    errors, loaded_route = _validate_package(change_path, registry)
 
     repo_root = find_repo_root(change_path)
 
@@ -1530,6 +1486,12 @@ def _check_gate(
         change_status = assume_status
 
     gate_lower = gate.lower()
+    if loaded_route is None:
+        # The package was refused before its route was read; the gates that use it read it.
+        loaded_route = load_change_route(change_path)
+        if gate_lower in {"declaring", "implemented", "converged"}:
+            errors.extend(loaded_route[1])
+    route = loaded_route[0]
 
     if gate_lower == "intake":
         if not req_file.is_file():
@@ -1606,28 +1568,13 @@ def _check_gate(
         errors.extend(f"Gate decomposed: {e}" for e in unreachable_green_errors(change_path))
 
     elif gate_lower == "declaring":
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         red_dir = change_path / "evidence" / "red"
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
-        errors.extend(
-            _tasks_behind_gate(
-                change_path,
-                "declaring",
-                {"declared", "implementing", "implemented", "verified"},
-                ("red",),
-            )
-        )
-        errors.extend(
-            _validate_evidence_changed_paths_contract(
-                change_path, "red", "declare", gate="declaring", route=route
-            )
-        )
+        errors.extend(_tasks_behind_gate(change_path, "declaring", RED_TAKEN_STATUSES, ("red",)))
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "red", route=route))
 
     elif gate_lower == "implemented":
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         green_dir = change_path / "evidence" / "green"
         reg_dir = change_path / "evidence" / "regression"
         if not green_dir.is_dir() or not list(green_dir.glob("*.yaml")):
@@ -1638,7 +1585,7 @@ def _check_gate(
         behind = _tasks_behind_gate(
             change_path,
             "implemented",
-            {"implemented", "verified"},
+            _TASKS_IMPLEMENTED,
             ("green", "regression") if route == "code" else ("green",),
         )
         if any("every task must be implemented first" in e for e in behind):
@@ -1650,59 +1597,37 @@ def _check_gate(
             errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
         else:
             errors.extend(behind)
-        errors.extend(
-            _validate_evidence_changed_paths_contract(
-                change_path, "green", "implement", gate="implemented", route=route
-            )
-        )
-        if reg_dir.is_dir() and list(reg_dir.glob("*.yaml")):
-            errors.extend(
-                _validate_evidence_changed_paths_contract(
-                    change_path, "regression", "implement", gate="implemented", route=route
-                )
-            )
-
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "green", route=route))
+        errors.extend(_validate_evidence_changed_paths_contract(change_path, "regression", route=route))
 
         # DF3-006: Red and Green are bound to one test oracle — a Green stamp
         # without the task's own Red evidence does not close the gate.
-        if green_dir.is_dir() and list(green_dir.glob("*.yaml")):
-            # A superseded or cancelled task is not implemented, so a Green recorded for it
-            # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
-            # Green for a task superseded on an already-green Red, and this gate refused it as
-            # "answers an already-green Red" with every task done - no step could clear it.
-            closed = {
-                tid for tid, meta in _task_frontmatter_by_id(change_path).items()
-                if meta.get("status") in {"superseded", "cancelled"}
-            }
-            for green_file in sorted(green_dir.glob("*.yaml")):
-                if green_file.stem in closed:
-                    continue
-                red_file = change_path / "evidence" / "red" / green_file.name
-                if not red_file.is_file():
-                    errors.append(
-                        f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
-                    )
-                    continue
-                if route == "code":
-                    errors.extend(_already_green_red_errors(red_file, green_file.name))
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in frozen_oracle_errors(
-                            red_file, repo_root, f"green evidence '{green_file.name}'"
-                        )
-                    )
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in green_coverage_errors(
-                            red_file, green_file, f"green evidence '{green_file.name}'"
-                        )
-                    )
-                    errors.extend(
-                        f"Gate implemented: {e}"
-                        for e in isolation_errors(
-                            red_file, green_file, f"green evidence '{green_file.name}'"
-                        )
-                    )
+        # A superseded or cancelled task is not implemented, so a Green recorded for it
+        # proves nothing the gate needs. ref-m03-346 (2026-10-07): the reference recorded a
+        # Green for a task superseded on an already-green Red, and this gate refused it as
+        # "answers an already-green Red" with every task done - no step could clear it.
+        closed = {
+            tid for tid, meta in _task_frontmatter_by_id(change_path).items()
+            if meta.get("status") in _TASKS_CLOSED
+        }
+        for green_file in sorted(green_dir.glob("*.yaml")):
+            if green_file.stem in closed:
+                continue
+            red_file = change_path / "evidence" / "red" / green_file.name
+            if not red_file.is_file():
+                errors.append(
+                    f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+                )
+                continue
+            if route == "code":
+                label = f"green evidence '{green_file.name}'"
+                errors.extend(_already_green_red_errors(red_file, green_file.name))
+                errors.extend(
+                    f"Gate implemented: {e}"
+                    for e in frozen_oracle_errors(red_file, repo_root, label)
+                    + green_coverage_errors(red_file, green_file, label)
+                    + isolation_errors(red_file, green_file, label)
+                )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"
@@ -1713,13 +1638,13 @@ def _check_gate(
             errors.extend(_verification_outcome_errors(ver_file))
         if not ver_run.is_file():
             errors.append("Gate converged: evidence/verification/run.yaml is missing")
-        elif load_change_route(change_path)[0] == "code":
+        elif route == "code":
             errors.extend(verification_coverage_errors(change_path))
         errors.extend(_draft_capability_errors("converged", change_path, repo_root))
 
         # Check all tasks frontmatter status (P1 / T3 / RM-005)
         if tasks_dir.is_dir():
-            terminal = {"implemented", "verified", "cancelled", "superseded"}
+            terminal = _TASKS_IMPLEMENTED | _TASKS_CLOSED
             for task_file in tasks_dir.glob("*.md"):
                 try:
                     meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
@@ -1736,8 +1661,6 @@ def _check_gate(
         # docs/ops routes keep their own green oracle and are not required to
         # carry product-source regression evidence.
         cov_file = change_path / "coverage.yaml"
-        route, route_errs = load_change_route(change_path)
-        errors.extend(route_errs)
         derived = _derived_coverage(change_path)
         if derived is not None or cov_file.is_file():
             try:
