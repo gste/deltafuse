@@ -31,6 +31,52 @@ def compute_receipt_digest(receipt_dict: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
+_ZERO_HASH = "sha256:" + ("0" * 64)
+
+
+def _default_validation_scopes() -> list[dict[str, Any]]:
+    return [
+        {"scope": "envelope", "status": "valid", "details": []},
+        {"scope": "input", "status": "valid", "details": []},
+        {"scope": "schema", "status": "valid", "details": []},
+        {"scope": "policy", "status": "valid", "details": []},
+        {"scope": "reference", "status": "valid", "details": []},
+        {"scope": "whole_gate", "status": "not_evaluated", "details": ["Whole-Change convergence is evaluated by Core gates, not single-file write"]},
+    ]
+
+
+def _utc_now() -> str:
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sha(value: str) -> str:
+    return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+def _load_record(
+    path: Path,
+    required: tuple[str, ...] = (),
+    missing: str = "missing required fields",
+) -> dict[str, Any]:
+    """Read one journal record; a record that is unreadable or lacks `required` keys is corrupt."""
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as ex:
+        raise ArtifactTransactionError(
+            f"Corrupt transaction record '{path.name}': {ex}",
+            code="corrupt_journal",
+            path=str(path),
+        ) from ex
+    if required and (not isinstance(rec, dict) or any(key not in rec for key in required)):
+        raise ArtifactTransactionError(
+            f"Corrupt transaction record '{path.name}': {missing}",
+            code="corrupt_journal",
+            path=str(path),
+        )
+    return rec
+
+
 def _write_atomic_json(target_path: Path, content_dict: dict[str, Any]) -> None:
     from deltafuse.core.artifact_storage import atomic_create, atomic_replace
     content_bytes = json.dumps(content_dict, indent=2, ensure_ascii=False).encode("utf-8")
@@ -62,27 +108,27 @@ class TransactionManager:
                 pass
         return None
 
-    def find_transaction_by_request_id(self, request_id: str) -> dict[str, Any] | None:
+    def _find_record(self, request_id: str) -> tuple[Path, dict[str, Any]] | None:
         if not self.journal_dir.is_dir():
             return None
         for record_path in sorted(self.journal_dir.glob("*.json")):
-            try:
-                rec = json.loads(record_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as ex:
-                raise ArtifactTransactionError(
-                    f"Corrupt transaction record '{record_path.name}': {ex}",
-                    code="corrupt_journal",
-                    path=str(record_path),
-                ) from ex
-            if not isinstance(rec, dict) or "request_id" not in rec:
-                raise ArtifactTransactionError(
-                    f"Corrupt transaction record '{record_path.name}': missing request_id",
-                    code="corrupt_journal",
-                    path=str(record_path),
-                )
+            rec = _load_record(record_path, ("request_id",), "missing request_id")
             if rec.get("request_id") == request_id:
-                return rec
+                return record_path, rec
         return None
+
+    def find_transaction_by_request_id(self, request_id: str) -> dict[str, Any] | None:
+        found = self._find_record(request_id)
+        return found[1] if found else None
+
+    def _journal_record(self, transaction_id: str) -> tuple[Path, dict[str, Any]]:
+        record_file = self.journal_dir / f"{transaction_id}.json"
+        if not record_file.is_file():
+            raise ArtifactTransactionError(
+                f"Transaction journal record '{transaction_id}' not found",
+                code="transaction_not_found",
+            )
+        return record_file, _load_record(record_file)
 
     def prepare_transaction(
         self,
@@ -94,46 +140,24 @@ class TransactionManager:
         expected_result_sha256: str,
         auth_context: Any,
         operation: str = "update",
-        operation_schema_version: str = "1",
         operation_schema_hash: str | None = None,
-        storage_schema_identity: str | None = None,
         storage_schema_hash: str | None = None,
-        serializer_revision: str = "1",
         normalized_payload_hash: str | None = None,
-        staged_path: Path | None = None,
-        timestamp: str | None = None,
-        validation_scopes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        import datetime
-
         self._ensure_dirs()
         raw_request_hash = hashlib.sha256(raw_request_bytes).hexdigest()
         norm_hash = normalized_payload_hash or raw_request_hash
 
-        for record_path in sorted(self.journal_dir.glob("*.json")):
-            try:
-                rec = json.loads(record_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as ex:
-                raise ArtifactTransactionError(
-                    f"Corrupt transaction record '{record_path.name}': {ex}",
-                    code="corrupt_journal",
-                    path=str(record_path),
-                ) from ex
-            if not isinstance(rec, dict) or "request_id" not in rec:
-                raise ArtifactTransactionError(
-                    f"Corrupt transaction record '{record_path.name}': missing request_id",
-                    code="corrupt_journal",
-                    path=str(record_path),
-                )
-            if rec.get("request_id") == request_id:
-                if rec.get("raw_request_hash") == raw_request_hash:
-                    return rec
-                else:
-                    raise ArtifactTransactionError(
-                        f"Request ID '{request_id}' re-used with different payload",
-                        code="idempotency_conflict",
-                        path=str(record_path),
-                    )
+        found = self._find_record(request_id)
+        if found is not None:
+            record_path, rec = found
+            if rec.get("raw_request_hash") == raw_request_hash:
+                return rec
+            raise ArtifactTransactionError(
+                f"Request ID '{request_id}' re-used with different payload",
+                code="idempotency_conflict",
+                path=str(record_path),
+            )
 
         transaction_id = f"tx-{uuid.uuid4().hex}"
         try:
@@ -145,20 +169,6 @@ class TransactionManager:
         except ValueError:
             relative_target = str(target_path).replace("\\", "/")
 
-        now_iso = (
-            timestamp
-            or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        )
-        st_id = storage_schema_identity or f"https://deltafuse.dev/schemas/v3/{kind}.schema.yaml"
-        default_scopes = [
-            {"scope": "envelope", "status": "valid", "details": []},
-            {"scope": "input", "status": "valid", "details": []},
-            {"scope": "schema", "status": "valid", "details": []},
-            {"scope": "policy", "status": "valid", "details": []},
-            {"scope": "reference", "status": "valid", "details": []},
-            {"scope": "whole_gate", "status": "not_evaluated", "details": ["Whole-Change convergence is evaluated by Core gates, not single-file write"]},
-        ]
-
         record = {
             "transaction_id": transaction_id,
             "request_id": request_id,
@@ -166,26 +176,26 @@ class TransactionManager:
             "target": relative_target,
             "target_abs_path": str(target_path),
             "operation": operation,
-            "operation_schema_version": operation_schema_version,
-            "operation_schema_hash": operation_schema_hash or ("sha256:" + ("0" * 64)),
-            "storage_schema_identity": st_id,
-            "storage_schema_hash": storage_schema_hash or ("sha256:" + ("0" * 64)),
-            "serializer_revision": serializer_revision,
+            "operation_schema_version": "1",
+            "operation_schema_hash": operation_schema_hash or _ZERO_HASH,
+            "storage_schema_identity": f"https://deltafuse.dev/schemas/v3/{kind}.schema.yaml",
+            "storage_schema_hash": storage_schema_hash or _ZERO_HASH,
+            "serializer_revision": "1",
             "raw_request_hash": raw_request_hash,
             "normalized_payload_hash": norm_hash,
             "previous_sha256": previous_sha256,
             "expected_result_sha256": expected_result_sha256,
-            "staged_path": str(staged_path) if staged_path else None,
+            "staged_path": None,
             "state": "prepared",
             "created_at": time.time(),
-            "timestamp": now_iso,
+            "timestamp": _utc_now(),
             "authorization_context": {
                 "actor": getattr(auth_context, "actor", "worker"),
                 "work_item": getattr(auth_context, "work_item", "unknown"),
                 "stage": getattr(auth_context, "stage", "unknown"),
                 "fingerprint": getattr(auth_context, "fingerprint", "unknown"),
             },
-            "validation_scopes": validation_scopes or default_scopes,
+            "validation_scopes": _default_validation_scopes(),
         }
 
         record_file = self.journal_dir / f"{transaction_id}.json"
@@ -193,22 +203,7 @@ class TransactionManager:
         return record
 
     def mark_published(self, transaction_id: str) -> None:
-        record_file = self.journal_dir / f"{transaction_id}.json"
-        if not record_file.is_file():
-            raise ArtifactTransactionError(
-                f"Transaction journal record '{transaction_id}' not found",
-                code="transaction_not_found",
-            )
-
-        try:
-            rec = json.loads(record_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as ex:
-            raise ArtifactTransactionError(
-                f"Corrupt transaction record '{record_file.name}': {ex}",
-                code="corrupt_journal",
-                path=str(record_file),
-            ) from ex
-
+        record_file, rec = self._journal_record(transaction_id)
         rec["state"] = "published"
         _write_atomic_json(record_file, rec)
 
@@ -244,40 +239,8 @@ class TransactionManager:
         durable_outcome: str = "committed",
         changed: bool = True,
     ) -> dict[str, Any]:
-        import datetime
-
-        record_file = self.journal_dir / f"{transaction_id}.json"
-        if not record_file.is_file():
-            raise ArtifactTransactionError(
-                f"Transaction journal record '{transaction_id}' not found",
-                code="transaction_not_found",
-            )
-
-        try:
-            rec = json.loads(record_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as ex:
-            raise ArtifactTransactionError(
-                f"Corrupt transaction record '{record_file.name}': {ex}",
-                code="corrupt_journal",
-                path=str(record_file),
-            ) from ex
-
-        raw_req_hash = rec["raw_request_hash"]
-        req_sha256 = raw_req_hash if raw_req_hash.startswith("sha256:") else f"sha256:{raw_req_hash}"
-
-        raw_norm_hash = rec["normalized_payload_hash"]
-        norm_sha256 = raw_norm_hash if raw_norm_hash.startswith("sha256:") else f"sha256:{raw_norm_hash}"
-
-        raw_res_hash = rec["expected_result_sha256"]
-        res_sha256 = raw_res_hash if raw_res_hash.startswith("sha256:") else f"sha256:{raw_res_hash}"
-
+        record_file, rec = self._journal_record(transaction_id)
         raw_prev = rec.get("previous_sha256")
-        prev_sha256 = (
-            raw_prev
-            if (raw_prev is None or raw_prev.startswith("sha256:"))
-            else f"sha256:{raw_prev}"
-        )
-
         receipt_dict = {
             "request_id": rec["request_id"],
             "transaction_id": rec["transaction_id"],
@@ -286,35 +249,28 @@ class TransactionManager:
             "target": rec["target"],
             "operation_schema": {
                 "version": str(rec.get("operation_schema_version", "1")),
-                "content_hash": rec.get("operation_schema_hash") or ("sha256:" + ("0" * 64)),
+                "content_hash": rec.get("operation_schema_hash") or _ZERO_HASH,
             },
             "storage_schema": {
                 "kind": rec["kind"],
                 "version": 3,
                 "id": rec.get("storage_schema_identity") or f"https://deltafuse.dev/schemas/v3/{rec['kind']}.schema.yaml",
-                "content_hash": rec.get("storage_schema_hash") or ("sha256:" + ("0" * 64)),
+                "content_hash": rec.get("storage_schema_hash") or _ZERO_HASH,
             },
             "serializer_revision": 1,
-            "request_sha256": req_sha256,
-            "payload_sha256": norm_sha256,
-            "previous_sha256": prev_sha256,
-            "result_sha256": res_sha256,
+            "request_sha256": _sha(rec["raw_request_hash"]),
+            "payload_sha256": _sha(rec["normalized_payload_hash"]),
+            "previous_sha256": None if raw_prev is None else _sha(raw_prev),
+            "result_sha256": _sha(rec["expected_result_sha256"]),
             "changed": changed,
             "outcome": durable_outcome,
-            "timestamp": rec.get("timestamp") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "timestamp": rec.get("timestamp") or _utc_now(),
             "authority": {
                 "actor": rec["authorization_context"]["actor"],
                 "work_item": rec["authorization_context"]["work_item"],
                 "product_root": str(self.product_root).replace("\\", "/"),
             },
-            "validation_scopes": rec.get("validation_scopes") or [
-                {"scope": "envelope", "status": "valid", "details": []},
-                {"scope": "input", "status": "valid", "details": []},
-                {"scope": "schema", "status": "valid", "details": []},
-                {"scope": "policy", "status": "valid", "details": []},
-                {"scope": "reference", "status": "valid", "details": []},
-                {"scope": "whole_gate", "status": "not_evaluated", "details": ["Whole-Change convergence is evaluated by Core gates, not single-file write"]},
-            ],
+            "validation_scopes": rec.get("validation_scopes") or _default_validation_scopes(),
         }
 
         digest = compute_receipt_digest(receipt_dict)
@@ -342,22 +298,7 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
         return outcomes
 
     for record_file in sorted(tm.journal_dir.glob("*.json")):
-        try:
-            rec = json.loads(record_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as ex:
-            raise ArtifactTransactionError(
-                f"Corrupt transaction record '{record_file.name}': {ex}",
-                code="corrupt_journal",
-                path=str(record_file),
-            ) from ex
-
-        if not isinstance(rec, dict) or "state" not in rec or "transaction_id" not in rec:
-            raise ArtifactTransactionError(
-                f"Corrupt transaction record '{record_file.name}': missing required fields",
-                code="corrupt_journal",
-                path=str(record_file),
-            )
-
+        rec = _load_record(record_file, ("state", "transaction_id"))
         state = rec.get("state")
         if state in ("committed", "cancelled", "ambiguous_stopped"):
             continue
@@ -380,12 +321,6 @@ def recover_pending_transactions(product_root: Path) -> list[dict[str, Any]]:
         elif current_hash == prev_hash:
             rec["state"] = "cancelled"
             _write_atomic_json(record_file, rec)
-            staged = rec.get("staged_path")
-            if staged and Path(staged).exists():
-                try:
-                    Path(staged).unlink(missing_ok=True)
-                except OSError:
-                    pass
             outcomes.append({
                 "transaction_id": tx_id,
                 "outcome": "restored_previous",
