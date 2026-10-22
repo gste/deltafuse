@@ -151,14 +151,6 @@ def format_schema_error(schema_name: str, error: jsonschema.ValidationError) -> 
     return message
 
 
-class SchemaValidationError(Exception):
-    """Raised when validation against a schema fails."""
-
-    def __init__(self, message: str, errors: list[str]):
-        super().__init__(message)
-        self.errors = errors
-
-
 def _normalize_data_for_json(data: Any) -> Any:
     """Recursively convert Python datetime/date to ISO strings for JSON schema validation."""
     if isinstance(data, (datetime.datetime, datetime.date)):
@@ -251,16 +243,6 @@ class SchemaRegistry:
         if schema.get("additionalProperties") is False:
             line += "; no other keys"
         return line
-
-    def validate_or_raise(self, schema_name: str, data: Any) -> None:
-        """Validates data against a schema and raises SchemaValidationError if invalid."""
-        errors = self.validate(schema_name, data)
-        if errors:
-            raise SchemaValidationError(
-                f"Validation failed for schema '{schema_name}' with {len(errors)} error(s):\n" + "\n".join(f"  - {e}" for e in errors),
-                errors=errors,
-            )
-
 
 # Global default registry instance
 default_registry = SchemaRegistry()

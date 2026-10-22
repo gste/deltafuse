@@ -12,7 +12,6 @@ from deltafuse.core.artifact_storage import (
     ArtifactStorageError,
     atomic_create,
     atomic_replace,
-    cleanup_orphaned_staging,
     stage_artifact_bytes,
 )
 
@@ -152,13 +151,6 @@ def test_staging_cleanup_on_success_and_failure(tmp_path: Path):
     # Check parent directory for lingering .tmp files
     tmp_files = list(tmp_path.glob("*.tmp.*"))
     assert len(tmp_files) == 0
-
-    # Cleanup helper can remove orphaned temp files
-    orphaned = tmp_path / "cleanup_test.txt.tmp.orphaned123"
-    orphaned.write_bytes(b"stale")
-    removed = cleanup_orphaned_staging(tmp_path, max_age_seconds=0.0)
-    assert removed == 1
-    assert not orphaned.exists()
 
 
 def test_real_subprocess_concurrent_atomic_create(tmp_path: Path):

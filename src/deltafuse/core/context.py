@@ -354,11 +354,6 @@ def count_tokens(text: str) -> TokenCount:
     return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
 
 
-def estimate_tokens(text: str) -> int:
-    """Token count: optional /tokenize, else the A04-01 byte estimate."""
-    return count_tokens(text).tokens
-
-
 def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
     """Sum tokens over unique existing files and report how they were counted.
 
@@ -386,11 +381,6 @@ def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
         modes.add(counted.mode)
         details.add(counted.detail)
     return total, token_count_receipt(modes, details, files=len(seen))
-
-
-def estimate_files_tokens(files: list[Path]) -> int:
-    """Sum estimated tokens over unique existing files (duplicates counted once)."""
-    return count_files_tokens(files)[0]
 
 
 def tokenizer_config() -> dict[str, Any]:

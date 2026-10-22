@@ -7,7 +7,8 @@ from deltafuse.cli import main
 from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue, select_next
-from deltafuse.core.steps import STEP_CONTRACTS, validate_step_contracts
+from deltafuse.core.context import PHASE_CONTRACTS
+from deltafuse.core.steps import STEP_CONTRACTS
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -31,7 +32,8 @@ def _write_proposed_dec(tmp_path: Path, change_id: str, dec_id: str = "DEC-0001"
 
 
 def test_step_contracts_match_phase_contracts():
-    assert validate_step_contracts() == []
+    assert set(STEP_CONTRACTS) == set(PHASE_CONTRACTS)
+    assert all(spec.get("phase") == name for name, spec in STEP_CONTRACTS.items())
     assert STEP_CONTRACTS["declare"]["gate"] == "declaring"
     assert STEP_CONTRACTS["implement"]["gate"] == "implemented"
 

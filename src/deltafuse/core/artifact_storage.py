@@ -11,7 +11,6 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
-import time
 import uuid
 
 
@@ -208,31 +207,6 @@ def atomic_write(target_path: Path, content_bytes: bytes) -> str:
     if target_path.is_file():
         return atomic_replace(target_path, content_bytes)
     return atomic_create(target_path, content_bytes)
-
-
-def cleanup_orphaned_staging(directory: Path, max_age_seconds: float = 3600.0) -> int:
-    """Clean up orphaned staging files (.tmp.*) in directory older than max_age_seconds."""
-    directory = Path(directory)
-    if not directory.is_dir():
-        return 0
-
-    removed_count = 0
-    now = time.time()
-
-    for p in directory.glob("*.tmp.*"):
-        if p.is_file():
-            try:
-                mtime = p.stat().st_mtime
-                # NTFS stamps mtime from another clock than time.time(): a file
-                # written a moment ago can read as slightly in the future, a
-                # negative age that never reached max_age_seconds=0 (CI flake).
-                if max(0.0, now - mtime) >= max_age_seconds:
-                    p.unlink(missing_ok=True)
-                    removed_count += 1
-            except OSError:
-                pass
-
-    return removed_count
 
 
 def verify_published_target_readback(target_path: Path, expected_sha256: str) -> bytes:

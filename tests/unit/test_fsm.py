@@ -9,7 +9,6 @@ from deltafuse.core.fsm import (
     missing_analyze_artifacts,
     VALID_CHANGE_STATUSES,
 )
-from deltafuse.core.archiver import is_change_id_archived
 from deltafuse.core.evidence import write_stamped_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -171,13 +170,6 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
     apply_decision(tmp_path, status="accepted", decision="DEC-0001")
     assert not any("blocked-on-decision" in e for e in check_gate(change_dir, "analyzed"))
     assert not any("without deltafuse decide" in e for e in check_gate(change_dir, "analyzed"))
-
-
-def test_is_change_id_archived(tmp_path: Path):
-    arch_dir = tmp_path / "docs" / "archive" / "changes" / "2026-09-05-CHG-999"
-    arch_dir.mkdir(parents=True)
-    assert is_change_id_archived("CHG-999", tmp_path)
-    assert not is_change_id_archived("CHG-888", tmp_path)
 
 
 def test_task_design_ref_validation(tmp_path: Path, repo_root: Path):

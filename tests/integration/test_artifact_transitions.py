@@ -17,7 +17,6 @@ from deltafuse.core.transitions import (
     TransitionError,
     advance_change,
     set_artifact_status,
-    last_receipt,
     load_receipts,
     receipt_chain_errors,
 )

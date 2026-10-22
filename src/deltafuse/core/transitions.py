@@ -223,11 +223,6 @@ def load_receipts(product_root: Path, change_id: str) -> list[dict[str, Any]]:
     return [row for row in read_jsonl(transitions_path(product_root)) if row.get("change") == change_id]
 
 
-def last_receipt(product_root: Path, change_id: str) -> dict[str, Any] | None:
-    rows = load_receipts(product_root, change_id)
-    return rows[-1] if rows else None
-
-
 def latest_transition_field(product_root: Path | str, change_id: str, gate: str, field: str) -> Any:
     """`field` of the Change's latest `gate` transition receipt; None when there is none."""
     for row in reversed(load_receipts(Path(product_root), change_id)):

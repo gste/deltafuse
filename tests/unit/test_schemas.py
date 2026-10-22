@@ -1,5 +1,5 @@
 import pytest
-from deltafuse.core.schemas import SchemaRegistry, SchemaValidationError
+from deltafuse.core.schemas import SchemaRegistry
 
 ALL_SCHEMAS = [
     "capability",

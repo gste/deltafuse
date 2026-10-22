@@ -3,8 +3,6 @@
 from pathlib import Path
 import pytest
 from deltafuse.core.context import (
-    estimate_tokens,
-    estimate_files_tokens,
     count_tokens,
     count_files_tokens,
     token_count_receipt,
@@ -28,8 +26,8 @@ def _clear_tokenize_url(monkeypatch):
 def test_estimate_tokens_heuristic():
     text = "Hello world from DeltaFuse framework"
     # A04-01: 36 UTF-8 bytes / 3.75 = 9.6 -> ceil = 10
-    assert estimate_tokens(text) == 10
-    assert estimate_tokens("") == 0
+    assert count_tokens(text).tokens == 10
+    assert count_tokens("").tokens == 0
 
 
 def test_estimate_tokens_a04_01_counts_bytes_not_file_type(tmp_path: Path):
@@ -42,16 +40,16 @@ def test_estimate_tokens_a04_01_counts_bytes_not_file_type(tmp_path: Path):
     as_jsonl.write_text(body, encoding="utf-8")
     as_json.write_text(body, encoding="utf-8")
     # A03-01 counted the .jsonl as English prose, 82 % under the tokenizers.
-    assert estimate_files_tokens([as_jsonl]) == estimate_files_tokens([as_json])
-    assert estimate_files_tokens([as_jsonl]) == -(-len(body.encode("utf-8")) // 3.75)
+    assert count_files_tokens([as_jsonl])[0] == count_files_tokens([as_json])[0]
+    assert count_files_tokens([as_jsonl])[0] == -(-len(body.encode("utf-8")) // 3.75)
 
     english = "The declaring gate is closed until every task is declared. " * 10
     one_letter = english + "ж"
     # One Cyrillic letter moved a whole A03-01 file from x1.3 to x2.2.
-    assert estimate_tokens(one_letter) - estimate_tokens(english) <= 1
+    assert count_tokens(one_letter).tokens - count_tokens(english).tokens <= 1
 
     russian = "Задача не может обогнать свой Change. " * 10
-    assert estimate_tokens(russian) == -(-len(russian.encode("utf-8")) // 3.75)
+    assert count_tokens(russian).tokens == -(-len(russian.encode("utf-8")) // 3.75)
 
 
 def test_validate_context_budget(tmp_path: Path):
@@ -104,8 +102,8 @@ def test_validate_context_budget_deduplicates_for_limits(tmp_path: Path):
 def test_estimate_files_tokens_deduplicates(tmp_path: Path):
     f1 = tmp_path / "a.py"
     f1.write_text("word " * 100, encoding="utf-8")
-    once = estimate_files_tokens([f1])
-    twice = estimate_files_tokens([f1, f1])
+    once = count_files_tokens([f1])[0]
+    twice = count_files_tokens([f1, f1])[0]
     assert once == twice
     assert once > 0
 

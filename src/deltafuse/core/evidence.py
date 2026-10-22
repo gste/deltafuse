@@ -66,7 +66,6 @@ class EvidenceOutcome:
     dest: Path
     authentic: bool
     errors: list[str] = field(default_factory=list)
-    command_exit_code: int = 0
 
 
 def classify_failure(log: str, exit_code: int) -> str | None:
@@ -817,5 +816,4 @@ def run_evidence(
         dest=dest,
         authentic=authentic,
         errors=errors,
-        command_exit_code=exit_code,
     )
