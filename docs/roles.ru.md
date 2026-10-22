@@ -96,14 +96,14 @@ Analyst, Spec Editor, Planner, Implementer и Verifier — шляпы **ворк
 - `implement` — реализация кода и фиксация Green/Regression evidence;
 - `verify` — проверка сходимости артефактов и архивация.
 
-Эти файлы привязывают воркера к LLM. Это не Ядро. Ядро (`deltafuse next`, `evidence`, `check-gate`) выбирает шаг и проверяет гейты. Скилл сам не выбирает следующий шаг.
+Эти файлы привязывают воркера к LLM. Это не Ядро. Ядро (`next`, `evidence`, `advance`) выбирает шаг и проверяет гейты. Скилл сам не выбирает следующий шаг.
 
 ### Профили исполнения (Execution Profiles)
 
 Высокоуровневые сценарии работы формируются последовательным вызовом канонических примитивов:
 
 1. **Стандартная доработка (Feature / Specification Change)**:
-   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → цикл по задачам (`declare` → `implement`) → `verify` → *(Human Gate: Merge)*.
+   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → `declare` (каждая задача) → `implement` (каждая задача) → `verify` → *(Human Gate: Merge)*.
 2. **Исправление дефекта реализации (Implementation Bug)**:
    `intake` → `analyze` *(дельта specification.operation: none)* → `specify` *(доказательство неизменности спеки в spec-delta.md)* → `decompose` *(создание задачи фикса)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Инициализация проекта (Bootstrap Profile)**:

@@ -43,11 +43,11 @@ deltafuse board <product-root> --json
 deltafuse board <product-root> --json --archive
 ```
 
-Stdout при `--json` — ровно один JSON (UTF-8); диагностика в stderr. Успех: exit `0`. Не продукт / битый lock: exit `≠ 0`, без «почти доски». Корни Changes — из `paths.changes` / `paths.archive` в config. Ноль записи на диск. `check-gate` на каждый CHG в v1 не гонять. `layout` не зависит от набора Changes: пустой `changes` всё равно полный `layout`.
+Stdout при `--json` — ровно один JSON (UTF-8); диагностика в stderr. Успех: exit `0`. Не продукт / битый lock: exit `≠ 0`, без «почти доски». Корни Changes — `docs/changes` и `docs/archive/changes`; ключи `paths.*` в config в этой версии фиксированы (`validate-config` отвергает другие значения), снимок их сообщает. Ноль записи на диск. `check-gate` на каждый CHG в v1 не гонять. `layout` не зависит от набора Changes: пустой `changes` всё равно полный `layout`.
 
 ## Совместимость
 
-`schema_version` снимка **не** равен `schema_version` у `change.yaml` (там `2`).
+`schema_version` снимка **не** равен `schema_version` у `change.yaml` (там `3`).
 
 Новое опциональное поле — остаётся `1`; потребитель игнорирует неизвестные ключи. Переименование / удаление / смена типа обязательного поля — bump на `2`. Неизвестный `schema_version` у потребителя — явный fail этого репо, не сканер YAML. `card.status` — непрозрачная строка только через `layout`.
 

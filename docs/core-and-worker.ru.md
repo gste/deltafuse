@@ -11,13 +11,13 @@
 | **Ядро** | Core | Машина, которая исполняет Процесс: FSM, гейты, evidence, `next`, archive, `board` | LLM. Человек, который заполняет файлы Change. Описание Процесса |
 | **Воркер** | Worker | LLM **или** человек, который пишет артефакты Change текущего шага | CI/OS-джоба. Очередь работы. Human Gate. Тот, кто выбирает следующий шаг или классифицирует Red/Green |
 
-Ядро — kernel CLI: `deltafuse next`, `evidence`, `check-gate`, `archive`, `board` и `artifact`. Оно читает git продукта и предоставляет службу сериализации Artifact Writer для атомарного обновления файлов. Оно не выдумывает claims, текст спецификации, TASK и код продукта. Оно не вызывает модель.
+Ядро — kernel CLI: `deltafuse next`, `evidence`, `advance` (проверка гейта + переход; `check-gate` — его read-only предпросмотр), `state`, `decide`, `archive`, `board` и `artifact write`. Оно читает git продукта и предоставляет службу сериализации Artifact Writer для атомарного обновления файлов. Оно не выдумывает claims, текст спецификации, TASK и код продукта. Оно не вызывает модель.
 
 Воркер читает то, что разрешает шаг, и пишет только файлы этого шага. Одни и те же пути для LLM и человека. Skills (`process/skills/*/SKILL.md`) привязывают воркера к LLM. `deltafuse next --human` привязывает тот же шаг к человеку. Второго процесса «для людей» нет.
 
 ```text
 Воркер  --только файлы Change-->  git продукта
-Ядро    --next / evidence / check-gate / archive-->  git продукта
+Ядро    --next / evidence / advance / archive-->  git продукта
 Ядро    --halt, если гейт не прошёл-->  Воркер
 ```
 

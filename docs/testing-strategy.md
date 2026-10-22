@@ -17,7 +17,7 @@
                      │    Workflow & State Machine   │  <- FSM, гейты, DAG зависимостей,
                      │       (Process Invariants)    │     мутационные тесты T1-T8, N10, хэш-локи
                      ├───────────────────────────────┤
-                     │   Schema, Layout & Contracts  │  <- Валидация 9 схем JSON Schema 2020-12,
+                     │   Schema, Layout & Contracts  │  <- Валидация 10 схем JSON Schema 2020-12,
                      │      (Structural Invariants)  │     frontmatter, шаблоны, раскладка продукта
                      └───────────────────────────────┘
 ```
@@ -32,8 +32,9 @@
 deltafuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # CLI: init, validate, check-gate, archive, validate-layout, evidence, next, decide, board, lint-context, bench
-│   ├── bench/                        # Агент-агностичный Worker bench: init кейса, score диска, compare (без LLM)
+│   ├── cli.py                        # CLI: init, new, validate, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, lint-context, leash, artifact write, bench journal
+│   ├── bench/
+│   │   └── journal.py                # Журнал команд продукта для `deltafuse bench journal`; init/score/compare — в deltafuse-bench
 │   └── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
@@ -48,13 +49,13 @@ deltafuse/
 │   │   ├── installer.py              # Кроссплатформенная установка, генерация адаптеров (.agents, .cursor, .gemini)
 │   │   ├── integrity.py              # Ссылочная целостность: якоря #REQ-*, #SC-*, решения #DEC-*, claims CR-* / O1/E1
 │   │   ├── layout.py                 # Валидатор эталонной раскладки продукта, lock-файлов и маркеров DO-NOT-EDIT
-│   │   └── schemas.py                # Загрузчик и валидатор 9 схем JSON Schema Draft 2020-12
+│   │   └── schemas.py                # Загрузчик и валидатор 10 схем JSON Schema Draft 2020-12
 ├── tests/
 │   ├── conftest.py                   # Общие pytest фикстуры (repo_root)
 │   ├── fixtures/
 │   │   └── change_builder.py         # Fluent builder (MockChangeBuilder) для синтетической сборки Change-пакетов
 │   ├── unit/                         # Модульные тесты инвариантов
-│   │   ├── test_schemas.py           # Валидация 9 схем JSON Schema 2020-12 и strict-режима
+│   │   ├── test_schemas.py           # Валидация 10 схем JSON Schema 2020-12 и strict-режима
 │   │   ├── test_templates.py         # Self-validation всех шаблонов process/templates
 │   │   ├── test_frontmatter.py       # Парсинг YAML frontmatter в markdown
 │   │   ├── test_graph.py             # Топологическая сортировка и цикл-детектор в задачах
@@ -68,7 +69,7 @@ deltafuse/
 │   │   ├── test_halt_contract.py     # HS-001: next --json halt — кнопки хоста; pack не в адаптерах
 │   │   ├── test_leash.py             # LS-001–003, LS-007: write envelope, deltafuse leash, orphan, host MUST
 │   │   ├── test_llm_adapter.py       # Skills — привязка воркера (LLM), не Ядро
-│   │   ├── test_bench.py             # BM-001: init без oracle, score not-run, Specify keywords, hidden suite, compare
+│   │   ├── test_bench_human_wait.py  # Журнал бенча: гейт, ждущий человека, не считается попыткой модели
 │   │   ├── test_first_write.py       # SK-001: шаблон Intake/Analyze/Decompose проходит check-gate; синонимы YAML
 │   │   └── test_context.py           # Контекстные бюджеты и фазовые контракты
 │   ├── integration/                  # Интеграционные тесты
@@ -76,7 +77,7 @@ deltafuse/
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
 │   │   └── test_validator_cli.py     # CLI: validate, check-gate, validate-layout, evidence, lint-context
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла
-│   │   ├── test_golden_workflow.py   # Эталонный 8-шаговый цикл фичи от intake до archive
+│   │   ├── test_golden_workflow.py   # Эталонный цикл фичи: 7 шагов от intake до verify, затем archive
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
 │   │   ├── test_terminal_workflows.py# Невоспроизводимые и отклонённые сценарии
 │   │   └── test_failure_modes.py     # Негативные гейты, циклы задач, потеря/порча request.md
@@ -90,7 +91,7 @@ deltafuse/
 ## 3. Детализированная матрица тестовых наборов
 
 ### Набор 1. Структурные тесты схем и шаблонов (`tests/unit/test_schemas.py`, `test_templates.py`)
-* **1.1. Мета-схемы**: все 9 схем в `process/schemas/*.yaml` компилируются по стандарту JSON Schema Draft 2020-12.
+* **1.1. Мета-схемы**: все 10 схем в `process/schemas/*.schema.yaml` компилируются по стандарту JSON Schema Draft 2020-12.
 * **1.2. Self-Validation шаблонов**: каждый файл-шаблон в `process/templates/**` на 100% валидируется своей схемой:
   - `change.yaml` -> `change.schema.yaml`
   - `tasks/TASK-001-template.md` (frontmatter) -> `task.schema.yaml`
@@ -187,7 +188,7 @@ deltafuse/
 
 ### Набор 6. E2E Сквозные сценарии (`tests/e2e/`)
 * **6.1. Golden Workflow (`test_golden_workflow.py`)**:
-  - 8-шаговый цикл: `intake -> analyze -> specify -> decompose -> declare -> implement -> verify -> archive`.
+  - 7 шагов и архив: `intake -> analyze -> specify -> decompose -> declare -> implement -> verify`, затем `archive`.
 * **6.2. No-op & Not-reproduced (`test_noop_workflow.py`)**:
   - Исследование багов, генерация `not-reproduced` evidence, переход Change в `not-reproduced`, архивация терминального пакета.
 * **6.3. Failure Modes (`test_failure_modes.py`)**:
@@ -196,7 +197,7 @@ deltafuse/
 
 ---
 
-### Набор 7. Агент-агностичный Worker bench (`tests/unit/test_bench.py`, `src/deltafuse/bench/`)
+### Набор 7. Агент-агностичный Worker bench (`tests/unit/test_bench_human_wait.py`, `src/deltafuse/bench/journal.py`; init/score/compare и их тесты — в deltafuse-bench)
 
 Ядро **не вызывает** модель. Mock `deltafuse eval` (one-shot dump пакета) удалён в 2.4.0.
 
@@ -216,7 +217,8 @@ python -m pytest -v
 # 2. Проверка валидности Change-пакета
 deltafuse validate docs/changes/CHG-001-test
 
-# 3. Проверка гейта жизненного цикла
+# 3. Закрытие гейта жизненного цикла (check-gate — read-only предпросмотр той же проверки)
+deltafuse advance docs/changes/CHG-001-test --gate decomposed
 deltafuse check-gate docs/changes/CHG-001-test --gate decomposed
 
 # 4. Архивация завершённого пакета
@@ -245,8 +247,8 @@ deltafuse board . --json
 # 10. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse-bench init M02-policy-stats ./m02
 deltafuse bench journal ./m02
-deltafuse-bench score ./m02 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
-deltafuse bench compare ../scores/opus.json ../scores/flash.json
+deltafuse-bench score ./m02 --pack <deltafuse-bench-checkout> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```
 
 ---

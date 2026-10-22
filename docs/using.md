@@ -81,7 +81,7 @@ The Worker writes tests and production files. The Core records proof:
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax failures and `_`-prefixed Red tests are not authentic. The Core stamps the YAML; `check-gate --gate declaring` rejects a schema-valid file that was not written by `deltafuse evidence`.
+Import/syntax failures and `_`-prefixed Red tests are not authentic. The Core stamps the YAML; the `declaring` gate (`advance`, or the read-only `check-gate`) rejects a schema-valid file that was not written by `deltafuse evidence`.
 
 ## Kernel coverage
 
@@ -91,11 +91,11 @@ After routing and one slice per primary capability, the Core writes the claim ma
 deltafuse coverage <change-dir>
 ```
 
-Then `check-gate --gate analyzed`. Re-running keeps existing `tasks` / `evidence` / `status`.
+Then `deltafuse advance <change-dir> --gate analyzed`. Re-running keeps existing `tasks` / `evidence` / `status`.
 
 ## Specify one slice
 
-After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: `check-gate --gate specified`. Do not close the Change gate mid-set.
+After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: `deltafuse advance <change-dir> --gate specified`. Do not close the Change gate mid-set.
 
 ## Next work
 
@@ -110,28 +110,28 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `check-gate`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate. `--spec --status accepted` requires the Change to be at `specification-proposed`: proposing is what runs the machine checks on the spec delta, so `decide` refuses an acceptance the Worker never proposed and writes nothing - it names the errors the proposal would be refused for. `--status rejected` is never blocked; a human can always say no.
+`--human` is the same step for a human Worker: read/write globs, `evidence` where needed, then `deltafuse advance --gate <gate>`. Not a second process. `deltafuse decide` is the only writer of DEC/spec `accepted` or `rejected`; editing frontmatter does not close the Human Gate. `--spec --status accepted` requires the Change to be at `specification-proposed`: proposing is what runs the machine checks on the spec delta, so `decide` refuses an acceptance the Worker never proposed and writes nothing - it names the errors the proposal would be refused for. `--status rejected` is never blocked; a human can always say no.
 
 **Human Gate password (optional).** `deltafuse gate-password set` stores a salted PBKDF2 hash in `.deltafuse/gate-password.yaml` (Core-owned: the leash refuses it in a Worker diff). From then on `decide` asks for the password in the terminal before it writes anything, and refuses when stdin is not a terminal; there is no flag or environment variable for it. Each receipt records `human_check: password` or `none`. `next --json` says which applies: `halt.human_check` is `none` (buttons in the chat) or `password` (`halt.terminal_required`: the prompt lists the commands for the human to run in a terminal), and a `decide` refused for lack of a terminal prints the command to type. `gate-password clear` and a change need the current password; `gate-password status` shows whether it is on. The password guards the `decide` command, not the journal: against a model that forges files by hand, isolate the Worker on the host.
 
 Default LLM entry is `/run` (through-mode): `deltafuse next`, load that skill, continue in the same session. Do not wait for pasted `/analyze` … `/verify`. When `next --json` has `halt.kind` `decision` or `spec`, present `halt.choices` as host buttons from the [halt contract](./contracts/halt.md), wait, then run only `choice.command`. `inspect` (`command: null`) means stop. Single-step skills restart one step after a problem.
 
-Generated skills bind the Worker to an LLM. They write Change files, close with `check-gate`, then run `deltafuse next` in this same session. They do not pick the next slash command.
+Generated skills bind the Worker to an LLM. They write Change files, close the gate with `deltafuse advance <change-dir> --gate <gate>` (the Core checks and stamps in one call; `check-gate` is a read-only preview), then run `deltafuse next` in this same session. They do not pick the next slash command.
 
 Empty ready queue exits non-zero and prints blocked items (DEC, spec gate) plus `halt.choices`, or a `done` halt when there is no new intake.
 
 ## Worker bench
 
-Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `bench score`. Attempts come from the Core journal, not from the Worker.
+Install a product sandbox, let any Worker fill it, then score **from a judge host** that has the pack. The Core does not call a model. The Worker must not run `deltafuse-bench score`. Attempts come from the Core journal, not from the Worker.
 
 ```text
 deltafuse-bench init M02-policy-stats <product-dir>
 deltafuse bench journal <product-dir>
-deltafuse-bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
-deltafuse bench compare ../scores/opus.json ../scores/flash.json
+deltafuse-bench score <product-dir> --pack <deltafuse-bench-checkout-or-case-dir> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```
 
-See [bench.md](./bench.md). Oracle and hidden tests stay in the framework pack.
+See [bench.md](./bench.md). The pack is the deltafuse-bench checkout or a case directory; oracle and hidden tests stay in the deltafuse-bench pack.
 
 ## Host halt
 

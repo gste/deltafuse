@@ -105,7 +105,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 ### Gate
 - `change.yaml` status transitioned to `analyzed` (or `blocked-on-decision`).
 - `routing.yaml` validates against `routing.schema.yaml`.
-- A claim that adds a new name to a family another capability's specification lists - a name in backticks with a dot, `family.member`, that no live spec holds yet, while that capability's spec holds others of the family - routes to that capability as its primary: the gate refuses the routing otherwise and names the claim, the name and the spec line. A related capability gets no slice, so nothing it owns would change (bench case M04: the audit event catalogue).
+- A claim that adds a new name to a family another capability's specification lists - a name in backticks with a dot, `family.member`, that no live spec holds yet, while that capability's spec holds others of the family - needs that capability as a primary: the gate refuses the routing unless a claim of the routing has that capability as primary, and names the claim, the name and the spec line - route the claim that adds the name there. A related capability gets no slice, so nothing it owns would change (bench case M04: the audit event catalogue).
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
@@ -128,7 +128,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
-3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close` for `check-gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close`: `deltafuse advance <change-dir> --gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
@@ -223,7 +223,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 1. Implement the minimal test case in the file indicated by `test_target`. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
-   Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; `check-gate` rejects unstamped YAML.
+   Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; the gate (`advance`; `check-gate` previews it) rejects unstamped YAML.
 3. Verify that the test fails exclusively due to the missing feature or bug, not due to syntax errors, import failures, or broken fixtures. Authentic Red is two exit codes: the test command fails (`exit_code: 1`) for that reason, and `deltafuse evidence` exits 0 having recorded it as `failure_category: behavioral-mismatch`. A run that could not execute at all is not Red, and `deltafuse evidence` exits non-zero for it. Neither is a test that fails on an error in its own code which no product code can change - a name it never bound, or an operator between built-in values on a line that uses nothing from the product (`set & tuple`): `deltafuse evidence` records it as `test-own-error`, names the test and line, and exits non-zero.
 4. The runner records execution proof in `evidence/red/<task-id>.yaml` conforming to `evidence.schema.yaml`:
    ```yaml

@@ -81,7 +81,7 @@ Initial capability catalog предлагается ИИ и принимаетс
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; `check-gate --gate declaring` отвергает schema-valid файл, который написали не через `deltafuse evidence`.
+Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; гейт `declaring` (`advance` или read-only `check-gate`) отвергает schema-valid файл, который написали не через `deltafuse evidence`.
 
 ## Coverage ядра
 
@@ -91,11 +91,11 @@ Import/syntax и Red с `_` не authentic. Ядро ставит штамп н�
 deltafuse coverage <change-dir>
 ```
 
-Затем `check-gate --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
+Затем `deltafuse advance <change-dir> --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
 
 ## Specify по одному срезу
 
-После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `check-gate --gate specified`. Не закрывайте гейт Change на середине набора.
+После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `deltafuse advance <change-dir> --gate specified`. Не закрывайте гейт Change на середине набора.
 
 ## Следующая работа
 
@@ -110,28 +110,28 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает. `--spec --status accepted` требует статуса Change `specification-proposed`: именно propose прогоняет машинные проверки spec-delta, поэтому `decide` отказывает в принятии, которого воркер не предложил, и ничего не записывает — сообщение называет ошибки, из-за которых proposal был бы отвергнут. `--status rejected` не блокируется никогда: человек всегда может сказать «нет».
+`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `deltafuse advance --gate <gate>`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает. `--spec --status accepted` требует статуса Change `specification-proposed`: именно propose прогоняет машинные проверки spec-delta, поэтому `decide` отказывает в принятии, которого воркер не предложил, и ничего не записывает — сообщение называет ошибки, из-за которых proposal был бы отвергнут. `--status rejected` не блокируется никогда: человек всегда может сказать «нет».
 
 **Пароль Human Gate (опционально).** `next --json` говорит, как отвечать: `halt.human_check` равен `none` (кнопки в чате) или `password` (`halt.terminal_required`: в prompt перечислены команды, которые человек запускает в терминале); отказавший из-за отсутствия терминала `decide` печатает команду для ввода. `deltafuse gate-password set` хранит солёный хэш PBKDF2 в `.deltafuse/gate-password.yaml` (файл ядра: leash отвергает его в diff воркера). После этого `decide` спрашивает пароль в терминале до любой записи и отказывает, если stdin — не терминал; флага или переменной окружения для пароля нет. Каждый receipt пишет `human_check: password` или `none`. `gate-password clear` и смена требуют текущий пароль; `gate-password status` показывает, включён ли он. Пароль закрывает команду `decide`, а не журнал: от модели, подделывающей файлы руками, защищает изоляция воркера на хосте.
 
 Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста по [контракту halt](./contracts/halt.ru.md), ждать, выполнить только `choice.command`. `inspect` (`command: null`) — стоп. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
-Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают гейт через `deltafuse advance <change-dir> --gate <gate>` (Ядро проверяет и ставит штамп одним вызовом; `check-gate` — read-only предпросмотр), затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
 
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) и `halt.choices`, либо halt `done`, если нового intake нет.
 
 ## Бенчмарк воркера
 
-Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
+Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `deltafuse-bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
 
 ```text
 deltafuse-bench init M02-policy-stats <product-dir>
 deltafuse bench journal <product-dir>
-deltafuse-bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
-deltafuse bench compare ../scores/opus.json ../scores/flash.json
+deltafuse-bench score <product-dir> --pack <deltafuse-bench-checkout-or-case-dir> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```
 
-См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.
+См. [bench.ru.md](./bench.ru.md). Пакет — checkout deltafuse-bench или каталог кейса; оракул и hidden-тесты остаются в пакете deltafuse-bench.
 
 ## Halt хоста
 

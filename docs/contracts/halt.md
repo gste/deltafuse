@@ -52,7 +52,7 @@ deltafuse decide <change-dir> --spec --status accepted
 
 ## Compatibility
 
-The parent `next --json` envelope uses `schema_version: 1`. That integer is **not** `change.yaml` `schema_version` (that stays `2`). This halt schema versions independently via `$id` `.../halt/v1`.
+The parent `next --json` envelope uses `schema_version: 1`. That integer is **not** `change.yaml` `schema_version` (that is `3`). This halt schema versions independently via `$id` `.../halt/v1`.
 
 | Change | What to do |
 |---|---|
