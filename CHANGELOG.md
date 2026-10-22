@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **`deltafuse bench init` and the bench's case loader moved to deltafuse-bench** (`deltafuse-bench
+  init <case> <dir>`, same output). `deltafuse.bench.init_product` and `deltafuse.bench.loader` were
+  used by the bench alone - the framework's tests never ran them. The framework keeps what a
+  product produces: its command journal (`deltafuse.bench.journal`, `deltafuse bench journal`).
 - **The legacy `artifact describe|create|update|validate|update-index` subcommands** (owner
   decision, codebase audit 2026-10-21). No skill and no bench run used them: `artifact write` is
   the Worker's path, creates or updates, and keeps the `change.yaml` index itself. With them went

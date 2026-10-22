@@ -200,10 +200,10 @@ deltafuse/
 
 Ядро **не вызывает** модель. Mock `deltafuse eval` (one-shot dump пакета) удалён в 2.4.0.
 
-* **7.1. Init**: `deltafuse bench init M01-cooldown` (пол) или `M02-policy-stats` (фронтир). Worker sandbox + seed spec/code + intake. Публичный API M02 (`peak_rate`, `token_rejects`, `reject_threshold`, `stats.py`) задан во intake. В дереве нет `oracle.yaml` и hidden suite. Непустой существующий каталог — отказ и команда пересоздания; `--force`/`-f` стирает и ставит заново. Успешный init печатает короткий промпт для агента (`deltafuse next`). Промпт не называет `bench score`. `BENCH.md` не велит воркеру запускать `bench score`.
+* **7.1. Init**: `deltafuse-bench init M01-cooldown` (пол) или `M02-policy-stats` (фронтир). Worker sandbox + seed spec/code + intake. Публичный API M02 (`peak_rate`, `token_rejects`, `reject_threshold`, `stats.py`) задан во intake. В дереве нет `oracle.yaml` и hidden suite. Непустой существующий каталог — отказ и команда пересоздания; `--force`/`-f` стирает и ставит заново. Успешный init печатает короткий промпт для агента (`deltafuse next`). Промпт не называет `bench score`. `BENCH.md` не велит воркеру запускать `bench score`.
 * **7.2. Score**: только с `--pack` / `DELTAFUSE_BENCH_PACK`. Headline `score` = `0.6 * correctness + 0.4 * process` при журнале retries; без журнала `score=n/a`, не 100. `correctness` — взвешенные oracle points (hidden по тестам; presence / already-past не входят). `process`/`efficiency` из `.deltafuse/bench-journal.jsonl` (ядро пишет все CLI-команды; `check-gate` — с `errors`). `--out-file` внутри песочницы — ошибка. Hidden traceback в JSON только с `--verbose`. Воркер журнал не пишет и не самоотчитывается.
 * **7.3. Compare**: два JSON scorecard; сначала `score`, затем вектор шагов + `first_fail`. `M01` — пол; `M02` — фронтир (два capability / policy / stats).
-* **7.4. CLI**: `bench init|score|compare|journal`; `--stage`, `--json`, `--label`, `--out-file`. `bench journal` — детерминированный rollup попыток (`cycles`), без `--pack` и без LLM.
+* **7.4. CLI**: `deltafuse-bench init|score|compare` (бенч, 3.3.9) и `deltafuse bench journal` (фреймворк); `--stage`, `--json`, `--label`, `--out-file`. `bench journal` — детерминированный rollup попыток (`cycles`), без `--pack` и без LLM.
 
 ---
 
@@ -243,7 +243,7 @@ deltafuse decide docs/changes/CHG-001-test --decision DEC-0001 --status accepted
 deltafuse board . --json
 
 # 10. Агент-агностичный Worker bench (диск, без LLM)
-deltafuse bench init M02-policy-stats ./m02
+deltafuse-bench init M02-policy-stats ./m02
 deltafuse bench journal ./m02
 deltafuse-bench score ./m02 --pack . --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse bench compare ../scores/opus.json ../scores/flash.json

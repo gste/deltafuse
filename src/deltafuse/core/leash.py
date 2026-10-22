@@ -77,7 +77,7 @@ CORE_JOURNALS = frozenset({"gate-journal.jsonl", "journal-head", "transitions.js
 # `seed_hashes` from it to judge `code.untouched`, so rewriting those digests
 # erases the Worker's own premature src/ edits (bench mutant M08) and every check
 # downstream still reads green. Written by the bench harness that initializes the
-# product (deltafuse.bench.init_product), never by the Worker.
+# product (deltafuse-bench's init_product), never by the Worker.
 CORE_OWNED = CORE_JOURNALS | {"gate-password.yaml", "bench.yaml"}
 # Who legitimately writes a Core-owned file that is not a journal.
 CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this product"}

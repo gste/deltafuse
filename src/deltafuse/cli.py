@@ -522,24 +522,15 @@ def _main(argv: list[str] | None = None) -> int:
                               help="Relative path to check instead of git diff (repeatable)")
 
     bench_parser = subparsers.add_parser(
-        "bench", help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)"
+        "bench", help="What a product's bench journal holds (no LLM); the bench itself is deltafuse-bench"
     )
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
-    bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
-    bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
-    bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
-    bench_init.add_argument("--force", "-f", action="store_true",
-                            help="Recreate the sandbox if the directory already exists")
-    bench_init.add_argument(
-        "--pack", default=None,
-        help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
-    )
-    # `score` and `compare` live in deltafuse-bench since 3.3.0: the judge is
-    # versioned apart from the framework it measures (roadmap: one harness in
-    # deltafuse-bench). The framework keeps only what a product produces.
+    # `init`, `score` and `compare` live in deltafuse-bench (score/compare since 3.3.0, init since
+    # 3.3.9): the bench is versioned apart from the framework it measures. The framework keeps
+    # only what a product produces - its command journal.
     bench_journal = bench_sub.add_parser("journal",
                                          help="Judge: collect Core attempts from a sandbox journal (no LLM)")
-    bench_journal.add_argument("product_dir", help="Product root created by bench init")
+    bench_journal.add_argument("product_dir", help="Product root created by `deltafuse-bench init`")
 
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
@@ -957,21 +948,7 @@ def _main(argv: list[str] | None = None) -> int:
         )
 
     elif args.command == "bench":
-        from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
-
         try:
-            if args.bench_cmd == "init":
-                meta = init_bench_product(
-                    args.case_id, args.product_dir, pack_root=args.pack, force=args.force
-                )
-                product = Path(args.product_dir).resolve()
-                print(f"Bench {meta['case']} ready in {product}")
-                print("Open that directory as the Worker workspace, then paste:")
-                print()
-                print("----- paste into the Worker -----")
-                print(format_worker_start_prompt(meta))
-                print("----- end -----")
-                return 0
             if args.bench_cmd == "journal":
                 from deltafuse.bench.journal import collect_attempts, load_events
 
@@ -979,7 +956,7 @@ def _main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
                 return 0
             print(
-                "Scoring moved to the judge: `deltafuse-bench score <product-dir> --pack <pack>`",
+                "The bench moved to deltafuse-bench: `deltafuse-bench init|score <product-dir>`",
                 file=sys.stderr,
             )
             return 2
