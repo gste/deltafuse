@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without Python `tests/validate-layout.ps1|sh` - the shell installers' pair, kept for them.
 - docs/state-machine (en, ru): a task can be marked `blocked` from `pending` once its Red is
   recorded; the transition table keeps it so the Core's refusal names what is missing.
+- **A Green is judged the same way in all three places that judge it** - `deltafuse evidence`
+  when it records the Green, the `implemented` gate, and the coverage summary Verify reads. Each
+  had kept its own selection of checks, so `deltafuse evidence` recorded as authentic a Green with
+  no Red or over an already-green Red, and the gate refused it a step later. Recording now refuses
+  it at once, with the gate's own message. The record-time coverage refusal now reads "did not
+  pass the tests Red recorded as failing", as the gate's does.
+
+### Removed
+
+- Internal: `evidence._is_authentic` (its checks were already in the record's error list) and
+  helpers only tests used (`is_change_id_archived`, `estimate_tokens`, `estimate_files_tokens`,
+  `last_receipt`, `validate_or_raise`, `validate_step_contracts`, `cleanup_orphaned_staging`).
 
 ## [3.3.9] - 2026-10-22
 

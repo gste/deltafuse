@@ -185,7 +185,7 @@ def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
         argv=[sys.executable, "-m", "pytest", "tests/test_other.py"],
         changed_paths=["tests/test_other.py"],
     )
-    assert any("did not turn the Red tests green" in e for e in green.errors), green.errors
+    assert any("did not pass the tests Red recorded as failing" in e for e in green.errors), green.errors
 
     # The same test, once the product implements it, does.
     (tmp_path / "src" / "limiter.py").write_text(
@@ -198,7 +198,7 @@ def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
         argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py"],
         changed_paths=["src/limiter.py"],
     )
-    assert not [e for e in green.errors if "did not turn the Red tests green" in e], green.errors
+    assert not [e for e in green.errors if "did not pass the tests Red recorded as failing" in e], green.errors
 
 
 def test_the_recorded_category_follows_the_report_the_gate_reads(tmp_path: Path, repo_root: Path):

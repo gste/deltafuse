@@ -155,7 +155,19 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
     # DF3-006/B-04: green must come from a real runner script, not `python -c`.
     runner_file = tmp_path / "tests" / "test_task-001.py"
     runner_file.parent.mkdir(parents=True, exist_ok=True)
-    runner_file.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    # A Green answers its task's Red over the same frozen test: record Red first, then
+    # change only the product (a Green with no Red, or over a rewritten test, is refused).
+    product = tmp_path / "src" / "core.py"
+    product.parent.mkdir(parents=True, exist_ok=True)
+    product.write_text("DONE = False\n", encoding="utf-8")
+    runner_file.write_text(
+        "import sys\nsys.path.insert(0, 'src')\nimport core\nassert core.DONE, 'not implemented'\n",
+        encoding="utf-8",
+    )
+    red = run_evidence(builder.change_dir, phase="red", task="TASK-001",
+                       argv=_run_file_cmd("tests/test_task-001.py"), changed_paths=["tests/test_task-001.py"])
+    assert red.payload["result"] == "expected-failure", red.errors
+    product.write_text("DONE = True\n", encoding="utf-8")
     outcome = run_evidence(
         builder.change_dir,
         phase="green",
@@ -163,7 +175,7 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
         argv=_run_file_cmd("tests/test_task-001.py"),
         changed_paths=["tests/test_task-001.py", "src/core.py"],
     )
-    assert outcome.authentic
+    assert outcome.authentic, outcome.errors
     assert outcome.payload["result"] == "passed"
     assert str(outcome.payload["base_revision"]).startswith("sha256:")
     status_after = yaml.safe_load(
