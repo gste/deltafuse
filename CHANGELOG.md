@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The Artifact Writer's contract names only `create` and `update`.** The request-envelope schema
+  (`docs/contracts/artifact-writer.schema.yaml`) and every descriptor's `allowed_operations` still
+  listed `validate` and `describe`, whose commands 3.3.9 removed; nothing read those values.
+- **The README names both ways to validate an installed product**: `deltafuse validate-layout`, and
+  without Python `tests/validate-layout.ps1|sh` - the shell installers' pair, kept for them.
+- docs/state-machine (en, ru): a task can be marked `blocked` from `pending` once its Red is
+  recorded; the transition table keeps it so the Core's refusal names what is missing.
+
 ## [3.3.9] - 2026-10-22
 
 ### Added
