@@ -164,6 +164,9 @@ def _normalize_data_for_json(data: Any) -> Any:
     return data
 
 
+_LOADED: dict[tuple, tuple[dict[str, dict[str, Any]], dict[str, Any]]] = {}
+
+
 class SchemaRegistry:
     """Registry and validator for DeltaFuse JSON schemas."""
 
@@ -184,14 +187,24 @@ class SchemaRegistry:
     def _load_all_schemas(self) -> None:
         if not self.schemas_dir.exists():
             return
-        for file in self.schemas_dir.glob("*.schema.yaml"):
-            schema_key = file.name.replace(".schema.yaml", "")
-            with open(file, "r", encoding="utf-8") as f:
-                schema_dict = yaml.safe_load(f)
-                self._schemas[schema_key] = schema_dict
+        files = sorted(self.schemas_dir.glob("*.schema.yaml"))
+        signature = (self.schemas_dir, tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files))
+        cached = _LOADED.get(signature)
+        if cached is None:
+            # Parsing and meta-validating every schema took ~0.3 s, paid by each registry a
+            # command built (evidence writes, decisions); one process loads a directory once.
+            schemas: dict[str, dict[str, Any]] = {}
+            validators: dict[str, Any] = {}
+            for file in files:
+                schema_key = file.name.replace(".schema.yaml", "")
+                with open(file, "r", encoding="utf-8") as f:
+                    schema_dict = yaml.safe_load(f)
                 validator_cls = validator_for(schema_dict)
                 validator_cls.check_schema(schema_dict)
-                self._validators[schema_key] = validator_cls(schema_dict)
+                schemas[schema_key] = schema_dict
+                validators[schema_key] = validator_cls(schema_dict)
+            cached = _LOADED[signature] = (schemas, validators)
+        self._schemas, self._validators = dict(cached[0]), dict(cached[1])
 
     def get_schema(self, name: str) -> dict[str, Any]:
         normalized = name.replace(".schema.yaml", "")

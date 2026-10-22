@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no Red or over an already-green Red, and the gate refused it a step later. Recording now refuses
   it at once, with the gate's own message. The record-time coverage refusal now reads "did not
   pass the tests Red recorded as failing", as the gate's does.
+- **A process loads the schemas once.** Every `SchemaRegistry` parsed and meta-validated all
+  schema files again (~0.3 s); one command built several (the module default, one per evidence
+  write, one per decision). The loaded schemas are now shared per directory and file signature,
+  so an edited schema is still read anew.
 
 ### Removed
 
