@@ -25,7 +25,7 @@ def _declared(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-190", title="Block after Green")
-        .step_intake().step_analyze().step_specify().step_decompose()
+        .step_through_decompose()
     )
     test_file = tmp_path / "tests" / "test_task-001.py"
     test_file.parent.mkdir(parents=True, exist_ok=True)
@@ -37,17 +37,12 @@ def _declared(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     return builder
 
 
-def _status(builder: MockChangeBuilder) -> str:
-    text = (builder.change_dir / "tasks" / "TASK-001.md").read_text(encoding="utf-8")
-    return yaml.safe_load(text.split("---")[1])["status"]
-
-
 def test_blocking_before_any_green_is_refused_and_names_the_green_step(tmp_path: Path, repo_root: Path):
     builder = _declared(tmp_path, repo_root)
     with pytest.raises(TransitionError, match="before a Green attempt") as refused:
         set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     assert "--phase green --task TASK-001" in str(refused.value)
-    assert _status(builder) != "blocked"
+    assert builder.task_status() != "blocked"
 
 
 def test_a_failed_green_the_core_recorded_lets_the_worker_block(tmp_path: Path, repo_root: Path):
@@ -55,7 +50,7 @@ def test_a_failed_green_the_core_recorded_lets_the_worker_block(tmp_path: Path, 
     green = run_evidence(builder.change_dir, phase="green", task="TASK-001", argv=PYTEST)
     assert green.payload["result"] == "failed" and not green.authentic
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
-    assert _status(builder) == "blocked"
+    assert builder.task_status() == "blocked"
 
 
 def test_a_hand_written_or_older_green_does_not_count(tmp_path: Path, repo_root: Path):
@@ -85,9 +80,6 @@ def test_a_hand_written_or_older_green_does_not_count(tmp_path: Path, repo_root:
 
 def test_a_task_with_no_red_cannot_be_blocked_by_the_worker(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-191", title="No Red")
-        .step_intake().step_analyze().step_specify().step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-191", title="No Red").step_through_decompose()
     with pytest.raises(TransitionError, match="no Red record"):
         set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")

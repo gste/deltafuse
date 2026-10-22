@@ -51,13 +51,7 @@ def test_next_picks_lowest_change_id(tmp_path: Path, repo_root: Path):
 
 def test_next_declare_binds_first_pending_task(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-032", title="Tasks")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-032", title="Tasks").step_through_decompose()
     selected = select_next(build_work_queue(tmp_path))
     assert selected is not None
     assert selected.skill == "declare"
@@ -123,13 +117,7 @@ def test_next_json_and_no_writes(tmp_path: Path, repo_root: Path, capsys):
 def test_next_step_filter_and_change_scope(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     MockChangeBuilder(tmp_path, change_id="CHG-035", title="A").step_intake()
-    later = (
-        MockChangeBuilder(tmp_path, change_id="CHG-036", title="B")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    later = MockChangeBuilder(tmp_path, change_id="CHG-036", title="B").step_through_decompose()
     ret = main(["next", str(tmp_path), "--step", "declare"])
     out, _ = capsys.readouterr()
     assert ret == 0
@@ -150,10 +138,7 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-037", title="Impl")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     # Implement opens only after the Core closed the declaring gate.
@@ -173,13 +158,7 @@ def test_next_implement_after_target_confirmed(tmp_path: Path, repo_root: Path):
 
 def test_next_human_declare_checklist(tmp_path: Path, repo_root: Path, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-038", title="Human declare")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-038", title="Human declare").step_through_decompose()
     before = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     ret = main(["next", str(tmp_path), "--human", "--step", "declare"])
     out, _ = capsys.readouterr()
@@ -320,13 +299,7 @@ def _set_task_status(builder: MockChangeBuilder, status: str, task_id: str = "TA
 
 def _decomposed(tmp_path: Path, repo_root: Path, change_id: str) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
-    return (
-        MockChangeBuilder(tmp_path, change_id=change_id, title="Phases")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    return MockChangeBuilder(tmp_path, change_id=change_id, title="Phases").step_through_decompose()
 
 
 def test_next_declared_tasks_close_the_declaring_gate_first(tmp_path: Path, repo_root: Path):

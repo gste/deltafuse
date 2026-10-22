@@ -1,4 +1,3 @@
-import pytest
 from deltafuse.core.schemas import SchemaRegistry
 
 ALL_SCHEMAS = [

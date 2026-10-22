@@ -6,9 +6,6 @@ import hashlib
 import sys
 from pathlib import Path
 
-import pytest
-
-sys = pytest.importorskip("sys")
 sys.path.insert(0, "scripts")
 
 import wheel_evidence  # noqa: E402

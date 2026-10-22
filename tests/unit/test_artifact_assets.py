@@ -3,7 +3,6 @@
 from pathlib import Path
 import subprocess
 import sys
-import pytest
 
 
 def test_artifact_writer_contract_docs_exist(repo_root: Path):

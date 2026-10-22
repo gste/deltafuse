@@ -17,10 +17,7 @@ def _full_change(tmp_path: Path, repo_root: Path, change_id: str, route: str) ->
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
         MockChangeBuilder(tmp_path, change_id=change_id, title=route.title(), route=route)
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()

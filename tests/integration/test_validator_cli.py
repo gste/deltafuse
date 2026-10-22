@@ -1,6 +1,5 @@
 import sys
 import yaml
-import pytest
 from pathlib import Path
 from deltafuse.cli import main
 from deltafuse.core.installer import install
@@ -101,13 +100,7 @@ def test_cli_evidence_red_already_green(tmp_path: Path, repo_root: Path, capsys)
     from tests.fixtures.change_builder import MockChangeBuilder
 
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-027", title="CLI evidence")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-027", title="CLI evidence").step_through_decompose()
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
     (tests_dir / "test_task-001.py").write_text("assert True\n", encoding="utf-8")

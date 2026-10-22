@@ -22,13 +22,7 @@ from tests.fixtures.change_builder import MockChangeBuilder
 
 def _decomposed(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
-    return (
-        MockChangeBuilder(tmp_path, change_id="CHG-200", title="JVM runner")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    return MockChangeBuilder(tmp_path, change_id="CHG-200", title="JVM runner").step_through_decompose()
 
 
 REAL_RUN = subprocess.run

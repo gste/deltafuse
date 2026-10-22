@@ -31,10 +31,7 @@ def _gap_found(tmp_path: Path, repo_root: Path, outcome: str = "spec-gap") -> Mo
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-220", title="Gap")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )
@@ -85,7 +82,7 @@ def test_the_reopened_gap_walks_back_through_analyze_and_specify(tmp_path: Path,
     assert "advance --gate analyzed" in ready[0].reason and "check-gate" not in ready[0].reason
     from deltafuse.core.queue import format_item
 
-    assert f"--gate analyzed" in format_item(ready[0]) and "check-gate" not in format_item(ready[0])
+    assert "--gate analyzed" in format_item(ready[0]) and "check-gate" not in format_item(ready[0])
     skill = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(encoding="utf-8")
     assert "If `analyze_pass` is `coverage` or `gap`, close with `deltafuse advance" in skill
 

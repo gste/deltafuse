@@ -1,7 +1,6 @@
 """E2E deterministic test: Edge cases, gate rejections, and DAG cycles."""
 
 from pathlib import Path
-import pytest
 import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.installer import install

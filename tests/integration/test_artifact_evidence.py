@@ -4,7 +4,6 @@ Validates verification phase evidence execution (task=null, run.yaml),
 Core stamp verification, authorization, and baseline binding.
 """
 
-import json
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +12,6 @@ import yaml
 
 from deltafuse.core.evidence import run_evidence, EvidenceRunError, evidence_stamp_error
 from deltafuse.core.installer import install
-from deltafuse.core.fsm import check_gate
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -21,10 +19,7 @@ def _decomposed_change(tmp_path: Path, repo_root: Path, change_id: str = "CHG-12
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
         MockChangeBuilder(tmp_path, change_id=change_id, title="Verification Integration")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
 
 

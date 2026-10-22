@@ -23,13 +23,7 @@ def _declare(builder: MockChangeBuilder, task_id: str = "TASK-001") -> None:
 
 def _decomposed(tmp_path: Path, repo_root: Path, change_id: str = "CHG-020") -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
-    return (
-        MockChangeBuilder(tmp_path, change_id=change_id, title="Evidence runner")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    return MockChangeBuilder(tmp_path, change_id=change_id, title="Evidence runner").step_through_decompose()
 
 
 def test_classify_failure_markers():

@@ -329,6 +329,14 @@ class MockChangeBuilder:
         self._core_advance("decomposed")
         return self
 
+    def task_status(self, task_id: str = "TASK-001") -> str:
+        meta, _ = parse_frontmatter((self.change_dir / "tasks" / f"{task_id}.md").read_text(encoding="utf-8"))
+        return str(meta.get("status"))
+
+    def step_through_decompose(self) -> MockChangeBuilder:
+        """Intake, Analyze, Specify and Decompose with their defaults: where most gate tests start."""
+        return self.step_intake().step_analyze().step_specify().step_decompose()
+
     def step_declare(self, task_id: str = "TASK-001") -> MockChangeBuilder:
         red_dir = self.change_dir / "evidence" / "red"
         red_dir.mkdir(parents=True, exist_ok=True)

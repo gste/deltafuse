@@ -124,13 +124,7 @@ def test_next_json_declare_envelope_keeps_tests_and_task_paths(
     tmp_path: Path, repo_root: Path, capsys
 ):
     install(target_dir=tmp_path, framework_root=repo_root)
-    (
-        MockChangeBuilder(tmp_path, change_id="CHG-091", title="Declare env")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    MockChangeBuilder(tmp_path, change_id="CHG-091", title="Declare env").step_through_decompose()
     ret, data = _next_json(tmp_path, capsys)
     assert ret == 0
     envelope = data["envelope"]
@@ -167,10 +161,7 @@ def test_next_json_implement_envelope_uses_task_allowed_paths(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-093", title="Implement env")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     builder._core_advance("declaring")
@@ -292,10 +283,7 @@ def test_leash_implement_covers_allowed_src(tmp_path: Path, repo_root: Path, cap
     _set_baseline(tmp_path)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-094", title="Covered src")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     builder._core_advance("declaring")
@@ -532,13 +520,7 @@ def test_leash_accepts_a_state_rewrite_of_a_slug_named_task(tmp_path: Path, repo
     for TASK-001.md, so the rewrite read as a hand edit. The receipt now names
     the file."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-507", title="Slug")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-507", title="Slug").step_through_decompose()
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.rename(task.with_name("TASK-001-penalty-config.md"))
     _git_init_commit(tmp_path)
@@ -555,13 +537,7 @@ def test_leash_ignores_interpreter_caches(tmp_path: Path, repo_root: Path, capsy
     src/ratelimit/__pycache__/*.pyc, and the leash refused declare over it."""
     install(target_dir=tmp_path, framework_root=repo_root)
     _set_baseline(tmp_path)
-    (
-        MockChangeBuilder(tmp_path, change_id="CHG-508", title="Caches")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    MockChangeBuilder(tmp_path, change_id="CHG-508", title="Caches").step_through_decompose()
     ret, data = _leash_json(
         tmp_path,
         capsys,
@@ -580,13 +556,7 @@ def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_r
     evidence/, coverage.yaml and change.yaml from the declare and implement
     envelopes - the evidence `deltafuse evidence` writes read as a violation."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-509", title="Forbid docs")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-509", title="Forbid docs").step_through_decompose()
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.write_text(
         task.read_text(encoding="utf-8").replace(
@@ -623,12 +593,9 @@ def test_a_tasks_evidence_is_judged_by_its_own_step_when_the_step_moved_on(tmp_p
     from deltafuse.core.leash import check_paths, collect_chain_envelopes
     from tests.fixtures.change_builder import MockChangeBuilder
 
-    builder = (
+    (
         MockChangeBuilder(tmp_path, "CHG-501")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )

@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-sys = pytest.importorskip("sys")
 sys.path.insert(0, "scripts")
 
 import sync_assets as sa  # noqa: E402
@@ -44,7 +43,7 @@ def test_failed_generation_keeps_previous_bundle(asset_repo, monkeypatch):
     real_generate = sa._generate
 
     def failing_generate(target: Path):
-        partial = real_generate(target)
+        real_generate(target)
         (target / "schemas" / "partial.txt").write_text("partial", encoding="utf-8")
         raise RuntimeError("disk full mid-generation")
 

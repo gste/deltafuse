@@ -36,7 +36,7 @@ from deltafuse.bench.journal import collect_attempts
 from deltafuse.core.archiver import ArchivalError, archive_change
 from deltafuse.core.decide import apply_decision
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.fsm import check_gate, find_repo_root
+from deltafuse.core.fsm import check_gate
 from deltafuse.cli import main
 from deltafuse.core.queue import build_work_queue, select_next
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -70,10 +70,7 @@ def test_f01b_archive_refuses_a_change_that_never_reached_converged(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-902", title="Never converged")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -113,7 +110,7 @@ def test_f02_converged_gate_does_not_demand_regression_for_docs_route(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(
         tmp_path, change_id="CHG-902", title="Docs converge", route="docs"
-    ).step_intake().step_analyze().step_specify().step_decompose()
+    ).step_through_decompose()
     builder.step_declare().step_implement().step_verify()
 
     # Drop the regression leg the code route expects; a docs change has none.
@@ -189,8 +186,6 @@ def test_f04_passing_analyzed_gate_advances_status_out_of_draft(
     ).step_intake().step_analyze()
     builder._update_change_yaml({"status": "analyzing"})
 
-    from deltafuse.core.queue import build_work_queue, select_next
-
     item = select_next(build_work_queue(tmp_path))
     assert item is not None and item.step == "analyze", (
         "stale analyzing with a passing gate must surface the advance step"
@@ -212,8 +207,6 @@ def test_b01_installed_wheel_ships_schemas_and_templates():
     """accidental_misuse: an installed wheel must carry schemas and templates
     in the runtime asset bundle, so the CLI works with no source checkout."""
     import importlib.resources
-
-    import yaml as _yaml
 
     bundle = importlib.resources.files("deltafuse.assets")
     manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
@@ -239,10 +232,7 @@ def test_b04_synthetic_green_command_is_not_authentic_evidence(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-905", title="Synthetic green")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     from deltafuse.core.evidence import run_evidence
@@ -305,10 +295,7 @@ def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-906", title="Envelope escape")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     task_file = next((builder.change_dir / "tasks").glob("*.md"))
     meta_text = task_file.read_text(encoding="utf-8")
@@ -320,8 +307,6 @@ def test_sec04_task_envelope_cannot_escape_slice(tmp_path: Path, repo_root: Path
         "allowed_paths:\n    - docs/intake/**\n    - .",
     )
     task_file.write_text(expanded, encoding="utf-8")
-
-    from deltafuse.core.queue import build_work_queue
 
     item = select_next(build_work_queue(tmp_path))
     assert item is None, "a task that expands its envelope must not be ready"

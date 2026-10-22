@@ -1,7 +1,6 @@
 """E2E deterministic test: Full Golden Workflow through all lifecycle gates."""
 
 from pathlib import Path
-import pytest
 from deltafuse.core.fsm import check_gate, validate_change_package
 from deltafuse.core.installer import install
 from tests.fixtures.change_builder import MockChangeBuilder

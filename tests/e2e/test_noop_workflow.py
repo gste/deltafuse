@@ -1,7 +1,6 @@
 """E2E deterministic test: No-op / Bug Not-Reproduced / Unchanged Spec path."""
 
 from pathlib import Path
-import pytest
 import yaml
 from deltafuse.core.fsm import check_gate, validate_change_package, can_transition
 from deltafuse.core.evidence import write_stamped_evidence

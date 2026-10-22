@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 import yaml
 from deltafuse.core.schemas import SchemaRegistry

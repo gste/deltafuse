@@ -6,17 +6,13 @@ nested status smuggling, receipt recovery, and duplicate Human Gate action rejec
 
 from pathlib import Path
 import pytest
-import yaml
 
-from deltafuse.cli import main
 from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
 from deltafuse.core.artifact_policy import ArtifactPolicyError, create_authorization_context
 from deltafuse.core.decide import apply_decision, DecideError
 from deltafuse.core.installer import install
 from deltafuse.core.transitions import (
-    TransitionError,
     advance_change,
-    set_artifact_status,
     load_receipts,
     receipt_chain_errors,
 )

@@ -118,7 +118,7 @@ def test_update_slice_success(product_root: Path, auth_context: AuthorizationCon
     """Update slice title with valid patch, preserving body bytes and draft status."""
     service = ArtifactService(product_root, auth_context)
 
-    create_receipt = service.create(
+    service.create(
         kind="slice",
         identity="SLICE-02",
         semantic_payload={
@@ -421,7 +421,7 @@ def test_reproduce_finding_5_update_idempotency_and_create_body_conflict(product
     spec_file.write_text("# Spec Overview\n", encoding="utf-8")
 
     # Part 1: Create a task artifact first
-    cr_receipt = service.create(
+    service.create(
         kind="task",
         identity="TASK-010",
         semantic_payload={
@@ -493,7 +493,7 @@ def test_update_retry_with_unrelated_later_target_edit(product_root: Path, auth_
     spec_file.parent.mkdir(parents=True, exist_ok=True)
     spec_file.write_text("# Spec Overview\n", encoding="utf-8")
 
-    cr_receipt = service.create(
+    service.create(
         kind="task",
         identity="TASK-020",
         semantic_payload={

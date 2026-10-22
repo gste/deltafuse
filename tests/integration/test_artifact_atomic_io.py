@@ -12,7 +12,6 @@ from deltafuse.core.artifact_storage import (
     ArtifactStorageError,
     atomic_create,
     atomic_replace,
-    stage_artifact_bytes,
 )
 
 

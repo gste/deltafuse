@@ -6,7 +6,6 @@ and error diagnostic structures.
 
 import json
 from pathlib import Path
-import pytest
 import yaml
 from jsonschema import Draft202012Validator
 

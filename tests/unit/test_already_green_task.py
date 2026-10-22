@@ -28,10 +28,7 @@ def _decomposed(tmp_path: Path, repo_root: Path, *, delta: str) -> MockChangeBui
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-140", title="Constraint already met")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.write_text(

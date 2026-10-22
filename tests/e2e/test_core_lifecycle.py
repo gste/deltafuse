@@ -173,10 +173,7 @@ def test_ops_route_change_is_routed_by_the_queue_to_converged(tmp_path: Path, re
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-992", title="Ops", route="ops")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     change = builder.change_dir
     runbook = tmp_path / "docs" / "ops" / "runbook.md"

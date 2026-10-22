@@ -11,7 +11,6 @@ changed after acceptance still counts, and evidence names it at once.
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -20,24 +19,18 @@ from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from deltafuse.core.transitions import load_receipts
 from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.git import git
 
 SPEC = "docs/spec/shared/utilities.md"
-
-
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True,
-    )
 
 
 def _specified_with_uncommitted_spec(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
     (tmp_path / SPEC).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / SPEC).write_text("# utilities\n\n## REQ-U-01\n\nOld.\n", encoding="utf-8")
-    _git(tmp_path, "init")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-m", "base")
+    git(tmp_path, "init")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "base")
     builder = MockChangeBuilder(tmp_path, change_id="CHG-210", title="Blank").step_intake().step_analyze()
     (tmp_path / SPEC).write_text("# utilities\n\n## REQ-U-01\n\nNew: is_blank.\n", encoding="utf-8")
     return builder.step_specify()
@@ -85,10 +78,7 @@ def test_a_forbidden_path_in_red_is_named_when_recorded_not_a_step_later(tmp_pat
     "<record>.yaml:", and the forbidden_paths message has no colon after the name - so the
     record read authentic and only the `declaring` gate refused it."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-211", title="Forbidden")
-        .step_intake().step_analyze().step_specify().step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-211", title="Forbidden").step_through_decompose()
     task = builder.change_dir / "tasks" / "TASK-001.md"
     text = task.read_text(encoding="utf-8")
     task.write_text(

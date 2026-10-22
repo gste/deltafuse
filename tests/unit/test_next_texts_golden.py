@@ -62,36 +62,36 @@ def _specified(root: Path) -> None:
 
 
 def _decomposed(root: Path) -> None:
-    _builder(root, "CHG-307").step_intake().step_analyze().step_specify().step_decompose()
+    _builder(root, "CHG-307").step_through_decompose()
 
 
 def _declared(root: Path) -> None:
-    _builder(root, "CHG-308").step_intake().step_analyze().step_specify().step_decompose().step_declare()
+    _builder(root, "CHG-308").step_through_decompose().step_declare()
 
 
 def _implemented(root: Path) -> None:
     (
-        _builder(root, "CHG-309").step_intake().step_analyze().step_specify().step_decompose()
+        _builder(root, "CHG-309").step_through_decompose()
         .step_declare().step_implement()
     )
 
 
 def _verified(root: Path) -> None:
     (
-        _builder(root, "CHG-310").step_intake().step_analyze().step_specify().step_decompose()
+        _builder(root, "CHG-310").step_through_decompose()
         .step_declare().step_implement().step_verify()
     )
 
 
 def _blocked(root: Path) -> None:
-    builder = _builder(root, "CHG-311").step_intake().step_analyze().step_specify().step_decompose()
+    builder = _builder(root, "CHG-311").step_through_decompose()
     record_green_attempt(builder.change_dir, "TASK-001")
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
 
 
 def _gap(root: Path) -> None:
     builder = (
-        _builder(root, "CHG-312").step_intake().step_analyze().step_specify().step_decompose()
+        _builder(root, "CHG-312").step_through_decompose()
         .step_declare().step_implement()
     )
     (builder.change_dir / "verification.md").write_text(
@@ -101,7 +101,7 @@ def _gap(root: Path) -> None:
 
 def _no_route_gap(root: Path) -> None:
     builder = (
-        _builder(root, "CHG-313").step_intake().step_analyze().step_specify().step_decompose()
+        _builder(root, "CHG-313").step_through_decompose()
         .step_declare().step_implement()
     )
     (builder.change_dir / "verification.md").write_text(

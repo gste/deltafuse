@@ -10,7 +10,6 @@ neither, so a dead end on the Writer path shows here before a paid run.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -19,15 +18,9 @@ import yaml
 from deltafuse.cli import main
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue, select_next
+from tests.fixtures.git import git
 
 CHANGE = "CHG-701-writer-walk"
-
-
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", "-c", "user.email=walk@test", "-c", "user.name=walk", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True,
-    )
 
 
 def _cli(capsys, *argv: str) -> str:
@@ -44,8 +37,8 @@ def _step_done(root: Path, capsys, label: str) -> None:
     data = json.loads(out if out.strip() else err)
     assert data["violations"] == [], f"{label}: {data['violations']}"
     assert code == 0, label
-    _git(root, "add", "-A")
-    _git(root, "commit", "-q", "--allow-empty", "-m", label)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--allow-empty", "-m", label)
 
 
 def _write(capsys, tmp: Path, change: Path, kind: str, envelope: dict) -> None:
@@ -71,9 +64,9 @@ def test_the_writer_path_reaches_converged_with_a_clean_leash(tmp_path: Path, re
             "core": {"summary": "Core capability", "spec": ["docs/spec/core.md"], "code_roots": ["src"]},
         }}},
     }, sort_keys=False), encoding="utf-8")
-    _git(root, "init", "-q")
-    _git(root, "add", "-A")
-    _git(root, "commit", "-q", "-m", "baseline")
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "baseline")
     change = root / "docs" / "changes" / CHANGE
 
     # Intake: the Core scaffolds, the Worker writes the request's prose.

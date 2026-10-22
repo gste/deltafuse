@@ -4,13 +4,11 @@ run the installed CLI without any source checkout on sys.path."""
 from __future__ import annotations
 
 import importlib.util
-import json
+import os
 import subprocess
 import sys
 import venv
 from pathlib import Path
-
-import os
 
 import pytest
 
@@ -21,10 +19,19 @@ def _run(cmd: list[str] | str, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=600, **kwargs)
 
 
+def _tree_status() -> str:
+    return _run(["git", "status", "--porcelain"], cwd=REPO_ROOT).stdout
+
+
 def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
-    """build -> install (clean venv) -> CLI smoke with no source checkout."""
+    """build -> install (clean venv) -> CLI smoke with no source checkout.
+
+    QF-010: the smoke never writes into the checkout - `git status --porcelain` is the
+    same after it as before (one build serves both checks; each build costs ~20 s).
+    """
     if importlib.util.find_spec("pip") is None:
         pytest.fail("blocked: pip is unavailable; wheel smoke cannot run silently skipped")
+    before = _tree_status()
     dist = tmp_path / "dist"
     # 1. Build a real wheel from the repo. The bundle must already be in
     # sync: the test NEVER fixes the source tree on drift (completion step 7).
@@ -53,7 +60,7 @@ def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
     # 3. Run the installed CLI from a directory with no checkout on sys.path.
     workdir = tmp_path / "clean"
     workdir.mkdir()
-    env = {k: v for k, v in __import__("os").environ.items() if k != "PYTHONPATH"}
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     # The installed CLI must self-identify the release version and answer.
     result = _run([str(pip), "-m", "deltafuse", "--help"], cwd=str(workdir), env=env)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -72,34 +79,4 @@ def test_wheel_build_install_and_cli_smoke(tmp_path: Path):
     )
     assert validate.returncode == 0, validate.stdout + validate.stderr
 
-    # 4. QF-010: the test itself never writes outside tmp_path. The evidence
-    # object is validated for shape and dumped into tmp_path only; durable
-    # release evidence is created by the explicit scripts/wheel_evidence.py.
-    import hashlib
-    import json as _json
-
-    evidence = {
-        "schema_version": 1,
-        "wheel": wheel.name,
-        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
-        "python": sys.version.split()[0],
-        "platform": sys.platform,
-    }
-    evidence_path = tmp_path / f"{wheel.stem}-build-manifest.json"
-    evidence_path.write_text(_json.dumps(evidence, indent=2), encoding="utf-8")
-    assert evidence_path.is_file()
-    assert evidence["sha256"]
-    assert evidence["wheel"].endswith(".whl")
-
-
-def test_wheel_smoke_leaves_working_tree_clean(tmp_path: Path, monkeypatch):
-    """QF-010: a full wheel smoke leaves `git status --porcelain` identical."""
-    before = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=REPO_ROOT
-    ).stdout
-    monkeypatch.setenv("DELTAFUSE_WHEEL_EVIDENCE_DIR", str(tmp_path))
-    test_wheel_build_install_and_cli_smoke(tmp_path)
-    after = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=REPO_ROOT
-    ).stdout
-    assert after == before
+    assert _tree_status() == before
