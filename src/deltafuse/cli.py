@@ -620,7 +620,11 @@ def _main(argv: list[str] | None = None) -> int:
         try:
             result = advance_change(target, args.gate)
         except TransitionError as te:
-            return _fail(target, "advance failed", te, 1, cmd="advance", gate=args.gate)
+            # One journal error per gate finding, as `check-gate` writes them: the bench reads
+            # gate retries (T3) and waits for the human from these lines.
+            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=te.errors, n_errors=len(te.errors))
+            print(f"advance failed: {te}", file=sys.stderr)
+            return 1
         receipt = dict(result)
         receipt.pop("ok", None)
         # P12: `advance --gate converged` is the one call a Worker makes now, so the

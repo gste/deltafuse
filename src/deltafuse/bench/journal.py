@@ -27,8 +27,14 @@ GATE_STAGE = {
     "converged": "verify",
 }
 
+# The commands that close or preview a gate. Workers close gates with `advance` (one call,
+# check and stamp); until 3.3.9 only `check-gate` was read here, so gate retries (bench T3)
+# read 0 for every Worker that followed the skills.
+GATE_CMDS = frozenset({"check-gate", "advance"})
+
 WORKER_CMDS = (
     "next",
+    "advance",
     "check-gate",
     "evidence",
     "coverage",
@@ -176,8 +182,8 @@ def load_events(product: Path) -> list[dict[str, Any]]:
 
 def _cycle_key(event: dict[str, Any]) -> tuple[str, str]:
     cmd = str(event.get("cmd") or "")
-    if cmd == "check-gate":
-        return cmd, str(event.get("gate") or "")
+    if cmd in GATE_CMDS:
+        return "gate", str(event.get("gate") or "")
     if cmd == "evidence":
         return cmd, str(event.get("phase") or "")
     return cmd, ""
@@ -195,7 +201,7 @@ HUMAN_WAIT_MARKERS = (
 
 def waits_for_human(event: dict[str, Any]) -> bool:
     """True when every error of a refused gate is the human's verdict."""
-    if str(event.get("cmd") or "") != "check-gate" or event.get("ok"):
+    if str(event.get("cmd") or "") not in GATE_CMDS or event.get("ok"):
         return False
     errors = [str(e) for e in (event.get("errors") or [])]
     if not errors or len(errors) != int(event.get("n_errors") or len(errors)):
@@ -230,7 +236,7 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
         slot = commands.setdefault(cmd, {"n": 0, "ok": 0, "fail": 0})
         slot["n"] += 1
         slot["ok" if ok else "fail"] += 1
-        if cmd == "check-gate":
+        if cmd in GATE_CMDS:
             gate = str(event.get("gate") or "unknown")
             row = gates.setdefault(
                 gate, {"n": 0, "ok": 0, "fail": 0, "last_ok": False, "redundant": 0}
@@ -256,7 +262,7 @@ def collect_attempts(events: list[dict[str, Any]]) -> dict[str, Any]:
                 "ok": False,
                 "seq": [],
             }
-            if key[0] == "check-gate":
+            if key[0] == "gate":
                 current["gate"] = key[1]
             elif key[0] == "evidence":
                 current["phase"] = key[1]

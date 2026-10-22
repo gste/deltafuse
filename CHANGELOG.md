@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Gate retries count `advance`.** The command journal read gate attempts from `check-gate`
+  alone, and since the skills close every gate with `advance` (one call, check and stamp), the
+  bench's T3 gate-retry threshold read 0 for every Worker that followed them - a refused `advance`
+  was never a retry. `advance` now counts as a gate attempt like `check-gate`, a refused one is
+  journaled with one error per gate finding (so a refusal that only waits for the human is still
+  told apart), and `TransitionError` carries those findings. T3 measures again: runs before 3.3.9
+  are not comparable on it. Owner decision 2026-10-22.
+
 - **The `analyzed` gate routes a claim that adds to another capability's list to that capability.**
   Bench case M04 (2026-10-04..21): every failed run made security.ratelimit the primary of the
   claim asking for a new audit event, `ratelimit.penalty_started`, and listed monitoring.audit as

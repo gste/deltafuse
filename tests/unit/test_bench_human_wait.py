@@ -51,3 +51,35 @@ def test_waiting_is_neither_an_attempt_nor_a_retry():
 def test_a_run_that_only_waited_has_no_retries():
     summary = summarize_journal([WAIT, WAIT, {"cmd": "check-gate", "gate": "specified", "ok": True}])
     assert summary["gate_retries"] == 0 and summary["human_waits"] == 2
+
+
+def test_a_refused_advance_is_a_gate_retry_as_check_gate_was():
+    """Bench T3 read gate retries from `check-gate` lines only, and the skills close every gate
+    with `advance`: T3 read 0 for every Worker that followed them (codebase audit 2026-10-22)."""
+    adv_fail = {**OWN_FAULT, "cmd": "advance", "seq": 1}
+    adv_ok = {"cmd": "advance", "gate": "declaring", "ok": True, "seq": 2}
+    summary = summarize_journal([adv_fail, adv_ok])
+    assert summary["gate_retries"] == 1
+    assert summary["by_stage"]["declare"] == {"attempts": 2, "retries": 1}
+    (cycle,) = summary["cycles"]
+    assert cycle["gate"] == "declaring" and cycle["n"] == 2 and cycle["fail"] == 1 and cycle["ok"]
+    # The human's verdict is not the model's retry, whichever command asked the gate.
+    waiting = summarize_journal([{**WAIT, "cmd": "advance"}])
+    assert waiting["gate_retries"] == 0 and waiting["human_waits"] == 1
+
+
+def test_the_cli_journals_a_refused_advance_one_error_per_gate_finding(tmp_path, repo_root):
+    from deltafuse.bench.journal import load_events
+    from deltafuse.cli import main
+    from deltafuse.core.installer import install
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    (tmp_path / ".deltafuse" / "bench.yaml").write_text("case: J\n", encoding="utf-8")  # a bench product journals
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-501", title="Journal").step_intake()
+    (builder.change_dir / "request.md").unlink()
+    assert main(["advance", str(builder.change_dir), "--gate", "analyzed"]) == 1
+    (event,) = [e for e in load_events(tmp_path) if e.get("cmd") == "advance"]
+    assert event["ok"] is False and event["gate"] == "analyzed"
+    assert event["n_errors"] == len(event["errors"]) > 1
+    assert not any(e.startswith("gate 'analyzed' failed") for e in event["errors"])

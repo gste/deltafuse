@@ -81,7 +81,15 @@ VALID_CHAIN_STATUSES = RECEIPTED_TARGETS | _INFLIGHT_STATUSES
 
 
 class TransitionError(Exception):
-    """Rejected or inconsistent lifecycle transition."""
+    """Rejected or inconsistent lifecycle transition.
+
+    `errors` holds the gate's own findings when a gate refused, one per item, so the command
+    journal can tell a refusal that only waits for the human from the Worker's own errors.
+    """
+
+    def __init__(self, message: str, errors: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.errors = list(errors) if errors else [message]
 
 
 def _gate_reachable(current: str | None, target: str) -> bool:
@@ -479,9 +487,7 @@ def advance_change(
 
         errors = check_gate(change_path, gate, registry=registry)
         if errors:
-            raise TransitionError(
-                f"gate '{gate}' failed: {'; '.join(errors)}"
-            )
+            raise TransitionError(f"gate '{gate}' failed: {'; '.join(errors)}", errors=errors)
         if current not in allowed_from:
             raise TransitionError(
                 f"cannot apply gate '{gate}' from status '{current}'; "
@@ -500,7 +506,8 @@ def advance_change(
         if leash is not None and leash["mode"] == "enforce" and leash["violations"]:
             raise TransitionError(
                 f"gate '{gate}' refused by the write leash (workflow.leash: enforce): "
-                + "; ".join(leash["violations"])
+                + "; ".join(leash["violations"]),
+                errors=list(leash["violations"]),
             )
 
         if gate == "converged":
