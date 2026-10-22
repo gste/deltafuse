@@ -96,14 +96,14 @@ The DeltaFuse lifecycle is built upon 7 canonical skill primitives (`process/ski
 - `implement` — implement code and record Green/Regression evidence;
 - `verify` — verify artifact convergence and archive package.
 
-Those files bind the Worker to an LLM. They are not the Core. The Core (`deltafuse next`, `evidence`, `check-gate`) selects the step and checks gates. Skills do not choose the next step.
+Those files bind the Worker to an LLM. They are not the Core. The Core (`next`, `evidence`, `advance`) selects the step and checks gates. Skills do not choose the next step.
 
 ### Execution Profiles
 
 High-level operational workflows are orchestrated by invoking these canonical primitives in sequence:
 
 1. **Standard Change (Feature / Specification Change)**:
-   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → task loop (`declare` → `implement`) → `verify` → *(Human Gate: Merge)*.
+   `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → `declare` (every task) → `implement` (every task) → `verify` → *(Human Gate: Merge)*.
 2. **Implementation Bug**:
    `intake` → `analyze` *(delta specification.operation: none)* → `specify` *(proof of unchanged spec in spec-delta.md)* → `decompose` *(bugfix task)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Bootstrap Profile**:

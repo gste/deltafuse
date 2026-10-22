@@ -1359,3 +1359,25 @@ def test_implemented_gate_names_unfinished_tasks_before_stale_evidence(tmp_path:
     errors = check_gate(builder.change_dir, "implemented")
     assert "task TASK-002 is 'declared'" in errors[0], errors
     assert not any("stale evidence" in e for e in errors), errors
+
+
+def test_check_gate_refuses_an_unknown_gate_as_advance_does(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: `check-gate --gate convreged` printed "passed" and exited 0."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-990", title="Typo").step_intake()
+    errors = check_gate(builder.change_dir, "convreged")
+    assert len(errors) == 1 and "unknown gate 'convreged'" in errors[0] and "converged" in errors[0]
+    assert check_gate(builder.change_dir, "Intake") == []  # a known gate in any case still works
+
+
+def test_a_v2_status_is_refused_by_the_schema_while_prose_may_say_targeting(tmp_path: Path, repo_root: Path):
+    """The v2 vocabulary guard is the schemas' status enums; a dead text search was removed
+    (codebase audit 2026-10-21), which, fixed, would have refused prose saying "targeting"."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-991", title="Legacy").step_intake().step_analyze()
+    slice_file = next((builder.change_dir / "slices").glob("*.md"))
+    text = slice_file.read_text(encoding="utf-8")
+    slice_file.write_text(text + "\nThis slice is targeting the public API.\n", encoding="utf-8")
+    assert not any("targeting" in e for e in validate_change_package(builder.change_dir))
+    slice_file.write_text(text.replace("status: draft", "status: targeting"), encoding="utf-8")
+    assert any("'targeting' is not one of" in e for e in validate_change_package(builder.change_dir))

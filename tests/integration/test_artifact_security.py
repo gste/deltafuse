@@ -268,7 +268,7 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
     inp.write_text(
         json.dumps({
             "identity": "TASK-001",
-            "semantic_payload": {
+            "fields": {
                 "title": "Task 1",
                 "kind": "feature",
                 "slice": "SLICE-01",
@@ -283,19 +283,21 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
         encoding="utf-8",
     )
 
-    ret1 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
-    assert ret1 == 3
+    ret1 = main(["artifact", "write", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    # `artifact write` resolves the Change by its id first, so a mismatched id is a boundary
+    # violation (exit 2) rather than missing authority (3): refused all the same, nothing written.
+    assert ret1 == 2
     assert not (chg905 / "tasks" / "TASK-001.md").exists()
 
     # 2. Unknown/invented lifecycle stage: status: invented-stage
     (chg905 / "change.yaml").write_text("id: CHG-905\nstatus: invented-stage\n", encoding="utf-8")
-    ret2 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    ret2 = main(["artifact", "write", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
     assert ret2 == 3
     assert not (chg905 / "tasks" / "TASK-001.md").exists()
 
     # 3. Deleted change.yaml
     (chg905 / "change.yaml").unlink()
-    ret3 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+    ret3 = main(["artifact", "write", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
     assert ret3 == 3
     assert not (chg905 / "tasks" / "TASK-001.md").exists()
 
@@ -308,7 +310,7 @@ def test_aw37_cli_and_service_authority_probes(tmp_path: Path):
         "change: CHG-905\nstatus: normalized\n",
     ]:
         (chg905 / "change.yaml").write_text(invalid_yaml, encoding="utf-8")
-        ret_f2 = main(["artifact", "create", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
+        ret_f2 = main(["artifact", "write", "--kind", "task", "--change", str(chg905), "--input", str(inp), "--json"])
         assert ret_f2 == 3, f"Expected exit 3 for change.yaml:\n{invalid_yaml}"
         assert not (chg905 / "tasks" / "TASK-001.md").exists()
 

@@ -8,8 +8,12 @@ run ended. A reopened task is declared again against the product as it was befor
 
 The `declaring` gate - every Red taken, no product code written for the tasks yet - copies each
 task's product files (its `allowed_paths` outside Declare's test globs, stubs included) to
-`.deltafuse/snapshots/<change>/` and records their digests in its transition receipt. Reopening a
-task restores that task's files to the copies. A sibling that changed the same file loses that
+`.deltafuse/snapshots/<sha256>` and records `{path: sha256}` in its transition receipt. Reopening a
+task restores that task's files to the copies. The copies are named by content, not by path:
+Fuse-Back, Gradle J01 (2026-10-21) - a mirror of the tree under `.deltafuse/snapshots/<change>/`
+added ~45 characters to a 104-character test path, and `git add` on Windows failed with
+"Filename too long". A content name is 85 characters from the product root whatever the source
+path; 3.3.8's mirrored copies are still read. A sibling that changed the same file loses that
 change too; its evidence goes stale and the queue sends it back to Implement (owner decision
 2026-10-11: honest, though it costs).
 """
@@ -26,8 +30,18 @@ ABSENT = "absent"
 _CLOSED = frozenset({"cancelled", "superseded"})
 
 
+def snapshot_store(product_root: Path) -> Path:
+    return Path(product_root) / ".deltafuse" / "snapshots"
+
+
+def snapshot_copy(product_root: Path, digest: str) -> Path:
+    """Where the copy of the bytes with this sha256 is kept."""
+    return snapshot_store(product_root) / digest
+
+
 def snapshot_dir(product_root: Path, change_id: str) -> Path:
-    return Path(product_root) / ".deltafuse" / "snapshots" / change_id
+    """3.3.8's layout, a mirror of the tree per Change: read, never written."""
+    return snapshot_store(product_root) / change_id
 
 
 def _digest(data: bytes) -> str:
@@ -64,7 +78,6 @@ def _tasks(change_path: Path) -> list[dict[str, Any]]:
 def record_declaring_snapshot(product_root: Path, change_path: Path, change_id: str) -> dict[str, str]:
     """Copy every live task's product files; return {path: sha256 | 'absent'}."""
     root = Path(product_root)
-    base = snapshot_dir(root, change_id)
     snapshot: dict[str, str] = {}
     for meta in _tasks(Path(change_path)):
         for rel in task_product_paths(meta):
@@ -75,22 +88,21 @@ def record_declaring_snapshot(product_root: Path, change_path: Path, change_id: 
                 snapshot[rel] = ABSENT
                 continue
             data = source.read_bytes()
-            copy = base / rel
-            copy.parent.mkdir(parents=True, exist_ok=True)
-            copy.write_bytes(data)
-            snapshot[rel] = _digest(data)
+            digest = _digest(data)
+            copy = snapshot_copy(root, digest)
+            if not copy.is_file():
+                copy.parent.mkdir(parents=True, exist_ok=True)
+                copy.write_bytes(data)
+            snapshot[rel] = digest
     return dict(sorted(snapshot.items()))
 
 
 def declaring_snapshot(product_root: Path, change_id: str) -> dict[str, str] | None:
     """The digests the Change's latest `declaring` transition recorded, or None."""
-    from deltafuse.core.transitions import load_receipts
+    from deltafuse.core.transitions import latest_transition_field
 
-    for row in reversed(load_receipts(Path(product_root), change_id)):
-        if row.get("kind") == "transition" and row.get("gate") == "declaring":
-            snap = row.get("product_snapshot")
-            return dict(snap) if isinstance(snap, dict) else None
-    return None
+    snap = latest_transition_field(product_root, change_id, "declaring", "product_snapshot")
+    return dict(snap) if isinstance(snap, dict) else None
 
 
 def restore_plan(product_root: Path, change_id: str, meta: dict[str, Any]) -> tuple[list[tuple[str, bytes | None]], list[str]]:
@@ -102,7 +114,6 @@ def restore_plan(product_root: Path, change_id: str, meta: dict[str, Any]) -> tu
     snap = declaring_snapshot(product_root, change_id)
     if snap is None:
         return [], []
-    base = snapshot_dir(Path(product_root), change_id)
     plan: list[tuple[str, bytes | None]] = []
     problems: list[str] = []
     for rel in task_product_paths(meta):
@@ -112,7 +123,9 @@ def restore_plan(product_root: Path, change_id: str, meta: dict[str, Any]) -> tu
         if digest == ABSENT:
             plan.append((rel, None))
             continue
-        copy = base / rel
+        copy = snapshot_copy(Path(product_root), digest)
+        if not copy.is_file():
+            copy = snapshot_dir(Path(product_root), change_id) / rel  # taken by 3.3.8
         data = copy.read_bytes() if copy.is_file() else None
         if data is None or _digest(data) != digest:
             problems.append(f"the copy of {rel} taken at the declaring gate is missing or altered ({copy})")

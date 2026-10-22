@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 import argparse
-import hashlib
 import json
 import re
 import sys
 from pathlib import Path
+from typing import Any, NoReturn
 
 from deltafuse.core.installer import install, InstallationError
 from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
@@ -30,15 +30,8 @@ from deltafuse.core.queue import (
 from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core import gate_password
 from deltafuse.core.transitions import TransitionError, advance_change, gate_order_errors
-from deltafuse.core.leash import (
-    LeashError,
-    check_paths,
-    collect_chain_envelopes,
-    collect_ready_envelopes,
-    git_dirty_paths,
-    load_baseline,
-    load_leash_mode,
-)
+from deltafuse.core.transitions import already_green_advice, set_artifact_status
+from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
 from deltafuse.core.context import (
@@ -48,7 +41,6 @@ from deltafuse.core.context import (
     validate_task_context_budget,
 )
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.bench.loader import PACK_ENV as BENCH_PACK_ENV, STAGES as BENCH_STAGES
 
 
 class _HintingParser(argparse.ArgumentParser):
@@ -59,9 +51,8 @@ class _HintingParser(argparse.ArgumentParser):
     which one they meant.
     """
 
-    def error(self, message: str) -> "NoReturn":  # type: ignore[name-defined]
+    def error(self, message: str) -> NoReturn:
         import difflib
-        import re
 
         # The "(choose from ...)" wording is argparse's own and has changed across Python
         # versions (3.10 through 3.14 are all in CI); the choice value itself ("invalid
@@ -115,105 +106,28 @@ def _journal(start: Path | str, **event: object) -> None:
     record_event(start, **event)
 
 
-def export_tool_schemas(kind: str | None = None, operation: str | None = None) -> dict[str, Any]:
-    """Export tool argument JSON Schema suitable for LLM / host agent bindings.
+def _fail(start: Path, what: str, error: object, code: int, **event: object) -> int:
+    """Journal a refused command, print `<what>: <error>` on stderr, return `code`."""
+    event.setdefault("ok", False)  # a caller that places `ok` itself keeps its journal key order
+    _journal(start, **event, errors=[str(error)])
+    print(f"{what}: {error}", file=sys.stderr)
+    return code
 
-    Excludes Core-owned fields (status, schema_version, framework) from public write schemas.
-    """
-    from deltafuse.core.artifact_registry import ArtifactRegistry
 
-    registry = ArtifactRegistry()
+def _print_errors(header: str, errors: list[str]) -> None:
+    print(header, file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
 
-    if kind:
-        descriptor = registry.get_descriptor(kind)
-        allowed = descriptor.get("creatable_semantic_fields") or descriptor.get("allowed_semantic_fields") or []
-        public_fields = [f for f in allowed if f not in ("status", "schema_version", "framework", "id", "change")]
 
-        props: dict[str, Any] = {}
-        for field in public_fields:
-            if field in ("allowed_paths", "forbidden_paths", "depends_on", "spec_refs"):
-                props[field] = {"type": "array", "items": {"type": "string"}}
-            elif field == "context_budget":
-                props[field] = {
-                    "type": "object",
-                    "properties": {
-                        "max_tokens": {"type": "integer"},
-                        "max_files": {"type": "integer"},
-                    },
-                }
-            else:
-                props[field] = {"type": "string"}
-
-        if operation == "create":
-            return {
-                "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "title": f"Artifact Create Payload Schema ({kind})",
-                "type": "object",
-                "required": ["identity", "semantic_payload"],
-                "properties": {
-                    "identity": {"type": "string", "description": f"Artifact ID for {kind}"},
-                    "semantic_payload": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": props,
-                    },
-                    "body": {"type": "string", "description": "Optional markdown body content"},
-                    "request_id": {"type": "string", "description": "Optional request ID for transaction idempotency"},
-                },
-            }
-        elif operation == "update":
-            return {
-                "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "title": f"Artifact Update Patch Schema ({kind})",
-                "type": "object",
-                "required": ["target", "expected_sha256", "patch"],
-                "properties": {
-                    "target": {"type": "string", "description": "Relative file path to target artifact"},
-                    "expected_sha256": {"type": "string", "description": "Expected SHA256 digest of target file"},
-                    "patch": {
-                        "type": "object",
-                        "properties": {
-                            "set": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "required": ["path", "value"],
-                                    "properties": {
-                                        "path": {"type": "string"},
-                                        "value": {},
-                                    },
-                                },
-                            },
-                            "remove": {"type": "array", "items": {"type": "string"}},
-                            "canonicalize_metadata": {"type": "boolean", "default": False},
-                        },
-                    },
-                    "body_replacement": {"type": "string", "description": "Optional body replacement string"},
-                    "request_id": {"type": "string", "description": "Optional request ID"},
-                },
-            }
-        elif operation == "validate":
-            return {
-                "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "title": f"Artifact Validate Schema ({kind})",
-                "type": "object",
-                "required": ["target"],
-                "properties": {
-                    "target": {"type": "string", "description": "Relative target file path or artifact ID"},
-                },
-            }
-
-    return {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "title": "DeltaFuse Artifact Writer Tool Call Schema Set",
-        "type": "object",
-        "properties": {
-            "create": {"$ref": "#/definitions/create"},
-            "update": {"$ref": "#/definitions/update"},
-            "validate": {"$ref": "#/definitions/validate"},
-            "describe": {"$ref": "#/definitions/describe"},
-        },
-    }
+def _report(cmd: str, target: Path, errors: list[str], failed: str, valid: str, **event: object) -> int:
+    """Journal a validator's verdict; list the errors on stderr (exit 1) or print `valid` (exit 0)."""
+    _journal(target, cmd=cmd, ok=not errors, errors=errors, n_errors=len(errors), **event)
+    if errors:
+        _print_errors(f"{failed} for {target} with {len(errors)} error(s):", errors)
+        return 1
+    print(valid)
+    return 0
 
 
 def _read_secret(prompt: str, hint: str = "") -> str:
@@ -333,7 +247,10 @@ def _artifact_write_command(args: argparse.Namespace) -> int:
         return fail(ex.code, f"input is not valid JSON: {ex.message}", 2)
     except (ArtifactPolicyError, ArtifactPatchError, ArtifactServiceError) as ex:
         code = getattr(ex, "code", "artifact_error")
-        ret = 3 if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority") else 2
+        # A policy refusal is 3, a malformed request 2 - the split the retired `artifact create` made.
+        denied = ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority",
+                  "unauthorized_stage", "stage_halted")
+        ret = 3 if code in denied else 2
         message = str(ex) if str(ex).startswith("[") else f"[{code}] {ex}"
         return fail(code, message, ret)
     except (ArtifactLockError, ArtifactTransactionError) as ex:
@@ -351,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     from deltafuse.core.assets import AssetError
 
     raw = list(sys.argv[1:] if argv is None else argv)
-    writes = len(raw) > 1 and raw[0] == "artifact" and raw[1] in ("create", "write", "update")
+    writes = len(raw) > 1 and raw[0] == "artifact" and raw[1] == "write"
     out, err = sys.stdout, sys.stderr
     cap_out = cap_err = None
     if writes:
@@ -399,7 +316,6 @@ def _journal_artifact_write(raw: list[str], code: int, out: str, err: str) -> No
     `artifact write` left no trace in the command journal, so a Worker that fought the
     Writer for 20 calls and one that never touched it looked the same to every metric.
     """
-    import re
 
     errors: list[str] = []
     if code != 0:
@@ -487,7 +403,6 @@ def _main(argv: list[str] | None = None) -> int:
     state_parser.add_argument("--status", required=True, help="New status")
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
-    # validate-layout command (P6.1)
     # new command (DF3-005 / C-03): deterministic Change scaffolding
     new_parser = subparsers.add_parser("new", help="Scaffold a minimal Change package (does not close Intake)")
     new_parser.add_argument("product_path", nargs="?", default=".", help="Product root (default: current dir)")
@@ -501,247 +416,127 @@ def _main(argv: list[str] | None = None) -> int:
 
     # evidence command (WK-002)
     ev_parser = subparsers.add_parser(
-        "evidence",
-        help="Run a command after '--' and write evidence/red|green|regression YAML",
+        "evidence", help="Run a command after '--' and write evidence/red|green|regression YAML"
     )
     ev_parser.add_argument("change_path", help="Path to Change package directory")
     ev_parser.add_argument(
-        "--phase",
-        "-p",
-        required=True,
-        choices=["red", "green", "regression", "verification"],
+        "--phase", "-p", required=True, choices=["red", "green", "regression", "verification"],
         help="Evidence phase to record",
     )
     ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
-    ev_parser.add_argument(
-        "--changed-path",
-        action="append",
-        default=[],
-        dest="changed_paths",
-        help="Relative path written by the Worker (repeatable)",
-    )
+    ev_parser.add_argument("--changed-path", action="append", default=[], dest="changed_paths",
+                           help="Relative path written by the Worker (repeatable)")
     ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
 
-    cov_parser = subparsers.add_parser(
-        "coverage",
-        help="Write coverage.yaml from routing and slices (no LLM)",
-    )
+    cov_parser = subparsers.add_parser("coverage",
+                                       help="Write coverage.yaml from routing and slices (no LLM)")
     cov_parser.add_argument("change_path", help="Path to Change package directory")
 
     # next / work queue (WK-003)
-    next_parser = subparsers.add_parser(
-        "next",
-        help="Select the next ready lifecycle step (no LLM)",
-    )
-    next_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root or Change package directory (default: current dir)",
-    )
+    next_parser = subparsers.add_parser("next", help="Select the next ready lifecycle step (no LLM)")
+    next_parser.add_argument("path", nargs="?", default=".",
+                             help="Product root or Change package directory (default: current dir)")
     next_parser.add_argument("--list", action="store_true", help="Print the full ready/blocked queue")
     next_parser.add_argument("--json", action="store_true", help="Write a JSON snapshot to stdout")
     next_parser.add_argument(
-        "--human",
-        action="store_true",
+        "--human", action="store_true",
         help="Print a checklist from the step contract (same files, not a second process)",
     )
-    next_parser.add_argument(
-        "--step",
-        choices=list(step_names()),
-        help="Only select this step",
-    )
+    next_parser.add_argument("--step", choices=list(step_names()), help="Only select this step")
 
     decide_parser = subparsers.add_parser(
-        "decide",
-        help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)",
+        "decide", help="Apply a Human Gate choice after the human answers (no LLM, no auto-accept)"
     )
+    decide_parser.add_argument("path", nargs="?", default=".",
+                               help="Product root, or Change directory for --spec")
+    decide_parser.add_argument("--decision", "-d", default=None, help="DEC id or docs/decisions/*.md path")
+    decide_parser.add_argument("--spec", action="store_true",
+                               help="Apply the specification Human Gate (spec-delta.md on the Change path)")
     decide_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root, or Change directory for --spec",
-    )
-    decide_parser.add_argument(
-        "--decision",
-        "-d",
-        default=None,
-        help="DEC id or docs/decisions/*.md path",
-    )
-    decide_parser.add_argument(
-        "--spec",
-        action="store_true",
-        help="Apply the specification Human Gate (spec-delta.md on the Change path)",
-    )
-    decide_parser.add_argument(
-        "--task",
-        default=None,
+        "--task", default=None,
         help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
     )
     decide_parser.add_argument(
-        "--status",
-        required=True,
-        choices=["accepted", "rejected", "cancelled", "reopened"],
+        "--status", required=True, choices=["accepted", "rejected", "cancelled", "reopened"],
         help="Recorded human choice (cancelled, reopened: only with --task)",
     )
     decide_parser.add_argument(
-        "--gap",
-        default=None,
+        "--gap", default=None,
         help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
     )
     decide_parser.add_argument(
-        "--note",
-        default=None,
-        help="With --status reopened: what the human passes on to the next Declare",
+        "--note", default=None, help="With --status reopened: what the human passes on to the next Declare"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
     # Human Gate password: interactive only, never a flag or an environment
     # variable - anything a Worker's shell can pass, a Worker can pass.
     gpw_parser = subparsers.add_parser(
-        "gate-password",
-        help="Set, clear or show the optional Human Gate password (interactive only)",
+        "gate-password", help="Set, clear or show the optional Human Gate password (interactive only)"
     )
     gpw_parser.add_argument("action", choices=["set", "clear", "status"])
     gpw_parser.add_argument("path", nargs="?", default=".", help="Product root")
 
     cap_parser = subparsers.add_parser(
-        "capability",
-        help="Propose a capability the catalog does not have yet (draft, Analyze)",
+        "capability", help="Propose a capability the catalog does not have yet (draft, Analyze)"
     )
     cap_sub = cap_parser.add_subparsers(dest="capability_command", required=True)
-    cap_propose = cap_sub.add_parser(
-        "propose", help="Add <domain>.<capability> to the catalog as a draft"
-    )
+    cap_propose = cap_sub.add_parser("propose", help="Add <domain>.<capability> to the catalog as a draft")
     cap_propose.add_argument("name", help="<domain>.<capability>, e.g. monitoring.usage_stats")
     cap_propose.add_argument("--summary", required=True, help="One line: what it is responsible for")
-    cap_propose.add_argument(
-        "--spec", required=True, help="Spec file Specify will write, under docs/spec/"
-    )
-    cap_propose.add_argument(
-        "--code-root", action="append", default=[], help="Code root it will own (repeatable)"
-    )
+    cap_propose.add_argument("--spec", required=True, help="Spec file Specify will write, under docs/spec/")
+    cap_propose.add_argument("--code-root", action="append", default=[],
+                             help="Code root it will own (repeatable)")
     cap_propose.add_argument("--path", default=".", help="Product root")
 
     # board snapshot (FM-001)
-    board_parser = subparsers.add_parser(
-        "board",
-        help="Emit a read-only fuse-map board snapshot (no product writes)",
-    )
+    board_parser = subparsers.add_parser("board",
+                                         help="Emit a read-only fuse-map board snapshot (no product writes)")
+    board_parser.add_argument("product_path", nargs="?", default=".",
+                              help="Product repository root (default: current dir)")
     board_parser.add_argument(
-        "product_path",
-        nargs="?",
-        default=".",
-        help="Product repository root (default: current dir)",
-    )
-    board_parser.add_argument(
-        "--json",
-        action="store_true",
-        default=True,
+        "--json", action="store_true", default=True,
         help="Write the snapshot JSON to stdout (default; the only stdout on success)",
     )
-    board_parser.add_argument(
-        "--archive",
-        action="store_true",
-        help="Include archived Change cards",
-    )
+    board_parser.add_argument("--archive", action="store_true", help="Include archived Change cards")
 
-    # lint-context command (P7.6)
     # validate-config (DF3-009 item 5): one validator for config contracts
-    cfg_parser = subparsers.add_parser(
-        "validate-config", help="Validate .deltafuse/config.yaml as one contract"
-    )
+    cfg_parser = subparsers.add_parser("validate-config",
+                                       help="Validate .deltafuse/config.yaml as one contract")
     cfg_parser.add_argument("product_path", nargs="?", default=".")
     cfg_parser.add_argument("--json", action="store_true")
 
     ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
     ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
 
-    leash_parser = subparsers.add_parser(
-        "leash",
-        help="Check git diff against the current write envelope (no LLM)",
-    )
-    leash_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Product root (default: current dir)",
-    )
+    leash_parser = subparsers.add_parser("leash",
+                                         help="Check git diff against the current write envelope (no LLM)")
+    leash_parser.add_argument("path", nargs="?", default=".", help="Product root (default: current dir)")
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
     leash_parser.add_argument(
-        "--base",
-        default=None,
+        "--base", default=None,
         help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
     )
-    leash_parser.add_argument(
-        "--head",
-        default=None,
-        help="Exact head SHA (default: HEAD); requires --base",
-    )
-    leash_parser.add_argument(
-        "--file",
-        action="append",
-        default=[],
-        dest="files",
-        help="Relative path to check instead of git diff (repeatable)",
-    )
+    leash_parser.add_argument("--head", default=None, help="Exact head SHA (default: HEAD); requires --base")
+    leash_parser.add_argument("--file", action="append", default=[], dest="files",
+                              help="Relative path to check instead of git diff (repeatable)")
 
     bench_parser = subparsers.add_parser(
-        "bench",
-        help="Agent-agnostic Worker bench: init a case, score the disk, compare runs (no LLM)",
+        "bench", help="What a product's bench journal holds (no LLM); the bench itself is deltafuse-bench"
     )
     bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
-    bench_init = bench_sub.add_parser("init", help="Install a product workspace for a bench case")
-    bench_init.add_argument("case_id", help="Case id (M01-cooldown floor, M02-policy-stats frontier)")
-    bench_init.add_argument("product_dir", help="New worker sandbox (must be empty unless --force)")
-    bench_init.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Recreate the sandbox if the directory already exists",
-    )
-    bench_init.add_argument(
-        "--pack",
-        default=None,
-        help="Judge pack (framework root, process/bench, or cases/). Default: this checkout",
-    )
-    # `score` and `compare` live in deltafuse-bench since 3.3.0: the judge is
-    # versioned apart from the framework it measures (roadmap: one harness in
-    # deltafuse-bench). The framework keeps only what a product produces.
-    bench_journal = bench_sub.add_parser(
-        "journal",
-        help="Judge: collect Core attempts from a sandbox journal (no LLM)",
-    )
-    bench_journal.add_argument("product_dir", help="Product root created by bench init")
+    # `init`, `score` and `compare` live in deltafuse-bench (score/compare since 3.3.0, init since
+    # 3.3.9): the bench is versioned apart from the framework it measures. The framework keeps
+    # only what a product produces - its command journal.
+    bench_journal = bench_sub.add_parser("journal",
+                                         help="Judge: collect Core attempts from a sandbox journal (no LLM)")
+    bench_journal.add_argument("product_dir", help="Product root created by `deltafuse-bench init`")
 
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
     art_sub = art_parser.add_subparsers(dest="artifact_cmd", required=True)
-
-    art_desc = art_sub.add_parser("describe", help="Describe artifact operation and allowed fields")
-    art_desc.add_argument("--kind", "-k", required=True, help="Target artifact kind")
-    art_desc.add_argument("--operation", "-o", default="create", choices=["create", "update", "validate", "describe"], help="Operation to describe")
-    art_desc.add_argument("--json", action="store_true", help="Output JSON format")
-    art_desc.add_argument("--export-schema", action="store_true", help="Export tool-call argument schema")
-
-    art_create = art_sub.add_parser("create", help="Create an artifact atomically")
-    art_create.add_argument("--kind", "-k", required=True, help="Target artifact kind")
-    art_create.add_argument("--change", "-c", default=".", help="Change package or product root path")
-    art_create.add_argument("--input", "-i", default="-", help="Path to JSON input file or '-' for stdin")
-    art_create.add_argument("--identity", help="Artifact ID; overrides JSON envelope if set")
-    art_create.add_argument("--json", action="store_true", help="Output JSON receipt to stdout")
-
-    art_update = art_sub.add_parser("update", help="Update an artifact atomically")
-    art_update.add_argument("--kind", "-k", required=True, help="Target artifact kind")
-    art_update.add_argument("--change", "-c", default=".", help="Change package or product root path")
-    art_update.add_argument("--input", "-i", default="-", help="Path to JSON input file or '-' for stdin")
-    art_update.add_argument("--target", help="Target relative file path; overrides JSON envelope if set")
-    art_update.add_argument("--expected-sha256", help="Expected SHA256 digest of target file")
-    art_update.add_argument("--json", action="store_true", help="Output JSON receipt to stdout")
-
     art_write = art_sub.add_parser(
-        "write",
-        help="Create or update a Change artifact: fields plus a prose body (the Worker's path)",
+        "write", help="Create or update a Change artifact: fields plus a prose body (the Worker's path)"
     )
     art_write.add_argument("--kind", "-k", required=True, help="task | slice | routing | spec-delta | change")
     art_write.add_argument("--change", "-c", required=True, help="Change directory")
@@ -750,18 +545,6 @@ def _main(argv: list[str] | None = None) -> int:
         help='JSON file (or - for stdin): {"identity" | "target", "fields": {...}, "body": "..."}',
     )
     art_write.add_argument("--json", action="store_true", help="Output the Writer receipt as JSON")
-
-    art_val = art_sub.add_parser("validate", help="Validate an artifact strictly read-only")
-    art_val.add_argument("--kind", "-k", required=True, help="Target artifact kind")
-    art_val.add_argument("--change", "-c", default=".", help="Change package or product root path")
-    art_val.add_argument("--target", "-t", required=True, help="Relative target file path or artifact ID")
-    art_val.add_argument("--json", action="store_true", help="Output JSON validation result to stdout")
-
-    art_idx = art_sub.add_parser("update-index", help="Explicit Change child-index update from existing child on disk")
-    art_idx.add_argument("--change", "-c", default=".", help="Change package directory path")
-    art_idx.add_argument("--child-kind", "-k", required=True, choices=["task", "slice", "spec-delta", "decision"], help="Child artifact kind")
-    art_idx.add_argument("--child-id", "-id", required=True, help="Child artifact ID")
-    art_idx.add_argument("--json", action="store_true", help="Output JSON result to stdout")
 
     args = parser.parse_args(raw)
 
@@ -787,14 +570,7 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate":
         target = Path(args.change_path)
         errors = validate_change_package(target)
-        _journal(target, cmd="validate", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"Change package {target} is valid.")
-        return 0
+        return _report("validate", target, errors, "Validation failed", f"Change package {target} is valid.")
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
@@ -820,9 +596,7 @@ def _main(argv: list[str] | None = None) -> int:
             token_heuristic=tokenizer["heuristic"],
         )
         if errors:
-            print(f"Gate {args.gate} check failed for {target}:", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
+            _print_errors(f"Gate {args.gate} check failed for {target}:", errors)
             return 1
         for warning in warnings:
             print(f"Gate {args.gate} (advisory): {warning}", file=sys.stderr)
@@ -837,20 +611,18 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Change package {target.name} successfully archived to {dest}")
             return 0
         except ArchivalError as ae:
-            _journal(target, cmd="archive", ok=False, errors=[str(ae)])
-            print(f"Archival failed: {ae}", file=sys.stderr)
-            return 1
+            return _fail(target, "Archival failed", ae, 1, cmd="archive")
         except Exception as ex:
-            _journal(target, cmd="archive", ok=False, errors=[str(ex)])
-            print(f"Unexpected error during archival: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Unexpected error during archival", ex, 2, cmd="archive")
 
     elif args.command == "advance":
         target = Path(args.change_path)
         try:
             result = advance_change(target, args.gate)
         except TransitionError as te:
-            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=[str(te)])
+            # One journal error per gate finding, as `check-gate` writes them: the bench reads
+            # gate retries (T3) and waits for the human from these lines.
+            _journal(target, cmd="advance", gate=args.gate, ok=False, errors=te.errors, n_errors=len(te.errors))
             print(f"advance failed: {te}", file=sys.stderr)
             return 1
         receipt = dict(result)
@@ -870,42 +642,27 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"advance: leash ({result['leash']['mode']}): {finding}", file=sys.stderr)
             if (result.get("leash") or {}).get("checked") is False:
                 print(f"advance: leash not checked: {result['leash']['reason']}", file=sys.stderr)
-            print(
-                f"advance: gate '{result['gate']}' applied: "
-                f"{result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"advance: gate '{result['gate']}' applied: {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "state":
-        # TransitionError is already imported at module scope; re-importing it
-        # here would make it a function-local name and leave the `advance`
-        # branch above referencing it before assignment.
-        from deltafuse.core.transitions import set_artifact_status
-
         target = Path(args.change_path)
         try:
             result = set_artifact_status(
-                target,
-                status=args.status,
-                task_id=args.task,
-                slice_id=args.slice_id,
+                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
                 change_status=args.change,
             )
         except TransitionError as te:
-            _journal(target, cmd="state", status=args.status, ok=False, errors=[str(te)])
-            print(f"state failed: {te}", file=sys.stderr)
-            return 1
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
         _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
-            print(
-                f"state: {result['artifact']} status {result['from']} -> {result['to']} "
-                f"(receipt {result['receipt'][:12]})"
-            )
+            print(f"state: {result['artifact']} status {result['from']} -> {result['to']} "
+                  f"(receipt {result['receipt'][:12]})")
         return 0
 
     elif args.command == "new":
@@ -913,10 +670,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         try:
             change_dir = scaffold_change(
-                Path(args.product_path),
-                args.change_id,
-                route=args.route,
-                title=args.title,
+                Path(args.product_path), args.change_id, route=args.route, title=args.title
             )
         except ScaffoldError as se:
             print(f"new failed: {se}", file=sys.stderr)
@@ -931,45 +685,22 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
-        _journal(target, cmd="validate-layout", ok=not errors, errors=errors, n_errors=len(errors))
-        if errors:
-            print(f"Product layout validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(f"DeltaFuse product layout at {target} is valid.")
-        return 0
+        valid = f"DeltaFuse product layout at {target} is valid."
+        return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
+        target = Path(args.change_path)
         try:
             outcome = run_evidence(
-                Path(args.change_path),
-                phase=args.phase,
-                task=args.task,
-                argv=evidence_argv,
-                changed_paths=args.changed_paths,
-                timeout=args.timeout,
+                target, phase=args.phase, task=args.task, argv=evidence_argv,
+                changed_paths=args.changed_paths, timeout=args.timeout,
             )
         except EvidenceRunError as ex:
-            _journal(
-                Path(args.change_path),
-                cmd="evidence",
-                phase=args.phase,
-                task=args.task,
-                ok=False,
-                errors=[str(ex)],
-            )
-            print(f"Evidence run failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(
-            Path(args.change_path),
-            cmd="evidence",
-            phase=args.phase,
-            task=args.task,
-            ok=bool(outcome.authentic),
-            errors=list(outcome.errors or []),
-            n_errors=len(outcome.errors or []),
-        )
+            return _fail(target, "Evidence run failed", ex, 2, cmd="evidence", phase=args.phase,
+                         task=args.task)
+        errors = list(outcome.errors or [])
+        _journal(target, cmd="evidence", phase=args.phase, task=args.task, ok=bool(outcome.authentic),
+                 errors=errors, n_errors=len(errors))
         print(f"Wrote {outcome.dest}")
         if outcome.authentic:
             print("Evidence is authentic.")
@@ -982,27 +713,19 @@ def _main(argv: list[str] | None = None) -> int:
                 # the implemented gate refuses an already-green Red. "Return it
                 # upstream" named no command, and the Worker declared the task seven
                 # times over (cls-g31g-m02b, 2026-10-04): say what closes it.
-                from deltafuse.core.transitions import already_green_advice
-
                 print(already_green_advice(args.change_path, str(args.task)), file=sys.stderr)
             return 0
-        print("Evidence is not authentic:", file=sys.stderr)
-        for err in outcome.errors:
-            print(f"  - {err}", file=sys.stderr)
+        _print_errors("Evidence is not authentic:", outcome.errors)
         return 1
 
     elif args.command == "coverage":
+        target = Path(args.change_path)
         try:
-            dest = write_coverage(Path(args.change_path))
-        except CoverageError as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 1
+            dest = write_coverage(target)
         except Exception as ex:
-            _journal(Path(args.change_path), cmd="coverage", ok=False, errors=[str(ex)])
-            print(f"Coverage failed: {ex}", file=sys.stderr)
-            return 2
-        _journal(Path(args.change_path), cmd="coverage", ok=True)
+            code = 1 if isinstance(ex, CoverageError) else 2
+            return _fail(target, "Coverage failed", ex, code, cmd="coverage")
+        _journal(target, cmd="coverage", ok=True)
         print(f"Wrote {dest}")
         return 0
 
@@ -1013,9 +736,7 @@ def _main(argv: list[str] | None = None) -> int:
             only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
             queue = build_work_queue(target, only_change=only)
         except QueueError as ex:
-            _journal(target, cmd="next", ok=False, mode=mode, errors=[str(ex)])
-            print(f"Next failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Next failed", ex, 2, cmd="next", ok=False, mode=mode)
         selected = select_next(queue, step=args.step)
         had_item = selected is not None
         if (
@@ -1033,8 +754,9 @@ def _main(argv: list[str] | None = None) -> int:
             # ready step, and the reference opened CHG-002 from the request CHG-001 had just
             # delivered. With no intake waiting there is no ready step to name.
             selected = None
+        scope = target if only is None else only
         _journal(
-            target if only is None else only,
+            scope,
             cmd="next",
             ok=True if mode in {"list", "json"} else selected is not None,
             mode=mode,
@@ -1044,16 +766,12 @@ def _main(argv: list[str] | None = None) -> int:
             empty=selected is None,
         )
         guide = (
-            format_human_guide(selected, load_product_root(target if only is None else only))
+            format_human_guide(selected, load_product_root(scope))
             if selected is not None
             else format_human_blocked_queue(queue)
         )
         if args.json:
-            payload = queue_snapshot(
-                queue,
-                selected=selected,
-                product_root=load_product_root(target if only is None else only),
-            )
+            payload = queue_snapshot(queue, selected=selected, product_root=load_product_root(scope))
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1074,37 +792,18 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "decide":
         target = Path(args.path)
+        which = (f"--decision {args.decision}" if args.decision else f"--task {args.task}" if args.task
+                 else f"--gap {args.gap}" if args.gap else "--spec")
         try:
             result = apply_decision(
-                target,
-                status=args.status,
-                decision=args.decision,
-                spec=args.spec,
-                task=args.task,
-                gap=args.gap,
-                note=args.note,
+                target, status=args.status, decision=args.decision, spec=args.spec, task=args.task,
+                gap=args.gap, note=args.note,
                 password_prompt=lambda: _gate_password_prompt(
-                    f"deltafuse decide {args.path} "
-                    + (
-                        f"--decision {args.decision}"
-                        if args.decision
-                        else (
-                            f"--task {args.task}"
-                            if args.task
-                            else (f"--gap {args.gap}" if args.gap else "--spec")
-                        )
-                    )
-                    + f" --status {args.status}"
+                    f"deltafuse decide {args.path} {which} --status {args.status}"
                 ),
             )
-        except DecideError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 1
-        except QueueError as ex:
-            _journal(target, cmd="decide", ok=False, errors=[str(ex)])
-            print(f"Decide failed: {ex}", file=sys.stderr)
-            return 2
+        except (DecideError, QueueError) as ex:
+            return _fail(target, "Decide failed", ex, 1 if isinstance(ex, DecideError) else 2, cmd="decide")
         _journal(
             target,
             cmd="decide",
@@ -1124,6 +823,10 @@ def _main(argv: list[str] | None = None) -> int:
                 print(f"change_status: {result['change_status']}")
             for rel in result.get("written") or []:
                 print(f"wrote: {rel}")
+            if result.get("ok") and result.get("status") == "reopened":
+                # GAP-REOPEN-COMMIT (Fuse-Back, 2026-10-21): the leash knows these writes are the
+                # human's, but a step's diff reads clearest against a commit that holds them.
+                print("next: commit these changes before the next step")
             for err in result.get("gate_errors") or []:
                 print(f"gate: {err}", file=sys.stderr)
         return 0 if result.get("ok") else 1
@@ -1145,22 +848,14 @@ def _main(argv: list[str] | None = None) -> int:
             errors = payload["violations"]
             mode = payload["mode"]
             skipped = payload["skipped"]
-            _journal(
-                root,
-                cmd="leash",
-                ok=payload["ok"],
-                errors=errors,
-                n_errors=len(errors),
-                skipped=skipped,
-            )
+            _journal(root, cmd="leash", ok=payload["ok"], errors=errors, n_errors=len(errors),
+                     skipped=skipped)
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif skipped:
                 print("leash: no write envelope (no ready Worker step)")
             elif errors:
-                print(f"leash: {len(errors)} path(s) outside the write envelope", file=sys.stderr)
-                for err in errors:
-                    print(f"  - {err}", file=sys.stderr)
+                _print_errors(f"leash: {len(errors)} path(s) outside the write envelope", errors)
             else:
                 print("leash: diff is inside the write envelope")
             if errors and mode != "advisory":
@@ -1180,14 +875,9 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "board":
         target = Path(args.product_path)
         try:
-            snapshot = build_board_snapshot(
-                target,
-                include_archive=args.archive,
-            )
+            snapshot = build_board_snapshot(target, include_archive=args.archive)
         except BoardError as ex:
-            _journal(target, cmd="board", ok=False, errors=[str(ex)])
-            print(f"Board failed: {ex}", file=sys.stderr)
-            return 2
+            return _fail(target, "Board failed", ex, 2, cmd="board")
         _journal(target, cmd="board", ok=True)
         print(json.dumps(snapshot, ensure_ascii=False, indent=2))
         return 0
@@ -1198,8 +888,11 @@ def _main(argv: list[str] | None = None) -> int:
         errors = validate_config(Path(args.product_path))
         _journal(Path(args.product_path), cmd="validate-config", ok=not errors, errors=errors, n_errors=len(errors))
         if args.json:
+            # Codebase audit 2026-10-21: the JSON was followed by the "valid" line and exit 0,
+            # errors or not - unparseable output with a passing code.
             print(json.dumps({"ok": not errors, "errors": errors}, ensure_ascii=False, indent=2))
-        elif errors:
+            return 1 if errors else 0
+        if errors:
             for e in errors:
                 print(f"config: {e}", file=sys.stderr)
             return 1
@@ -1219,10 +912,7 @@ def _main(argv: list[str] | None = None) -> int:
                     meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
-                        ref_files: list[Path] = []
-                        for sref in meta.get("spec_refs", []):
-                            sp_rel = sref.split("#")[0]
-                            ref_files.append(repo_root / sp_rel)
+                        ref_files = [repo_root / sref.split("#")[0] for sref in meta.get("spec_refs", [])]
                         b_errs = validate_context_budget(
                             budget, ref_files, repo_root=repo_root, receipt=token_receipt
                         )
@@ -1237,10 +927,7 @@ def _main(argv: list[str] | None = None) -> int:
                     budget = meta.get("context_budget")
                     if budget and isinstance(budget, dict):
                         b_errs = validate_task_context_budget(
-                            budget,
-                            meta.get("spec_refs") or [],
-                            meta.get("allowed_paths") or [],
-                            repo_root,
+                            budget, meta.get("spec_refs") or [], meta.get("allowed_paths") or [], repo_root,
                             receipt=token_receipt,
                         )
                         errors.extend(f"{tf.name}: {e}" for e in b_errs)
@@ -1253,47 +940,19 @@ def _main(argv: list[str] | None = None) -> int:
                     errors.append(f"{tf.name}: {ex}")
         if not token_receipt:
             token_receipt = token_count_receipt()
-        _journal(
+        return _report(
+            "lint-context",
             target,
-            cmd="lint-context",
-            ok=not errors,
-            errors=errors,
-            n_errors=len(errors),
+            errors,
+            "Context budget validation failed",
+            f"Context budget for {target} is within limits (tokens counted by {token_receipt.get('mode')}).",
             token_mode=token_receipt.get("mode"),
             token_measured=token_receipt.get("measured"),
             token_heuristic=token_receipt.get("heuristic"),
         )
-        if errors:
-            print(f"Context budget validation failed for {target} with {len(errors)} error(s):", file=sys.stderr)
-            for err in errors:
-                print(f"  - {err}", file=sys.stderr)
-            return 1
-        print(
-            f"Context budget for {target} is within limits "
-            f"(tokens counted by {token_receipt.get('mode')})."
-        )
-        return 0
 
     elif args.command == "bench":
-        from deltafuse.bench import BenchError
-        from deltafuse.bench.init_product import format_worker_start_prompt, init_bench_product
-
         try:
-            if args.bench_cmd == "init":
-                meta = init_bench_product(
-                    args.case_id,
-                    args.product_dir,
-                    pack_root=args.pack,
-                    force=args.force,
-                )
-                product = Path(args.product_dir).resolve()
-                print(f"Bench {meta['case']} ready in {product}")
-                print("Open that directory as the Worker workspace, then paste:")
-                print()
-                print("----- paste into the Worker -----")
-                print(format_worker_start_prompt(meta))
-                print("----- end -----")
-                return 0
             if args.bench_cmd == "journal":
                 from deltafuse.bench.journal import collect_attempts, load_events
 
@@ -1301,496 +960,16 @@ def _main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
                 return 0
             print(
-                "Scoring moved to the judge: `deltafuse-bench score <product-dir> --pack <pack>`",
+                "The bench moved to deltafuse-bench: `deltafuse-bench init|score <product-dir>`",
                 file=sys.stderr,
             )
             return 2
-        except BenchError as ex:
-            print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
-        except Exception as ex:
+        except Exception as ex:  # BenchError included: same text, same code
             print(f"Bench failed: {ex}", file=sys.stderr)
             return 2
 
     elif args.command == "artifact":
-        from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
-        from deltafuse.core.artifact_policy import ArtifactPolicyError, create_authorization_context
-        from deltafuse.core.artifact_lock import ArtifactLockError, resolve_product_root
-        from deltafuse.core.artifact_transactions import ArtifactTransactionError
-        from deltafuse.core.artifact_patch import ArtifactPatchError
-
-        if args.artifact_cmd == "describe":
-            if args.export_schema:
-                schema_out = export_tool_schemas(kind=args.kind, operation=args.operation)
-                print(json.dumps(schema_out, ensure_ascii=False, indent=2))
-                return 0
-
-            root = Path(".").resolve()
-            service = ArtifactService(product_root=root)
-            desc_info = service.describe(kind=args.kind, operation=args.operation)
-            if args.json:
-                print(json.dumps(desc_info, ensure_ascii=False, indent=2))
-            else:
-                print(f"artifact describe: kind '{desc_info['kind']}' operation '{desc_info['operation']}'")
-                print(f"Allowed semantic fields: {', '.join(desc_info['allowed_semantic_fields'])}")
-                print(f"Core-owned fields: {', '.join(desc_info['core_owned_fields'])}")
-            return 0
-
-        elif args.artifact_cmd == "create":
-            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
-            from deltafuse.core.artifact_registry import ArtifactRegistry
-
-            MAX_INPUT_BYTES = 1024 * 1024
-
-            try:
-                if args.input == "-":
-                    if hasattr(sys.stdin, "buffer"):
-                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
-                    else:
-                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
-                else:
-                    p = Path(args.input)
-                    if not p.is_file():
-                        msg = f"Input file not found: {args.input}"
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
-                        print(msg, file=sys.stderr)
-                        return 2
-                    stat_size = p.stat().st_size
-                    if stat_size > MAX_INPUT_BYTES:
-                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
-                        print(msg, file=sys.stderr)
-                        return 2
-                    raw_bytes = p.read_bytes()
-
-                if len(raw_bytes) > MAX_INPUT_BYTES:
-                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
-                    if args.json:
-                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
-                    print(msg, file=sys.stderr)
-                    return 2
-
-                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
-            except ArtifactReaderError as re_err:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
-                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
-                return 2
-
-            identity = args.identity or raw_json.get("identity")
-            if not identity:
-                msg = "Missing required 'identity' in JSON input or CLI argument"
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
-                print(msg, file=sys.stderr)
-                return 2
-
-            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
-            body = raw_json.get("body", "")
-
-            env_keys = {"request_id", "operation", "change", "identity", "body", "target", "expected_sha256"}
-            if raw_json.get("kind") == args.kind:
-                env_keys.add("kind")
-
-            if "semantic_payload" in raw_json and isinstance(raw_json["semantic_payload"], dict):
-                semantic_payload = raw_json["semantic_payload"]
-                envelope = dict(raw_json)
-                envelope["request_id"] = request_id
-                envelope["operation"] = "create"
-                envelope["kind"] = args.kind
-                envelope["identity"] = identity
-            else:
-                semantic_payload = {k: v for k, v in raw_json.items() if k not in env_keys}
-                envelope = {
-                    "request_id": request_id,
-                    "operation": "create",
-                    "kind": args.kind,
-                    "identity": identity,
-                    "semantic_payload": semantic_payload,
-                }
-                if "change" in raw_json:
-                    envelope["change"] = raw_json["change"]
-                if "body" in raw_json:
-                    envelope["body"] = raw_json["body"]
-
-
-            reg = ArtifactRegistry()
-            env_val = reg.validate_operation_envelope(envelope)
-            if not env_val.valid:
-                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
-                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
-                return 2
-
-            change_dir = Path(args.change).resolve()
-            cid = None
-            expected_cid = None
-            if change_dir.name.startswith("CHG-"):
-                expected_cid = change_dir.name
-
-            if (change_dir / "change.yaml").is_file():
-                try:
-                    from deltafuse.core.artifact_reader import strict_read_artifact
-                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
-                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    actual_file_cid = pres.metadata.get("id")
-                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                    if expected_cid and actual_file_cid != expected_cid:
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                    cid = actual_file_cid
-                except Exception as ex:
-                    if args.json:
-                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
-                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
-                    return 3
-            else:
-                if envelope.get("change"):
-                    cid = envelope.get("change")
-                elif (change_dir / "docs" / "changes").is_dir():
-                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
-                    if len(chg_subdirs) == 1:
-                        cid = chg_subdirs[0]
-                elif expected_cid:
-                    cid = expected_cid
-
-            root = resolve_product_root(change_dir)
-            auth = create_authorization_context(
-                actor="worker",
-                work_item="CLI",
-                product_root=root,
-                change_id=cid,
-            )
-            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
-
-            try:
-                receipt = service.create(
-                    kind=args.kind,
-                    identity=identity,
-                    semantic_payload=semantic_payload,
-                    body=body,
-                    request_id=request_id,
-                )
-            except ArtifactPolicyError as pe:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
-                print(f"Policy denied: {pe}", file=sys.stderr)
-                return 3
-            except ArtifactPatchError as pe:
-                code = pe.code
-                ret = 3 if code == "core_owned_field" else 2
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
-                print(f"Patch error: {pe}", file=sys.stderr)
-                return ret
-            except ArtifactServiceError as se:
-                code = se.code
-                if code in ("core_owned_field", "policy_denied", "missing_core_context", "missing_change_authority", "stage_halted", "unauthorized_stage"):
-                    ret = 3
-                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
-                    ret = 4
-                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
-                    ret = 2
-                else:
-                    ret = 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
-                print(f"Artifact error: {se}", file=sys.stderr)
-                return ret
-            except ArtifactLockError as le:
-                ret = 4 if "mismatch" in str(le) else 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
-                print(f"Lock error: {le}", file=sys.stderr)
-                return ret
-            except ArtifactTransactionError as te:
-                ret = 4 if te.code == "idempotency_conflict" else 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
-                print(f"Transaction error: {te}", file=sys.stderr)
-                return ret
-            except Exception as ex:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
-                print(f"Unexpected error: {ex}", file=sys.stderr)
-                return 5
-
-            if args.json:
-                print(json.dumps(receipt, ensure_ascii=False, indent=2))
-            else:
-                print(f"artifact create: kind '{args.kind}' identity '{identity}' created (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
-            return 0
-
-        elif args.artifact_cmd == "write":
-            return _artifact_write_command(args)
-
-        elif args.artifact_cmd == "update":
-            from deltafuse.core.artifact_reader import ArtifactReaderError, strict_parse_json
-            from deltafuse.core.artifact_registry import ArtifactRegistry
-
-            MAX_INPUT_BYTES = 1024 * 1024
-
-            try:
-                if args.input == "-":
-                    if hasattr(sys.stdin, "buffer"):
-                        raw_bytes = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
-                    else:
-                        raw_bytes = sys.stdin.read(MAX_INPUT_BYTES + 1).encode("utf-8")
-                else:
-                    p = Path(args.input)
-                    if not p.is_file():
-                        msg = f"Input file not found: {args.input}"
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "file_not_found", "message": msg}}, ensure_ascii=False, indent=2))
-                        print(msg, file=sys.stderr)
-                        return 2
-                    stat_size = p.stat().st_size
-                    if stat_size > MAX_INPUT_BYTES:
-                        msg = f"Input file size ({stat_size} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
-                        print(msg, file=sys.stderr)
-                        return 2
-                    raw_bytes = p.read_bytes()
-
-                if len(raw_bytes) > MAX_INPUT_BYTES:
-                    msg = f"Input payload size ({len(raw_bytes)} bytes) exceeds max bytes ({MAX_INPUT_BYTES})"
-                    if args.json:
-                        print(json.dumps({"ok": False, "error": {"code": "exceeds_max_bytes", "message": msg}}, ensure_ascii=False, indent=2))
-                    print(msg, file=sys.stderr)
-                    return 2
-
-                raw_json = strict_parse_json(raw_bytes, max_bytes=MAX_INPUT_BYTES)
-            except ArtifactReaderError as re_err:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": re_err.code, "message": re_err.message}}, ensure_ascii=False, indent=2))
-                print(f"Invalid JSON input: {re_err.message}", file=sys.stderr)
-                return 2
-
-            target = args.target or raw_json.get("target")
-            expected_sha256 = args.expected_sha256 or raw_json.get("expected_sha256")
-
-            if not target:
-                msg = "Missing required 'target' in JSON input or CLI argument"
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
-                print(msg, file=sys.stderr)
-                return 2
-            if not expected_sha256:
-                msg = "Missing required 'expected_sha256' in JSON input or CLI argument"
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "required_property_missing", "message": msg}}, ensure_ascii=False, indent=2))
-                print(msg, file=sys.stderr)
-                return 2
-
-            request_id = raw_json.get("request_id") or f"req-cli-{hashlib.sha256(raw_bytes).hexdigest()[:12]}"
-
-            if "body_replacement" in raw_json:
-                body_replacement = raw_json["body_replacement"]
-            elif "body" in raw_json:
-                body_replacement = raw_json["body"]
-            else:
-                body_replacement = None
-
-            if "patch" in raw_json and isinstance(raw_json["patch"], dict):
-                patch = raw_json["patch"]
-                envelope = dict(raw_json)
-                envelope["request_id"] = request_id
-                envelope["operation"] = "update"
-                envelope["kind"] = args.kind
-                envelope["target"] = target
-                envelope["expected_sha256"] = expected_sha256
-            else:
-                patch = {
-                    "set": raw_json.get("set", []),
-                    "remove": raw_json.get("remove", []),
-                    "canonicalize_metadata": raw_json.get("canonicalize_metadata", False),
-                }
-                envelope = {
-                    "request_id": request_id,
-                    "operation": "update",
-                    "kind": args.kind,
-                    "target": target,
-                    "expected_sha256": expected_sha256,
-                    "patch": patch,
-                }
-                if body_replacement is not None:
-                    envelope["body_replacement"] = body_replacement
-
-            canonicalize_metadata = patch.get("canonicalize_metadata", False) if isinstance(patch, dict) else False
-
-            reg = ArtifactRegistry()
-            env_val = reg.validate_operation_envelope(envelope)
-            if not env_val.valid:
-                diags_msg = "; ".join(f"{d.path}: {d.message}" for d in env_val.diagnostics)
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "invalid_envelope", "message": f"Invalid operation envelope: {diags_msg}"}}, ensure_ascii=False, indent=2))
-                print(f"Invalid operation envelope: {diags_msg}", file=sys.stderr)
-                return 2
-
-            change_dir = Path(args.change).resolve()
-            cid = None
-            expected_cid = None
-            if change_dir.name.startswith("CHG-"):
-                expected_cid = change_dir.name
-
-            if (change_dir / "change.yaml").is_file():
-                try:
-                    from deltafuse.core.artifact_reader import strict_read_artifact
-                    has_fm = not (change_dir / "change.yaml").name.endswith((".yaml", ".yml"))
-                    pres = strict_read_artifact((change_dir / "change.yaml").read_bytes(), has_frontmatter_delimiters=has_fm)
-                    actual_file_cid = pres.metadata.get("id")
-                    if not isinstance(actual_file_cid, str) or not re.match(r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$", actual_file_cid):
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Invalid or missing Change ID in change.yaml: '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Invalid or missing Change ID in change.yaml: '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                    if expected_cid and actual_file_cid != expected_cid:
-                        if args.json:
-                            print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'"}}, ensure_ascii=False, indent=2))
-                        print(f"Policy denied: Change ID mismatch: directory '{expected_cid}' contains change.yaml with id '{actual_file_cid}'", file=sys.stderr)
-                        return 3
-                    cid = actual_file_cid
-                except Exception as ex:
-                    if args.json:
-                        print(json.dumps({"ok": False, "error": {"code": "missing_change_authority", "message": f"Failed reading change.yaml: {ex}"}}, ensure_ascii=False, indent=2))
-                    print(f"Policy denied: Failed reading change.yaml: {ex}", file=sys.stderr)
-                    return 3
-            else:
-                if envelope.get("change"):
-                    cid = envelope.get("change")
-                elif (change_dir / "docs" / "changes").is_dir():
-                    chg_subdirs = [d.name for d in (change_dir / "docs" / "changes").iterdir() if d.is_dir() and d.name.startswith("CHG-")]
-                    if len(chg_subdirs) == 1:
-                        cid = chg_subdirs[0]
-                elif expected_cid:
-                    cid = expected_cid
-
-            root = resolve_product_root(change_dir)
-            auth = create_authorization_context(
-                actor="worker",
-                work_item="CLI",
-                product_root=root,
-                change_id=cid,
-            )
-            service = ArtifactService(product_root=root, change_dir=change_dir, auth_context=auth, registry=reg)
-
-            try:
-                receipt = service.update(
-                    kind=args.kind,
-                    target=target,
-                    expected_sha256=expected_sha256,
-                    patch=patch,
-                    body_replacement=body_replacement,
-                    request_id=request_id,
-                    canonicalize_metadata=canonicalize_metadata,
-                )
-            except ArtifactPolicyError as pe:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": pe.code, "message": str(pe)}}, ensure_ascii=False, indent=2))
-                print(f"Policy denied: {pe}", file=sys.stderr)
-                return 3
-            except ArtifactPatchError as pe:
-                code = pe.code
-                ret = 3 if code == "core_owned_field" else 2
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(pe)}}, ensure_ascii=False, indent=2))
-                print(f"Patch error: {pe}", file=sys.stderr)
-                return ret
-            except ArtifactServiceError as se:
-                code = se.code
-                if code in ("core_owned_field", "policy_denied", "missing_core_context"):
-                    ret = 3
-                elif code in ("target_already_exists", "target_not_found", "expected_sha256_mismatch", "missing_reference"):
-                    ret = 4
-                elif code in ("schema_validation_failed", "invalid_payload", "unexposed_field", "invalid_envelope", "required_property_missing"):
-                    ret = 2
-                else:
-                    ret = 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": code, "message": str(se)}}, ensure_ascii=False, indent=2))
-                print(f"Artifact error: {se}", file=sys.stderr)
-                return ret
-            except ArtifactLockError as le:
-                ret = 4 if "mismatch" in str(le) else 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "lock_error", "message": str(le)}}, ensure_ascii=False, indent=2))
-                print(f"Lock error: {le}", file=sys.stderr)
-                return ret
-            except ArtifactTransactionError as te:
-                ret = 4 if te.code == "idempotency_conflict" else 5
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": te.code, "message": str(te)}}, ensure_ascii=False, indent=2))
-                print(f"Transaction error: {te}", file=sys.stderr)
-                return ret
-            except Exception as ex:
-                if args.json:
-                    print(json.dumps({"ok": False, "error": {"code": "unexpected_error", "message": str(ex)}}, ensure_ascii=False, indent=2))
-                print(f"Unexpected error: {ex}", file=sys.stderr)
-                return 5
-
-            if args.json:
-                print(json.dumps(receipt, ensure_ascii=False, indent=2))
-            else:
-                print(f"artifact update: kind '{args.kind}' target '{target}' updated (receipt {receipt.get('receipt_id', receipt.get('transaction_id', ''))})")
-            return 0
-
-
-        elif args.artifact_cmd == "validate":
-            change_dir = Path(args.change).resolve()
-            root = resolve_product_root(change_dir)
-            service = ArtifactService(product_root=root, change_dir=change_dir)
-            result = service.validate(kind=args.kind, target=args.target)
-
-            if args.json:
-                print(json.dumps(result, ensure_ascii=False, indent=2))
-            else:
-                if result["valid"]:
-                    print(f"artifact validate: kind '{args.kind}' target '{args.target}' is valid.")
-                else:
-                    print(f"artifact validate: kind '{args.kind}' target '{args.target}' is INVALID.", file=sys.stderr)
-                    for d in result.get("diagnostics", []):
-                        print(f"  - [{d.get('code')}] {d.get('json_pointer')}: {d.get('message')}", file=sys.stderr)
-
-            return 0 if result["valid"] else 2
-
-        elif args.artifact_cmd == "update-index":
-            from deltafuse.core.scaffold import ScaffoldError, update_change_child_index
-
-            change_dir = Path(args.change).resolve()
-            try:
-                update_change_child_index(
-                    change_dir,
-                    child_kind=args.child_kind,
-                    child_id=args.child_id,
-                )
-            except ScaffoldError as se:
-                print(f"update-index failed: {se}", file=sys.stderr)
-                return 1
-            except Exception as ex:
-                print(f"Unexpected error: {ex}", file=sys.stderr)
-                return 2
-
-            payload = {
-                "ok": True,
-                "change": change_dir.name,
-                "child_kind": args.child_kind,
-                "child_id": args.child_id,
-            }
-            if args.json:
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-            else:
-                print(f"artifact update-index: updated {args.child_kind} '{args.child_id}' in {change_dir.name}")
-            return 0
+        return _artifact_write_command(args)
 
     return 0
 

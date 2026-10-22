@@ -7,6 +7,127 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.9] - 2026-10-22
+
+### Added
+
+- **Gate retries count `advance`.** The command journal read gate attempts from `check-gate`
+  alone, and since the skills close every gate with `advance` (one call, check and stamp), the
+  bench's T3 gate-retry threshold read 0 for every Worker that followed them - a refused `advance`
+  was never a retry. `advance` now counts as a gate attempt like `check-gate`, a refused one is
+  journaled with one error per gate finding (so a refusal that only waits for the human is still
+  told apart), and `TransitionError` carries those findings. T3 measures again: runs before 3.3.9
+  are not comparable on it. Owner decision 2026-10-22.
+
+- **The `analyzed` gate routes a claim that adds to another capability's list to that capability.**
+  Bench case M04 (2026-10-04..21): every failed run made security.ratelimit the primary of the
+  claim asking for a new audit event, `ratelimit.penalty_started`, and listed monitoring.audit as
+  related only; a related capability gets no slice, so the event never reached the audit catalogue
+  in the spec or the code, and Verify said `converged`. The analyze skill even said to list such a
+  capability as related. Now a claim naming a new `family.member` in backticks - absent from every
+  live spec, while another capability's spec lists members of that family - must route to that
+  capability as primary; the gate names the claim, the name and the spec line, and the skill says a
+  claim that changes what another capability owns routes there. Over the 126 bench runs on disk the
+  rule flags the 9 M04 runs routed that way and no other run of M01-M04.
+
+### Fixed
+
+- **The leash takes what the human's `decide` wrote as the human's, before anyone commits it.**
+  Fuse-Back, Maven J01 (2026-10-21): after `decide --gap spec-gap --status reopened` the enforce
+  leash refused `advance --gate analyzed` - the `gap-reopen` receipt 3.3.8 appends to
+  `transitions.jsonl` was missing from the receipt kinds the leash knows ("not a Core transition
+  receipt"), and the Green/regression records `decide` archived and the spec-delta.md it set back to
+  `proposed` read as the Worker's writes outside the envelope. Committing made the advance pass;
+  the bench commits after every human decision and never saw it. Now a file whose bytes a `decide`
+  receipt vouches for, a deleted record whose bytes lie in a receipted reopen archive, and a product
+  file a task reopen restored to its `declaring` snapshot pass; a reopened task had the same gap.
+  Other bytes are judged as before. `decide` says to commit after a reopen. docs/contracts/leash
+  (en, ru) updated.
+- **The `declaring` snapshot names a copy by its content, so a deep path stays short.** Fuse-Back,
+  Gradle J01 (2026-10-21): 3.3.8 mirrored each task's product files under
+  `.deltafuse/snapshots/<change>/<path>`, ~45 characters on top of a 104-character test path, and
+  `git add` on Windows failed with "Filename too long" (the gate itself passed). A copy is now
+  `.deltafuse/snapshots/<sha256>` - 85 characters from the product root whatever the source path,
+  one copy per content - and the receipt's `{path: sha256}` is how reopening finds it. Copies 3.3.8
+  took in the mirrored layout are still restored. README (en, ru) says a product with deep paths
+  needs `git config core.longpaths true` on Windows; DeltaFuse does not change git configuration.
+
+### Removed
+
+- **`deltafuse bench init` and the bench's case loader moved to deltafuse-bench** (`deltafuse-bench
+  init <case> <dir>`, same output). `deltafuse.bench.init_product` and `deltafuse.bench.loader` were
+  used by the bench alone - the framework's tests never ran them. The framework keeps what a
+  product produces: its command journal (`deltafuse.bench.journal`, `deltafuse bench journal`).
+- **The legacy `artifact describe|create|update|validate|update-index` subcommands** (owner
+  decision, codebase audit 2026-10-21). No skill and no bench run used them: `artifact write` is
+  the Worker's path, creates or updates, and keeps the `change.yaml` index itself. With them went
+  `export_tool_schemas`, `ArtifactService.validate`/`describe` and the request-envelope helpers of
+  `ArtifactRegistry` (`get_envelope_schema*`, `validate_operation_envelope`,
+  `validate_operation_input`), about 900 lines; their CLI tests' properties (stdin input, a
+  Core-owned field refused with exit 3, a duplicate JSON key refused before anything is written)
+  are now tested on `artifact write`. docs/using (en, ru) updated. The request-envelope contract
+  `docs/contracts/artifact-writer.schema.yaml` stays for now; nothing reads it at run time.
+
+### Changed
+
+- **`paths` in `.deltafuse/config.yaml` are fixed, and `validate-config` refuses another value**
+  (owner decision on the codebase audit). The Core names `docs/changes` itself about a hundred times
+  and the other document directories likewise; only the queue, the board and `artifact write`
+  followed `paths.changes`, so a product that moved it was half-read. `paths.intake`, `changes`,
+  `specification`, `decisions` and `archive` must keep their defaults; an unknown `paths` key is
+  refused too. The skills no longer tell the Worker to resolve artifact roots from the config.
+- **The Core recovers an interrupted Writer transaction.** `recover_pending_transactions` had no
+  caller, though docs/using said the Core ran it. Every Writer operation now runs it first, under
+  the mutation lock: a write cut after its file was published gets its receipt, one cut before is
+  cancelled, anything else is marked `ambiguous_stopped`. docs/using (en, ru) now say what it does
+  (it never restored a file: a `prepared` transaction had not replaced one).
+- **`artifact write` exits 3 for a stage refusal** (`unauthorized_stage`, `stage_halted`), as the
+  retired `artifact create` did: 3 is a policy refusal, 2 a malformed request. It exited 2.
+- **The Core is a tenth smaller (src 19.4K -> 17.6K lines), with no check weakened.** The codebase
+  audit (backlog/roadmap/codebase-audit/AUDIT.md) found the growth was the same file-reading and
+  refusal code copied into each fix. Shared helpers now read YAML records, frontmatter directories,
+  JSONL journals and config sections, write files atomically, build halts and CLI failures, and run
+  git; dead definitions, unused imports and parameters are gone. Each change kept every refusal and
+  receipt: what `deltafuse next` prints is pinned word for word by a new golden test
+  (tests/golden/next_texts.json), the CLI was compared on 120 argv cases, and the gate checks on 452
+  calls, before and after. One effect is visible: a broken route is reported once per gate, not
+  twice.
+- **The skills are a tenth shorter (41.3 KB -> 37.1 KB), with no rule dropped.** A Worker reads one
+  skill on every step. Removed are sentences that repeat another sentence of the same skill, or a
+  Core refusal that names the fix at the moment it matters (implement: the frozen-oracle and
+  `blocked` refusals; declare: the sibling-oracle refusal; verify: the coverage mapping), stale
+  lines (declare named `check-gate --gate converged`; verify ended with a line about Specify;
+  analyze kept notes from before the Artifact Writer), and "why" narration. Every skill now says
+  the Core owns `advance` and stops when `advance` fails, not `check-gate`.
+- **`deltafuse next` names `advance --gate <gate>`, never `check-gate`.** Every step skill closes a
+  gate with `advance` alone (one decision, one call), and the reasons and envelopes `next` wrote
+  said `check-gate`. For a Declare or Implement task the envelope now says to advance once `next`
+  names no other task, as the skills say.
+
+### Fixed
+
+- **A task reopen counts only in its own Change.** The leash looked the reopen up by task id alone,
+  so reopening TASK-001 of one Change let a Red record or a reopen archive of TASK-001 in any other
+  Change through.
+- **`check-gate` refuses an unknown gate**, as `advance` does; a typo printed "passed" and exited 0.
+- **`validate-config --json` exits 1 on errors and prints only the JSON.** It printed the JSON, then
+  the "valid" line, and exited 0 whatever the errors.
+- **The coverage summary names what the `implemented` gate refuses**: a Green with no Red, and on
+  the code route a Green over an already-green Red.
+- **A dead legacy-vocabulary text search is gone.** Its pattern held backspace bytes where `\b` was
+  meant and matched nothing; the v2 statuses it meant to catch are refused by the schemas' status
+  enums, and fixed it would have refused prose that says "targeting".
+- **The analyze gap pass closes the `analyzed` gate.** After `decide --gap spec-gap`, the skill's
+  step 3 closed the gate only for the `coverage` pass, so a literal Worker could finish the gap pass
+  and never advance. It now reads "`coverage` or `gap`".
+- **The record-time `changed_paths` check names a forbidden path and docs/ops product code.**
+  `deltafuse evidence` kept only gate messages holding "<record>.yaml:", and those two messages have
+  no colon after the record's name: the record read authentic and the gate refused it a step later.
+- **Green's isolated run reads `pytest.cmd` as pytest.** The oracle stripped only `.exe` from the
+  runner's name and raised `ValueError` on a Windows batch shim.
+- **The already-green advice finds `TASK-NNN-<slug>.md`.** It read `tasks/<id>.md` only, lost
+  `requirement_delta`, and sent a task that could close as superseded to the human.
+
 ## [3.3.8] - 2026-10-21
 
 ### Fixed

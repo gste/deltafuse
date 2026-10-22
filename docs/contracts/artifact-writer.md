@@ -2,7 +2,7 @@
 
 **Contract Version:** 1  
 **Target Storage Schemas:** v3  
-**Framework Version:** 3.2.0  
+**Framework Version:** 3.3.9 (this document describes it)  
 **Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/v1`  
 **Receipt Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/receipt/v1`  
 
@@ -12,6 +12,8 @@ The Artifact Writer contract defines the typed operation transport envelope, ope
 
 It acts as a serialization and persistence protocol between callers (Workers, host wrappers, CLI) and DeltaFuse Core storage. It does **not** grant authorization to mutate Core-owned fields or execute lifecycle transitions.
 
+The Worker's command is `deltafuse artifact write --kind <kind> --change <change-dir> --input <json|->`: it names the artifact (`identity` or `target`), and the Core decides whether that is a `create` or an `update` and keeps the `change.yaml` child index itself. The `describe`, `validate` and `update-index` operations and the `artifact create|update|describe|validate|update-index` subcommands were removed in 3.3.9; the service keeps `create` and `update`.
+
 ---
 
 ## 2. Operation Envelopes
@@ -20,7 +22,7 @@ All operation requests pass a closed JSON/YAML request envelope validating again
 
 ```yaml
 request_id: "req-001"
-operation: "create" # create | update | validate | describe
+operation: "create" # create | update
 kind: "task"        # task | slice | spec-delta | routing | change | ...
 change: "CHG-001"
 identity: "TASK-001"
@@ -32,16 +34,15 @@ semantic_payload:
 
 ### Fields:
 - `request_id`: Required string identifier for transaction tracking and idempotency.
-- `operation`: Required enum (`create`, `update`, `validate`, `describe`, `update-index`).
+- `operation`: Required enum (`create`, `update`). `deltafuse artifact write` sets it; the Worker does not.
 - `kind`: Required enum corresponding to one of the 10 storage schemas.
 - `change`: Owning Change ID or relative directory path.
-- `identity`: Specific artifact identifier (e.g. `TASK-001`) for `create` / `describe`.
-- `target`: Relative file path (e.g. `tasks/TASK-001.md`) for `update` / `validate`.
+- `identity`: Specific artifact identifier (e.g. `TASK-001`); required for `create`.
+- `target`: Relative file path (e.g. `tasks/TASK-001.md`) for `update`.
 - `expected_sha256`: Optional SHA256 digest of target file before update (concurrency control).
 - `semantic_payload`: Object containing initial semantic fields on `create`.
 - `patch`: Object containing JSON Pointer edits on `update`.
 - `body`: Optional opaque markdown body content.
-- `update-index`: Atomic update operation synchronizing `change.yaml` child lists from disk.
 
 ---
 
@@ -73,16 +74,16 @@ Operation descriptors reside in `process/artifact-operations/*.descriptor.yaml` 
 
 | Kind | Allowed Operations | Public Semantic Fields | Core-Owned Fields |
 |---|---|---|---|
-| `task` | `create`, `update`, `validate`, `describe` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
-| `slice` | `create`, `update`, `validate`, `describe` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
-| `spec-delta` | `create`, `update`, `validate`, `describe` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
-| `routing` | `create`, `update`, `validate`, `describe` | `claims` | `change` |
-| `change` | `update`, `validate`, `describe` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
-| `decision` | `validate`, `describe` | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
-| `evidence` | `validate`, `describe` | None | All fields (kernel stamped) |
-| `coverage` | `validate`, `describe` | None | `change`, `claims` |
-| `capability` | `validate`, `describe` | None | `schema_version`, `domains`, `policies` |
-| `lock` | `validate`, `describe` | None | `schema_version`, `framework` |
+| `task` | `create`, `update` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
+| `slice` | `create`, `update` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
+| `spec-delta` | `create`, `update` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
+| `routing` | `create`, `update` | `claims` | `change` |
+| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
+| `decision` | `create`, `update` (only while `proposed`) | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
+| `evidence` | None (`deltafuse evidence` writes it) | None | All fields (kernel stamped) |
+| `coverage` | None (`deltafuse coverage` writes it) | None | `change`, `claims` |
+| `capability` | None | None | `schema_version`, `domains`, `policies` |
+| `lock` | None | None | `schema_version`, `framework` |
 
 ---
 
@@ -107,7 +108,7 @@ Every mutating operation returns a receipt conforming to `process/artifact-opera
 ## 6. Exit Codes and Diagnostic Errors
 
 Proposed CLI exit codes:
-- `0`: Success / valid read-only validation.
+- `0`: Success.
 - `2`: Invalid input, envelope, or schema validation failure.
 - `3`: Authorization or Core-owned field write denied.
 - `4`: Target SHA256 mismatch or concurrency lock failure.

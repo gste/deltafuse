@@ -1,0 +1,1158 @@
+{
+  "analyze-done": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# analyze  CHG-302",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /analyze",
+        "gate: analyzed",
+        "change: CHG-302",
+        "path: docs/changes/CHG-302",
+        "task: -",
+        "task_path: -",
+        "skill_path: .agents/skills/analyze/SKILL.md",
+        "analyze_pass: coverage",
+        "reason: Run deltafuse coverage if needed, then advance --gate analyzed",
+        "",
+        "## Read",
+        "- docs/changes/*/request.md",
+        "- docs/changes/*/routing.yaml",
+        "- docs/changes/*/change.yaml",
+        "- docs/changes/*/slices/**",
+        "",
+        "## Write",
+        "- docs/changes/*/change.yaml",
+        "",
+        "## Record coverage (kernel, do not hand-write YAML)",
+        "- `deltafuse coverage docs/changes/CHG-302`",
+        "",
+        "## Close the gate",
+        "`deltafuse advance docs/changes/CHG-302 --gate analyzed`",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-302",
+          "read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**"
+          ],
+          "step": "analyze",
+          "task": null,
+          "write": [
+            "docs/changes/*/change.yaml"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [
+              "docs/changes/*/request.md",
+              "docs/changes/*/routing.yaml",
+              "docs/changes/*/change.yaml",
+              "docs/changes/*/slices/**"
+            ],
+            "allowed_write": [
+              "docs/changes/*/change.yaml"
+            ],
+            "analyze_pass": "coverage",
+            "capability": null,
+            "change_id": "CHG-302",
+            "gate": "analyzed",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-302",
+            "reason": "Run deltafuse coverage if needed, then advance --gate analyzed",
+            "skill": "analyze",
+            "skill_path": ".agents/skills/analyze/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "analyze",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**"
+          ],
+          "allowed_write": [
+            "docs/changes/*/change.yaml"
+          ],
+          "analyze_pass": "coverage",
+          "capability": null,
+          "change_id": "CHG-302",
+          "gate": "analyzed",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-302",
+          "reason": "Run deltafuse coverage if needed, then advance --gate analyzed",
+          "skill": "analyze",
+          "skill_path": ".agents/skills/analyze/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "analyze",
+          "task": null,
+          "task_path": null
+        }
+      }
+    }
+  },
+  "analyzed": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# specify  CHG-303",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /specify",
+        "gate: specified",
+        "change: CHG-303",
+        "path: docs/changes/CHG-303",
+        "task: -",
+        "task_path: -",
+        "skill_path: .agents/skills/specify/SKILL.md",
+        "specify_pass: slice",
+        "capability: system.core",
+        "slice_id: SLICE-01",
+        "reason: Specify slices/SLICE-01.md (system.core)",
+        "",
+        "## Read",
+        "- docs/changes/*/request.md",
+        "- docs/changes/*/routing.yaml",
+        "- docs/changes/*/change.yaml",
+        "- docs/changes/*/slices/**",
+        "- docs/changes/*/spec-delta.md",
+        "- docs/decisions/**",
+        "- docs/spec/core.md",
+        "",
+        "## Spec refs (this slice)",
+        "- docs/spec/core.md#REQ-01",
+        "",
+        "## Write",
+        "- docs/changes/*/spec-delta.md",
+        "- docs/changes/*/change.yaml",
+        "- docs/changes/*/slices/**",
+        "- docs/spec/_capabilities.yaml",
+        "- docs/spec/core.md",
+        "",
+        "## Close the gate",
+        "Do not run `advance --gate specified` yet. Write only this pass, then `deltafuse next`.",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-303",
+          "read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**",
+            "docs/changes/*/spec-delta.md",
+            "docs/decisions/**",
+            "docs/spec/core.md"
+          ],
+          "step": "specify",
+          "task": null,
+          "write": [
+            "docs/changes/*/spec-delta.md",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**",
+            "docs/spec/_capabilities.yaml",
+            "docs/spec/core.md"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [
+              "docs/changes/*/request.md",
+              "docs/changes/*/routing.yaml",
+              "docs/changes/*/change.yaml",
+              "docs/changes/*/slices/**",
+              "docs/changes/*/spec-delta.md",
+              "docs/decisions/**",
+              "docs/spec/core.md"
+            ],
+            "allowed_write": [
+              "docs/changes/*/spec-delta.md",
+              "docs/changes/*/change.yaml",
+              "docs/changes/*/slices/**",
+              "docs/spec/_capabilities.yaml",
+              "docs/spec/core.md"
+            ],
+            "analyze_pass": null,
+            "capability": "system.core",
+            "change_id": "CHG-303",
+            "gate": "specified",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-303",
+            "reason": "Specify slices/SLICE-01.md (system.core)",
+            "skill": "specify",
+            "skill_path": ".agents/skills/specify/SKILL.md",
+            "slice_id": "SLICE-01",
+            "spec_refs": [
+              "docs/spec/core.md#REQ-01"
+            ],
+            "specify_pass": "slice",
+            "step": "specify",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**",
+            "docs/changes/*/spec-delta.md",
+            "docs/decisions/**",
+            "docs/spec/core.md"
+          ],
+          "allowed_write": [
+            "docs/changes/*/spec-delta.md",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/slices/**",
+            "docs/spec/_capabilities.yaml",
+            "docs/spec/core.md"
+          ],
+          "analyze_pass": null,
+          "capability": "system.core",
+          "change_id": "CHG-303",
+          "gate": "specified",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-303",
+          "reason": "Specify slices/SLICE-01.md (system.core)",
+          "skill": "specify",
+          "skill_path": ".agents/skills/specify/SKILL.md",
+          "slice_id": "SLICE-01",
+          "spec_refs": [
+            "docs/spec/core.md#REQ-01"
+          ],
+          "specify_pass": "slice",
+          "step": "specify",
+          "task": null,
+          "task_path": null
+        }
+      }
+    }
+  },
+  "blocked-task": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-311",
+            "gate": null,
+            "halt_kind": "blocked",
+            "intake_pending": null,
+            "kind": "blocked",
+            "path": "docs/changes/CHG-311",
+            "reason": "Task TASK-001 is blocked: it waits for the human (the Worker's reply that blocked it says why - for example a declared oracle it showed no code can pass). The human cancels it with `deltafuse decide docs/changes/CHG-311 --task TASK-001 --status cancelled`, or reopens it for Declare with `deltafuse decide docs/changes/CHG-311 --task TASK-001 --status reopened --note \"<why>\"`",
+            "skill": null,
+            "skill_path": null,
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": null,
+            "task": "TASK-001",
+            "task_path": "docs/changes/CHG-311/tasks/TASK-001.md"
+          }
+        ],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop and inspect"
+            }
+          ],
+          "kind": "blocked",
+          "prompt": "Work is blocked. Stop and inspect. Do not auto-accept Decisions or merge."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "decision": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-305",
+            "gate": null,
+            "halt_kind": "decision",
+            "intake_pending": null,
+            "kind": "blocked",
+            "path": "docs/changes/CHG-305",
+            "reason": "Decision 'DEC-0001-test.md' for Change 'CHG-305' is in 'proposed' status",
+            "skill": null,
+            "skill_path": null,
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": null,
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": "deltafuse decide docs/changes/CHG-305 --decision DEC-0001 --status accepted",
+              "id": "accept:DEC-0001",
+              "label": "Accept DEC-0001: Pick a store"
+            },
+            {
+              "command": "deltafuse decide docs/changes/CHG-305 --decision DEC-0001 --status rejected",
+              "id": "reject:DEC-0001",
+              "label": "Reject DEC-0001: Pick a store"
+            },
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop and inspect"
+            }
+          ],
+          "human_check": "none",
+          "kind": "decision",
+          "prompt": "A Decision is a Human Gate. Present these choices and wait. Do not pick. Show them as buttons in the chat; a click runs the command."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "declared": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# declare  CHG-308  TASK-001",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /declare",
+        "gate: declaring",
+        "change: CHG-308",
+        "path: docs/changes/CHG-308",
+        "task: TASK-001",
+        "task_path: docs/changes/CHG-308/tasks/TASK-001.md",
+        "skill_path: .agents/skills/declare/SKILL.md",
+        "reason: Every task is declared; close the declaring gate with advance --gate declaring",
+        "",
+        "## Read",
+        "- docs/changes/*/tasks/*",
+        "- docs/spec/**",
+        "- tests/**",
+        "",
+        "## Write",
+        "- tests/**",
+        "- docs/changes/*/evidence/red/**",
+        "- docs/changes/*/coverage.yaml",
+        "- docs/changes/*/change.yaml",
+        "",
+        "## Record proof (kernel, do not hand-write YAML)",
+        "- Red oracle against unchanged production code: `deltafuse evidence docs/changes/CHG-308 --phase red --task TASK-001 --changed-path <rel> -- <command>`",
+        "",
+        "## Close the gate",
+        "Once `deltafuse next` names no other task of this Change: `deltafuse advance docs/changes/CHG-308 --gate declaring`",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-308",
+          "read": [
+            "docs/changes/*/tasks/*",
+            "docs/spec/**",
+            "tests/**"
+          ],
+          "step": "declare",
+          "task": "TASK-001",
+          "write": [
+            "docs/changes/*/evidence/red/**",
+            "docs/changes/*/coverage.yaml",
+            "docs/changes/*/change.yaml",
+            "tests/**",
+            "src/core.py"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-308",
+            "gate": "declaring",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-308",
+            "reason": "Every task is declared; close the declaring gate with advance --gate declaring",
+            "skill": "declare",
+            "skill_path": ".agents/skills/declare/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "declare",
+            "task": "TASK-001",
+            "task_path": "docs/changes/CHG-308/tasks/TASK-001.md"
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [],
+          "allowed_write": [],
+          "analyze_pass": null,
+          "capability": null,
+          "change_id": "CHG-308",
+          "gate": "declaring",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-308",
+          "reason": "Every task is declared; close the declaring gate with advance --gate declaring",
+          "skill": "declare",
+          "skill_path": ".agents/skills/declare/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "declare",
+          "task": "TASK-001",
+          "task_path": "docs/changes/CHG-308/tasks/TASK-001.md"
+        }
+      }
+    }
+  },
+  "decomposed": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# declare  CHG-307  TASK-001",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /declare",
+        "gate: declaring",
+        "change: CHG-307",
+        "path: docs/changes/CHG-307",
+        "task: TASK-001",
+        "task_path: docs/changes/CHG-307/tasks/TASK-001.md",
+        "skill_path: .agents/skills/declare/SKILL.md",
+        "reason: Task TASK-001 status 'pending'",
+        "",
+        "## Read",
+        "- docs/changes/*/tasks/*",
+        "- docs/spec/**",
+        "- tests/**",
+        "",
+        "## Write",
+        "- tests/**",
+        "- docs/changes/*/evidence/red/**",
+        "- docs/changes/*/coverage.yaml",
+        "- docs/changes/*/change.yaml",
+        "",
+        "## Record proof (kernel, do not hand-write YAML)",
+        "- Red oracle against unchanged production code: `deltafuse evidence docs/changes/CHG-307 --phase red --task TASK-001 --changed-path <rel> -- <command>`",
+        "",
+        "## Close the gate",
+        "Once `deltafuse next` names no other task of this Change: `deltafuse advance docs/changes/CHG-307 --gate declaring`",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-307",
+          "read": [
+            "docs/changes/*/tasks/*",
+            "docs/spec/**",
+            "tests/**"
+          ],
+          "step": "declare",
+          "task": "TASK-001",
+          "write": [
+            "docs/changes/*/evidence/red/**",
+            "docs/changes/*/coverage.yaml",
+            "docs/changes/*/change.yaml",
+            "tests/**",
+            "src/core.py"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-307",
+            "gate": "declaring",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-307",
+            "reason": "Task TASK-001 status 'pending'",
+            "skill": "declare",
+            "skill_path": ".agents/skills/declare/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "declare",
+            "task": "TASK-001",
+            "task_path": "docs/changes/CHG-307/tasks/TASK-001.md"
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [],
+          "allowed_write": [],
+          "analyze_pass": null,
+          "capability": null,
+          "change_id": "CHG-307",
+          "gate": "declaring",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-307",
+          "reason": "Task TASK-001 status 'pending'",
+          "skill": "declare",
+          "skill_path": ".agents/skills/declare/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "declare",
+          "task": "TASK-001",
+          "task_path": "docs/changes/CHG-307/tasks/TASK-001.md"
+        }
+      }
+    }
+  },
+  "empty": {
+    "human": {
+      "exit": 0,
+      "out": []
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop"
+            }
+          ],
+          "kind": "done",
+          "prompt": "No ready work and no new intake file is waiting. Do not start a Change unless the human already stated one in this chat. Merge/push is a Human Gate. Do not git push."
+        },
+        "ready": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": null,
+            "gate": "intake",
+            "halt_kind": null,
+            "intake_pending": false,
+            "kind": "ready",
+            "path": null,
+            "reason": "No active Change; start /intake",
+            "skill": "intake",
+            "skill_path": ".agents/skills/intake/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "intake",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "gap-without-route": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-313",
+            "gate": null,
+            "halt_kind": "blocked",
+            "intake_pending": null,
+            "kind": "blocked",
+            "path": "docs/changes/CHG-313",
+            "reason": "Change CHG-313: Verify recorded the gap 'test-gap' in verification.md, so it does not converge and is not repaired silently. The Core has no route back for this gap yet; the human settles it",
+            "skill": null,
+            "skill_path": null,
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": null,
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop and inspect"
+            }
+          ],
+          "kind": "blocked",
+          "prompt": "Work is blocked. Stop and inspect. Do not auto-accept Decisions or merge."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "implemented": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# verify  CHG-309",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /verify",
+        "gate: converged",
+        "change: CHG-309",
+        "path: docs/changes/CHG-309",
+        "task: -",
+        "task_path: -",
+        "skill_path: .agents/skills/verify/SKILL.md",
+        "reason: All tasks are terminal; Verify the Change",
+        "",
+        "## Read",
+        "- docs/changes/**",
+        "- docs/spec/**",
+        "- tests/**",
+        "",
+        "## Write",
+        "- docs/changes/*/verification.md",
+        "- docs/changes/*/evidence/verification/**",
+        "- docs/changes/*/coverage.yaml",
+        "- docs/changes/*/change.yaml",
+        "- docs/changes/*/tasks/*",
+        "",
+        "## Close the gate",
+        "`deltafuse advance docs/changes/CHG-309 --gate converged`",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-309",
+          "read": [
+            "docs/changes/**",
+            "docs/spec/**",
+            "tests/**"
+          ],
+          "step": "verify",
+          "task": null,
+          "write": [
+            "docs/changes/*/verification.md",
+            "docs/changes/*/evidence/verification/**",
+            "docs/changes/*/coverage.yaml",
+            "docs/changes/*/change.yaml",
+            "docs/changes/*/tasks/*"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-309",
+            "gate": "converged",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-309",
+            "reason": "All tasks are terminal; Verify the Change",
+            "skill": "verify",
+            "skill_path": ".agents/skills/verify/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "verify",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [],
+          "allowed_write": [],
+          "analyze_pass": null,
+          "capability": null,
+          "change_id": "CHG-309",
+          "gate": "converged",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-309",
+          "reason": "All tasks are terminal; Verify the Change",
+          "skill": "verify",
+          "skill_path": ".agents/skills/verify/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "verify",
+          "task": null,
+          "task_path": null
+        }
+      }
+    }
+  },
+  "intake-done": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# analyze  CHG-301",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /analyze",
+        "gate: analyzed",
+        "change: CHG-301",
+        "path: docs/changes/CHG-301",
+        "task: -",
+        "task_path: -",
+        "skill_path: .agents/skills/analyze/SKILL.md",
+        "analyze_pass: routing",
+        "reason: Write routing.yaml from request.md and the capability catalog",
+        "",
+        "## Read",
+        "- docs/changes/*/request.md",
+        "- docs/changes/*/change.yaml",
+        "- docs/spec/_capabilities.yaml",
+        "- .deltafuse/**",
+        "",
+        "## Write",
+        "- docs/changes/*/routing.yaml",
+        "- docs/changes/*/change.yaml",
+        "",
+        "## Close the gate",
+        "Do not run `advance --gate analyzed` yet. Write only this pass, then `deltafuse next`.",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-301",
+          "read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/change.yaml",
+            "docs/spec/_capabilities.yaml",
+            ".deltafuse/**"
+          ],
+          "step": "analyze",
+          "task": null,
+          "write": [
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [
+              "docs/changes/*/request.md",
+              "docs/changes/*/change.yaml",
+              "docs/spec/_capabilities.yaml",
+              ".deltafuse/**"
+            ],
+            "allowed_write": [
+              "docs/changes/*/routing.yaml",
+              "docs/changes/*/change.yaml"
+            ],
+            "analyze_pass": "routing",
+            "capability": null,
+            "change_id": "CHG-301",
+            "gate": "analyzed",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-301",
+            "reason": "Write routing.yaml from request.md and the capability catalog",
+            "skill": "analyze",
+            "skill_path": ".agents/skills/analyze/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "analyze",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [
+            "docs/changes/*/request.md",
+            "docs/changes/*/change.yaml",
+            "docs/spec/_capabilities.yaml",
+            ".deltafuse/**"
+          ],
+          "allowed_write": [
+            "docs/changes/*/routing.yaml",
+            "docs/changes/*/change.yaml"
+          ],
+          "analyze_pass": "routing",
+          "capability": null,
+          "change_id": "CHG-301",
+          "gate": "analyzed",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-301",
+          "reason": "Write routing.yaml from request.md and the capability catalog",
+          "skill": "analyze",
+          "skill_path": ".agents/skills/analyze/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "analyze",
+          "task": null,
+          "task_path": null
+        }
+      }
+    }
+  },
+  "spec-gap": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-312",
+            "gate": null,
+            "halt_kind": "blocked",
+            "intake_pending": null,
+            "kind": "blocked",
+            "path": "docs/changes/CHG-312",
+            "reason": "Change CHG-312: Verify recorded the gap 'spec-gap' in verification.md, so it does not converge and is not repaired silently. The human reopens it for Analyze with `deltafuse decide docs/changes/CHG-312 --gap spec-gap --status reopened --note \"<what the gap names>\"`",
+            "skill": null,
+            "skill_path": null,
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": null,
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop and inspect"
+            }
+          ],
+          "kind": "blocked",
+          "prompt": "Work is blocked. Stop and inspect. Do not auto-accept Decisions or merge."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "spec-proposed": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-304",
+            "gate": null,
+            "halt_kind": "spec",
+            "intake_pending": null,
+            "kind": "blocked",
+            "path": "docs/changes/CHG-304",
+            "reason": "Human specification gate (status specification-proposed)",
+            "skill": null,
+            "skill_path": null,
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": null,
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": "deltafuse decide docs/changes/CHG-304 --spec --status accepted",
+              "id": "accept-spec:CHG-304",
+              "label": "Accept specification for CHG-304"
+            },
+            {
+              "command": "deltafuse decide docs/changes/CHG-304 --spec --status rejected",
+              "id": "reject-spec:CHG-304",
+              "label": "Reject specification for CHG-304"
+            },
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop and inspect"
+            }
+          ],
+          "human_check": "none",
+          "kind": "spec",
+          "prompt": "Specification accept is a Human Gate. Present these choices and wait. Do not pick. Show them as buttons in the chat; a click runs the command."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  },
+  "specified": {
+    "human": {
+      "exit": 0,
+      "out": [
+        "# decompose  CHG-306",
+        "",
+        "You are the Worker (human). Fill the same Change files an LLM Worker would. This is not a second process.",
+        "Do not auto-accept Decisions or merge.",
+        "",
+        "skill: /decompose",
+        "gate: decomposed",
+        "change: CHG-306",
+        "path: docs/changes/CHG-306",
+        "task: -",
+        "task_path: -",
+        "skill_path: .agents/skills/decompose/SKILL.md",
+        "reason: Change is specified; next is Decompose",
+        "",
+        "## Read",
+        "- docs/changes/*/slices/**",
+        "- docs/changes/*/spec-delta.md",
+        "- docs/spec/**",
+        "",
+        "## Write",
+        "- docs/changes/*/tasks/**",
+        "- docs/changes/*/coverage.yaml",
+        "- docs/changes/*/change.yaml",
+        "",
+        "## Close the gate",
+        "`deltafuse advance docs/changes/CHG-306 --gate decomposed`",
+        "",
+        "Then: `deltafuse next`"
+      ]
+    },
+    "json": {
+      "exit": 0,
+      "out": {
+        "blocked": [],
+        "envelope": {
+          "change": "CHG-306",
+          "read": [
+            "docs/changes/*/slices/**",
+            "docs/changes/*/spec-delta.md",
+            "docs/spec/**"
+          ],
+          "step": "decompose",
+          "task": null,
+          "write": [
+            "docs/changes/*/tasks/**",
+            "docs/changes/*/coverage.yaml",
+            "docs/changes/*/change.yaml"
+          ]
+        },
+        "halt": null,
+        "ready": [
+          {
+            "allowed_read": [],
+            "allowed_write": [],
+            "analyze_pass": null,
+            "capability": null,
+            "change_id": "CHG-306",
+            "gate": "decomposed",
+            "halt_kind": null,
+            "intake_pending": null,
+            "kind": "ready",
+            "path": "docs/changes/CHG-306",
+            "reason": "Change is specified; next is Decompose",
+            "skill": "decompose",
+            "skill_path": ".agents/skills/decompose/SKILL.md",
+            "slice_id": null,
+            "spec_refs": [],
+            "specify_pass": null,
+            "step": "decompose",
+            "task": null,
+            "task_path": null
+          }
+        ],
+        "schema_version": 1,
+        "selected": {
+          "allowed_read": [],
+          "allowed_write": [],
+          "analyze_pass": null,
+          "capability": null,
+          "change_id": "CHG-306",
+          "gate": "decomposed",
+          "halt_kind": null,
+          "intake_pending": null,
+          "kind": "ready",
+          "path": "docs/changes/CHG-306",
+          "reason": "Change is specified; next is Decompose",
+          "skill": "decompose",
+          "skill_path": ".agents/skills/decompose/SKILL.md",
+          "slice_id": null,
+          "spec_refs": [],
+          "specify_pass": null,
+          "step": "decompose",
+          "task": null,
+          "task_path": null
+        }
+      }
+    }
+  },
+  "verified": {
+    "human": {
+      "exit": 1,
+      "out": []
+    },
+    "json": {
+      "exit": 1,
+      "out": {
+        "blocked": [],
+        "envelope": null,
+        "halt": {
+          "choices": [
+            {
+              "command": null,
+              "id": "inspect",
+              "label": "Stop"
+            }
+          ],
+          "kind": "done",
+          "prompt": "No ready work and no new intake file is waiting. Do not start a Change unless the human already stated one in this chat. Merge/push is a Human Gate. Do not git push."
+        },
+        "ready": [],
+        "schema_version": 1,
+        "selected": null
+      }
+    }
+  }
+}

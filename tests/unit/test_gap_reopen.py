@@ -80,6 +80,14 @@ def test_the_reopened_gap_walks_back_through_analyze_and_specify(tmp_path: Path,
     assert ready and ready[0].step == "analyze" and ready[0].analyze_pass == "gap"
     assert "audit.md lacks the row" in ready[0].reason
     assert "docs/changes/*/slices/**" in ready[0].allowed_write
+    # The gap pass closes `analyzed` itself, with advance alone - the reason and the skill agree
+    # (the skill once closed the gate for `coverage` only, and the reason named check-gate).
+    assert "advance --gate analyzed" in ready[0].reason and "check-gate" not in ready[0].reason
+    from deltafuse.core.queue import format_item
+
+    assert f"--gate analyzed" in format_item(ready[0]) and "check-gate" not in format_item(ready[0])
+    skill = (repo_root / "process" / "skills" / "analyze" / "SKILL.md").read_text(encoding="utf-8")
+    assert "If `analyze_pass` is `coverage` or `gap`, close with `deltafuse advance" in skill
 
     advance_change(change, "analyzed")
     ready = build_work_queue(tmp_path).ready

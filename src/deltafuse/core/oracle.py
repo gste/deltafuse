@@ -365,12 +365,14 @@ def isolation_plan(argv: list[str], recorded: dict[str, Any], red_failed: Iterab
     bare argument that is not an existing path is an option's value and stays.
     None when the runner is not pytest or nothing is frozen.
     """
-    from deltafuse.core.test_reports import PYTEST_RUNNERS, runner_family
+    from deltafuse.core.test_reports import PYTEST_RUNNERS, runner_family, runner_head
 
     expected = frozen_test_ids(recorded, red_failed)
     if not expected or runner_family(argv) != "pytest":
         return None
-    head = Path(str(argv[0]).replace("\\", "/")).name.lower().removesuffix(".exe")
+    # One reading of the runner's name with runner_family: `pytest.cmd` is pytest there, and
+    # stripping only `.exe` here sent it to `argv.index("pytest")`, which raised.
+    head = runner_head(argv[0])
     split = 1 if head in PYTEST_RUNNERS else argv.index("pytest") + 1
     kept: list[str] = []
     rest = iter(argv[split:])

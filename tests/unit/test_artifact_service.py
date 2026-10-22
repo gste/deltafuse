@@ -74,51 +74,6 @@ def test_create_task_initializes_core_status_and_rejects_status_override(product
     assert err_code == "core_owned_field" or "status" in str(exc_info.value).lower()
 
 
-def test_validate_is_strictly_read_only(product_root: Path, auth_context: AuthorizationContext):
-    """validate() is strictly read-only and writes zero files to journal, receipts or target."""
-    service = ArtifactService(product_root, auth_context)
-
-    # Set up referenced files
-    slice_file = product_root / "slices" / "SLICE-01.md"
-    slice_file.write_text("---\nid: SLICE-01\nchange: CHG-001\ntitle: Auth Slice\nstatus: draft\nprimary_capability: auth\nclaims:\n  - CR-001\n---\nSlice body\n", encoding="utf-8")
-    spec_file = product_root / "docs" / "spec" / "context.md"
-    spec_file.parent.mkdir(parents=True, exist_ok=True)
-    spec_file.write_text("# Spec Context\n", encoding="utf-8")
-
-    task_file = product_root / "tasks" / "TASK-002.md"
-    task_content = (
-        "---\n"
-        "id: TASK-002\n"
-        "change: CHG-001\n"
-        "slice: SLICE-01\n"
-        "kind: feature\n"
-        "status: pending\n"
-        "depends_on: []\n"
-        "requirement_delta: none\n"
-        "spec_refs:\n"
-        "  - docs/spec/context.md\n"
-        "design_ref: null\n"
-        "allowed_paths: []\n"
-        "forbidden_paths: []\n"
-        "context_budget:\n"
-        "  max_tokens: 10000\n"
-        "  max_files: 5\n"
-        "---\n"
-        "Body content\n"
-    )
-    task_file.write_text(task_content, encoding="utf-8")
-
-    journal_dir = product_root / ".deltafuse" / "journal"
-    receipts_dir = product_root / ".deltafuse" / "receipts"
-
-    res = service.validate(kind="task", target="tasks/TASK-002.md")
-
-    assert res["valid"] is True
-    # Zero journal or receipt directories created
-    assert not journal_dir.exists()
-    assert not receipts_dir.exists()
-
-
 def test_create_task_success(product_root: Path, auth_context: AuthorizationContext):
     """Supported artifact created without raw YAML; receipt returned; initial pending status set."""
     service = ArtifactService(product_root, auth_context)
@@ -246,16 +201,6 @@ def test_failed_validation_leaves_filesystem_and_journal_untouched(product_root:
 
     journal_dir = product_root / ".deltafuse" / "journal"
     assert not journal_dir.exists() or len(list(journal_dir.glob("*"))) == 0
-
-
-def test_describe_operation(product_root: Path, auth_context: AuthorizationContext):
-    """describe() returns kind descriptor schema details without side effects."""
-    service = ArtifactService(product_root, auth_context)
-    desc = service.describe(kind="task", operation="create")
-
-    assert desc["kind"] == "task"
-    assert desc["operation"] == "create"
-    assert "allowed_semantic_fields" in desc
 
 
 def test_reproduce_finding_2_empty_payload_rejected(product_root: Path, auth_context: AuthorizationContext):

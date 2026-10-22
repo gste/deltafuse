@@ -53,7 +53,7 @@ deltafuse board <product-root> --json --archive
 | Success | Exit `0`, body validates against this schema. |
 | Not a product / unreadable lock or config | Exit `≠ 0`, no partial JSON pretending to be a board. |
 | `--archive` | Include `archive` array; omit the key when the flag is absent. |
-| Paths | Resolve Change roots from `.deltafuse/config.yaml` `paths.changes` and `paths.archive`, not hardcoded `docs/changes`. |
+| Paths | Change roots are `docs/changes` and `docs/archive/changes`; the `paths.*` keys of `.deltafuse/config.yaml` are fixed in this version (`validate-config` refuses other values) and the snapshot reports them. |
 | Side effects | Zero file creates/updates/deletes under `<product-root>`. |
 | Gate fan-out | Must not run `check-gate` on every Change by default. Optional later flag, not v1. |
 | Layout | `layout` is framework geometry for the pinned DeltaFuse version. It MUST NOT depend on which Changes exist. Empty `changes` still includes the full `layout`. |
@@ -62,7 +62,7 @@ The same object is the return value of a Python function (name left to FM-001). 
 
 ## Compatibility
 
-`schema_version` is **not** `change.yaml` `schema_version` (that stays `2`).
+`schema_version` is **not** `change.yaml` `schema_version` (that is `3`).
 
 | Change | What to do |
 |---|---|

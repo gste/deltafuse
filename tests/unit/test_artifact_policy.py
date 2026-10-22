@@ -8,7 +8,6 @@ from deltafuse.core.artifact_policy import (
     resolve_artifact_path,
     resolve_change_stage,
     validate_artifact_policy,
-    revalidate_authorization_context,
     ArtifactPolicyError,
     AuthorizationContext,
 )
@@ -103,17 +102,6 @@ def test_forged_actor_core_rejected():
             change_id="CHG-001",
             stage="specified",
         )
-
-
-def test_revalidate_authorization_context(tmp_path: Path):
-    ctx = create_authorization_context(
-        actor="worker",
-        work_item="CHG-001",
-        product_root=tmp_path,
-        change_id="CHG-001",
-        stage="implement",
-    )
-    assert revalidate_authorization_context(ctx) is True
 
 
 def test_aw37_mismatched_change_id_rejected(tmp_path: Path):

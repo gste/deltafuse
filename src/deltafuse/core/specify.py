@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from deltafuse.core.analyze import catalog_spec_refs, load_slice_records
+from deltafuse.core.analyze import PassCursor, catalog_spec_refs, load_slice_records
 from deltafuse.core.frontmatter import parse_frontmatter
 
 SPECIFIED_SLICE_STATUSES = {"specified", "decomposed", "verified"}
@@ -35,17 +34,6 @@ _CLOSE_WRITE = [
     "docs/changes/*/change.yaml",
     "docs/changes/*/spec-delta.md",
 ]
-
-
-@dataclass
-class SpecifyCursor:
-    pass_name: str
-    reason: str
-    slice_id: str | None = None
-    capability: str | None = None
-    spec_refs: list[str] = field(default_factory=list)
-    allowed_read: list[str] = field(default_factory=list)
-    allowed_write: list[str] = field(default_factory=list)
 
 
 def spec_ref_file(ref: str) -> str:
@@ -88,8 +76,6 @@ def spec_delta_outside_slice_files(
         meta, _ = parse_frontmatter(delta_file.read_text(encoding="utf-8"))
     except Exception:
         return []
-    if not isinstance(meta, dict):
-        return []
     allow = allowed_live_spec_files(change_path, product_root)
     errors: list[str] = []
     for kind in ("added", "modified"):
@@ -120,14 +106,14 @@ def unspecified_slices(change_path: Path | str) -> list[Any]:
 def next_specify_pass(
     change_path: Path | str,
     product_root: Path | str,
-) -> SpecifyCursor | None:
+) -> PassCursor | None:
     """Next Specify write for an analyzed Change."""
     pending = unspecified_slices(change_path)
     if pending:
         record = pending[0]
         spec_refs = slice_spec_refs(record, product_root)
         spec_files = _unique_files(spec_refs)
-        return SpecifyCursor(
+        return PassCursor(
             pass_name="slice",
             reason=f"Specify slices/{record.slice_id}.md ({record.primary_capability})",
             slice_id=record.slice_id,
@@ -136,9 +122,9 @@ def next_specify_pass(
             allowed_read=[*_SLICE_READ, *spec_files],
             allowed_write=[*_SLICE_WRITE, *spec_files],
         )
-    return SpecifyCursor(
+    return PassCursor(
         pass_name="close",
-        reason="All slices specified; check-gate specified and set Change status",
+        reason="All slices specified; propose the specification, then advance --gate specified",
         allowed_read=list(_CLOSE_READ),
         allowed_write=list(_CLOSE_WRITE),
     )

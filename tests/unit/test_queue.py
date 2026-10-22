@@ -185,7 +185,8 @@ def test_next_human_declare_checklist(tmp_path: Path, repo_root: Path, capsys):
     assert "not a second process" in out
     assert "Worker (human)" in out
     assert "docs/changes/*/evidence/red/**" in out
-    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate declaring" in out
+    assert f"advance {builder.change_dir.relative_to(tmp_path).as_posix()} --gate declaring" in out
+    assert "check-gate" not in out  # the skills close a gate with advance alone
     assert "deltafuse evidence" in out and "--phase red" in out
     assert "Do not auto-accept Decisions" in out
     assert (builder.change_dir / "change.yaml").read_text(encoding="utf-8") == before
@@ -250,7 +251,7 @@ def test_next_human_analyze_routing_skips_analyzed_gate(tmp_path: Path, repo_roo
     out, _ = capsys.readouterr()
     assert ret == 0
     assert "analyze_pass: routing" in out
-    assert "Do not run `check-gate --gate analyzed` yet" in out
+    assert "Do not run `advance --gate analyzed` yet" in out
     assert "docs/spec/**" not in out
     assert "docs/spec/_capabilities.yaml" in out
 
@@ -282,7 +283,7 @@ def test_next_human_analyze_coverage_uses_kernel(tmp_path: Path, repo_root: Path
     assert ret == 0
     assert "analyze_pass: coverage" in out
     assert "deltafuse coverage" in out
-    assert f"check-gate {builder.change_dir.relative_to(tmp_path).as_posix()} --gate analyzed" in out
+    assert f"advance {builder.change_dir.relative_to(tmp_path).as_posix()} --gate analyzed" in out
 
 
 def test_next_json_blocked_decision_has_halt_choices(tmp_path: Path, repo_root: Path, capsys):
@@ -387,7 +388,7 @@ def test_next_keeps_decompose_until_the_decomposed_gate_passes(
     selected = select_next(build_work_queue(tmp_path))
     assert selected is not None
     assert selected.skill == "decompose"
-    assert "check-gate decomposed" in selected.reason
+    assert "advance --gate decomposed" in selected.reason
 
 
 def test_an_intake_note_taken_in_by_an_archived_change_is_not_pending(tmp_path: Path, repo_root: Path, capsys):

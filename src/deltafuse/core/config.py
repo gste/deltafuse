@@ -9,13 +9,23 @@ silently disabling a contract.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import yaml
 
 from deltafuse.core.gate_receipts import PROFILES, REMOVED_PROFILES
 
 KNOWN_TOP_KEYS = {"schema_version", "framework", "paths", "context", "workflow", "project", "adapters"}
+# Where the Core reads and writes the product's documents. Fixed in this version: the Core names
+# these directories itself (`docs/changes` alone ~100 times), so another value would leave a
+# product half-read - the queue followed `paths.changes`, the leash and the gates did not
+# (codebase audit 2026-10-21, owner decision: refuse rather than half-support).
+FIXED_PATHS = {
+    "intake": "docs/intake",
+    "changes": "docs/changes",
+    "specification": "docs/spec",
+    "decisions": "docs/decisions",
+    "archive": "docs/archive",
+}
 KNOWN_WORKFLOW_KEYS = {
     "schema_version",
     "leash",
@@ -35,10 +45,6 @@ LEASH_MODES = {"off", "advisory", "enforce"}
 TRACE_CLAIMS_MODES = {"off", "warn"}
 BASELINES = {"draft", "accepted"}
 KNOWN_PROJECT_KEYS = {"baseline", "capability_catalog"}
-
-
-class ConfigError(Exception):
-    """Invalid or unknown product config content."""
 
 
 def validate_active_code_roots(product_root: Path | str) -> list[str]:
@@ -104,6 +110,21 @@ def validate_config(product_root: Path | str) -> list[str]:
     if unknown_top:
         errors.append(f"config.yaml: unknown top-level keys {sorted(unknown_top)}")
 
+    paths = data.get("paths")
+    if paths is not None:
+        if not isinstance(paths, dict):
+            errors.append("config.yaml: paths must be a mapping")
+        else:
+            for key, value in sorted(paths.items()):
+                fixed = FIXED_PATHS.get(key)
+                if fixed is None:
+                    errors.append(f"config.yaml: unknown paths key {key!r}; known: {sorted(FIXED_PATHS)}")
+                elif str(value).strip("/").replace("\\", "/") != fixed:
+                    errors.append(
+                        f"config.yaml: paths.{key} is {value!r}, but this version of the Core reads and "
+                        f"writes {fixed!r} only; set it to {fixed!r} or remove it"
+                    )
+
     project = data.get("project")
     if project is not None:
         if not isinstance(project, dict):
@@ -166,19 +187,23 @@ def validate_config(product_root: Path | str) -> list[str]:
     return errors
 
 
+def config_section(
+    product_root: Path | str,
+    key: str,
+    *,
+    tolerate: tuple[type[BaseException], ...] = (Exception,),
+) -> dict:
+    """One top-level mapping of `.deltafuse/config.yaml`, or {} when the file, its YAML or the
+    key is missing or not a mapping. A read or parse error outside *tolerate* propagates."""
+    try:
+        data = yaml.safe_load((Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    except tolerate:
+        return {}
+    section = data.get(key) if isinstance(data, dict) else None
+    return section if isinstance(section, dict) else {}
+
+
 def load_trace_claims_mode(product_root: Path | str, *, missing: str = "off") -> str:
     """`workflow.trace_claims`: off (default) or warn. See TRACE_CLAIMS_MODES."""
-    path = Path(product_root) / ".deltafuse" / "config.yaml"
-    if not path.is_file():
-        return missing
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
-        return missing
-    if not isinstance(data, dict):
-        return missing
-    workflow = data.get("workflow")
-    if not isinstance(workflow, dict):
-        return missing
-    mode = workflow.get("trace_claims")
+    mode = config_section(product_root, "workflow").get("trace_claims")
     return mode if mode in TRACE_CLAIMS_MODES else missing

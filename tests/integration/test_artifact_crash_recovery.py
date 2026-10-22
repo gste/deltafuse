@@ -350,3 +350,31 @@ def test_real_subprocess_hard_kill_publish_boundary_recovery(tmp_path: Path):
     assert len(receipts) == 1
 
 
+
+
+def test_the_next_write_finishes_a_write_cut_after_publish(tmp_path: Path, repo_root: Path):
+    """Codebase audit 2026-10-21: recover_pending_transactions had no caller in the Core, though
+    docs/using.md says the Core recovers interrupted writes. Every Writer operation now runs it
+    under the mutation lock first, so a write cut between publishing the file and finalizing its
+    receipt is finished by the next one."""
+    import json as _json
+
+    from deltafuse.core.artifact_write import write_artifact
+    from tests.unit.test_artifact_write import TASK, _specified
+
+    builder = _specified(tmp_path, repo_root, "CHG-711")
+    write_artifact(builder.change_dir, "task", identity="TASK-009", fields=dict(TASK), body="Prose.\n")
+    journal = tmp_path / ".deltafuse" / "journal"
+    (record_file,) = [p for p in journal.glob("*.json") if "TASK-009" in p.read_text(encoding="utf-8")]
+    record = _json.loads(record_file.read_text(encoding="utf-8"))
+    receipt = tmp_path / ".deltafuse" / "receipts" / f"{record['transaction_id']}.json"
+    assert record["state"] == "committed" and receipt.is_file()
+
+    # The crash: the file is published, the receipt was never written.
+    record["state"] = "published"
+    record_file.write_text(_json.dumps(record), encoding="utf-8")
+    receipt.unlink()
+
+    write_artifact(builder.change_dir, "task", identity="TASK-010", fields=dict(TASK), body="Prose.\n")
+    assert _json.loads(record_file.read_text(encoding="utf-8"))["state"] == "committed"
+    assert receipt.is_file()

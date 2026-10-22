@@ -33,7 +33,7 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
     builder.step_specify()
     assert check_gate(change_dir, "specified") == []
 
-    # Gate 4: Decompose via Artifact Writer CLI 'create'
+    # Gate 4: Decompose via the Artifact Writer (`artifact write` also updates change.yaml's index)
     task_payload = {
         "identity": "TASK-001",
         "slice": "SLICE-01",
@@ -49,12 +49,8 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
     input_file = tmp_path / "task_input.json"
     input_file.write_text(json.dumps(task_payload), encoding="utf-8")
 
-    res = main(["artifact", "create", "-k", "task", "-c", str(change_dir), "-i", str(input_file), "--json"])
-    assert res == 0, "artifact create task failed"
-
-    # Update change.yaml child index explicitly via CLI 'update-index'
-    res = main(["artifact", "update-index", "-c", str(change_dir), "-k", "task", "-id", "TASK-001", "--json"])
-    assert res == 0, "artifact update-index task failed"
+    res = main(["artifact", "write", "-k", "task", "-c", str(change_dir), "-i", str(input_file), "--json"])
+    assert res == 0, "artifact write task failed"
 
     builder._core_advance("decomposed")
     assert check_gate(change_dir, "decomposed") == []

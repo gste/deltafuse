@@ -10,15 +10,15 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.config import load_trace_claims_mode
+from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.integrity import (
+    extract_claim_kinds_from_request,
     extract_claims_from_request,
     load_capability_catalog,
     lookup_capability,
     path_is_inside_repo,
 )
-
-ANALYZE_PASSES = ("routing", "slice", "coverage")
 
 _COVERAGE_STATUSES = {
     "pending",
@@ -72,7 +72,9 @@ _COVERAGE_WRITE = [
 
 
 @dataclass
-class AnalyzeCursor:
+class PassCursor:
+    """The one write the Core names for an Analyze or Specify pass."""
+
     pass_name: str
     reason: str
     capability: str | None = None
@@ -105,45 +107,26 @@ def _strip_anchor(ref: str) -> str:
     return ref.split("#", 1)[0].strip()
 
 
-def routing_primary_capabilities(change_path: Path | str) -> list[str]:
-    """Distinct owning capabilities from routing.yaml, stable order."""
-    data = _load_yaml_mapping(Path(change_path) / "routing.yaml")
-    if not data:
-        return []
-    claims = data.get("claims")
+def _routing_claims(change_path: Path | str) -> list[tuple[Any, str]]:
+    """(claim id, primary_capability) of each routing.yaml claim that names a capability."""
+    claims = (_load_yaml_mapping(Path(change_path) / "routing.yaml") or {}).get("claims")
     if not isinstance(claims, dict):
         return []
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for row in claims.values():
-        if not isinstance(row, dict):
-            continue
-        cap = row.get("primary_capability")
-        if isinstance(cap, str) and cap and cap not in seen:
-            seen.add(cap)
-            ordered.append(cap)
-    ordered.sort()
-    return ordered
+    return [
+        (cid, row["primary_capability"])
+        for cid, row in claims.items()
+        if isinstance(row, dict) and isinstance(row.get("primary_capability"), str) and row["primary_capability"]
+    ]
+
+
+def routing_primary_capabilities(change_path: Path | str) -> list[str]:
+    """Distinct owning capabilities from routing.yaml, sorted; a claim with a non-string id counts too."""
+    return sorted({cap for _, cap in _routing_claims(change_path)})
 
 
 def slice_primary_capabilities(change_path: Path | str) -> dict[str, str]:
     """Map SLICE-NN -> primary_capability for readable slice files."""
-    slices_dir = Path(change_path) / "slices"
-    found: dict[str, str] = {}
-    if not slices_dir.is_dir():
-        return found
-    for slice_file in sorted(slices_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
-        slice_id = meta.get("id")
-        cap = meta.get("primary_capability")
-        if isinstance(slice_id, str) and isinstance(cap, str) and cap:
-            found[slice_id] = cap
-    return found
+    return {row.slice_id: row.primary_capability for row in load_slice_records(change_path)}
 
 
 def covered_primary_capabilities(change_path: Path | str) -> set[str]:
@@ -218,11 +201,11 @@ def _change_status(change_path: Path) -> str | None:
 def next_analyze_pass(
     change_path: Path | str,
     product_root: Path | str,
-) -> AnalyzeCursor | None:
+) -> PassCursor | None:
     """Next Analyze write for this Change, or None when Analyze is complete on disk."""
     path = Path(change_path)
     if not (path / "routing.yaml").is_file():
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="routing",
             reason="Write routing.yaml from request.md and the capability catalog",
             allowed_read=analyze_allowed_read("routing"),
@@ -236,7 +219,7 @@ def next_analyze_pass(
         cap = uncovered[0]
         spec_refs = catalog_spec_refs(product_root, cap)
         slice_id = next_slice_id(path)
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="slice",
             reason=f"Write slices/{slice_id}.md for {cap}",
             capability=cap,
@@ -246,24 +229,24 @@ def next_analyze_pass(
             allowed_write=analyze_allowed_write("slice"),
         )
     if not (path / "coverage.yaml").is_file():
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="coverage",
-            reason="Run deltafuse coverage, then check-gate analyzed",
+            reason="Run deltafuse coverage, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
             allowed_write=analyze_allowed_write("coverage"),
         )
     status = _change_status(path)
     if status in {"normalized", "analyzing"}:
-        return AnalyzeCursor(
+        return PassCursor(
             pass_name="coverage",
-            reason="Run deltafuse coverage if needed, then check-gate analyzed",
+            reason="Run deltafuse coverage if needed, then advance --gate analyzed",
             allowed_read=analyze_allowed_read("coverage"),
             allowed_write=analyze_allowed_write("coverage"),
         )
     return None
 
 
-def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | None:
+def _gap_pass(change_path: Path, product_root: Path | str) -> PassCursor | None:
     """Analyze for a Change the human reopened from a Verify gap (decide --gap).
 
     ref-m04-365-2 (2026-10-11): the catalogue row Verify found missing sat in a spec file no
@@ -284,14 +267,14 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | No
     info = latest_gap_reopen(change_path) or {}
     note = str(info.get("note") or "").strip()
     where = f"docs/changes/{change_path.name}/{info['path']}/" if info.get("path") else "reopened/"
-    return AnalyzeCursor(
+    return PassCursor(
         pass_name="gap",
         reason=(
             f"Verify recorded '{info.get('gap') or 'a gap'}' and the human reopened the Change for "
             f"Analyze; the verification is archived in {where}. Bound the slices so Specify can "
             "write what the gap names: add the specification file to a slice's spec_refs, or route "
-            "the capability that owns it and write its slice. Then check-gate analyzed and "
-            "advance --gate analyzed; every slice is back to draft, and Specify follows"
+            "the capability that owns it and write its slice. Then advance --gate analyzed; "
+            "every slice is back to draft, and Specify follows"
             + (f". The human's note: {note}" if note else "")
         ),
         allowed_read=[*_ROUTING_READ, *_SLICE_READ, "docs/spec/**", f"docs/changes/*/{info.get('path', 'reopened')}/**"],
@@ -300,34 +283,13 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> AnalyzeCursor | No
 
 
 def routing_claim_capabilities(change_path: Path | str) -> dict[str, str]:
-    data = _load_yaml_mapping(Path(change_path) / "routing.yaml")
-    if not data:
-        return {}
-    claims = data.get("claims")
-    if not isinstance(claims, dict):
-        return {}
-    caps: dict[str, str] = {}
-    for cid, row in claims.items():
-        if not isinstance(cid, str) or not isinstance(row, dict):
-            continue
-        cap = row.get("primary_capability")
-        if isinstance(cap, str) and cap:
-            caps[cid] = cap
-    return caps
+    """Claim id -> primary_capability from routing.yaml, for string claim ids."""
+    return {cid: cap for cid, cap in _routing_claims(change_path) if isinstance(cid, str)}
 
 
 def load_slice_records(change_path: Path | str) -> list[SliceRecord]:
     records: list[SliceRecord] = []
-    slices_dir = Path(change_path) / "slices"
-    if not slices_dir.is_dir():
-        return records
-    for slice_file in sorted(slices_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(meta, dict):
-            continue
+    for _, meta in iter_frontmatter(Path(change_path) / "slices"):
         slice_id = meta.get("id")
         cap = meta.get("primary_capability")
         if not isinstance(slice_id, str) or not isinstance(cap, str) or not cap:
@@ -377,15 +339,8 @@ def _change_id(change_path: Path) -> str:
 def _slice_tasks(change_path: Path) -> dict[str, list[str]]:
     """Task ids per slice, from task frontmatter, in id order."""
     out: dict[str, list[str]] = {}
-    tasks_dir = change_path / "tasks"
-    if not tasks_dir.is_dir():
-        return out
-    for task_file in sorted(tasks_dir.glob("*.md")):
-        try:
-            meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if isinstance(meta, dict) and isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
+    for _, meta in iter_frontmatter(change_path / "tasks"):
+        if isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
             out.setdefault(meta["slice"], []).append(meta["id"])
     for ids in out.values():
         ids.sort()
@@ -499,7 +454,6 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
 
     # P12 (workflow.trace_claims: warn, default off): costs one config read and, only when
     # asked for, a scan of each claim's own test files. `off` changes nothing below.
-    from deltafuse.core.config import load_trace_claims_mode
     from deltafuse.core.fsm import find_repo_root
 
     trace_repo_root: Path | None = None
@@ -639,9 +593,7 @@ def claim_trace_warnings(change_path: Path | str) -> list[str]:
     detectable here; that stays the judge's job until this has run on enough models to
     trust promoting it.
     """
-    from deltafuse.core.config import load_trace_claims_mode
     from deltafuse.core.fsm import find_repo_root
-    from deltafuse.core.integrity import extract_claim_kinds_from_request
 
     path = Path(change_path)
     repo_root = find_repo_root(path)
@@ -700,3 +652,130 @@ def write_coverage(change_path: Path | str) -> Path:
 
     return dest
 
+
+
+# --- A new name in a family another capability specifies (q4: under-routing at Analyze) ---------
+
+_BACKTICKED = re.compile(r"`([^`\n]+)`")
+_DOTTED_NAME = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+_FILE_SUFFIXES = frozenset({"py", "md", "yaml", "yml", "json", "toml", "txt", "cfg", "ini", "java", "kt", "js", "ts"})
+_CLAIM_ID = re.compile(r"\bCR-\d{3}\b")
+
+
+def catalog_capability_specs(catalog: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Capability id (`domain.name`) -> the live spec files the catalog names for it."""
+    out: dict[str, list[str]] = {}
+    domains = (catalog or {}).get("domains") if isinstance(catalog, dict) else None
+    for dname, dobj in (domains or {}).items() if isinstance(domains, dict) else []:
+        caps = dobj.get("capabilities") if isinstance(dobj, dict) else None
+        for cname, cobj in (caps or {}).items() if isinstance(caps, dict) else []:
+            specs = cobj.get("spec") if isinstance(cobj, dict) else None
+            out[f"{dname}.{cname}"] = [s for s in specs or [] if isinstance(s, str)] if isinstance(specs, list) else []
+    return out
+
+
+def claim_texts(request_text: str, routing_claims: dict[str, Any]) -> dict[str, str]:
+    """Claim id -> its lines of request.md (from the line naming it to the next claim) and its summary."""
+    texts: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in request_text.splitlines():
+        found = _CLAIM_ID.search(line)
+        if found:
+            current = found.group(0)
+        if current:
+            texts.setdefault(current, []).append(line)
+    for cid, row in routing_claims.items():
+        if isinstance(cid, str) and isinstance(row, dict) and isinstance(row.get("summary"), str):
+            texts.setdefault(cid, []).append(row["summary"])
+    return {cid: "\n".join(lines) for cid, lines in texts.items()}
+
+
+def _named_identifiers(text: str, capability_ids: set[str]) -> list[str]:
+    names: list[str] = []
+    for span in _BACKTICKED.findall(text):
+        token = span.strip()
+        if not _DOTTED_NAME.match(token) or token in capability_ids:
+            continue
+        if token.rsplit(".", 1)[1] in _FILE_SUFFIXES:
+            continue
+        if token not in names:
+            names.append(token)
+    return names
+
+
+def new_name_family_errors(
+    routing_claims: dict[str, Any], texts: dict[str, str], spec_texts: dict[str, dict[str, str]]
+) -> list[str]:
+    """Claims that add a new name to a family of names another capability's spec lists, unrouted.
+
+    Bench case M04 (ref-m04-344, -363-2, -365-2, -368, ref-v339-b, 2026-10-04..21): the request asks
+    that security operations see a new event, `ratelimit.penalty_started`; the audit event
+    catalogue - `ratelimit.rejected` among its rows - is monitoring.audit's specification. In every
+    failed run Analyze made security.ratelimit the claim's primary capability and listed
+    monitoring.audit as related only, so it got no slice, Specify never added the event to the
+    catalogue and Implement never to its code; every run that routed the claim to
+    monitoring.audit got both. A related capability takes no slice: a claim that adds to what
+    another capability lists changes that capability. The rule reads only names in backticks
+    with a dot (`family.member`), a member no live spec holds yet, and specs that hold others of
+    its family.
+
+    `spec_texts` maps capability id -> {spec path: text}.
+    """
+    capability_ids = set(spec_texts)
+    primaries = {
+        row.get("primary_capability")
+        for row in routing_claims.values()
+        if isinstance(row, dict) and isinstance(row.get("primary_capability"), str)
+    }
+    every_spec = "\n".join(text for files in spec_texts.values() for text in files.values())
+    errors: list[str] = []
+    for cid in sorted(texts):
+        for name in _named_identifiers(texts[cid], capability_ids):
+            if re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", every_spec):
+                continue  # not new: some specification already names it
+            family = name.split(".", 1)[0]
+            member = re.compile(rf"(?<![\w.]){re.escape(family)}\.[a-z][a-z0-9_]*")
+            for cap in sorted(spec_texts):
+                if cap in primaries:
+                    continue
+                example = next(
+                    (
+                        (path, m.group(0))
+                        for path, text in sorted(spec_texts[cap].items())
+                        for m in member.finditer(text)
+                        if m.group(0) not in capability_ids
+                    ),
+                    None,
+                )
+                if example is None:
+                    continue
+                errors.append(
+                    f"Gate analyzed: {cid} adds the name `{name}`, and names of the `{family}.` family "
+                    f"are listed in {cap}'s specification ({example[0]}: `{example[1]}`), but no claim "
+                    f"routes to {cap} as its primary capability - so it gets no slice, and neither its "
+                    f"specification nor its code would change. Route {cid} to {cap} as primary "
+                    "(the capability that only uses the name goes to related_capabilities), and write "
+                    f"its slice"
+                )
+    return errors
+
+
+def unrouted_name_family_errors(change_path: Path | str, product_root: Path | str) -> list[str]:
+    """new_name_family_errors on a Change and its product's live specification."""
+    change_path, root = Path(change_path), Path(product_root)
+    routing = _load_yaml_mapping(change_path / "routing.yaml") or {}
+    claims = routing.get("claims") if isinstance(routing.get("claims"), dict) else {}
+    request = change_path / "request.md"
+    if not claims or not request.is_file():
+        return []
+    catalog, _ = load_capability_catalog(root)
+    spec_texts: dict[str, dict[str, str]] = {}
+    for cap, paths in catalog_capability_specs(catalog).items():
+        files: dict[str, str] = {}
+        for rel in paths:
+            path = root / rel
+            if path.is_file():
+                files[rel] = path.read_text(encoding="utf-8", errors="replace")
+        spec_texts[cap] = files
+    texts = claim_texts(request.read_text(encoding="utf-8", errors="replace"), claims)
+    return new_name_family_errors(claims, texts, spec_texts)

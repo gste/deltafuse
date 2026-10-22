@@ -8,7 +8,6 @@ decisions, deltas) from actual child artifacts on disk under ProductMutationLock
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +19,6 @@ from deltafuse.core.artifact_reader import strict_read_artifact, strict_parse_ya
 from deltafuse.core.artifact_registry import ArtifactRegistry
 from deltafuse.core.artifact_storage import atomic_replace
 from deltafuse.core.fsm import find_repo_root
-from deltafuse.core.frontmatter import parse_frontmatter
 
 VALID_ROUTES = ("code", "docs", "ops")
 CHANGE_ID_PATTERN = r"^CHG-[0-9]{3,}(-[a-z0-9-]+)?$"

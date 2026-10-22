@@ -7,6 +7,7 @@ and read-only validate/describe guarantees.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from pathlib import Path
@@ -15,27 +16,25 @@ from typing import Any
 
 from deltafuse.core.artifact_codec import ArtifactCodecError, serialize_artifact
 from deltafuse.core.artifact_lock import (
-    ArtifactLockError,
     ProductMutationLock,
     check_noop_mutation,
     revalidate_authority,
     validate_expected_hash,
 )
-from deltafuse.core.artifact_patch import ArtifactPatchError, apply_artifact_patch
+from deltafuse.core.artifact_patch import apply_artifact_patch
 from deltafuse.core.artifact_policy import (
-    _INTERNAL_CORE_SECRET,
     ArtifactPolicyError,
     AuthorizationContext,
-    create_authorization_context,
     resolve_artifact_path,
     validate_artifact_policy,
 )
 from deltafuse.core.artifact_reader import strict_read_artifact
-from deltafuse.core.artifact_registry import ArtifactRegistry, ValidationDiagnostic
+from deltafuse.core.artifact_registry import ArtifactRegistry
 from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.artifact_transactions import (
     ArtifactTransactionError,
     TransactionManager,
+    recover_pending_transactions,
 )
 
 
@@ -54,9 +53,6 @@ def verify_published_artifact(
     expected_sha256: str,
     kind: str,
     registry: ArtifactRegistry,
-    product_root: Path,
-    change_dir: Path | None = None,
-    change_id: str | None = None,
 ) -> None:
     """Verify published target artifact on disk before transaction receipt finalization."""
     from deltafuse.core.artifact_storage import verify_published_target_readback, ArtifactStorageError
@@ -106,7 +102,7 @@ class ArtifactService:
     @property
     def transaction_mgr(self) -> TransactionManager:
         if self._transaction_mgr is None:
-            self._transaction_mgr = TransactionManager(self.product_root, change_dir=self.change_dir)
+            self._transaction_mgr = TransactionManager(self.product_root)
         return self._transaction_mgr
 
     def _resolve_target_path(self, kind: str, identity_or_target: str | Path) -> Path:
@@ -173,6 +169,138 @@ class ArtifactService:
             return dataclasses.replace(self.auth_context, stage=disk_stage)
         return self.auth_context
 
+    @staticmethod
+    def _check_request_id(request_id: str | None) -> None:
+        if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
+            raise ArtifactServiceError(
+                f"Invalid request_id pattern: '{request_id}'",
+                code="invalid_envelope",
+            )
+
+    @staticmethod
+    def _require_valid(result: Any, message: str, code: str, target_path: Path) -> None:
+        if not result.valid:
+            diag_msgs = [f"{d.path}: {d.message}" for d in result.diagnostics]
+            raise ArtifactServiceError(f"{message}: {'; '.join(diag_msgs)}", code=code, path=str(target_path))
+
+    def _request_bytes(self, request: dict[str, Any]) -> bytes:
+        """The canonical request bytes the idempotency hash covers, with the authority snapshot."""
+        request["auth_context"] = {
+            "actor": getattr(self.auth_context, "actor", None),
+            "work_item": getattr(self.auth_context, "work_item", None),
+            "stage": getattr(self.auth_context, "stage", None),
+            "change_id": getattr(self.auth_context, "change_id", None),
+            "fingerprint": getattr(self.auth_context, "fingerprint", None),
+        } if self.auth_context else None
+        return json.dumps(request, sort_keys=True, ensure_ascii=False).encode("utf-8")
+
+    @contextlib.contextmanager
+    def _mutation(self):
+        """Hold the product lock, recheck live authority and recover interrupted transactions."""
+        with ProductMutationLock(self.product_root):
+            revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
+            recover_pending_transactions(self.product_root)
+            yield
+
+    def _committed_receipt(
+        self, tx: dict[str, Any], durable_outcome: str = "committed", changed: bool = True
+    ) -> dict[str, Any] | None:
+        if tx.get("state") != "committed":
+            return None
+        receipt = self.transaction_mgr.get_receipt(tx["transaction_id"])
+        if receipt:
+            return receipt
+        return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome=durable_outcome, changed=changed)
+
+    def _replay(self, req_id: str, raw_req_hash: str, recorded_outcome: bool) -> dict[str, Any] | None:
+        """The receipt of an already committed request, or None; a reused id with another payload is refused."""
+        existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
+        if existing_tx is None:
+            return None
+        if existing_tx.get("raw_request_hash") != raw_req_hash:
+            raise ArtifactTransactionError(
+                f"Request ID '{req_id}' re-used with different payload",
+                code="idempotency_conflict",
+            )
+        if recorded_outcome:
+            return self._committed_receipt(
+                existing_tx, existing_tx.get("outcome", "committed"), existing_tx.get("changed", True)
+            )
+        return self._committed_receipt(existing_tx)
+
+    def _prepare(
+        self,
+        req_id: str,
+        raw_req_bytes: bytes,
+        kind: str,
+        target_path: Path,
+        operation: str,
+        previous_sha256: str | None,
+        result_sha256: str,
+        payload_sha256: str,
+        schema_hashes: tuple[str, str],
+    ) -> dict[str, Any]:
+        return self.transaction_mgr.prepare_transaction(
+            request_id=req_id,
+            raw_request_bytes=raw_req_bytes,
+            normalized_payload_hash=payload_sha256,
+            kind=kind,
+            target_path=target_path,
+            previous_sha256=previous_sha256,
+            expected_result_sha256=result_sha256,
+            auth_context=self.auth_context,
+            operation=operation,
+            operation_schema_hash=schema_hashes[0],
+            storage_schema_hash=schema_hashes[1],
+        )
+
+    def _publish(
+        self,
+        tx: dict[str, Any],
+        kind: str,
+        target_path: Path,
+        content_bytes: bytes,
+        result_sha256: str,
+        previous_sha256: str | None,
+    ) -> dict[str, Any]:
+        """Publish the prepared bytes, read them back, then finalize the receipt."""
+        receipt = self._committed_receipt(tx)
+        if receipt is not None:
+            return receipt
+
+        if previous_sha256 is None:
+            atomic_create(target_path, content_bytes)
+        else:
+            atomic_replace(target_path, content_bytes, expected_sha256=previous_sha256)
+        self.transaction_mgr.mark_published(tx["transaction_id"])
+        try:
+            verify_published_artifact(
+                target_path=target_path,
+                expected_sha256=result_sha256,
+                kind=kind,
+                registry=self.registry,
+            )
+        except Exception as ex:
+            self.transaction_mgr.mark_readback_failed(tx["transaction_id"], str(ex))
+            if isinstance(ex, ArtifactTransactionError):
+                raise
+            raise ArtifactTransactionError(
+                f"Readback verification failed after publication of '{target_path}': {ex}",
+                code="readback_verification_failed",
+                path=str(target_path),
+            ) from ex
+
+        try:
+            return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
+        except ArtifactTransactionError:
+            raise
+        except Exception as ex:
+            raise ArtifactTransactionError(
+                f"Receipt finalization failed after publication of '{target_path}': {ex}",
+                code="receipt_finalization_failed",
+                path=str(target_path),
+            ) from ex
+
     def create(
         self,
         kind: str,
@@ -183,12 +311,7 @@ class ArtifactService:
     ) -> dict[str, Any]:
         """Create a new artifact atomically under schema and policy protection."""
         self.registry.verify_product_lock(self.product_root)
-
-        if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
-            raise ArtifactServiceError(
-                f"Invalid request_id pattern: '{request_id}'",
-                code="invalid_envelope",
-            )
+        self._check_request_id(request_id)
 
         if not isinstance(semantic_payload, dict):
             raise ArtifactServiceError(
@@ -289,125 +412,47 @@ class ArtifactService:
         if kind not in ("task", "slice", "decision"):
             metadata.pop("id", None)
 
-        val_res = self.registry.validate_storage_schema(kind, metadata)
-        if not val_res.valid:
-            diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
-            raise ArtifactServiceError(
-                f"Storage schema validation failed for create '{kind}': {'; '.join(diag_msgs)}",
-                code="schema_validation_failed",
-                path=str(target_path),
-            )
-
-        ref_res = self.registry.validate_references(
-            kind,
-            metadata,
-            product_root=self.product_root,
-            change_dir=self.change_dir,
-            change_id=change_id,
+        self._require_valid(
+            self.registry.validate_storage_schema(kind, metadata),
+            f"Storage schema validation failed for create '{kind}'", "schema_validation_failed", target_path,
         )
-        if not ref_res.valid:
-            diag_msgs = [f"{d.path}: {d.message}" for d in ref_res.diagnostics]
-            raise ArtifactServiceError(
-                f"Reference validation failed for create '{kind}': {'; '.join(diag_msgs)}",
-                code="missing_reference",
-                path=str(target_path),
-            )
+        self._require_valid(
+            self.registry.validate_references(
+                kind,
+                metadata,
+                product_root=self.product_root,
+                change_dir=self.change_dir,
+                change_id=change_id,
+            ),
+            f"Reference validation failed for create '{kind}'", "missing_reference", target_path,
+        )
 
         content_str = serialize_artifact(metadata, body, kind=kind)
         content_bytes = content_str.encode("utf-8")
         expected_sha256 = hashlib.sha256(content_bytes).hexdigest()
 
-        req_id = request_id or f"req-{hashlib.sha256(content_bytes).hexdigest()[:16]}"
-        raw_req_dict = {
+        req_id = request_id or f"req-{expected_sha256[:16]}"
+        raw_req_bytes = self._request_bytes({
             "operation": "create",
             "kind": kind,
             "identity": identity,
             "target": str(target_path),
             "semantic_payload": semantic_payload,
             "body": body,
-            "auth_context": {
-                "actor": getattr(self.auth_context, "actor", None),
-                "work_item": getattr(self.auth_context, "work_item", None),
-                "stage": getattr(self.auth_context, "stage", None),
-                "change_id": getattr(self.auth_context, "change_id", None),
-                "fingerprint": getattr(self.auth_context, "fingerprint", None),
-            } if self.auth_context else None,
-        }
-        raw_req_bytes = json.dumps(raw_req_dict, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        })
         raw_req_hash = hashlib.sha256(raw_req_bytes).hexdigest()
 
-        op_hash = self.registry.get_descriptor_hash(kind)
-        st_hash = self.registry.get_storage_schema_hash(kind)
+        schema_hashes = (self.registry.get_descriptor_hash(kind), self.registry.get_storage_schema_hash(kind))
 
-        with ProductMutationLock(self.product_root):
-            revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
-
-            existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
-            if existing_tx is not None:
-                if existing_tx.get("raw_request_hash") != raw_req_hash:
-                    raise ArtifactTransactionError(
-                        f"Request ID '{req_id}' re-used with different payload",
-                        code="idempotency_conflict",
-                    )
-                if existing_tx.get("state") == "committed":
-                    receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
-                    if receipt:
-                        return receipt
-                    return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome="committed", changed=True)
-
-            tx = self.transaction_mgr.prepare_transaction(
-                request_id=req_id,
-                raw_request_bytes=raw_req_bytes,
-                normalized_payload_hash=expected_sha256,
-                kind=kind,
-                target_path=target_path,
-                previous_sha256=None,
-                expected_result_sha256=expected_sha256,
-                auth_context=self.auth_context,
-                operation="create",
-                operation_schema_hash=op_hash,
-                storage_schema_hash=st_hash,
+        with self._mutation():
+            receipt = self._replay(req_id, raw_req_hash, recorded_outcome=False)
+            if receipt is not None:
+                return receipt
+            tx = self._prepare(
+                req_id, raw_req_bytes, kind, target_path, "create",
+                None, expected_sha256, expected_sha256, schema_hashes,
             )
-
-            if tx.get("state") == "committed":
-                receipt = self.transaction_mgr.get_receipt(tx["transaction_id"])
-                if receipt:
-                    return receipt
-                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
-
-            atomic_create(target_path, content_bytes)
-            self.transaction_mgr.mark_published(tx["transaction_id"])
-            try:
-                verify_published_artifact(
-                    target_path=target_path,
-                    expected_sha256=expected_sha256,
-                    kind=kind,
-                    registry=self.registry,
-                    product_root=self.product_root,
-                    change_dir=self.change_dir,
-                    change_id=change_id,
-                )
-            except Exception as ex:
-                self.transaction_mgr.mark_readback_failed(tx["transaction_id"], str(ex))
-                if isinstance(ex, ArtifactTransactionError):
-                    raise
-                raise ArtifactTransactionError(
-                    f"Readback verification failed after publication of '{target_path}': {ex}",
-                    code="readback_verification_failed",
-                    path=str(target_path),
-                ) from ex
-
-            try:
-                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
-            except Exception as ex:
-                if isinstance(ex, ArtifactTransactionError):
-                    raise
-                raise ArtifactTransactionError(
-                    f"Receipt finalization failed after publication of '{target_path}': {ex}",
-                    code="receipt_finalization_failed",
-                    path=str(target_path),
-                ) from ex
-
+            return self._publish(tx, kind, target_path, content_bytes, expected_sha256, None)
 
     def update(
         self,
@@ -421,12 +466,7 @@ class ArtifactService:
     ) -> dict[str, Any]:
         """Update an existing artifact atomically using typed JSON pointer patches."""
         self.registry.verify_product_lock(self.product_root)
-
-        if request_id and not re.match(r"^[a-zA-Z0-9_\-]+$", request_id):
-            raise ArtifactServiceError(
-                f"Invalid request_id pattern: '{request_id}'",
-                code="invalid_envelope",
-            )
+        self._check_request_id(request_id)
         if not expected_sha256 or not re.match(r"^(sha256:[a-fA-F0-9]{64}|[a-fA-F0-9]{64})$", str(expected_sha256)):
             raise ArtifactServiceError(
                 f"Invalid expected_sha256 format: '{expected_sha256}'",
@@ -447,7 +487,7 @@ class ArtifactService:
             raise ArtifactPolicyError(outcome.reason, code="policy_denied", path=str(target_path))
 
         canon_optin = canonicalize_metadata or bool(patch.get("canonicalize_metadata", False)) if isinstance(patch, dict) else False
-        raw_req_dict = {
+        raw_req_bytes = self._request_bytes({
             "operation": "update",
             "kind": kind,
             "target": str(target_path),
@@ -455,34 +495,14 @@ class ArtifactService:
             "patch": patch,
             "body_replacement": body_replacement,
             "canonicalize_metadata": canon_optin,
-            "auth_context": {
-                "actor": getattr(self.auth_context, "actor", None),
-                "work_item": getattr(self.auth_context, "work_item", None),
-                "stage": getattr(self.auth_context, "stage", None),
-                "change_id": getattr(self.auth_context, "change_id", None),
-                "fingerprint": getattr(self.auth_context, "fingerprint", None),
-            } if self.auth_context else None,
-        }
-        raw_req_bytes = json.dumps(raw_req_dict, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        })
         raw_req_hash = hashlib.sha256(raw_req_bytes).hexdigest()
 
         if request_id:
-            with ProductMutationLock(self.product_root):
-                revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
-                existing_tx = self.transaction_mgr.find_transaction_by_request_id(request_id)
-                if existing_tx is not None:
-                    if existing_tx.get("raw_request_hash") != raw_req_hash:
-                        raise ArtifactTransactionError(
-                            f"Request ID '{request_id}' re-used with different payload",
-                            code="idempotency_conflict",
-                        )
-                    if existing_tx.get("state") == "committed":
-                        receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
-                        if receipt:
-                            return receipt
-                        durable_outcome = existing_tx.get("outcome", "committed")
-                        changed_flag = existing_tx.get("changed", True)
-                        return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome=durable_outcome, changed=changed_flag)
+            with self._mutation():
+                receipt = self._replay(request_id, raw_req_hash, recorded_outcome=True)
+                if receipt is not None:
+                    return receipt
 
         existing_bytes = target_path.read_bytes()
         validate_expected_hash(target_path, expected_sha256)
@@ -508,29 +528,20 @@ class ArtifactService:
             title_text = updated_meta.pop("title")
             body_text = f"# {updated_meta.get('id', 'TASK')}: {title_text}\n\n" + re.sub(r"^# [^\n]*\n*", "", body_text)
 
-        val_res = self.registry.validate_storage_schema(kind, updated_meta)
-        if not val_res.valid:
-            diag_msgs = [f"{d.path}: {d.message}" for d in val_res.diagnostics]
-            raise ArtifactServiceError(
-                f"Storage schema validation failed for update '{kind}': {'; '.join(diag_msgs)}",
-                code="schema_validation_failed",
-                path=str(target_path),
-            )
-
-        ref_res = self.registry.validate_references(
-            kind,
-            updated_meta,
-            product_root=self.product_root,
-            change_dir=self.change_dir,
-            change_id=updated_meta.get("change") or getattr(self.auth_context, "change_id", None),
+        self._require_valid(
+            self.registry.validate_storage_schema(kind, updated_meta),
+            f"Storage schema validation failed for update '{kind}'", "schema_validation_failed", target_path,
         )
-        if not ref_res.valid:
-            diag_msgs = [f"{d.path}: {d.message}" for d in ref_res.diagnostics]
-            raise ArtifactServiceError(
-                f"Reference validation failed for update '{kind}': {'; '.join(diag_msgs)}",
-                code="missing_reference",
-                path=str(target_path),
-            )
+        self._require_valid(
+            self.registry.validate_references(
+                kind,
+                updated_meta,
+                product_root=self.product_root,
+                change_dir=self.change_dir,
+                change_id=updated_meta.get("change") or getattr(self.auth_context, "change_id", None),
+            ),
+            f"Reference validation failed for update '{kind}'", "missing_reference", target_path,
+        )
 
         existing_text = existing_bytes.decode("utf-8")
         try:
@@ -552,29 +563,15 @@ class ArtifactService:
         candidate_bytes = candidate_str.encode("utf-8")
         candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
 
-        op_hash = self.registry.get_descriptor_hash(kind)
-        st_hash = self.registry.get_storage_schema_hash(kind)
+        schema_hashes = (self.registry.get_descriptor_hash(kind), self.registry.get_storage_schema_hash(kind))
 
         is_noop = check_noop_mutation(existing_bytes, candidate_bytes)
-        req_id = request_id or (f"req-noop-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}" if is_noop else f"req-{hashlib.sha256(candidate_bytes).hexdigest()[:16]}")
+        req_id = request_id or f"req-{'noop-' if is_noop else ''}{candidate_sha256[:16]}"
 
-        with ProductMutationLock(self.product_root):
-            revalidate_authority(self.auth_context, lambda: self._get_live_auth_context())
-
-            existing_tx = self.transaction_mgr.find_transaction_by_request_id(req_id)
-            if existing_tx is not None:
-                if existing_tx.get("raw_request_hash") != raw_req_hash:
-                    raise ArtifactTransactionError(
-                        f"Request ID '{req_id}' re-used with different payload",
-                        code="idempotency_conflict",
-                    )
-                if existing_tx.get("state") == "committed":
-                    receipt = self.transaction_mgr.get_receipt(existing_tx["transaction_id"])
-                    if receipt:
-                        return receipt
-                    durable_outcome = existing_tx.get("outcome", "committed")
-                    changed_flag = existing_tx.get("changed", True)
-                    return self.transaction_mgr.finalize_receipt(existing_tx["transaction_id"], durable_outcome=durable_outcome, changed=changed_flag)
+        with self._mutation():
+            receipt = self._replay(req_id, raw_req_hash, recorded_outcome=True)
+            if receipt is not None:
+                return receipt
 
             validate_expected_hash(target_path, expected_sha256)
 
@@ -585,162 +582,24 @@ class ArtifactService:
                         expected_sha256=expected_sha256,
                         kind=kind,
                         registry=self.registry,
-                        product_root=self.product_root,
-                        change_dir=self.change_dir,
-                        change_id=updated_meta.get("change") or getattr(self.auth_context, "change_id", None),
                     )
+                except ArtifactTransactionError:
+                    raise
                 except Exception as ex:
-                    if isinstance(ex, ArtifactTransactionError):
-                        raise
                     raise ArtifactTransactionError(
                         f"Readback verification failed for no-op target '{target_path}': {ex}",
                         code="readback_verification_failed",
                         path=str(target_path),
                     ) from ex
 
-                tx = self.transaction_mgr.prepare_transaction(
-                    request_id=req_id,
-                    raw_request_bytes=raw_req_bytes,
-                    normalized_payload_hash=candidate_sha256,
-                    kind=kind,
-                    target_path=target_path,
-                    previous_sha256=expected_sha256,
-                    expected_result_sha256=expected_sha256,
-                    auth_context=self.auth_context,
-                    operation="update",
-                    operation_schema_hash=op_hash,
-                    storage_schema_hash=st_hash,
+                tx = self._prepare(
+                    req_id, raw_req_bytes, kind, target_path, "update",
+                    expected_sha256, expected_sha256, candidate_sha256, schema_hashes,
                 )
                 return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="unchanged", changed=False)
 
-            tx = self.transaction_mgr.prepare_transaction(
-                request_id=req_id,
-                raw_request_bytes=raw_req_bytes,
-                normalized_payload_hash=candidate_sha256,
-                kind=kind,
-                target_path=target_path,
-                previous_sha256=expected_sha256,
-                expected_result_sha256=candidate_sha256,
-                auth_context=self.auth_context,
-                operation="update",
-                operation_schema_hash=op_hash,
-                storage_schema_hash=st_hash,
+            tx = self._prepare(
+                req_id, raw_req_bytes, kind, target_path, "update",
+                expected_sha256, candidate_sha256, candidate_sha256, schema_hashes,
             )
-
-            if tx.get("state") == "committed":
-                receipt = self.transaction_mgr.get_receipt(tx["transaction_id"])
-                if receipt:
-                    return receipt
-                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
-
-            atomic_replace(target_path, candidate_bytes, expected_sha256=expected_sha256)
-            self.transaction_mgr.mark_published(tx["transaction_id"])
-            try:
-                verify_published_artifact(
-                    target_path=target_path,
-                    expected_sha256=candidate_sha256,
-                    kind=kind,
-                    registry=self.registry,
-                    product_root=self.product_root,
-                    change_dir=self.change_dir,
-                    change_id=updated_meta.get("change") or getattr(self.auth_context, "change_id", None),
-                )
-            except Exception as ex:
-                self.transaction_mgr.mark_readback_failed(tx["transaction_id"], str(ex))
-                if isinstance(ex, ArtifactTransactionError):
-                    raise
-                raise ArtifactTransactionError(
-                    f"Readback verification failed after publication of '{target_path}': {ex}",
-                    code="readback_verification_failed",
-                    path=str(target_path),
-                ) from ex
-
-            try:
-                return self.transaction_mgr.finalize_receipt(tx["transaction_id"], durable_outcome="committed", changed=True)
-            except Exception as ex:
-                if isinstance(ex, ArtifactTransactionError):
-                    raise
-                raise ArtifactTransactionError(
-                    f"Receipt finalization failed after publication of '{target_path}': {ex}",
-                    code="receipt_finalization_failed",
-                    path=str(target_path),
-                ) from ex
-
-
-
-
-    def validate(self, kind: str, target: str | Path) -> dict[str, Any]:
-        """Strictly read-only validation check. Does NOT open transactions or alter files."""
-        target_path = self._resolve_target_path(kind, target)
-
-        if not target_path.is_file():
-            return {
-                "valid": False,
-                "target": str(target_path),
-                "scopes": ["input", "schema"],
-                "diagnostics": [
-                    {
-                        "code": "file_not_found",
-                        "json_pointer": "",
-                        "stage": "input",
-                        "message": f"Target file '{target_path}' does not exist",
-                    }
-                ],
-            }
-
-        content_bytes = target_path.read_bytes()
-        try:
-            has_frontmatter = not target_path.name.endswith((".yaml", ".yml"))
-            parse_res = strict_read_artifact(content_bytes, has_frontmatter_delimiters=has_frontmatter)
-        except Exception as ex:
-            return {
-                "valid": False,
-                "target": str(target_path),
-                "scopes": ["input"],
-                "diagnostics": [
-                    {
-                        "code": "parse_error",
-                        "json_pointer": "",
-                        "stage": "input",
-                        "message": f"Failed to parse frontmatter: {ex}",
-                    }
-                ],
-            }
-
-        val_res = self.registry.validate_storage_schema(kind, parse_res.metadata)
-        ref_res = self.registry.validate_references(
-            kind,
-            parse_res.metadata,
-            product_root=self.product_root,
-            change_id=parse_res.metadata.get("change"),
-        )
-
-        diags = [
-            {
-                "code": d.code,
-                "json_pointer": d.path,
-                "stage": d.stage,
-                "message": d.message,
-            }
-            for d in val_res.diagnostics + ref_res.diagnostics
-        ]
-        is_valid = val_res.valid and ref_res.valid
-
-        return {
-            "valid": is_valid,
-            "target": str(target_path),
-            "scopes": ["input", "schema", "policy", "reference"],
-            "diagnostics": diags,
-        }
-
-    def describe(self, kind: str, operation: str = "create") -> dict[str, Any]:
-        """Strictly read-only inspection of per-kind operation descriptor."""
-        descriptor = self.registry.get_descriptor(kind)
-        return {
-            "kind": kind,
-            "operation": operation,
-            "allowed_semantic_fields": descriptor.get("creatable_semantic_fields") or descriptor.get("allowed_semantic_fields") or [],
-            "core_owned_fields": descriptor.get("core_owned_fields") or ["id", "change", "status", "schema_version", "framework"],
-            "schema_id": f"https://deltafuse.dev/schemas/v3/{kind}.schema.yaml",
-            "schema_version": "3",
-        }
+            return self._publish(tx, kind, target_path, candidate_bytes, candidate_sha256, expected_sha256)

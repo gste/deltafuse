@@ -81,7 +81,7 @@ Initial capability catalog предлагается ИИ и принимаетс
 deltafuse evidence <change-dir> --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 ```
 
-Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; `check-gate --gate declaring` отвергает schema-valid файл, который написали не через `deltafuse evidence`.
+Import/syntax и Red с `_` не authentic. Ядро ставит штамп на YAML; гейт `declaring` (`advance` или read-only `check-gate`) отвергает schema-valid файл, который написали не через `deltafuse evidence`.
 
 ## Coverage ядра
 
@@ -91,11 +91,11 @@ Import/syntax и Red с `_` не authentic. Ядро ставит штамп н�
 deltafuse coverage <change-dir>
 ```
 
-Затем `check-gate --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
+Затем `deltafuse advance <change-dir> --gate analyzed`. Повтор сохраняет уже записанные `tasks` / `evidence` / `status`.
 
 ## Specify по одному срезу
 
-После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `check-gate --gate specified`. Не закрывайте гейт Change на середине набора.
+После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `deltafuse advance <change-dir> --gate specified`. Не закрывайте гейт Change на середине набора.
 
 ## Следующая работа
 
@@ -110,28 +110,28 @@ deltafuse decide <change-dir> --decision DEC-0001 --status accepted
 deltafuse decide <change-dir> --spec --status accepted
 ```
 
-`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `check-gate`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает. `--spec --status accepted` требует статуса Change `specification-proposed`: именно propose прогоняет машинные проверки spec-delta, поэтому `decide` отказывает в принятии, которого воркер не предложил, и ничего не записывает — сообщение называет ошибки, из-за которых proposal был бы отвергнут. `--status rejected` не блокируется никогда: человек всегда может сказать «нет».
+`--human` — тот же шаг для человеческого воркера: glob чтения/записи, `evidence` где нужно, затем `deltafuse advance --gate <gate>`. Не второй процесс. `deltafuse decide` — единственный писатель `accepted`/`rejected` у DEC и spec; правка frontmatter гейт не закрывает. `--spec --status accepted` требует статуса Change `specification-proposed`: именно propose прогоняет машинные проверки spec-delta, поэтому `decide` отказывает в принятии, которого воркер не предложил, и ничего не записывает — сообщение называет ошибки, из-за которых proposal был бы отвергнут. `--status rejected` не блокируется никогда: человек всегда может сказать «нет».
 
 **Пароль Human Gate (опционально).** `next --json` говорит, как отвечать: `halt.human_check` равен `none` (кнопки в чате) или `password` (`halt.terminal_required`: в prompt перечислены команды, которые человек запускает в терминале); отказавший из-за отсутствия терминала `decide` печатает команду для ввода. `deltafuse gate-password set` хранит солёный хэш PBKDF2 в `.deltafuse/gate-password.yaml` (файл ядра: leash отвергает его в diff воркера). После этого `decide` спрашивает пароль в терминале до любой записи и отказывает, если stdin — не терминал; флага или переменной окружения для пароля нет. Каждый receipt пишет `human_check: password` или `none`. `gate-password clear` и смена требуют текущий пароль; `gate-password status` показывает, включён ли он. Пароль закрывает команду `decide`, а не журнал: от модели, подделывающей файлы руками, защищает изоляция воркера на хосте.
 
 Точка входа LLM по умолчанию — `/run` (сквозной режим): `deltafuse next`, загрузить skill, продолжить в той же сессии. Не ждать вставленных `/analyze` … `/verify`. Когда `next --json` даёт `halt.kind` `decision` или `spec`, показать `halt.choices` кнопками хоста по [контракту halt](./contracts/halt.ru.md), ждать, выполнить только `choice.command`. `inspect` (`command: null`) — стоп. Одношаговые skills — чтобы после сбоя перезапустить один шаг.
 
-Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают шаг через `check-gate`, затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
+Сгенерированные skills привязывают воркера к LLM: пишут файлы Change, закрывают гейт через `deltafuse advance <change-dir> --gate <gate>` (Ядро проверяет и ставит штамп одним вызовом; `check-gate` — read-only предпросмотр), затем `deltafuse next` в этой же сессии. Следующую слеш-команду сами не выбирают.
 
 Пустая очередь — ненулевой exit, в выводе blocked (DEC, spec gate) и `halt.choices`, либо halt `done`, если нового intake нет.
 
 ## Бенчмарк воркера
 
-Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
+Ставится песочница продукта, любой воркер заполняет дерево, **судья** считает диск с `--pack`. Модель из CLI не вызывается. Воркер не запускает `deltafuse-bench score`. Попытки — из журнала ядра, не из самоотчёта воркера.
 
 ```text
-deltafuse bench init M02-policy-stats <product-dir>
+deltafuse-bench init M02-policy-stats <product-dir>
 deltafuse bench journal <product-dir>
-deltafuse-bench score <product-dir> --pack <framework-or-pack> --json --label cursor+opus-5 --out-file ../scores/opus.json
-deltafuse bench compare ../scores/opus.json ../scores/flash.json
+deltafuse-bench score <product-dir> --pack <deltafuse-bench-checkout-or-case-dir> --json --label cursor+opus-5 --out-file ../scores/opus.json
+deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```
 
-См. [bench.ru.md](./bench.ru.md). Оракул и hidden-тесты остаются в пакете фреймворка.
+См. [bench.ru.md](./bench.ru.md). Пакет — checkout deltafuse-bench или каталог кейса; оракул и hidden-тесты остаются в пакете deltafuse-bench.
 
 ## Halt хоста
 
@@ -150,27 +150,9 @@ deltafuse leash <product-root> --file src/foo.py
 
 Ядро предоставляет управляемую схемам службу сериализации и валидации для артефактов пакетов Change ([artifact-writer.ru.md](./contracts/artifact-writer.ru.md)).
 
-### Практические примеры использования
-
-```text
-# Проверить поддерживаемые свойства и схемы через инспекцию возможностей
-deltafuse artifact describe --kind task --operation create
-
-# Создать новый артефакт Change из JSON-структуры
-deltafuse artifact create --kind task --change docs/changes/CHG-101 --input input.json
-
-# Атомарно обновить артефакт через JSON Pointer patch с проверкой SHA256 целого файла
-deltafuse artifact update --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --expected-sha256 <sha> --input patch.json
-
-# Выполнить read-only валидацию схемы и ссылок без изменения диска
-deltafuse artifact validate --kind task --change docs/changes/CHG-101 --target tasks/TASK-001.md --json
-
-# Обновить дочерний индекс родительского Change после создания/обновления задачи/среза
-deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task --child-id TASK-001
-```
-
-### Обнаружение возможностей и совместимость
-Клиенты определяют доступность Artifact Writer с помощью `deltafuse artifact describe --kind <kind> --operation <op>`.
+`artifact write` — единственная команда Writer: прежние подкоманды `describe`, `create`, `update`,
+`validate` и `update-index` удалены в 3.3.9 - ни один навык ими не пользовался, а `write` сам
+создаёт или обновляет и ведёт индекс в `change.yaml`.
 
 **Путь воркера — `artifact write`** (п. 1 роадмапа). Воркер пишет структуру только через Writer: прозу (тело) и поля, а `id`, `change`, `status`, `context_budget` задачи, сам файл и индекс в `change.yaml` пишет ядро: `deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.json`, где `task.json` — `{"identity": "TASK-001", "fields": {...}, "body": "проза"}`. Файла нет — создаётся; есть — меняются только названные поля, ожидаемый sha256 ядро берёт само. Списки `spec-delta` сливаются по слайсам, проза дописывается. Хост с вызовом функций отдаёт тот же вход как типизированный инструмент. Виды: `task`, `slice`, `routing`, `spec-delta`, `change`. Leash отвергает `routing.yaml`, `spec-delta.md`, слайс или задачу, байты которых не породили ни Writer, ни ядро (`deltafuse state`, `decide`).
 
@@ -178,10 +160,10 @@ deltafuse artifact update-index --change docs/changes/CHG-101 --child-kind task 
 Существующие артефакты никогда автоматически не перезаписываются и не мигрируют массово; Writer читает файлы, созданные вручную. Новые записи `routing.yaml`, `spec-delta.md`, слайсов и задач идут через Writer: leash судит только то, что изменилось с его базы, поэтому уже закоммиченные артефакты не затронуты.
 
 ### Явное подтверждение каноникализации
-Для переформатирования или нормализации метаданных неканоничных артефактов требуется явный флаг `--canonicalize-metadata` вместе с проверкой хэша файла. Без явного согласия формативные правки метаданных не применяются.
+Неканоничные метаданные существующего артефакта без явного согласия не переформатируются: служебный API (`ArtifactService.update`) принимает `canonicalize_metadata` вместе с ожидаемым хэшем файла. У CLI такого параметра нет.
 
 ### Процедура восстановления транзакций
-В случае сбоя или прерывания процесса при операциях создания/обновления Ядро проверяет `.deltafuse/journal/` под блокировкой `ProductMutationLock`. Незавершённые транзакции со статусом `prepared` восстанавливают исходный файл, а транзакции со статусом `published` завершают запись чека receipt и публикации.
+Каждая операция Writer (`artifact write`) сначала, под блокировкой `ProductMutationLock`, доводит то, что прерванная оставила в `.deltafuse/journal/`, по байтам целевого файла: если в нём уже ожидаемый результат, пишется receipt и транзакция становится `committed`; если прежние байты - транзакция `cancelled` (файл так и не заменён); иначе - например, после сбоя файл правили руками - она помечается `ambiguous_stopped` и остаётся человеку. Повреждённая запись журнала останавливает запись.
 
 
 

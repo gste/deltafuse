@@ -2,7 +2,7 @@
 
 **Версия контракта:** 1  
 **Целевая схема хранения:** v3  
-**Версия фреймворка:** 3.2.0  
+**Версия фреймворка:** 3.3.9 (документ описывает её)  
 **Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/v1`  
 **Receipt Schema URI:** `https://deltafuse.dev/contracts/artifact-writer/receipt/v1`  
 
@@ -12,6 +12,8 @@
 
 Он служит протоколом сериализации и сохранения между клиентами (Worker, хост-обёртками, CLI) и хранилищем DeltaFuse Core. Он **не** даёт полномочий изменять поля, принадлежащие Core, или выполнять переходы жизненного цикла.
 
+Команда воркера — `deltafuse artifact write --kind <kind> --change <change-dir> --input <json|->`: воркер называет артефакт (`identity` или `target`), а ядро решает, `create` это или `update`, и само ведёт индекс дочерних элементов в `change.yaml`. Операции `describe`, `validate` и `update-index` и подкоманды `artifact create|update|describe|validate|update-index` удалены в 3.3.9; служба сохраняет `create` и `update`.
+
 ---
 
 ## 2. Конверт операций
@@ -20,7 +22,7 @@
 
 ```yaml
 request_id: "req-001"
-operation: "create" # create | update | validate | describe
+operation: "create" # create | update
 kind: "task"        # task | slice | spec-delta | routing | change | ...
 change: "CHG-001"
 identity: "TASK-001"
@@ -32,16 +34,15 @@ semantic_payload:
 
 ### Поля:
 - `request_id`: Обязательный строковый идентификатор для отслеживания транзакций и идемпотентности.
-- `operation`: Обязательный enum (`create`, `update`, `validate`, `describe`, `update-index`).
+- `operation`: Обязательный enum (`create`, `update`). Его ставит `deltafuse artifact write`, а не воркер.
 - `kind`: Обязательный enum, соответствующий одной из 10 схем хранения.
 - `change`: Идентификатор владения Change или относительный путь к директории.
-- `identity`: Идентификатор конкретного артефакта (например, `TASK-001`) для `create` / `describe`.
-- `target`: Относительный путь к файлу (например, `tasks/TASK-001.md`) для `update` / `validate`.
+- `identity`: Идентификатор конкретного артефакта (например, `TASK-001`); обязателен для `create`.
+- `target`: Относительный путь к файлу (например, `tasks/TASK-001.md`) для `update`.
 - `expected_sha256`: Опциональный хэш SHA256 целевого файла до обновления (контроль параллелизма).
 - `semantic_payload`: Объект с начальными семантическими полями при `create`.
 - `patch`: Объект с правками JSON Pointer при `update`.
 - `body`: Опциональное непрозрачное тело документа Markdown.
-- `update-index`: Атомарная операция синхронизации списков дочерних элементов в `change.yaml` с диска.
 
 ---
 
@@ -73,16 +74,16 @@ patch:
 
 | Тип | Допустимые операции | Допустимые семантические поля | Поля Core |
 |---|---|---|---|
-| `task` | `create`, `update`, `validate`, `describe` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
-| `slice` | `create`, `update`, `validate`, `describe` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
-| `spec-delta` | `create`, `update`, `validate`, `describe` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
-| `routing` | `create`, `update`, `validate`, `describe` | `claims` | `change` |
-| `change` | `update`, `validate`, `describe` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
-| `decision` | `validate`, `describe` | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
-| `evidence` | `validate`, `describe` | Нет | Все поля (штампуются ядром) |
-| `coverage` | `validate`, `describe` | Нет | `change`, `claims` |
-| `capability` | `validate`, `describe` | Нет | `schema_version`, `domains`, `policies` |
-| `lock` | `validate`, `describe` | Нет | `schema_version`, `framework` |
+| `task` | `create`, `update` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
+| `slice` | `create`, `update` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
+| `spec-delta` | `create`, `update` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
+| `routing` | `create`, `update` | `claims` | `change` |
+| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
+| `decision` | `create`, `update` (только пока `proposed`) | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
+| `evidence` | Нет (пишет `deltafuse evidence`) | Нет | Все поля (штампуются ядром) |
+| `coverage` | Нет (пишет `deltafuse coverage`) | Нет | `change`, `claims` |
+| `capability` | Нет | Нет | `schema_version`, `domains`, `policies` |
+| `lock` | Нет | Нет | `schema_version`, `framework` |
 
 ---
 
@@ -107,7 +108,7 @@ patch:
 ## 6. Коды выхода и диагностика ошибок
 
 Коды выхода CLI:
-- `0`: Успех / успешная read-only валидация.
+- `0`: Успех.
 - `2`: Ошибка ввода, конверта или валидации схемы.
 - `3`: Отказ в авторизации или попытка записи полей Core.
 - `4`: Несовпадение целевого SHA256 или ошибка блокировки параллелизма.

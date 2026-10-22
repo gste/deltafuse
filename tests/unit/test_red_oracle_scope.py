@@ -150,6 +150,11 @@ def test_the_isolated_run_keeps_configuration_options_and_drops_selection_and_pl
     assert isolation_plan(["pytest.exe", "tests"], record, FAILED, tmp_path)[0] == [
         "pytest.exe", *NODES, "-p", "no:cacheprovider",
     ]
+    # A Windows batch shim is pytest to runner_family, so the plan must read it the same way
+    # (codebase audit 2026-10-21: stripping only `.exe` raised ValueError here).
+    assert isolation_plan(["C:/venv/Scripts/pytest.CMD", "tests"], record, FAILED, tmp_path)[0] == [
+        "C:/venv/Scripts/pytest.CMD", *NODES, "-p", "no:cacheprovider",
+    ]
 
 
 def test_there_is_no_isolated_run_for_other_runners_or_without_frozen_tests(tmp_path: Path):

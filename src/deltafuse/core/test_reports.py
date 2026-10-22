@@ -70,11 +70,16 @@ def _strip_runner_suffix(name: str) -> str:
     return name
 
 
+def runner_head(program: object) -> str:
+    """The runner's bare name: no directory, no `.exe`/`.cmd`/`.bat`, lower case."""
+    return _strip_runner_suffix(Path(str(program).replace("\\", "/")).name).lower()
+
+
 def runner_family(argv: list[str]) -> str:
     """`pytest`, `jvm`, or `` when the Core has no reader for this runner."""
     if not argv:
         return ""
-    head = _strip_runner_suffix(Path(str(argv[0]).replace("\\", "/")).name).lower()
+    head = runner_head(argv[0])
     if head in PYTEST_RUNNERS:
         return "pytest"
     if head in JVM_RUNNERS:
@@ -237,6 +242,12 @@ def no_test_ran(command: object, tests: object, log: str = "") -> str | None:
         "the runner ran no test: its report of this run names none that passed or failed, "
         "and a suite that did not run is not evidence. Run the tests, and record it again"
     )
+
+
+def no_test_error(label: str, command: object, tests: object, log: str = "") -> list[str]:
+    """`<label> is not evidence: <why>` when the run ran no test (`no_test_ran`); else empty."""
+    why = no_test_ran(command, tests, log)
+    return [f"{label} is not evidence: {why}"] if why else []
 
 
 def red_is_authentic(report: TestReport) -> tuple[bool, str | None]:

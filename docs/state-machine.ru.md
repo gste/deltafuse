@@ -48,13 +48,13 @@ project:
                   [declaring]                              |
                       |                                    |
                       v                                    |
-              [declared]                           |
+                  [declared]                               |
                       |                                    |
                       v                                    |
                 [implementing]                             |
                       |                                    |
                       v                                    |
-                 [implemented]                             |
+                 [implemented] ----------------------------+
                       |                                    |
                       v                                    |
                   [verifying] -----------------------------+
@@ -86,13 +86,13 @@ Change может быть переведён в терминальное сос
 | `analyzed` | `decomposed` | Багфикс: изменение спецификации не требуется (`requirement_delta: none`); `deltafuse next` сразу даёт Decompose. | Гейт `decomposed` доказывает точные ссылки задач на существующие требования `REQ-*`. |
 | `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
-| `decomposed` | `declaring` | Выбрана задача для реализации, запущен `/declare`. | Предшествующие зависимые задачи выполнены. |
-| `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Записан `evidence/red/evidence.yaml`, код продукта не изменён. |
+| `decomposed` | `declared` | `deltafuse advance <change-dir> --gate declaring`, когда каждая задача `declared` (промежуточный `declaring` перешагивается, см. ниже). | Каждая задача, кроме `cancelled` и `superseded`, `declared` со своим Red evidence. |
+| `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Для каждой задачи записан `evidence/red/<task-id>.yaml`, код продукта не изменён. |
 | `declared` | `implementing` | Запущен `/implement`. Начато изменение продуктового кода. | Скоуп файлов ограничен контрактом задачи. |
-| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Записан `evidence/green/evidence.yaml`. На `route: code` Green отвечает на Red, который действительно падал: Green поверх `already-green` Red не доказывает дельту и гейт не закрывает. Задачу с `already-green` Red и `requirement_delta: none` уже выполнила работа вокруг неё: Worker закрывает её как `superseded` (`deltafuse state --task <id> --status superseded`, ядро разрешает только в этом случае; тест остаётся регрессионным). Задача, обещавшая дельту требований, останавливается до решения человека. |
+| `implementing` | `implemented` | Тестовый таргет стал Green, scoped regressions прошли успешно. | Для каждой задачи записаны `evidence/green/<task-id>.yaml` и `evidence/regression/<task-id>.yaml`. На `route: code` Green отвечает на Red, который действительно падал: Green поверх `already-green` Red не доказывает дельту и гейт не закрывает. Задачу с `already-green` Red и `requirement_delta: none` уже выполнила работа вокруг неё: Worker закрывает её как `superseded` (`deltafuse state --task <id> --status superseded`, ядро разрешает только в этом случае; тест остаётся регрессионным). Задача, обещавшая дельту требований, останавливается до решения человека. |
 | `implemented` | `verifying` | Все задачи пакета Change переведены в состояние `implemented`. | Нет незавершённых или зависших задач. |
 | `verifying` | `converged` | Запущен `/verify`. Доказана сквозная трассируемость и сходимость всех слоёв. | Все объявленные дельты применены, тесты зелёные, расхождений нет. |
-| `verifying` | `analyzing` | Обнаружен пропуск в спецификации, архитектурный зазор или скоуп-дрифт. | **Escalation Gate**: возврат на анализ без несанкционированных правок. |
+| `implemented` / `verifying` | `analyzing` | Verify записал `spec-gap`; человек переоткрывает его: `deltafuse decide <change-dir> --gap spec-gap --status reopened`. | **Escalation Gate**: возврат на анализ только решением человека (квитанция `gap-reopen`), без несанкционированных правок. |
 | `verifying` | `not-reproduced` | Закрытие Change как невоспроизведённого дефекта или подтверждённого no-op. | В `verification.md` зафиксирован исход `not-reproduced`. |
 | `analyzing` / `declaring` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |
 | `normalized` / `analyzing` | `rejected` | Запрос нереализуем или отвергнут по результатам маршрутизации/анализа. | Обоснование отказа задокументировано (опционально `analysis.md` или заметки Change). |
@@ -129,23 +129,24 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 Состояния отдельных атомарных задач (`tasks/TASK-NNN-<slug>.md`):
 
 ```text
-               +-----------------------------+
-               |                             |
-               v                             |
 [pending] ---> [declaring] ---> [declared] ---> [implementing] ---> [implemented] ---> [verified]
-  |               |
-  |               +------------> [blocked]
+  |  |  ^           |               |                 |                   |
+  |  |  |           +---------------+--------+--------+-------------------+
+  |  |  |                                    v
+  |  |  +-- человек: reopened ---------- [blocked] --- человек ---> [cancelled]
+  |  |
+  |  +--> [declared]  (Red записан сразу, минуя declaring)
   |
-  +----------------------------> [cancelled / superseded]
+  +-----> [cancelled] (человек) / [superseded]
 ```
 
-- `pending`: задача создана, ожидает выполнения зависимостей;
+- `pending`: задача создана, ожидает выполнения зависимостей; дальше — `declaring`, `declared`, `cancelled` (только человек) или `superseded`;
 - `declaring`: пишется минимальный тест, доказывающий Red;
 - `declared`: зафиксирован воспроизводимый Red evidence;
 - `implementing`: пишется минимальный продуктовый код;
 - `implemented`: тест и регрессии прошли успешно (Green evidence);
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
-- `blocked`: обнаружено внешнее препятствие или ошибка в контракте;
+- `blocked`: заявленный оракул оказался неверным; запуск останавливается до решения человека. Достижим из `declaring`, `declared`, `implementing` и `implemented`. Воркер ставит его (`deltafuse state <change-dir> --task <id> --status blocked`) только после того, как ядро записало Green против оракула, замороженного Red, и тесты оракула не изменены;
 - `cancelled`: задача отменена — только решением человека, не воркера: `deltafuse decide <change-dir> --task <id> --status cancelled` (пароль Human Gate, если задан; квитанция вида `task` в журнале). `deltafuse state` такой переход отказывает;
 - из `blocked` выходит только человек: отменой (выше) или переоткрытием `deltafuse decide <change-dir> --task <id> --status reopened [--note "<почему>"]` — доказательства задачи переносятся в `reopened/<task>.<n>/`, её продуктовые файлы возвращаются к копиям, снятым гейтом `declaring`, в журнал пишется квитанция `task`/`reopened`, задача возвращается в `pending`, и только её можно объявить заново, когда Change уже `declared` или `implementing`;
 - `superseded`: заменена другой задачей.
