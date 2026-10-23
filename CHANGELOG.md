@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **`deltafuse validate` and `deltafuse lint-context`** (owner decision 2026-10-23). No skill and
+  no bench code called them, and every gate already runs the same checks: `validate` was the
+  package validation `check-gate` and `advance` run first, and `lint-context` the slice and task
+  context-budget checks inside it. The token counting mode still reaches the journal through
+  `check-gate`. The budget functions lose the `receipt` parameter only
+  `lint-context` passed.
 - `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model
   protocol of AW-35/AW-20, superseded by the bench qualification and called by nothing. Its five
   tests of JSON Pointer escaping in `apply_artifact_patch` (AW-46) moved to `test_artifact_patch.py`.

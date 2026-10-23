@@ -47,11 +47,6 @@ python -m pytest -n auto
 deltafuse validate-layout .
 ```
 
-### Lint Change Context Budget
-```bash
-deltafuse lint-context docs/changes/CHG-001
-```
-
 ### Record evidence (kernel)
 ```bash
 deltafuse evidence docs/changes/CHG-001 --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from deltafuse.core.installer import install, InstallationError
-from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
+from deltafuse.core.fsm import check_gate
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
@@ -34,13 +34,7 @@ from deltafuse.core.transitions import already_green_advice, set_artifact_status
 from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
-from deltafuse.core.context import (
-    token_count_receipt,
-    tokenizer_config,
-    validate_context_budget,
-    validate_task_context_budget,
-)
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.context import tokenizer_config
 
 
 class _HintingParser(argparse.ArgumentParser):
@@ -366,10 +360,6 @@ def _main(argv: list[str] | None = None) -> int:
     init_parser.add_argument("--agents-md", choices=["prompt", "bridge", "preserve", "replace"], default=None,
                              help="Host instruction integration: prompt (TTY), bridge, preserve, or replace")
 
-    # validate command
-    val_parser = subparsers.add_parser("validate", help="Validate Change package structural invariants")
-    val_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
-
     # check-gate command
     gate_parser = subparsers.add_parser("check-gate", help="Check lifecycle gate preconditions")
     gate_parser.add_argument("change_path", help="Path to Change package directory")
@@ -506,9 +496,6 @@ def _main(argv: list[str] | None = None) -> int:
     cfg_parser.add_argument("product_path", nargs="?", default=".")
     cfg_parser.add_argument("--json", action="store_true")
 
-    ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
-    ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
-
     leash_parser = subparsers.add_parser("leash",
                                          help="Check git diff against the current write envelope (no LLM)")
     leash_parser.add_argument("path", nargs="?", default=".", help="Product root (default: current dir)")
@@ -566,11 +553,6 @@ def _main(argv: list[str] | None = None) -> int:
         except Exception as e:
             print(f"Unexpected error during installation: {e}", file=sys.stderr)
             return 2
-
-    elif args.command == "validate":
-        target = Path(args.change_path)
-        errors = validate_change_package(target)
-        return _report("validate", target, errors, "Validation failed", f"Change package {target} is valid.")
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
@@ -898,58 +880,6 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         print("config: .deltafuse/config.yaml is a valid v3 contract")
         return 0
-
-    elif args.command == "lint-context":
-        target = Path(args.change_path)
-        repo_root = find_repo_root(target)
-        slices_dir = target / "slices"
-        errors: list[str] = []
-        # Q0-2: the counting mode travels with the verdict into the journal.
-        token_receipt: dict[str, Any] = {}
-        if slices_dir.is_dir():
-            for sf in slices_dir.glob("*.md"):
-                try:
-                    meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
-                    budget = meta.get("context_budget")
-                    if budget and isinstance(budget, dict):
-                        ref_files = [repo_root / sref.split("#")[0] for sref in meta.get("spec_refs", [])]
-                        b_errs = validate_context_budget(
-                            budget, ref_files, repo_root=repo_root, receipt=token_receipt
-                        )
-                        errors.extend(f"{sf.name}: {e}" for e in b_errs)
-                except Exception as ex:
-                    errors.append(f"{sf.name}: {ex}")
-        tasks_dir = target / "tasks"
-        if tasks_dir.is_dir():
-            for tf in tasks_dir.glob("*.md"):
-                try:
-                    meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
-                    budget = meta.get("context_budget")
-                    if budget and isinstance(budget, dict):
-                        b_errs = validate_task_context_budget(
-                            budget, meta.get("spec_refs") or [], meta.get("allowed_paths") or [], repo_root,
-                            receipt=token_receipt,
-                        )
-                        errors.extend(f"{tf.name}: {e}" for e in b_errs)
-                    else:
-                        errors.append(
-                            f"{tf.name}: context_budget is required "
-                            "(max_tokens/max_files) for Declare and Implement"
-                        )
-                except Exception as ex:
-                    errors.append(f"{tf.name}: {ex}")
-        if not token_receipt:
-            token_receipt = token_count_receipt()
-        return _report(
-            "lint-context",
-            target,
-            errors,
-            "Context budget validation failed",
-            f"Context budget for {target} is within limits (tokens counted by {token_receipt.get('mode')}).",
-            token_mode=token_receipt.get("mode"),
-            token_measured=token_receipt.get("measured"),
-            token_heuristic=token_receipt.get("heuristic"),
-        )
 
     elif args.command == "bench":
         try:

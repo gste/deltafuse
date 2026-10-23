@@ -427,15 +427,11 @@ def validate_context_budget(
     context_budget: dict[str, Any],
     files: list[Path],
     repo_root: Path | None = None,
-    receipt: dict[str, Any] | None = None,
 ) -> list[str]:
     """Validates that loaded files do not exceed max_tokens and max_files constraints.
 
     Missing paths and paths outside *repo_root* are errors, not silent skips.
     Duplicate paths are counted once for budget limits.
-
-    Q0-2: when *receipt* is given it is filled with the token counting mode, so
-    the caller can record how the verdict was reached.
     """
     errors: list[str] = []
     max_files = context_budget.get("max_files")
@@ -463,7 +459,7 @@ def validate_context_budget(
         seen.add(resolved)
         unique_files.append(resolved)
 
-    return errors + _budget_errors(max_files, max_tokens, len(unique_files), unique_files, receipt)
+    return errors + _budget_errors(max_files, max_tokens, len(unique_files), unique_files)
 
 
 def _budget_errors(
@@ -471,9 +467,8 @@ def _budget_errors(
     max_tokens: Any,
     files_loaded: int,
     counted_files: list[Path],
-    receipt: dict[str, Any] | None,
 ) -> list[str]:
-    """The max_files and max_tokens verdicts; *receipt* gets the token counting mode."""
+    """The max_files and max_tokens verdicts."""
     errors: list[str] = []
     if max_files is not None and files_loaded > max_files:
         errors.append(
@@ -481,16 +476,12 @@ def _budget_errors(
             f"maximum allowed is {max_files}"
         )
     if max_tokens is not None:
-        estimated, counted = count_files_tokens(counted_files)
-        if receipt is not None:
-            receipt.update(counted)
+        estimated, _ = count_files_tokens(counted_files)
         if estimated > max_tokens:
             errors.append(
                 f"Context budget exceeded: estimated {estimated} tokens loaded, "
                 f"maximum allowed is {max_tokens}"
             )
-    elif receipt is not None:
-        receipt.update(token_count_receipt())
     return errors
 
 
@@ -578,12 +569,8 @@ def validate_task_context_budget(
     spec_refs: Sequence[Any],
     allowed_paths: Sequence[Any],
     repo_root: Path,
-    receipt: dict[str, Any] | None = None,
 ) -> list[str]:
-    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes.
-
-    Q0-2: *receipt* receives the token counting mode when provided.
-    """
+    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes."""
     errors: list[str] = []
     max_files = context_budget.get("max_files")
     max_tokens = context_budget.get("max_tokens")
@@ -620,4 +607,4 @@ def validate_task_context_budget(
     for apath in allowed_paths:
         consider(apath, must_exist=False)
 
-    return errors + _budget_errors(max_files, max_tokens, len(unique_declared), unique_existing, receipt)
+    return errors + _budget_errors(max_files, max_tokens, len(unique_declared), unique_existing)

@@ -322,39 +322,6 @@ def test_token_count_receipt_without_counting_is_unknown(monkeypatch):
     assert receipt["endpoint"] == "http://127.0.0.1:1240/tokenize"
 
 
-def test_validate_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
-    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
-    f1 = tmp_path / "a.md"
-    f1.write_text("alpha beta\n", encoding="utf-8")
-    receipt: dict = {}
-    errs = validate_context_budget(
-        {"max_tokens": 1000, "max_files": 5}, [f1], repo_root=tmp_path, receipt=receipt
-    )
-    assert errs == []
-    assert receipt["mode"] == "heuristic"
-    assert receipt["required"] is False
-
-
-def test_validate_task_context_budget_fills_receipt(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
-    monkeypatch.delenv("DELTAFUSE_TOKENIZER_REQUIRED", raising=False)
-    spec = tmp_path / "docs" / "spec" / "core.md"
-    spec.parent.mkdir(parents=True)
-    spec.write_text("# Core\n## REQ-01\n", encoding="utf-8")
-    receipt: dict = {}
-    errs = validate_task_context_budget(
-        {"max_tokens": 64000, "max_files": 24},
-        ["docs/spec/core.md#REQ-01"],
-        ["src/core.py"],
-        tmp_path,
-        receipt=receipt,
-    )
-    assert errs == []
-    assert receipt["mode"] == "heuristic"
-    assert receipt["files_counted"] == 1
-
-
 def test_default_task_budget_matches_contract():
     """docs/small-llm-contract.md pins 64,000 / 24 for framework-controlled input."""
     assert DEFAULT_TASK_BUDGET == {"max_tokens": 64000, "max_files": 24}

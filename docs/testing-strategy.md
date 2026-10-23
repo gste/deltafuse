@@ -32,7 +32,7 @@
 deltafuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # CLI: init, new, validate, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, lint-context, leash, artifact write, bench journal
+│   ├── cli.py                        # CLI: init, new, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, leash, artifact write, bench journal
 │   ├── bench/
 │   │   └── journal.py                # Журнал команд продукта для `deltafuse bench journal`; init/score/compare — в deltafuse-bench
 │   └── core/
@@ -75,7 +75,7 @@ deltafuse/
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, --force, LS-004 hook/CI template
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
-│   │   └── test_validator_cli.py     # CLI: validate, check-gate, validate-layout, evidence, lint-context
+│   │   └── test_validator_cli.py     # CLI: check-gate, validate-layout, evidence
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла
 │   │   ├── test_golden_workflow.py   # Эталонный цикл фичи: 7 шагов от intake до verify, затем archive
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
@@ -181,8 +181,7 @@ deltafuse/
   - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
-  - **F-002 / decomposed, declaring, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact). `deltafuse lint-context` проверяет и `tasks/`.
-  - Команда `deltafuse lint-context <change_dir>`.
+  - **F-002 / decomposed, declaring, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact).
 
 ---
 
@@ -214,37 +213,31 @@ deltafuse/
 # 1. Запуск полного набора автоматических тестов (параллельно, pytest-xdist из extras dev)
 python -m pytest -n auto
 
-# 2. Проверка валидности Change-пакета
-deltafuse validate docs/changes/CHG-001-test
-
-# 3. Закрытие гейта жизненного цикла (check-gate — read-only предпросмотр той же проверки)
+# 2. Закрытие гейта жизненного цикла (check-gate — read-only предпросмотр той же проверки)
 deltafuse advance docs/changes/CHG-001-test --gate decomposed
 deltafuse check-gate docs/changes/CHG-001-test --gate decomposed
 
-# 4. Архивация завершённого пакета
+# 3. Архивация завершённого пакета
 deltafuse archive docs/changes/CHG-001-test
 
-# 5. Проверка эталонной структуры репозитория и адаптеров
+# 4. Проверка эталонной структуры репозитория и адаптеров
 deltafuse validate-layout .
 
-# 6. Проверка контекстного бюджета пакета
-deltafuse lint-context docs/changes/CHG-001-test
-
-# 7. Прогон команды и запись evidence YAML (ядро, без LLM)
+# 5. Прогон команды и запись evidence YAML (ядро, без LLM)
 deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 
-# 8. Следующий готовый шаг (очередь, без LLM)
+# 6. Следующий готовый шаг (очередь, без LLM)
 deltafuse next --list
 deltafuse next --human
 
-# 8a. Сквозной режим: halt JSON и запись клика Human Gate (не auto-accept)
+# 6a. Сквозной режим: halt JSON и запись клика Human Gate (не auto-accept)
 deltafuse next --json
 deltafuse decide docs/changes/CHG-001-test --decision DEC-0001 --status accepted
 
-# 9. Снимок доски для fuse-map (без записи в продукт)
+# 7. Снимок доски для fuse-map (без записи в продукт)
 deltafuse board . --json
 
-# 10. Агент-агностичный Worker bench (диск, без LLM)
+# 8. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse-bench init M02-policy-stats ./m02
 deltafuse bench journal ./m02
 deltafuse-bench score ./m02 --pack <deltafuse-bench-checkout> --json --label cursor+opus-5 --out-file ../scores/opus.json
