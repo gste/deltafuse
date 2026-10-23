@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The test suite runs in parallel**: `pytest-xdist` joins the `dev` extras, CI runs
   `pytest -n auto`, and the docs say so (about 2 minutes instead of 7-8 on 16 cores).
 
+### Fixed
+
+- **`init.sh` computed a framework hash the Core never accepts.** Since DF3-003 it recorded
+  `pyproject.toml` as `pyproject.toml:<hash>`, where `hasher.py` and `init.ps1` write
+  `pyproject:<hash>`, so a product installed with `init.sh` from a checkout pinned a lock hash the
+  Core's check refuses. A test now computes the hash with all three on one tree.
+- **A checkout's framework hash no longer moves when pip writes `src/*.egg-info`** (every editable
+  install and wheel build): the hash skips it, as it skips `__pycache__`, in `hasher.py`,
+  `init.ps1` and `init.sh`. Found as a race once the suite ran in parallel - the wheel smoke
+  rewrote it while other tests compared a product's lock against the checkout.
+
 ### Removed
 
 - `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model

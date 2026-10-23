@@ -85,6 +85,10 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
                     # Skip __pycache__ or .pytest_cache if created in framework
                     if "__pycache__" in file_path.parts or ".pytest_cache" in file_path.parts:
                         continue
+                    # and the build metadata pip writes into src/ on every editable install or
+                    # wheel build, which moved a checkout's hash with no framework change
+                    if any(part.endswith(".egg-info") for part in file_path.relative_to(framework_root).parts):
+                        continue
                     rel_path = file_path.relative_to(framework_root).as_posix().lower()
                     file_hash = compute_file_sha256(file_path)
                     records.append(f"{rel_path}:{file_hash}")
