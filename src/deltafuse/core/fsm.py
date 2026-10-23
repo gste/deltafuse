@@ -36,7 +36,7 @@ from deltafuse.core.integrity import (
     scan_changed_paths_for_private_test_access,
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
-from deltafuse.core.schemas import SchemaRegistry, default_registry
+from deltafuse.core.schemas import SchemaRegistry
 from deltafuse.core.test_reports import no_test_error, no_test_ran
 
 VALID_CHANGE_STATUSES = {
@@ -150,7 +150,7 @@ def _validate_package(
     """The package's errors, and its route as load_change_route read it (None when the
     package was refused before the route was read)."""
     if registry is None:
-        registry = default_registry
+        registry = SchemaRegistry()
 
     change_path = Path(change_dir).resolve()
     errors: list[str] = []
@@ -1570,7 +1570,7 @@ def _check_gate(
                 repo_root,
                 change_status,
                 spec_delta_file,
-                registry or default_registry,
+                registry or SchemaRegistry(),
             )
         )
 

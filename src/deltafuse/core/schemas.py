@@ -256,6 +256,3 @@ class SchemaRegistry:
         if schema.get("additionalProperties") is False:
             line += "; no other keys"
         return line
-
-# Global default registry instance
-default_registry = SchemaRegistry()

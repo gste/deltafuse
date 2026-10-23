@@ -196,9 +196,9 @@ def test_handwritten_red_yaml_fails_targeting(tmp_path: Path, repo_root: Path):
         "changed_paths": ["tests/test_task-001.py"],
         "spec_status": "unchanged",
     }
-    from deltafuse.core.schemas import default_registry
+    from deltafuse.core.schemas import SchemaRegistry
 
-    assert default_registry.validate("evidence", payload) == []
+    assert SchemaRegistry().validate("evidence", payload) == []
     (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(payload), encoding="utf-8")
     errs = check_gate(builder.change_dir, "declaring")
     assert any("not stamped by deltafuse evidence" in e for e in errs)

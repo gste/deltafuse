@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema files again (~0.3 s); one command built several (the module default, one per evidence
   write, one per decision). The loaded schemas are now shared per directory and file signature,
   so an edited schema is still read anew.
+- **`deltafuse` starts faster** (in a clean environment ~0.6 → ~0.4 s per call): the schemas are
+  no longer loaded at import (`schemas.default_registry` is gone; a command loads them when it
+  validates), and `importlib.metadata` is imported only by an installed wheel, which has no
+  `VERSION` file to read.
 
 ### Removed
 
