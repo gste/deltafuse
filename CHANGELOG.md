@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context-budget checks inside it. The token counting mode still reaches the journal through
   `check-gate`. The budget functions lose the `receipt` parameter only
   `lint-context` passed.
+- **`deltafuse validate-layout`; `deltafuse init` runs its check instead.** The check of an
+  installed product (lock, config, adapter skills against the lock) ran only when someone asked;
+  `init` now runs it on the product it just installed or upgraded and exits 1, naming each
+  problem, when the layout is invalid. The shell installers keep their Python-free pair
+  `tests/validate-layout.ps1|sh`. The bench installs through the Python API and is unaffected.
 - **`deltafuse bench journal`.** deltafuse-bench reads the journal through the Python API
   (`deltafuse.bench.journal.collect_attempts`); nothing called the command.
 - `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model

@@ -39,7 +39,6 @@ WORKER_CMDS = (
     "evidence",
     "coverage",
     "archive",
-    "validate-layout",
     "board",
     "leash",
 )

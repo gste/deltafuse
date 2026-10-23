@@ -32,7 +32,7 @@
 deltafuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # CLI: init, new, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, leash, artifact write
+│   ├── cli.py                        # CLI: init, new, advance, check-gate, state, archive, validate-config, evidence, next, decide, board, leash, artifact write
 │   ├── bench/
 │   │   └── journal.py                # Журнал команд продукта (его читает deltafuse-bench); init/score/compare — в deltafuse-bench
 │   └── core/
@@ -75,7 +75,7 @@ deltafuse/
 │   ├── integration/                  # Интеграционные тесты
 │   │   ├── test_installer.py         # Установка, --force, LS-004 hook/CI template
 │   │   ├── test_layout.py            # Проверка эталонной раскладки продукта, lock-файлов и навыков
-│   │   └── test_validator_cli.py     # CLI: check-gate, validate-layout, evidence
+│   │   └── test_validator_cli.py     # CLI: check-gate, init checks its layout, evidence
 │   ├── e2e/                          # Сквозные симуляции жизненного цикла
 │   │   ├── test_golden_workflow.py   # Эталонный цикл фичи: 7 шагов от intake до verify, затем archive
 │   │   ├── test_noop_workflow.py     # Цикл невоспроизведённого бага (not-reproduced) и архивация
@@ -170,7 +170,7 @@ deltafuse/
 * **4.2. Идемпотентность и защита данных**:
   - Пользовательские спецификации, решения и конфиги не затираются при повторном запуске.
   - Флаг `--force` обновляет только управляемые фреймворком файлы.
-* **4.3. Валидатор раскладки (`deltafuse validate-layout`)**:
+* **4.3. Валидатор раскладки (`validate_product_layout`, его запускает `deltafuse init` после установки)**:
   - Проверка структуры репозитория, соответствия `config.yaml` <-> `lock.yaml` (версия, источник, хэш, `workflow.auto_accept_decisions`), отсутствия легаси-каталогов (`docs/process`, `docs/init`, `docs/todo`).
 
 ---
@@ -220,24 +220,21 @@ deltafuse check-gate docs/changes/CHG-001-test --gate decomposed
 # 3. Архивация завершённого пакета
 deltafuse archive docs/changes/CHG-001-test
 
-# 4. Проверка эталонной структуры репозитория и адаптеров
-deltafuse validate-layout .
-
-# 5. Прогон команды и запись evidence YAML (ядро, без LLM)
+# 4. Прогон команды и запись evidence YAML (ядро, без LLM)
 deltafuse evidence docs/changes/CHG-001-test --phase red --task TASK-001 --changed-path tests/test_foo.py -- pytest tests/test_foo.py -q
 
-# 6. Следующий готовый шаг (очередь, без LLM)
+# 5. Следующий готовый шаг (очередь, без LLM)
 deltafuse next --list
 deltafuse next --human
 
-# 6a. Сквозной режим: halt JSON и запись клика Human Gate (не auto-accept)
+# 5a. Сквозной режим: halt JSON и запись клика Human Gate (не auto-accept)
 deltafuse next --json
 deltafuse decide docs/changes/CHG-001-test --decision DEC-0001 --status accepted
 
-# 7. Снимок доски для fuse-map (без записи в продукт)
+# 6. Снимок доски для fuse-map (без записи в продукт)
 deltafuse board . --json
 
-# 8. Агент-агностичный Worker bench (диск, без LLM)
+# 7. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse-bench init M02-policy-stats ./m02
 deltafuse-bench score ./m02 --pack <deltafuse-bench-checkout> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse-bench compare ../scores/opus.json ../scores/flash.json

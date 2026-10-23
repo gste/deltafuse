@@ -113,7 +113,7 @@ bash ./scripts/init.sh /path/to/product
 
 The installer preserves existing product files. `-Force`/`--force` updates only the requested pin, lock, and generated adapters; use it after reviewing active Change versions.
 
-Validate an installed product with `deltafuse validate-layout <product>`; without Python (the shell installers above), with `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
+`deltafuse init` checks the product it installed (lock, config, adapter skills against the lock) and exits non-zero if the layout is invalid; the shell installers above have the Python-free pair `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
 
 On Windows, a product with deep paths (Java packages, Fuse-Back characterization tests) needs long paths in git, or `git add` fails with "Filename too long": `git config core.longpaths true` in the product repository. DeltaFuse does not change your git configuration.
 

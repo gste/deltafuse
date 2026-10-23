@@ -401,9 +401,6 @@ def _main(argv: list[str] | None = None) -> int:
     new_parser.add_argument("--title", default="", help="Short Change title")
     new_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
-    layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
-    layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
-
     # evidence command (WK-002)
     ev_parser = subparsers.add_parser(
         "evidence", help="Run a command after '--' and write evidence/red|green|regression YAML"
@@ -535,6 +532,13 @@ def _main(argv: list[str] | None = None) -> int:
                 print("Host instruction files were preserved; activate DeltaFuse explicitly with /run or deltafuse next --json.")
             if result.adapter_mode == "link":
                 print("Adapter skills are relative links into the nested framework checkout.")
+            # The installed product is checked here, where it was made: lock, config, adapter
+            # skills against the lock (`deltafuse validate-layout` did it on request through 3.3.9).
+            errors = validate_product_layout(result.target_dir)
+            if errors:
+                _print_errors(f"Installed, but the product layout at {result.target_dir} is invalid "
+                              f"with {len(errors)} error(s):", errors)
+                return 1
             return 0
         except InstallationError as e:
             print(f"Installation Error: {e}", file=sys.stderr)
@@ -652,12 +656,6 @@ def _main(argv: list[str] | None = None) -> int:
         else:
             print(f"new: scaffolded {args.change_id} at {change_dir} (Intake stays open)")
         return 0
-
-    elif args.command == "validate-layout":
-        target = Path(args.product_path)
-        errors = validate_product_layout(target)
-        valid = f"DeltaFuse product layout at {target} is valid."
-        return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
         target = Path(args.change_path)

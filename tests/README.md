@@ -29,7 +29,7 @@ tests/
 │   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
-├── validate-layout.ps1 / .sh     # Python-free layout validators for the shell installers (the Python one is `deltafuse validate-layout`)
+├── validate-layout.ps1 / .sh     # Python-free layout validators for the shell installers (`deltafuse init` checks its own)
 └── smoke-test.ps1 / .sh          # Legacy shell smoke test scripts
 ```
 
@@ -40,11 +40,6 @@ In parallel (`pytest-xdist`, in the `dev` extras): the suite is about 850 tests,
 install a product and run the Core on it, so one process takes 7-8 minutes and `-n auto` about 2.
 ```bash
 python -m pytest -n auto
-```
-
-### Validate Product Layout
-```bash
-deltafuse validate-layout .
 ```
 
 ### Record evidence (kernel)
