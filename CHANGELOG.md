@@ -31,8 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validates), and `importlib.metadata` is imported only by an installed wheel, which has no
   `VERSION` file to read.
 
+- **The test suite runs in parallel**: `pytest-xdist` joins the `dev` extras, CI runs
+  `pytest -n auto`, and the docs say so (about 2 minutes instead of 7-8 on 16 cores).
+
 ### Removed
 
+- `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model
+  protocol of AW-35/AW-20, superseded by the bench qualification and called by nothing. Its five
+  tests of JSON Pointer escaping in `apply_artifact_patch` (AW-46) moved to `test_artifact_patch.py`.
 - Internal: `evidence._is_authentic` (its checks were already in the record's error list) and
   helpers only tests used (`is_change_id_archived`, `estimate_tokens`, `estimate_files_tokens`,
   `last_receipt`, `validate_or_raise`, `validate_step_contracts`, `cleanup_orphaned_staging`).

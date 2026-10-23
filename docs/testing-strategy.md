@@ -211,8 +211,8 @@ deltafuse/
 ## 4. Консольные команды для инженера и агентов
 
 ```bash
-# 1. Запуск полного набора автоматических тестов (89 тестов)
-python -m pytest -v
+# 1. Запуск полного набора автоматических тестов (параллельно, pytest-xdist из extras dev)
+python -m pytest -n auto
 
 # 2. Проверка валидности Change-пакета
 deltafuse validate docs/changes/CHG-001-test
@@ -259,4 +259,4 @@ deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 - **Операционные системы**: `ubuntu-latest`, `windows-latest`, `macos-latest`
 - **Версии Python**: `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
 - **Шаги проверки**:
-  1. `python -m pytest -v` (полный набор unit, integration, e2e)
+  1. `python -m pytest -v -n auto` (полный набор unit, integration, e2e)

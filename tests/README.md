@@ -36,8 +36,10 @@ tests/
 ## Running Tests
 
 ### Run Full Pytest Suite
+In parallel (`pytest-xdist`, in the `dev` extras): the suite is about 850 tests, most of which
+install a product and run the Core on it, so one process takes 7-8 minutes and `-n auto` about 2.
 ```bash
-python -m pytest -v
+python -m pytest -n auto
 ```
 
 ### Validate Product Layout
