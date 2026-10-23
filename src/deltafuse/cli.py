@@ -508,17 +508,6 @@ def _main(argv: list[str] | None = None) -> int:
     leash_parser.add_argument("--file", action="append", default=[], dest="files",
                               help="Relative path to check instead of git diff (repeatable)")
 
-    bench_parser = subparsers.add_parser(
-        "bench", help="What a product's bench journal holds (no LLM); the bench itself is deltafuse-bench"
-    )
-    bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
-    # `init`, `score` and `compare` live in deltafuse-bench (score/compare since 3.3.0, init since
-    # 3.3.9): the bench is versioned apart from the framework it measures. The framework keeps
-    # only what a product produces - its command journal.
-    bench_journal = bench_sub.add_parser("journal",
-                                         help="Judge: collect Core attempts from a sandbox journal (no LLM)")
-    bench_journal.add_argument("product_dir", help="Product root created by `deltafuse-bench init`")
-
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
     art_sub = art_parser.add_subparsers(dest="artifact_cmd", required=True)
@@ -880,23 +869,6 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         print("config: .deltafuse/config.yaml is a valid v3 contract")
         return 0
-
-    elif args.command == "bench":
-        try:
-            if args.bench_cmd == "journal":
-                from deltafuse.bench.journal import collect_attempts, load_events
-
-                payload = collect_attempts(load_events(Path(args.product_dir).resolve()))
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-                return 0
-            print(
-                "The bench moved to deltafuse-bench: `deltafuse-bench init|score <product-dir>`",
-                file=sys.stderr,
-            )
-            return 2
-        except Exception as ex:  # BenchError included: same text, same code
-            print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
 
     elif args.command == "artifact":
         return _artifact_write_command(args)

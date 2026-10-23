@@ -32,9 +32,9 @@
 deltafuse/
 ├── src/deltafuse/                    # Ядро фреймворка, валидаторы и CLI
 │   ├── __init__.py
-│   ├── cli.py                        # CLI: init, new, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, leash, artifact write, bench journal
+│   ├── cli.py                        # CLI: init, new, advance, check-gate, state, archive, validate-layout, validate-config, evidence, next, decide, board, leash, artifact write
 │   ├── bench/
-│   │   └── journal.py                # Журнал команд продукта для `deltafuse bench journal`; init/score/compare — в deltafuse-bench
+│   │   └── journal.py                # Журнал команд продукта (его читает deltafuse-bench); init/score/compare — в deltafuse-bench
 │   └── core/
 │   │   ├── archiver.py               # Неизменяемый архив: перемещение Change, проверка converged, защита от перезаписи
 │   │   ├── board.py                  # Read-only снимок доски для fuse-map (FM-001)
@@ -203,7 +203,7 @@ deltafuse/
 * **7.1. Init**: `deltafuse-bench init M01-cooldown` (пол) или `M02-policy-stats` (фронтир). Worker sandbox + seed spec/code + intake. Публичный API M02 (`peak_rate`, `token_rejects`, `reject_threshold`, `stats.py`) задан во intake. В дереве нет `oracle.yaml` и hidden suite. Непустой существующий каталог — отказ и команда пересоздания; `--force`/`-f` стирает и ставит заново. Успешный init печатает короткий промпт для агента (`deltafuse next`). Промпт не называет `bench score`. `BENCH.md` не велит воркеру запускать `bench score`.
 * **7.2. Score**: только с `--pack` / `DELTAFUSE_BENCH_PACK`. Headline `score` = `0.6 * correctness + 0.4 * process` при журнале retries; без журнала `score=n/a`, не 100. `correctness` — взвешенные oracle points (hidden по тестам; presence / already-past не входят). `process`/`efficiency` из `.deltafuse/bench-journal.jsonl` (ядро пишет все CLI-команды; `advance` и `check-gate` — с `errors` по одной находке шлюза; оба считаются попытками шлюза для повторов T3). `--out-file` внутри песочницы — ошибка. Hidden traceback в JSON только с `--verbose`. Воркер журнал не пишет и не самоотчитывается.
 * **7.3. Compare**: два JSON scorecard; сначала `score`, затем вектор шагов + `first_fail`. `M01` — пол; `M02` — фронтир (два capability / policy / stats).
-* **7.4. CLI**: `deltafuse-bench init|score|compare` (бенч, 3.3.9) и `deltafuse bench journal` (фреймворк); `--stage`, `--json`, `--label`, `--out-file`. `bench journal` — детерминированный rollup попыток (`cycles`), без `--pack` и без LLM.
+* **7.4. CLI**: `deltafuse-bench init|score|compare` (бенч, 3.3.9); `--stage`, `--json`, `--label`, `--out-file`. Попытки (`cycles`) бенч собирает из журнала продукта через `deltafuse.bench.journal`, без LLM.
 
 ---
 
@@ -239,7 +239,6 @@ deltafuse board . --json
 
 # 8. Агент-агностичный Worker bench (диск, без LLM)
 deltafuse-bench init M02-policy-stats ./m02
-deltafuse bench journal ./m02
 deltafuse-bench score ./m02 --pack <deltafuse-bench-checkout> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```

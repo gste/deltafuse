@@ -96,7 +96,7 @@ There are no product-local `docs/process/`, `docs/init/`, or `docs/todo/`. Boots
 | [context-model.md](./context-model.md) ([ru](./context-model.ru.md)) | Domain routing, slicing, and context contracts |
 | [roles.md](./roles.md) ([ru](./roles.ru.md)) | AI and human authority boundaries |
 | [using.md](./using.md) ([ru](./using.ru.md)) | Installation and product integration |
-| [bench.md](./bench.md) ([ru](./bench.ru.md)) | Agent-agnostic Worker bench: deltafuse-bench (`deltafuse-bench init`, `score`, `compare`) scores the disk; the framework keeps `deltafuse bench journal` |
+| [bench.md](./bench.md) ([ru](./bench.ru.md)) | Agent-agnostic Worker bench: deltafuse-bench (`deltafuse-bench init`, `score`, `compare`) scores the disk; the framework keeps the command journal it reads |
 | [contracts/board-snapshot.md](./contracts/board-snapshot.md) ([ru](./contracts/board-snapshot.ru.md)) | Read-only board snapshot for fuse-map (`schema_version: 1`) |
 | [contracts/halt.md](./contracts/halt.md) ([ru](./contracts/halt.ru.md)) | Host buttons for `next --json` halt (`kind` + `choices`) |
 | [contracts/leash.md](./contracts/leash.md) ([ru](./contracts/leash.ru.md)) | Write envelope for `next --json` and `deltafuse leash` |

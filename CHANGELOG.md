@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context-budget checks inside it. The token counting mode still reaches the journal through
   `check-gate`. The budget functions lose the `receipt` parameter only
   `lint-context` passed.
+- **`deltafuse bench journal`.** deltafuse-bench reads the journal through the Python API
+  (`deltafuse.bench.journal.collect_attempts`); nothing called the command.
 - `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model
   protocol of AW-35/AW-20, superseded by the bench qualification and called by nothing. Its five
   tests of JSON Pointer escaping in `apply_artifact_patch` (AW-46) moved to `test_artifact_patch.py`.

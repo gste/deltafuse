@@ -96,7 +96,7 @@ product/
 | [context-model.md](./context-model.md) | Domain routing, slicing и context contracts |
 | [roles.md](./roles.md) | Границы полномочий ИИ и человека |
 | [using.ru.md](./using.ru.md) | Установка и product integration |
-| [bench.ru.md](./bench.ru.md) ([en](./bench.md)) | Агент-агностичный бенчмарк воркера: deltafuse-bench (`deltafuse-bench init`, `score`, `compare`) считает диск; во фреймворке остаётся `deltafuse bench journal` |
+| [bench.ru.md](./bench.ru.md) ([en](./bench.md)) | Агент-агностичный бенчмарк воркера: deltafuse-bench (`deltafuse-bench init`, `score`, `compare`) считает диск; во фреймворке остаётся журнал команд, который он читает |
 | [contracts/board-snapshot.ru.md](./contracts/board-snapshot.ru.md) ([en](./contracts/board-snapshot.md)) | Снимок доски для fuse-map (`schema_version: 1`) |
 | [contracts/halt.ru.md](./contracts/halt.ru.md) ([en](./contracts/halt.md)) | Кнопки хоста для `next --json` halt (`kind` + `choices`) |
 | [contracts/leash.ru.md](./contracts/leash.ru.md) ([en](./contracts/leash.md)) | Конверт записи для `next --json` и `deltafuse leash` |
