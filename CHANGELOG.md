@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`workflow.evidence_timeout`**: how many seconds `deltafuse evidence` lets the test command
+  run, for the product (default 90; `--timeout` still overrides it for one call). A Maven or
+  Gradle build compiles the module before one test runs, and on a service of a few hundred
+  classes that alone outlasts 90 seconds; no skill tells the Worker to pass `--timeout`.
+- **`deltafuse validate-config` checks the capability catalog against its schema** when there is
+  one (`docs/spec/_capabilities.yaml`), as the `specified` gate does. `fuseback handoff` checked
+  it with `deltafuse artifact validate --kind capability`, which 3.3.9 removed.
+
 ### Changed
 
 - **The Artifact Writer's contract names only `create` and `update`.** The request-envelope schema
@@ -36,8 +46,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The test suite runs in parallel**: `pytest-xdist` joins the `dev` extras, CI runs
   `pytest -n auto`, and the docs say so (about 2 minutes instead of 7-8 on 16 cores).
 
+- **`deltafuse init` checks the layout it installed.** The check of an installed product (lock,
+  config, adapter skills against the lock) ran only when someone called `validate-layout`; `init`
+  now runs it on the product it just installed or upgraded and exits 1, naming each problem, when
+  the layout is invalid. `validate-layout` stays for the later check: `fuseback handoff` runs it
+  on the product it hands over. The bench installs through the Python API and is unaffected.
+
 ### Fixed
 
+- **The leash hook is installed in a submodule.** A product whose `.git` is a file (a service
+  that is a submodule of an aggregator repository, a linked worktree) got no pre-commit hook,
+  silently: the hook directory is now asked of git (`git rev-parse --git-path hooks`).
 - **`init.sh` computed a framework hash the Core never accepts.** Since DF3-003 it recorded
   `pyproject.toml` as `pyproject.toml:<hash>`, where `hasher.py` and `init.ps1` write
   `pyproject:<hash>`, so a product installed with `init.sh` from a checkout pinned a lock hash the
@@ -55,11 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context-budget checks inside it. The token counting mode still reaches the journal through
   `check-gate`. The budget functions lose the `receipt` parameter only
   `lint-context` passed.
-- **`deltafuse validate-layout`; `deltafuse init` runs its check instead.** The check of an
-  installed product (lock, config, adapter skills against the lock) ran only when someone asked;
-  `init` now runs it on the product it just installed or upgraded and exits 1, naming each
-  problem, when the layout is invalid. The shell installers keep their Python-free pair
-  `tests/validate-layout.ps1|sh`. The bench installs through the Python API and is unaffected.
 - **`deltafuse bench journal`.** deltafuse-bench reads the journal through the Python API
   (`deltafuse.bench.journal.collect_attempts`); nothing called the command.
 - `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model

@@ -1085,7 +1085,16 @@ def _git_hooks_dir(product_root: Path) -> Path | None:
     git = product_root / ".git"
     if git.is_dir():
         return git / "hooks"
-    return None
+    if not git.is_file():
+        return None
+    # A submodule or a linked worktree: `.git` is a file naming the real git directory, and
+    # the hook went nowhere (a service that is a submodule of an aggregator repository).
+    done = subprocess.run(["git", "rev-parse", "--git-path", "hooks"], cwd=product_root,
+                          capture_output=True, text=True)
+    path = done.stdout.strip()
+    if done.returncode != 0 or not path:
+        return None
+    return Path(path) if Path(path).is_absolute() else product_root / path
 
 
 def sync_leash_hook(product_root: Path, mode: str) -> None:

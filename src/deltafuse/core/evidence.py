@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.config import load_evidence_timeout
 from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import (
     CONTRACT_GATES,
@@ -516,7 +517,7 @@ def run_evidence(
     task: str | None = None,
     argv: list[str],
     changed_paths: list[str] | None = None,
-    timeout: int = 90,
+    timeout: int | None = None,
 ) -> EvidenceOutcome:
     """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml."""
     if phase not in {"red", "green", "regression", "verification"}:
@@ -553,6 +554,8 @@ def run_evidence(
         _refuse_green_for_a_closed_task(change_path, str(task))
 
     repo_root = find_repo_root(change_path)
+    if timeout is None:
+        timeout = load_evidence_timeout(repo_root)
     if phase == "red":
         _refuse_red_over_a_siblings_oracle(change_path, str(task), repo_root)
     change_id = _load_change_id(change_path)

@@ -46,6 +46,14 @@ def test_cli_check_gate(tmp_path: Path, repo_root: Path, monkeypatch, capsys):
     assert ret == 0
 
 
+def test_cli_validate_layout(tmp_path: Path, repo_root: Path, capsys):
+    # fuseback handoff checks the product it hands over with this command.
+    install(target_dir=tmp_path, framework_root=repo_root)
+    assert main(['validate-layout', str(tmp_path)]) == 0
+    out, _ = capsys.readouterr()
+    assert "DeltaFuse product layout at" in out and "is valid." in out
+
+
 def test_cli_init_checks_the_layout_it_installed(tmp_path: Path, monkeypatch, capsys):
     assert main(['init', str(tmp_path / "ok"), '--agents-md', 'bridge']) == 0
     capsys.readouterr()

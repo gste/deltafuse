@@ -35,7 +35,9 @@ KNOWN_WORKFLOW_KEYS = {
     "call_width",
     "auto_accept_decisions",
     "trace_claims",
+    "evidence_timeout",
 }
+DEFAULT_EVIDENCE_TIMEOUT = 90
 LEASH_MODES = {"off", "advisory", "enforce"}
 # P12 (experiment): `warn` has `converged` name Expectation/Constraint claims coverage.yaml
 # has no test for, as an advisory line - never a gate error. `off` (default) costs nothing:
@@ -168,6 +170,11 @@ def validate_config(product_root: Path | str) -> list[str]:
                 errors.append(
                     f"config.yaml: workflow.integrity_profile {profile!r} must be one of {sorted(PROFILES)}"
                 )
+            timeout = workflow.get("evidence_timeout")
+            if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
+                errors.append(
+                    f"config.yaml: workflow.evidence_timeout {timeout!r} must be a positive number of seconds"
+                )
             commands = workflow.get("test_commands")
             if commands is not None:
                 if not isinstance(commands, list) or not all(
@@ -183,8 +190,37 @@ def validate_config(product_root: Path | str) -> list[str]:
                     errors.append(
                         "config.yaml: workflow.code_roots must be a list of glob paths like 'src/**'"
                     )
+    errors.extend(_catalog_schema_errors(root))
     errors.extend(validate_active_code_roots(root))
     return errors
+
+
+def _catalog_schema_errors(product_root: Path) -> list[str]:
+    """The capability catalog against its schema, when there is one (a product has none before
+    Analyze or `fuseback catalog` writes it). The `specified` gate checks the same; this is the
+    check on request that `deltafuse artifact validate --kind capability` was until 3.3.9."""
+    from deltafuse.core.integrity import load_capability_catalog
+    from deltafuse.core.schemas import SchemaRegistry
+
+    if not (Path(product_root) / "docs" / "spec" / "_capabilities.yaml").is_file():
+        return []
+    catalog, load_errors = load_capability_catalog(Path(product_root))
+    if load_errors or catalog is None:
+        return [f"catalog: {e}" for e in load_errors]
+    return [f"catalog: docs/spec/_capabilities.yaml: {e}" for e in SchemaRegistry().validate("capability", catalog)]
+
+
+def load_evidence_timeout(product_root: Path | str) -> int:
+    """Seconds `deltafuse evidence` lets the test command run: `workflow.evidence_timeout`, else 90.
+
+    A Maven or Gradle build compiles the whole module before one test runs; on a service of a
+    few hundred classes that alone outlasts 90 seconds, and the Worker passing `--timeout` on
+    every call is a rule no skill states.
+    """
+    value = config_section(product_root, "workflow").get("evidence_timeout")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return DEFAULT_EVIDENCE_TIMEOUT
 
 
 def config_section(

@@ -401,6 +401,9 @@ def _main(argv: list[str] | None = None) -> int:
     new_parser.add_argument("--title", default="", help="Short Change title")
     new_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
+    layout_parser = subparsers.add_parser("validate-layout", help="Validate product repository layout, locks, and adapters")
+    layout_parser.add_argument("product_path", nargs="?", default=".", help="Path to product repository root (default: current dir)")
+
     # evidence command (WK-002)
     ev_parser = subparsers.add_parser(
         "evidence", help="Run a command after '--' and write evidence/red|green|regression YAML"
@@ -413,7 +416,8 @@ def _main(argv: list[str] | None = None) -> int:
     ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
     ev_parser.add_argument("--changed-path", action="append", default=[], dest="changed_paths",
                            help="Relative path written by the Worker (repeatable)")
-    ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+    ev_parser.add_argument("--timeout", type=int, default=None,
+                           help="Command timeout in seconds (default: workflow.evidence_timeout, else 90)")
 
     cov_parser = subparsers.add_parser("coverage",
                                        help="Write coverage.yaml from routing and slices (no LLM)")
@@ -533,7 +537,7 @@ def _main(argv: list[str] | None = None) -> int:
             if result.adapter_mode == "link":
                 print("Adapter skills are relative links into the nested framework checkout.")
             # The installed product is checked here, where it was made: lock, config, adapter
-            # skills against the lock (`deltafuse validate-layout` did it on request through 3.3.9).
+            # skills against the lock; `deltafuse validate-layout` runs the same check on request.
             errors = validate_product_layout(result.target_dir)
             if errors:
                 _print_errors(f"Installed, but the product layout at {result.target_dir} is invalid "
@@ -656,6 +660,12 @@ def _main(argv: list[str] | None = None) -> int:
         else:
             print(f"new: scaffolded {args.change_id} at {change_dir} (Intake stays open)")
         return 0
+
+    elif args.command == "validate-layout":
+        target = Path(args.product_path)
+        errors = validate_product_layout(target)
+        valid = f"DeltaFuse product layout at {target} is valid."
+        return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
         target = Path(args.change_path)

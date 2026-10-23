@@ -29,7 +29,7 @@ tests/
 │   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
-├── validate-layout.ps1 / .sh     # Python-free layout validators for the shell installers (`deltafuse init` checks its own)
+├── validate-layout.ps1 / .sh     # Python-free layout validators for the shell installers (the Python one is `deltafuse validate-layout`, which `deltafuse init` also runs)
 └── smoke-test.ps1 / .sh          # Legacy shell smoke test scripts
 ```
 

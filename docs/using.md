@@ -50,7 +50,7 @@ Anything the Core owns uses the token `deltafuse` (no hyphen): the CLI, the Pyth
 git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 ```
 
-`.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.leash` and `workflow.auto_accept_decisions`. `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and `auto_accept_decisions`. Re-run the installer after changing `auto_accept_decisions` so lock matches config. (`workflow.call_width` was retired in 3.3.6; an older config or lock that carries it is accepted and ignored.)
+`.deltafuse/config.yaml` specifies the requested framework version and repository settings, including `workflow.leash` and `workflow.auto_accept_decisions`. `.deltafuse/lock.yaml` pins the resolved version, schema version, framework content hash, and `auto_accept_decisions`. Re-run the installer after changing `auto_accept_decisions` so lock matches config. `workflow.evidence_timeout` is how many seconds `deltafuse evidence` lets the test command run (default 90; a Maven or Gradle build that compiles the module first needs more); `--timeout` overrides it for one call. (`workflow.call_width` was retired in 3.3.6; an older config or lock that carries it is accepted and ignored.)
 
 For framework releases, `VERSION` is the single machine-readable version source. Package metadata reads it dynamically, and installer templates contain a schema-valid `0.0.0` marker that each installer replaces from `VERSION`. A version bump therefore edits `VERSION` plus the human release entry in `CHANGELOG.md`; generated assets are synchronized without embedding the release number.
 

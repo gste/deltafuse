@@ -335,3 +335,19 @@ def test_enforce_does_not_overwrite_foreign_pre_commit(tmp_path: Path, repo_root
     managed = tmp_path / ".deltafuse" / "hooks" / "pre-commit"
     assert managed.is_file()
     assert "deltafuse leash" in managed.read_text(encoding="utf-8")
+
+
+def test_the_hook_lands_in_the_git_dir_of_a_submodule(tmp_path: Path, repo_root: Path):
+    # A service that is a submodule of an aggregator repository has a `.git` file, not a
+    # directory; the hook went nowhere and the leash ran only when called by hand.
+    env = _leash_env(repo_root)
+    product, git_dir = tmp_path / "service", tmp_path / "modules" / "service"
+    product.mkdir()
+    git_dir.parent.mkdir()
+    _git(["init", "--separate-git-dir", str(git_dir)], cwd=product, env=env)
+    assert (product / ".git").is_file()
+    install(target_dir=product, framework_root=repo_root)
+    hook = git_dir / "hooks" / "pre-commit"
+    assert hook.is_file() and "deltafuse leash" in hook.read_text(encoding="utf-8")
+    _git(["add", "-A"], cwd=product, env=env)
+    assert _commit(product, "init", env).returncode == 0

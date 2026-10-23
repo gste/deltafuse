@@ -113,7 +113,7 @@ bash ./scripts/init.sh /path/to/product
 
 Installer сохраняет существующие product files. `-Force`/`--force` обновляет только requested pin, lock и generated adapters; применять его следует после проверки версий активных Changes.
 
-`deltafuse init` проверяет установленный продукт (lock, config, навыки адаптеров против lock) и выходит с ошибкой, если раскладка неверна; у установщиков на оболочке выше есть пара без Python - `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
+`deltafuse init` проверяет установленный продукт (lock, config, навыки адаптеров против lock) и выходит с ошибкой, если раскладка неверна; позже её проверяет `deltafuse validate-layout <product>`; у установщиков на оболочке выше есть пара без Python - `tests/validate-layout.ps1` / `tests/validate-layout.sh`.
 
 На Windows продукту с глубокими путями (пакеты Java, характеризующие тесты Fuse-Back) нужны длинные пути в git, иначе `git add` падает с "Filename too long": `git config core.longpaths true` в репозитории продукта. DeltaFuse вашу настройку git не меняет.
 

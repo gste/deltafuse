@@ -375,3 +375,19 @@ def test_rewriting_the_frozen_red_oracle_does_not_produce_green(
     assert not any("frozen Red oracle" in e for e in honest.errors), honest.errors
     errs = check_gate(builder.change_dir, "implemented")
     assert not any("frozen Red oracle" in e for e in errs), errs
+
+
+def test_the_timeout_comes_from_the_config_when_the_call_names_none(tmp_path: Path, repo_root: Path):
+    # A Maven build compiles the module before one test runs and outlasts the default 90 s;
+    # `workflow.evidence_timeout` sets it once for the product.
+    builder = _decomposed(tmp_path, repo_root, "CHG-031")
+    config = tmp_path / ".deltafuse" / "config.yaml"
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data.setdefault("workflow", {})["evidence_timeout"] = 1
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    runner = tmp_path / "tests" / "test_task-001.py"
+    runner.parent.mkdir(parents=True, exist_ok=True)
+    runner.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+    outcome = run_evidence(builder.change_dir, phase="red", task="TASK-001",
+                           argv=_run_file_cmd("tests/test_task-001.py"), changed_paths=["tests/test_task-001.py"])
+    assert "timed out after 1s" in (outcome.payload.get("summary") or "") + " ".join(outcome.errors), outcome.payload
