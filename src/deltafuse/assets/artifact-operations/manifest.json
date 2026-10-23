@@ -5,43 +5,43 @@
   "descriptors": {
     "task": {
       "file": "task.descriptor.yaml",
-      "allowed_operations": ["create", "update", "validate", "describe"]
+      "allowed_operations": ["create", "update"]
     },
     "slice": {
       "file": "slice.descriptor.yaml",
-      "allowed_operations": ["create", "update", "validate", "describe"]
+      "allowed_operations": ["create", "update"]
     },
     "spec-delta": {
       "file": "spec-delta.descriptor.yaml",
-      "allowed_operations": ["create", "update", "validate", "describe"]
+      "allowed_operations": ["create", "update"]
     },
     "routing": {
       "file": "routing.descriptor.yaml",
-      "allowed_operations": ["create", "update", "validate", "describe"]
+      "allowed_operations": ["create", "update"]
     },
     "change": {
       "file": "change.descriptor.yaml",
-      "allowed_operations": ["update", "validate", "describe"]
+      "allowed_operations": ["update"]
     },
     "decision": {
       "file": "decision.descriptor.yaml",
-      "allowed_operations": ["validate", "describe"]
+      "allowed_operations": ["create", "update"]
     },
     "evidence": {
       "file": "evidence.descriptor.yaml",
-      "allowed_operations": ["validate", "describe"]
+      "allowed_operations": []
     },
     "coverage": {
       "file": "coverage.descriptor.yaml",
-      "allowed_operations": ["validate", "describe"]
+      "allowed_operations": []
     },
     "capability": {
       "file": "capability.descriptor.yaml",
-      "allowed_operations": ["validate", "describe"]
+      "allowed_operations": []
     },
     "lock": {
       "file": "lock.descriptor.yaml",
-      "allowed_operations": ["validate", "describe"]
+      "allowed_operations": []
     }
   }
 }
