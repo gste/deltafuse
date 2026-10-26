@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.11] - 2026-10-26
+
+No framework changes. Released as the pair of Fuseback 3.3.11, whose changes are Spring services on the JVM:
+characterizing a Java service and writing its spec with a ~30B open model, measured against Opus 5.5 on an owner's
+service (see Fuseback's changelog).
+
 ## [3.3.10] - 2026-10-23
 
 ### Added
