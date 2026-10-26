@@ -110,7 +110,6 @@ def test_replaced_history_is_detected(tmp_path: Path, repo_root: Path):
     _record(root, artifact)
 
     journal = root / ".deltafuse" / "gate-journal.jsonl"
-    forged = dict(_artifact_receipt_payload(), chain_hash=None)
     journal.write_text(
         json.dumps({**_artifact_receipt_payload(), "chain_hash": ""}, sort_keys=True)
         + "\n",

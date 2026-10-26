@@ -9,7 +9,6 @@ from deltafuse.core.artifact_policy import (
     resolve_change_stage,
     validate_artifact_policy,
     ArtifactPolicyError,
-    AuthorizationContext,
 )
 
 

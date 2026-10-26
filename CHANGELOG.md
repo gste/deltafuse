@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.11] - 2026-10-26
+
+No framework changes. Released as the pair of Fuseback 3.3.11, whose changes are Spring services on the JVM:
+characterizing a Java service and writing its spec with a ~30B open model, measured against Opus 5.5 on an owner's
+service (see Fuseback's changelog).
+
+## [3.3.10] - 2026-10-23
+
+### Added
+
+- **`workflow.evidence_timeout`**: how many seconds `deltafuse evidence` lets the test command
+  run, for the product (default 90; `--timeout` still overrides it for one call). A Maven or
+  Gradle build compiles the module before one test runs, and on a service of a few hundred
+  classes that alone outlasts 90 seconds; no skill tells the Worker to pass `--timeout`.
+- **`deltafuse validate-config` checks the capability catalog against its schema** when there is
+  one (`docs/spec/_capabilities.yaml`), as the `specified` gate does. `fuseback handoff` checked
+  it with `deltafuse artifact validate --kind capability`, which 3.3.9 removed.
+
+### Changed
+
+- **The Artifact Writer's contract names only `create` and `update`.** The request-envelope schema
+  (`docs/contracts/artifact-writer.schema.yaml`) and every descriptor's `allowed_operations` still
+  listed `validate` and `describe`, whose commands 3.3.9 removed; nothing read those values. The
+  descriptor index (`process/artifact-operations/manifest.json`) now carries each descriptor's own
+  list - it had kept the old one, and for `decision` had never named `create` and `update`.
+- **The README names both ways to validate an installed product**: `deltafuse validate-layout`, and
+  without Python `tests/validate-layout.ps1|sh` - the shell installers' pair, kept for them.
+- docs/state-machine (en, ru): a task can be marked `blocked` from `pending` once its Red is
+  recorded; the transition table keeps it so the Core's refusal names what is missing.
+- **A Green is judged the same way in all three places that judge it** - `deltafuse evidence`
+  when it records the Green, the `implemented` gate, and the coverage summary Verify reads. Each
+  had kept its own selection of checks, so `deltafuse evidence` recorded as authentic a Green with
+  no Red or over an already-green Red, and the gate refused it a step later. Recording now refuses
+  it at once, with the gate's own message. The record-time coverage refusal now reads "did not
+  pass the tests Red recorded as failing", as the gate's does.
+- **A process loads the schemas once.** Every `SchemaRegistry` parsed and meta-validated all
+  schema files again (~0.3 s); one command built several (the module default, one per evidence
+  write, one per decision). The loaded schemas are now shared per directory and file signature,
+  so an edited schema is still read anew.
+- **`deltafuse` starts faster** (in a clean environment ~0.6 → ~0.4 s per call): the schemas are
+  no longer loaded at import (`schemas.default_registry` is gone; a command loads them when it
+  validates), and `importlib.metadata` is imported only by an installed wheel, which has no
+  `VERSION` file to read.
+
+- **The test suite runs in parallel**: `pytest-xdist` joins the `dev` extras, CI runs
+  `pytest -n auto`, and the docs say so (about 2 minutes instead of 7-8 on 16 cores).
+
+- **`deltafuse init` checks the layout it installed.** The check of an installed product (lock,
+  config, adapter skills against the lock) ran only when someone called `validate-layout`; `init`
+  now runs it on the product it just installed or upgraded and exits 1, naming each problem, when
+  the layout is invalid. `validate-layout` stays for the later check: `fuseback handoff` runs it
+  on the product it hands over. The bench installs through the Python API and is unaffected.
+
+### Fixed
+
+- **The leash hook is installed in a submodule.** A product whose `.git` is a file (a service
+  that is a submodule of an aggregator repository, a linked worktree) got no pre-commit hook,
+  silently: the hook directory is now asked of git (`git rev-parse --git-path hooks`).
+- **`init.sh` computed a framework hash the Core never accepts.** Since DF3-003 it recorded
+  `pyproject.toml` as `pyproject.toml:<hash>`, where `hasher.py` and `init.ps1` write
+  `pyproject:<hash>`, so a product installed with `init.sh` from a checkout pinned a lock hash the
+  Core's check refuses. A test now computes the hash with all three on one tree.
+- **A checkout's framework hash no longer moves when pip writes `src/*.egg-info`** (every editable
+  install and wheel build): the hash skips it, as it skips `__pycache__`, in `hasher.py`,
+  `init.ps1` and `init.sh`. Found as a race once the suite ran in parallel - the wheel smoke
+  rewrote it while other tests compared a product's lock against the checkout.
+
+### Removed
+
+- **`deltafuse validate` and `deltafuse lint-context`** (owner decision 2026-10-23). No skill and
+  no bench code called them, and every gate already runs the same checks: `validate` was the
+  package validation `check-gate` and `advance` run first, and `lint-context` the slice and task
+  context-budget checks inside it. The token counting mode still reaches the journal through
+  `check-gate`. The budget functions lose the `receipt` parameter only
+  `lint-context` passed.
+- **`deltafuse bench journal`.** deltafuse-bench reads the journal through the Python API
+  (`deltafuse.bench.journal.collect_attempts`); nothing called the command.
+- `scripts/evaluate_artifact_writer.py`, its tests and its corpus: the paired small-model
+  protocol of AW-35/AW-20, superseded by the bench qualification and called by nothing. Its five
+  tests of JSON Pointer escaping in `apply_artifact_patch` (AW-46) moved to `test_artifact_patch.py`.
+- Internal: `evidence._is_authentic` (its checks were already in the record's error list) and
+  helpers only tests used (`is_change_id_archived`, `estimate_tokens`, `estimate_files_tokens`,
+  `last_receipt`, `validate_or_raise`, `validate_step_contracts`, `cleanup_orphaned_staging`).
+
 ## [3.3.9] - 2026-10-22
 
 ### Added

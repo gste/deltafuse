@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from deltafuse.core.config import load_evidence_timeout
 from deltafuse.core.context import load_change_route, posix_relpath
 from deltafuse.core.fsm import (
     CONTRACT_GATES,
@@ -25,8 +26,7 @@ from deltafuse.core.fsm import (
     _load_record,
     _validate_evidence_changed_paths_contract,
     find_repo_root,
-    frozen_oracle_errors,
-    isolation_errors,
+    green_record_errors,
 )
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
@@ -66,7 +66,6 @@ class EvidenceOutcome:
     dest: Path
     authentic: bool
     errors: list[str] = field(default_factory=list)
-    command_exit_code: int = 0
 
 
 def classify_failure(log: str, exit_code: int) -> str | None:
@@ -285,33 +284,6 @@ def _isolated_oracle_run(
         "exit_code": exit_code,
         "not_passing": not_passing,
     }
-
-
-def _is_authentic(
-    *,
-    phase: str,
-    result: str,
-    failure_category: str | None,
-    route: str,
-    private_errors: list[str],
-    red_from_report: bool = False,
-    report_says_red: bool = False,
-) -> bool:
-    if phase == "red":
-        if route == "code" and private_errors:
-            return False
-        if result == "already-green":
-            return True
-        if result != "expected-failure":
-            return False
-        if route == "code":
-            if red_from_report:
-                return report_says_red
-            return failure_category == AUTHENTIC_RED_CATEGORY
-        return True
-    if phase in {"green", "regression", "verification"}:
-        return result == "passed"
-    return False
 
 
 def _lock_pin(product_root: Path) -> str:
@@ -545,7 +517,7 @@ def run_evidence(
     task: str | None = None,
     argv: list[str],
     changed_paths: list[str] | None = None,
-    timeout: int = 90,
+    timeout: int | None = None,
 ) -> EvidenceOutcome:
     """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml."""
     if phase not in {"red", "green", "regression", "verification"}:
@@ -582,6 +554,8 @@ def run_evidence(
         _refuse_green_for_a_closed_task(change_path, str(task))
 
     repo_root = find_repo_root(change_path)
+    if timeout is None:
+        timeout = load_evidence_timeout(repo_root)
     if phase == "red":
         _refuse_red_over_a_siblings_oracle(change_path, str(task), repo_root)
     change_id = _load_change_id(change_path)
@@ -746,13 +720,11 @@ def run_evidence(
             )
     errors.extend(private_errors)
     errors.extend(_contract_errors_now(change_path, phase, dest, route))
-    red_from_report = False
     if phase == "red" and route == "code" and result == "expected-failure":
         if report is not None:
             # The runner's own report, read through its ecosystem's meaning of
             # `<error>`: pytest says the test never ran, Surefire says it ran
             # and threw. The rule is written in neutral words for that reason.
-            red_from_report = True
             ok, why = red_is_authentic(report)
             if not ok:
                 errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
@@ -765,57 +737,30 @@ def run_evidence(
                 f"Red failure_category is '{category}', not '{AUTHENTIC_RED_CATEGORY}': "
                 f"{_why_not_behavioral(log)}"
             )
-    if phase == "green" and route == "code" and report is not None:
-        missing = green_covers_red(_red_failed_tests(change_path, task), report)
-        if missing:
-            errors.append(
-                "Green did not turn the Red tests green; still not passing: "
-                f"{missing[:5]}"
-            )
-    if phase == "green" and route == "code":
-        # Named here as well as at the implemented gate: the Worker that just
-        # rewrote the oracle should hear it now, not two steps later.
+    if phase == "green":
+        # The implemented gate's own judgement of this Green, now rather than two steps later:
+        # the Worker that just rewrote the oracle, or recorded Green over an already-green or
+        # missing Red, hears it while it can still act.
         red_file = change_path / "evidence" / "red" / f"{task}.yaml"
-        if red_file.is_file():
-            errors.extend(
-                f"evidence: {e}"
-                for e in frozen_oracle_errors(red_file, repo_root, f"this Green ({task})")
-            )
-            errors.extend(
-                f"evidence: {e}"
-                for e in isolation_errors(red_file, dest, f"this Green ({task})")
-            )
-    if phase in {"green", "regression"} and result != "passed":
+        errors.extend(
+            f"evidence: {e}"
+            for e in green_record_errors(red_file, dest, repo_root, route=route, label=f"this Green ({task})")
+        )
+    if phase != "red" and result != "passed":
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if phase in {"green", "regression", "verification"} and route == "code" and result == "passed":
         errors.extend(no_test_error(phase, argv, payload.get("tests"), log))  # the full log, not the summary
     if timed_out:
         errors.append(f"command timed out after {timeout}s")
 
-    authentic = _is_authentic(
-        phase=phase,
-        result=result,
-        failure_category=category,
-        route=route,
-        private_errors=private_errors,
-        red_from_report=red_from_report,
-        report_says_red=bool(report is not None and red_is_authentic(report)[0]),
-    )
-    if runner_ok is False:
-        authentic = False
-    if not authentic and not errors:
-        errors.append(f"{phase} evidence is not authentic (result '{result}')")
-    # `errors` is the explanation of a refusal, so the two must agree: printing
-    # "Evidence is authentic." and exiting 0 next to a non-empty list is a green
-    # light the Worker acts on, and the gate two steps later is a much worse
-    # place to hear about it (F4: a Green recorded over an oracle rewritten
-    # during Implement was reported authentic).
-    authentic = authentic and not errors
+    # Authentic means nothing above refused the record: every way a run can fail to be
+    # evidence appends its reason to `errors` (a refusal with no explanation would leave
+    # the Worker guessing - F4), so the verdict is the empty list, not a second rulebook.
+    authentic = not errors
 
     return EvidenceOutcome(
         payload=payload,
         dest=dest,
         authentic=authentic,
         errors=errors,
-        command_exit_code=exit_code,
     )

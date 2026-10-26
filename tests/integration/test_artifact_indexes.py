@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.cli import main
-from deltafuse.core.analyze import build_coverage_document, write_coverage, CoverageError
+from deltafuse.core.analyze import write_coverage
 from deltafuse.core.artifact_registry import ArtifactRegistry
 from deltafuse.core.installer import install
 from deltafuse.core.scaffold import scaffold_change, update_change_child_index, ScaffoldError

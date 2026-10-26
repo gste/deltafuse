@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.core.artifact_codec import ArtifactCodecError
 from deltafuse.core.artifact_reader import strict_read_artifact
 from deltafuse.core.artifacts import ArtifactService, ArtifactServiceError
 from deltafuse.core.artifact_policy import create_authorization_context

@@ -20,7 +20,6 @@ import yaml
 from deltafuse.core import gate_receipts
 from deltafuse.core.decide import DecideError, apply_decision
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
-from deltafuse.core.frontmatter import parse_frontmatter
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue
 from deltafuse.core.transitions import TransitionError, set_artifact_status
@@ -32,18 +31,7 @@ FIXED_ORACLE = "def test_penalty():\n    assert 10 < 100 and False  # fails unti
 
 def _decomposed(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
-    return (
-        MockChangeBuilder(tmp_path, change_id="CHG-180", title="Wrong oracle")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
-
-
-def _status(builder: MockChangeBuilder) -> str:
-    meta, _ = parse_frontmatter((builder.change_dir / "tasks" / "TASK-001.md").read_text(encoding="utf-8"))
-    return str(meta.get("status"))
+    return MockChangeBuilder(tmp_path, change_id="CHG-180", title="Wrong oracle").step_through_decompose()
 
 
 def _red(tmp_path: Path, builder: MockChangeBuilder, oracle: str):
@@ -74,7 +62,7 @@ def test_the_worker_cannot_leave_blocked(tmp_path: Path, repo_root: Path):
     with pytest.raises(TransitionError, match="only the human answers that halt") as exc_info:
         set_artifact_status(builder.change_dir, status="pending", task_id="TASK-001")
     assert "--task TASK-001 --status reopened" in str(exc_info.value)
-    assert _status(builder) == "blocked"
+    assert builder.task_status() == "blocked"
     reason = build_work_queue(tmp_path).blocked[0].reason
     assert "--status cancelled" in reason and "--status reopened" in reason
 
@@ -85,7 +73,7 @@ def test_the_human_reopens_and_the_task_is_declared_again(tmp_path: Path, repo_r
 
     result = apply_decision(change, status="reopened", task="TASK-001", note="t=100 contradicts a 10 s penalty")
     assert result["ok"] and result["status"] == "reopened" and result["from"] == "blocked"
-    assert _status(builder) == "pending"
+    assert builder.task_status() == "pending"
     assert not (change / "evidence" / "red" / "TASK-001.yaml").exists()
     archive = change / "reopened" / "TASK-001.1"
     assert (archive / "red.yaml").is_file()
@@ -132,7 +120,7 @@ def test_reopen_needs_a_blocked_task_and_a_note_needs_reopen(tmp_path: Path, rep
         apply_decision(builder.change_dir, status="reopened", task="TASK-001")
     with pytest.raises(DecideError, match="--note goes only with --status reopened"):
         apply_decision(builder.change_dir, status="cancelled", task="TASK-001", note="why")
-    assert _status(builder) == "pending"
+    assert builder.task_status() == "pending"
     change_yaml = (builder.change_dir / "change.yaml").read_text(encoding="utf-8")
     assert re.search(r"(?m)^status: decomposed$", change_yaml)
 
@@ -201,7 +189,7 @@ def test_an_altered_copy_refuses_the_reopen(tmp_path: Path, repo_root: Path):
     set_artifact_status(builder.change_dir, status="blocked", task_id="TASK-001")
     with pytest.raises(DecideError, match="missing or altered"):
         apply_decision(builder.change_dir, status="reopened", task="TASK-001")
-    assert _status(builder) == "blocked"
+    assert builder.task_status() == "blocked"
 
 
 def test_red_may_not_change_a_test_another_tasks_red_froze(tmp_path: Path, repo_root: Path):

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from deltafuse.core.installer import install, InstallationError
-from deltafuse.core.fsm import validate_change_package, check_gate, find_repo_root
+from deltafuse.core.fsm import check_gate
 from deltafuse.core.archiver import archive_change, ArchivalError
 from deltafuse.core.evidence import EvidenceRunError, run_evidence
 from deltafuse.core.layout import validate_product_layout
@@ -34,13 +34,7 @@ from deltafuse.core.transitions import already_green_advice, set_artifact_status
 from deltafuse.core.leash import LeashError, load_leash_mode
 from deltafuse.core.leash_run import run_leash
 from deltafuse.core.steps import step_names
-from deltafuse.core.context import (
-    token_count_receipt,
-    tokenizer_config,
-    validate_context_budget,
-    validate_task_context_budget,
-)
-from deltafuse.core.frontmatter import parse_frontmatter
+from deltafuse.core.context import tokenizer_config
 
 
 class _HintingParser(argparse.ArgumentParser):
@@ -366,10 +360,6 @@ def _main(argv: list[str] | None = None) -> int:
     init_parser.add_argument("--agents-md", choices=["prompt", "bridge", "preserve", "replace"], default=None,
                              help="Host instruction integration: prompt (TTY), bridge, preserve, or replace")
 
-    # validate command
-    val_parser = subparsers.add_parser("validate", help="Validate Change package structural invariants")
-    val_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
-
     # check-gate command
     gate_parser = subparsers.add_parser("check-gate", help="Check lifecycle gate preconditions")
     gate_parser.add_argument("change_path", help="Path to Change package directory")
@@ -426,7 +416,8 @@ def _main(argv: list[str] | None = None) -> int:
     ev_parser.add_argument("--task", "-t", default=None, help="Task id (TASK-NNN); required for red/green/regression, forbidden for verification")
     ev_parser.add_argument("--changed-path", action="append", default=[], dest="changed_paths",
                            help="Relative path written by the Worker (repeatable)")
-    ev_parser.add_argument("--timeout", type=int, default=90, help="Command timeout in seconds")
+    ev_parser.add_argument("--timeout", type=int, default=None,
+                           help="Command timeout in seconds (default: workflow.evidence_timeout, else 90)")
 
     cov_parser = subparsers.add_parser("coverage",
                                        help="Write coverage.yaml from routing and slices (no LLM)")
@@ -506,9 +497,6 @@ def _main(argv: list[str] | None = None) -> int:
     cfg_parser.add_argument("product_path", nargs="?", default=".")
     cfg_parser.add_argument("--json", action="store_true")
 
-    ctx_parser = subparsers.add_parser("lint-context", help="Lint Change package context budget and contracts")
-    ctx_parser.add_argument("change_path", nargs="?", default=".", help="Path to Change package directory")
-
     leash_parser = subparsers.add_parser("leash",
                                          help="Check git diff against the current write envelope (no LLM)")
     leash_parser.add_argument("path", nargs="?", default=".", help="Product root (default: current dir)")
@@ -520,17 +508,6 @@ def _main(argv: list[str] | None = None) -> int:
     leash_parser.add_argument("--head", default=None, help="Exact head SHA (default: HEAD); requires --base")
     leash_parser.add_argument("--file", action="append", default=[], dest="files",
                               help="Relative path to check instead of git diff (repeatable)")
-
-    bench_parser = subparsers.add_parser(
-        "bench", help="What a product's bench journal holds (no LLM); the bench itself is deltafuse-bench"
-    )
-    bench_sub = bench_parser.add_subparsers(dest="bench_cmd", required=True)
-    # `init`, `score` and `compare` live in deltafuse-bench (score/compare since 3.3.0, init since
-    # 3.3.9): the bench is versioned apart from the framework it measures. The framework keeps
-    # only what a product produces - its command journal.
-    bench_journal = bench_sub.add_parser("journal",
-                                         help="Judge: collect Core attempts from a sandbox journal (no LLM)")
-    bench_journal.add_argument("product_dir", help="Product root created by `deltafuse-bench init`")
 
     # artifact command (AW-11)
     art_parser = subparsers.add_parser("artifact", help="Typed Artifact Writer CLI operations (AW-11)")
@@ -559,6 +536,13 @@ def _main(argv: list[str] | None = None) -> int:
                 print("Host instruction files were preserved; activate DeltaFuse explicitly with /run or deltafuse next --json.")
             if result.adapter_mode == "link":
                 print("Adapter skills are relative links into the nested framework checkout.")
+            # The installed product is checked here, where it was made: lock, config, adapter
+            # skills against the lock; `deltafuse validate-layout` runs the same check on request.
+            errors = validate_product_layout(result.target_dir)
+            if errors:
+                _print_errors(f"Installed, but the product layout at {result.target_dir} is invalid "
+                              f"with {len(errors)} error(s):", errors)
+                return 1
             return 0
         except InstallationError as e:
             print(f"Installation Error: {e}", file=sys.stderr)
@@ -566,11 +550,6 @@ def _main(argv: list[str] | None = None) -> int:
         except Exception as e:
             print(f"Unexpected error during installation: {e}", file=sys.stderr)
             return 2
-
-    elif args.command == "validate":
-        target = Path(args.change_path)
-        errors = validate_change_package(target)
-        return _report("validate", target, errors, "Validation failed", f"Change package {target} is valid.")
 
     elif args.command == "check-gate":
         target = Path(args.change_path)
@@ -898,75 +877,6 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         print("config: .deltafuse/config.yaml is a valid v3 contract")
         return 0
-
-    elif args.command == "lint-context":
-        target = Path(args.change_path)
-        repo_root = find_repo_root(target)
-        slices_dir = target / "slices"
-        errors: list[str] = []
-        # Q0-2: the counting mode travels with the verdict into the journal.
-        token_receipt: dict[str, Any] = {}
-        if slices_dir.is_dir():
-            for sf in slices_dir.glob("*.md"):
-                try:
-                    meta, _ = parse_frontmatter(sf.read_text(encoding="utf-8"))
-                    budget = meta.get("context_budget")
-                    if budget and isinstance(budget, dict):
-                        ref_files = [repo_root / sref.split("#")[0] for sref in meta.get("spec_refs", [])]
-                        b_errs = validate_context_budget(
-                            budget, ref_files, repo_root=repo_root, receipt=token_receipt
-                        )
-                        errors.extend(f"{sf.name}: {e}" for e in b_errs)
-                except Exception as ex:
-                    errors.append(f"{sf.name}: {ex}")
-        tasks_dir = target / "tasks"
-        if tasks_dir.is_dir():
-            for tf in tasks_dir.glob("*.md"):
-                try:
-                    meta, _ = parse_frontmatter(tf.read_text(encoding="utf-8"))
-                    budget = meta.get("context_budget")
-                    if budget and isinstance(budget, dict):
-                        b_errs = validate_task_context_budget(
-                            budget, meta.get("spec_refs") or [], meta.get("allowed_paths") or [], repo_root,
-                            receipt=token_receipt,
-                        )
-                        errors.extend(f"{tf.name}: {e}" for e in b_errs)
-                    else:
-                        errors.append(
-                            f"{tf.name}: context_budget is required "
-                            "(max_tokens/max_files) for Declare and Implement"
-                        )
-                except Exception as ex:
-                    errors.append(f"{tf.name}: {ex}")
-        if not token_receipt:
-            token_receipt = token_count_receipt()
-        return _report(
-            "lint-context",
-            target,
-            errors,
-            "Context budget validation failed",
-            f"Context budget for {target} is within limits (tokens counted by {token_receipt.get('mode')}).",
-            token_mode=token_receipt.get("mode"),
-            token_measured=token_receipt.get("measured"),
-            token_heuristic=token_receipt.get("heuristic"),
-        )
-
-    elif args.command == "bench":
-        try:
-            if args.bench_cmd == "journal":
-                from deltafuse.bench.journal import collect_attempts, load_events
-
-                payload = collect_attempts(load_events(Path(args.product_dir).resolve()))
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-                return 0
-            print(
-                "The bench moved to deltafuse-bench: `deltafuse-bench init|score <product-dir>`",
-                file=sys.stderr,
-            )
-            return 2
-        except Exception as ex:  # BenchError included: same text, same code
-            print(f"Bench failed: {ex}", file=sys.stderr)
-            return 2
 
     elif args.command == "artifact":
         return _artifact_write_command(args)

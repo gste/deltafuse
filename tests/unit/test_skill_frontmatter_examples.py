@@ -19,7 +19,6 @@ import yaml
 
 from deltafuse.core.fsm import validate_change_package
 from deltafuse.core.installer import install
-from deltafuse.core.schemas import default_registry
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -66,13 +65,7 @@ def test_the_skills_writer_examples_are_accepted_by_the_writer(tmp_path: Path, r
 
 def test_task_schema_error_names_the_whole_shape(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-801", title="Shape")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-801", title="Shape").step_through_decompose()
     task = builder.change_dir / "tasks" / "TASK-001.md"
     task.write_text(
         task.read_text(encoding="utf-8").replace("kind: feature", "kind: code"),

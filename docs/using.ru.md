@@ -50,7 +50,7 @@ Installer не создаёт `docs/process/`, `docs/init/` или `docs/todo/` 
 git submodule add https://github.com/gste/deltafuse.git vendor/deltafuse
 ```
 
-`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.leash` и `workflow.auto_accept_decisions`. `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и `auto_accept_decisions`. После смены `auto_accept_decisions` перезапустите инсталлятор, чтобы lock совпал с config. (`workflow.call_width` убран в 3.3.6; старый config или lock с ним принимается и игнорируется.)
+`.deltafuse/config.yaml` объявляет требуемую версию framework и project settings, включая `workflow.leash` и `workflow.auto_accept_decisions`. `.deltafuse/lock.yaml` фиксирует resolved version, schema version, framework content hash и `auto_accept_decisions`. После смены `auto_accept_decisions` перезапустите инсталлятор, чтобы lock совпал с config. `workflow.evidence_timeout` - сколько секунд `deltafuse evidence` даёт тестовой команде (по умолчанию 90; сборке Maven или Gradle, которая сначала компилирует модуль, нужно больше); `--timeout` переопределяет его для одного вызова. (`workflow.call_width` убран в 3.3.6; старый config или lock с ним принимается и игнорируется.)
 
 Для framework release файл `VERSION` является единственным machine-readable источником версии. Package metadata читает его динамически, а installer templates содержат schema-valid marker `0.0.0`, который каждый installer заменяет значением из `VERSION`. Поэтому version bump меняет `VERSION` и человекочитаемую release-запись в `CHANGELOG.md`; generated assets синхронизируются без встраивания номера релиза.
 
@@ -126,7 +126,6 @@ deltafuse decide <change-dir> --spec --status accepted
 
 ```text
 deltafuse-bench init M02-policy-stats <product-dir>
-deltafuse bench journal <product-dir>
 deltafuse-bench score <product-dir> --pack <deltafuse-bench-checkout-or-case-dir> --json --label cursor+opus-5 --out-file ../scores/opus.json
 deltafuse-bench compare ../scores/opus.json ../scores/flash.json
 ```

@@ -23,13 +23,7 @@ def _declare(builder: MockChangeBuilder, task_id: str = "TASK-001") -> None:
 
 def _decomposed(tmp_path: Path, repo_root: Path, change_id: str = "CHG-020") -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
-    return (
-        MockChangeBuilder(tmp_path, change_id=change_id, title="Evidence runner")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    return MockChangeBuilder(tmp_path, change_id=change_id, title="Evidence runner").step_through_decompose()
 
 
 def test_classify_failure_markers():
@@ -155,7 +149,19 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
     # DF3-006/B-04: green must come from a real runner script, not `python -c`.
     runner_file = tmp_path / "tests" / "test_task-001.py"
     runner_file.parent.mkdir(parents=True, exist_ok=True)
-    runner_file.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    # A Green answers its task's Red over the same frozen test: record Red first, then
+    # change only the product (a Green with no Red, or over a rewritten test, is refused).
+    product = tmp_path / "src" / "core.py"
+    product.parent.mkdir(parents=True, exist_ok=True)
+    product.write_text("DONE = False\n", encoding="utf-8")
+    runner_file.write_text(
+        "import sys\nsys.path.insert(0, 'src')\nimport core\nassert core.DONE, 'not implemented'\n",
+        encoding="utf-8",
+    )
+    red = run_evidence(builder.change_dir, phase="red", task="TASK-001",
+                       argv=_run_file_cmd("tests/test_task-001.py"), changed_paths=["tests/test_task-001.py"])
+    assert red.payload["result"] == "expected-failure", red.errors
+    product.write_text("DONE = True\n", encoding="utf-8")
     outcome = run_evidence(
         builder.change_dir,
         phase="green",
@@ -163,7 +169,7 @@ def test_run_evidence_green_records_base_revision(tmp_path: Path, repo_root: Pat
         argv=_run_file_cmd("tests/test_task-001.py"),
         changed_paths=["tests/test_task-001.py", "src/core.py"],
     )
-    assert outcome.authentic
+    assert outcome.authentic, outcome.errors
     assert outcome.payload["result"] == "passed"
     assert str(outcome.payload["base_revision"]).startswith("sha256:")
     status_after = yaml.safe_load(
@@ -190,9 +196,9 @@ def test_handwritten_red_yaml_fails_targeting(tmp_path: Path, repo_root: Path):
         "changed_paths": ["tests/test_task-001.py"],
         "spec_status": "unchanged",
     }
-    from deltafuse.core.schemas import default_registry
+    from deltafuse.core.schemas import SchemaRegistry
 
-    assert default_registry.validate("evidence", payload) == []
+    assert SchemaRegistry().validate("evidence", payload) == []
     (red_dir / "TASK-001.yaml").write_text(yaml.safe_dump(payload), encoding="utf-8")
     errs = check_gate(builder.change_dir, "declaring")
     assert any("not stamped by deltafuse evidence" in e for e in errs)
@@ -369,3 +375,19 @@ def test_rewriting_the_frozen_red_oracle_does_not_produce_green(
     assert not any("frozen Red oracle" in e for e in honest.errors), honest.errors
     errs = check_gate(builder.change_dir, "implemented")
     assert not any("frozen Red oracle" in e for e in errs), errs
+
+
+def test_the_timeout_comes_from_the_config_when_the_call_names_none(tmp_path: Path, repo_root: Path):
+    # A Maven build compiles the module before one test runs and outlasts the default 90 s;
+    # `workflow.evidence_timeout` sets it once for the product.
+    builder = _decomposed(tmp_path, repo_root, "CHG-031")
+    config = tmp_path / ".deltafuse" / "config.yaml"
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data.setdefault("workflow", {})["evidence_timeout"] = 1
+    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    runner = tmp_path / "tests" / "test_task-001.py"
+    runner.parent.mkdir(parents=True, exist_ok=True)
+    runner.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+    outcome = run_evidence(builder.change_dir, phase="red", task="TASK-001",
+                           argv=_run_file_cmd("tests/test_task-001.py"), changed_paths=["tests/test_task-001.py"])
+    assert "timed out after 1s" in (outcome.payload.get("summary") or "") + " ".join(outcome.errors), outcome.payload

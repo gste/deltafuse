@@ -151,14 +151,6 @@ def format_schema_error(schema_name: str, error: jsonschema.ValidationError) -> 
     return message
 
 
-class SchemaValidationError(Exception):
-    """Raised when validation against a schema fails."""
-
-    def __init__(self, message: str, errors: list[str]):
-        super().__init__(message)
-        self.errors = errors
-
-
 def _normalize_data_for_json(data: Any) -> Any:
     """Recursively convert Python datetime/date to ISO strings for JSON schema validation."""
     if isinstance(data, (datetime.datetime, datetime.date)):
@@ -170,6 +162,9 @@ def _normalize_data_for_json(data: Any) -> Any:
     if isinstance(data, list):
         return [_normalize_data_for_json(v) for v in data]
     return data
+
+
+_LOADED: dict[tuple, tuple[dict[str, dict[str, Any]], dict[str, Any]]] = {}
 
 
 class SchemaRegistry:
@@ -192,14 +187,24 @@ class SchemaRegistry:
     def _load_all_schemas(self) -> None:
         if not self.schemas_dir.exists():
             return
-        for file in self.schemas_dir.glob("*.schema.yaml"):
-            schema_key = file.name.replace(".schema.yaml", "")
-            with open(file, "r", encoding="utf-8") as f:
-                schema_dict = yaml.safe_load(f)
-                self._schemas[schema_key] = schema_dict
+        files = sorted(self.schemas_dir.glob("*.schema.yaml"))
+        signature = (self.schemas_dir, tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files))
+        cached = _LOADED.get(signature)
+        if cached is None:
+            # Parsing and meta-validating every schema took ~0.3 s, paid by each registry a
+            # command built (evidence writes, decisions); one process loads a directory once.
+            schemas: dict[str, dict[str, Any]] = {}
+            validators: dict[str, Any] = {}
+            for file in files:
+                schema_key = file.name.replace(".schema.yaml", "")
+                with open(file, "r", encoding="utf-8") as f:
+                    schema_dict = yaml.safe_load(f)
                 validator_cls = validator_for(schema_dict)
                 validator_cls.check_schema(schema_dict)
-                self._validators[schema_key] = validator_cls(schema_dict)
+                schemas[schema_key] = schema_dict
+                validators[schema_key] = validator_cls(schema_dict)
+            cached = _LOADED[signature] = (schemas, validators)
+        self._schemas, self._validators = dict(cached[0]), dict(cached[1])
 
     def get_schema(self, name: str) -> dict[str, Any]:
         normalized = name.replace(".schema.yaml", "")
@@ -251,16 +256,3 @@ class SchemaRegistry:
         if schema.get("additionalProperties") is False:
             line += "; no other keys"
         return line
-
-    def validate_or_raise(self, schema_name: str, data: Any) -> None:
-        """Validates data against a schema and raises SchemaValidationError if invalid."""
-        errors = self.validate(schema_name, data)
-        if errors:
-            raise SchemaValidationError(
-                f"Validation failed for schema '{schema_name}' with {len(errors)} error(s):\n" + "\n".join(f"  - {e}" for e in errors),
-                errors=errors,
-            )
-
-
-# Global default registry instance
-default_registry = SchemaRegistry()

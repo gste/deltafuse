@@ -4,14 +4,9 @@ adapter-skill installer, otherwise products get empty adapter roots and
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-import pytest
-
-sys = pytest.importorskip("sys")
-
-from deltafuse.core import installer as inst  # noqa: E402
+from deltafuse.core import installer as inst
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

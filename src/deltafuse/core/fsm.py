@@ -36,7 +36,7 @@ from deltafuse.core.integrity import (
     scan_changed_paths_for_private_test_access,
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
-from deltafuse.core.schemas import SchemaRegistry, default_registry
+from deltafuse.core.schemas import SchemaRegistry
 from deltafuse.core.test_reports import no_test_error, no_test_ran
 
 VALID_CHANGE_STATUSES = {
@@ -150,7 +150,7 @@ def _validate_package(
     """The package's errors, and its route as load_change_route read it (None when the
     package was refused before the route was read)."""
     if registry is None:
-        registry = default_registry
+        registry = SchemaRegistry()
 
     change_path = Path(change_dir).resolve()
     errors: list[str] = []
@@ -983,16 +983,9 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
             if green:
                 label = f"green of {tid}"
                 problems += _ran_no_test(green, label)
-                if not red_file.is_file():
-                    # The implemented gate's own refusals, so the summary holds what it holds
-                    # (codebase audit 2026-10-21).
-                    problems.append(f"{label} has no matching Red evidence")
-                elif code_route:
-                    problems += _already_green_red_errors(red_file, f"{tid}.yaml")
-                if red_file.is_file():
-                    problems += green_coverage_errors(red_file, green_file, label)
-                    problems += frozen_oracle_errors(red_file, repo_root, label)
-                    problems += isolation_errors(red_file, green_file, label)
+                problems += green_record_errors(
+                    red_file, green_file, repo_root, route="code" if code_route else "", label=label
+                )
                 if green.get("base_revision") and green.get("base_revision") != current:
                     problems.append(f"{label} predates later changes to docs/spec/** or src/**")
             reg = _load_record(reg_file)
@@ -1008,6 +1001,28 @@ def task_evidence_summary(change_path: Path, repo_root: Path) -> dict[str, dict[
     return summary
 
 
+def green_record_errors(
+    red_file: Path, green_file: Path, repo_root: Path, *, route: str, label: str
+) -> list[str]:
+    """What the implemented gate holds against one Green record, in the gate's order.
+
+    One list for the three places that judge a Green - the `implemented` gate, the coverage
+    summary Verify reads, and `deltafuse evidence` when it records the Green - which had
+    each kept their own, different selection (codebase audit 2026-10-21): a Green over an
+    already-green Red or with no Red at all was recorded "authentic" and refused a step later.
+    """
+    if not red_file.is_file():
+        return [f"{label} has no matching Red evidence"]
+    if route != "code":
+        return []
+    return (
+        _already_green_red_errors(red_file, label)
+        + frozen_oracle_errors(red_file, repo_root, label)
+        + green_coverage_errors(red_file, green_file, label)
+        + isolation_errors(red_file, green_file, label)
+    )
+
+
 def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     """An already-green Red proves no delta, so it cannot carry `implemented`.
 
@@ -1020,7 +1035,7 @@ def _already_green_red_errors(red_file: Path, label: str) -> list[str]:
     if _load_record(red_file).get("result") != "already-green":
         return []
     return [
-        f"Gate implemented: green evidence '{label}' answers an already-green Red - the "
+        f"{label} answers an already-green Red - the "
         "declared oracle passed on unchanged product code, so there is no failure for this "
         "Green to have removed and nothing here proves a delta. Declare a Red that fails for "
         "the expected public reason, or, if the requirement is genuinely already met, close "
@@ -1555,7 +1570,7 @@ def _check_gate(
                 repo_root,
                 change_status,
                 spec_delta_file,
-                registry or default_registry,
+                registry or SchemaRegistry(),
             )
         )
 
@@ -1617,20 +1632,12 @@ def _check_gate(
             if green_file.stem in closed:
                 continue
             red_file = change_path / "evidence" / "red" / green_file.name
-            if not red_file.is_file():
-                errors.append(
-                    f"Gate implemented: green evidence '{green_file.name}' has no matching Red evidence"
+            errors.extend(
+                f"Gate implemented: {e}"
+                for e in green_record_errors(
+                    red_file, green_file, repo_root, route=route, label=f"green evidence '{green_file.name}'"
                 )
-                continue
-            if route == "code":
-                label = f"green evidence '{green_file.name}'"
-                errors.extend(_already_green_red_errors(red_file, green_file.name))
-                errors.extend(
-                    f"Gate implemented: {e}"
-                    for e in frozen_oracle_errors(red_file, repo_root, label)
-                    + green_coverage_errors(red_file, green_file, label)
-                    + isolation_errors(red_file, green_file, label)
-                )
+            )
 
     elif gate_lower == "converged":
         ver_file = change_path / "verification.md"

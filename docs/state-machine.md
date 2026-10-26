@@ -126,6 +126,7 @@ stateDiagram-v2
     implementing --> implemented: green evidence verified
     implemented --> verified: verify
     
+    pending --> blocked: declared oracle wrong (after Green)
     declaring --> blocked: declared oracle wrong (after Green)
     declared --> blocked: declared oracle wrong (after Green)
     implementing --> blocked: declared oracle wrong (after Green)
@@ -144,13 +145,13 @@ stateDiagram-v2
 
 | Status | Description | Allowed Next Statuses | Gate / Precondition |
 |---|---|---|---|
-| `pending` | Task defined in `tasks/TASK-NNN.md`. | `declaring`, `declared`, `cancelled`, `superseded` | Task matches `task.schema.yaml`. |
+| `pending` | Task defined in `tasks/TASK-NNN.md`. | `declaring`, `declared`, `blocked`, `cancelled`, `superseded` | Task matches `task.schema.yaml`. |
 | `declaring` | Test target being written. | `declared`, `blocked` | Test runs and fails for expected reason. |
 | `declared` | Verified Red evidence recorded. | `implementing`, `blocked` | Evidence file in `evidence/red/<task-id>.yaml`. |
 | `implementing` | Implementation code being authored. | `implemented`, `blocked` | Tests pass; regression suite passes. |
 | `implemented` | Green & regression evidence recorded. | `verified`, `blocked` | Evidence in `evidence/green/` & `regression/`. |
 | `verified` | Cross-layer convergence confirmed by verifier. | *Terminal* | End-to-end verification step completes. |
-| `blocked` | The declared oracle proved wrong; the run halts for the human. Reachable from `declaring`, `declared`, `implementing` or `implemented`. | `cancelled`, `pending` (the human only) | The Worker may set it (`deltafuse state <change-dir> --task <id> --status blocked`) only after the Core recorded Green against the oracle Red froze, with those tests unchanged; blocking reason documented. The human reopens with `deltafuse decide <change-dir> --task <id> --status reopened [--note "<why>"]`: the task's evidence moves to `reopened/<task>.<n>/`, its product files return to the copies the `declaring` gate took, a `task` gate receipt `reopened` is journaled, and that task alone may be declared again while its Change is `declared` or `implementing`. |
+| `blocked` | The declared oracle proved wrong; the run halts for the human. Reachable from `pending` (once its Red is recorded), `declaring`, `declared`, `implementing` or `implemented`. | `cancelled`, `pending` (the human only) | The Worker may set it (`deltafuse state <change-dir> --task <id> --status blocked`) only after the Core recorded Green against the oracle Red froze, with those tests unchanged; blocking reason documented. The human reopens with `deltafuse decide <change-dir> --task <id> --status reopened [--note "<why>"]`: the task's evidence moves to `reopened/<task>.<n>/`, its product files return to the copies the `declaring` gate took, a `task` gate receipt `reopened` is journaled, and that task alone may be declared again while its Change is `declared` or `implementing`. |
 | `cancelled` | Task cancelled during Change lifecycle - the human's decision, never the Worker's: `deltafuse decide <change-dir> --task <id> --status cancelled` (Human Gate password when set; journaled as a `task` gate receipt). `deltafuse state` refuses it. | *Terminal* | Cancellation rationale documented. |
 | `superseded` | Task replaced by finer-grained tasks. | *Terminal* | Superseding task IDs documented. |
 

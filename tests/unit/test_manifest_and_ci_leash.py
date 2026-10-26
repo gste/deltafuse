@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,6 +10,7 @@ from deltafuse.core.hasher import compute_framework_content_hash
 from deltafuse.core.leash import git_dirty_paths
 from deltafuse.cli import main
 from deltafuse.core.installer import install
+from tests.fixtures.git import git
 
 
 def _framework_root(tmp_path: Path) -> Path:
@@ -64,17 +64,6 @@ def test_manifest_digest_is_deterministic_for_same_tree(tmp_path: Path):
     assert compute_framework_content_hash(root) == compute_framework_content_hash(root)
 
 
-def _git(root: Path, *args: str) -> str:
-    proc = subprocess.run(
-        ["git", "-c", "user.email=leash@test", "-c", "user.name=leash", *args],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return proc.stdout.strip()
-
-
 def _enforce(root: Path) -> None:
     """These tests are about what the leash refuses: `enforce` (a fresh install is advisory)."""
     import yaml
@@ -87,10 +76,10 @@ def _enforce(root: Path) -> None:
 
 def _init_repo(root: Path) -> str:
     (root / ".gitignore").write_text("", encoding="utf-8")
-    _git(root, "init")
-    _git(root, "add", "-A")
-    _git(root, "commit", "-m", "init")
-    return _git(root, "rev-parse", "HEAD")
+    git(root, "init")
+    git(root, "add", "-A")
+    git(root, "commit", "-m", "init")
+    return git(root, "rev-parse", "HEAD")
 
 
 def test_clean_checkout_with_out_of_envelope_commit_fails_ci(
@@ -105,9 +94,9 @@ def test_clean_checkout_with_out_of_envelope_commit_fails_ci(
     # The Worker commits an out-of-envelope product file and the checkout is clean.
     (tmp_path / "src").mkdir(parents=True, exist_ok=True)
     (tmp_path / "src" / "rogue.py").write_text("rogue\n", encoding="utf-8")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-m", "rogue change")
-    head = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "rogue change")
+    head = git(tmp_path, "rev-parse", "HEAD")
 
     # Old behaviour: local-diff leash sees nothing on a clean checkout.
     assert git_dirty_paths(tmp_path) == []

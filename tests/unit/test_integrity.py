@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 from deltafuse.core.integrity import (
     extract_claims_from_request,

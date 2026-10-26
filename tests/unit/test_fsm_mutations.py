@@ -15,10 +15,7 @@ def test_mutation_t1_green_evidence_in_red_folder_rejected(tmp_path: Path):
     """T1: Green evidence file placed in evidence/red/ directory must be rejected."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-201", title="T1 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
@@ -48,10 +45,7 @@ def test_mutation_t2_red_evidence_with_passed_result_rejected(tmp_path: Path):
     """T2: Red evidence with result=passed and exit_code=0 must be rejected."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-202", title="T2 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
@@ -80,10 +74,7 @@ def test_mutation_t3_converged_gate_fails_with_pending_tasks(tmp_path: Path):
     """T3: Gate converged must fail if any task is still in 'pending' status."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-203", title="T3 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )
@@ -141,10 +132,7 @@ def test_mutation_t4_evidence_for_nonexistent_task_rejected(tmp_path: Path):
     """T4: Evidence referencing nonexistent TASK-999 must be rejected."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-204", title="T4 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     red_dir = builder.change_dir / "evidence" / "red"
     red_dir.mkdir(parents=True, exist_ok=True)
@@ -172,10 +160,7 @@ def test_mutation_t5_status_mismatch_rejected(tmp_path: Path):
     """T5: change.yaml claiming status 'normalized' with decomposed tasks/evidence must be rejected."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-205", title="T5 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     # Force change.yaml status back to normalized
     cfile = builder.change_dir / "change.yaml"
@@ -196,10 +181,7 @@ def test_mutation_t7_broken_spec_anchor_rejected(tmp_path: Path):
 
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-207", title="T7 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     # Point task to a broken anchor #REQ-GHOST-999
     from deltafuse.core.frontmatter import parse_frontmatter
@@ -243,10 +225,7 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-208", title="T8 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -263,10 +242,7 @@ def test_mutation_t8_rearchive_collision_fails(tmp_path: Path, repo_root: Path):
     transitions_path(tmp_path).write_text("", encoding="utf-8")
     builder2 = (
         MockChangeBuilder(tmp_path, change_id="CHG-208", title="T8 Collision Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -283,10 +259,7 @@ def test_mutation_n10_missing_spec_root_fails(tmp_path: Path):
     """N10: If docs/spec directory does not exist, spec_refs must not be silently skipped."""
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-210", title="N10 Mutation Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     # Delete docs/spec directory
     import shutil

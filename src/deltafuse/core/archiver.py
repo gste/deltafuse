@@ -13,19 +13,6 @@ class ArchivalError(Exception):
     pass
 
 
-def is_change_id_archived(change_id: str, repo_root: Path | str) -> bool:
-    """Checks if a Change ID already exists in historical archives."""
-    archive_dir = Path(repo_root) / "docs" / "archive" / "changes"
-    if not archive_dir.is_dir():
-        return False
-    for item in archive_dir.iterdir():
-        if item.is_dir():
-            # Matches YYYY-MM-DD-<change_id> or exactly <change_id>
-            if item.name.endswith(f"-{change_id}") or item.name == change_id:
-                return True
-    return False
-
-
 def archive_change(
     change_path: Path | str,
     repo_root: Path | str | None = None,

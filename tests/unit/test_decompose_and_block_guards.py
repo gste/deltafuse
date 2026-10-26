@@ -51,7 +51,7 @@ def test_blocked_is_refused_while_the_frozen_oracle_is_changed(tmp_path: Path, r
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-170", title="Tampered oracle")
-        .step_intake().step_analyze().step_specify().step_decompose()
+        .step_through_decompose()
     )
     test_file = tmp_path / "tests" / "test_task-001.py"
     test_file.parent.mkdir(parents=True, exist_ok=True)

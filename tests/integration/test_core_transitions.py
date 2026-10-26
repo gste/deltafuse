@@ -14,7 +14,7 @@ from deltafuse.core.queue import build_work_queue, select_next
 from deltafuse.core.transitions import (
     TransitionError,
     advance_change,
-    last_receipt,
+    load_receipts,
     receipt_mismatch,
 )
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -80,7 +80,7 @@ def test_advance_records_receipt_that_matches_change_status(
     assert result["from"] == "analyzing"
     assert result["to"] == "analyzed"
     assert _read_status(builder.change_dir) == "analyzed"
-    last = last_receipt(tmp_path, "CHG-411")
+    last = load_receipts(tmp_path, "CHG-411")[-1]
     assert last is not None and last["receipt"] == result["receipt"]
     assert receipt_mismatch(tmp_path, builder.change_dir) is None
 
@@ -327,7 +327,7 @@ def test_state_finds_a_task_by_its_frontmatter_id(tmp_path: Path, repo_root: Pat
 
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     assert "status: declared" in slug.read_text(encoding="utf-8")
-    receipt = last_receipt(tmp_path, "CHG-965")
+    receipt = load_receipts(tmp_path, "CHG-965")[-1]
     assert receipt["artifact_id"] == "TASK-001"
     assert receipt["path"].endswith("/tasks/TASK-001-penalty-config.md")
     capsys.readouterr()
@@ -386,7 +386,7 @@ def test_a_rejected_spec_returns_to_analyzed_with_a_receipt(tmp_path: Path, repo
     result = apply_decision(builder.change_dir, status="rejected", spec=True)
     assert result["change_status"] == "analyzed"
     assert _read_status(builder.change_dir) == "analyzed"
-    receipt = last_receipt(tmp_path, "CHG-968")
+    receipt = load_receipts(tmp_path, "CHG-968")[-1]
     assert (receipt["kind"], receipt["from"], receipt["to"]) == ("artifact-status", "specification-proposed", "analyzed")
     assert receipt["reason"] == "spec rejected"
     assert receipt_chain_errors(tmp_path, builder.change_dir) == []

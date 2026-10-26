@@ -109,13 +109,7 @@ def test_a_missing_product_api_and_an_error_raised_in_product_code_stay_red(tmp_
 
 def test_evidence_refuses_such_a_red_and_the_gate_reads_it(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-150", title="Own bug")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-150", title="Own bug").step_through_decompose()
     (tmp_path / "tests").mkdir(parents=True, exist_ok=True)
     (tmp_path / "tests" / "test_task-001.py").write_text(
         "import sys\n\nNET = ('socket',)\n\n\ndef test_in_process():\n"

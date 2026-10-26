@@ -4,8 +4,6 @@ storage_schema_id: https://deltafuse.dev/schemas/v3/decision.schema.yaml
 allowed_operations:
   - create
   - update
-  - validate
-  - describe
 creatable_semantic_fields:
   - title
   - kind

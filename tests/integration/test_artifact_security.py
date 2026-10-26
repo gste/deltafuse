@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 import pytest
 
-from deltafuse.core.artifact_patch import apply_artifact_patch, ArtifactPatchError
+from deltafuse.core.artifact_patch import ArtifactPatchError
 from deltafuse.core.artifact_policy import (
     create_authorization_context,
-    validate_artifact_policy,
     resolve_artifact_path,
     ArtifactPolicyError,
 )

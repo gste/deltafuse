@@ -30,19 +30,22 @@ framework_hash() {
   local manifest result
   manifest="$(mktemp)"
   {
-    for root in docs process scripts tests src; do
-      if [ -d "$SCRIPT_DIR/$root" ]; then
-        # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches
-        find "$SCRIPT_DIR/$root" -type f -print | grep -Ev '/(__pycache__|\.pytest_cache)/' || true
-      fi
+    {
+      for root in docs process scripts tests src; do
+        if [ -d "$SCRIPT_DIR/$root" ]; then
+          # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches and pip's build metadata
+          find "$SCRIPT_DIR/$root" -type f -print | grep -Ev '/(__pycache__|\.pytest_cache|[^/]+\.egg-info)/' || true
+        fi
+      done
+      printf '%s\n' "$SCRIPT_DIR/VERSION"
+    } | while IFS= read -r file; do
+      relative="$(printf '%s' "${file#"$SCRIPT_DIR/"}" | tr '[:upper:]' '[:lower:]')"
+      printf '%s:%s\n' "$relative" "$(sha256_file "$file")"
     done
-    printf '%s\n' "$SCRIPT_DIR/VERSION"
-    # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too
-    printf '%s\n' "$SCRIPT_DIR/pyproject.toml"
-  } | while IFS= read -r file; do
-    relative="$(printf '%s' "${file#"$SCRIPT_DIR/"}" | tr '[:upper:]' '[:lower:]')"
-    printf '%s:%s\n' "$relative" "$(sha256_file "$file")"
-  done | LC_ALL=C sort > "$manifest"
+    # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too, under the
+    # record name hasher.py and init.ps1 use (this script once wrote `pyproject.toml:`)
+    printf 'pyproject:%s\n' "$(sha256_file "$SCRIPT_DIR/pyproject.toml")"
+  } | LC_ALL=C sort > "$manifest"
   result="$(sha256_file "$manifest")"
   rm -f -- "$manifest"
   printf '%s\n' "$result"

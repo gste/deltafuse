@@ -14,7 +14,7 @@ properties:
     description: Unique identifier for idempotency and transaction tracking.
   operation:
     type: string
-    enum: [create, update, validate, describe]
+    enum: [create, update]
     description: Desired artifact writer operation.
   kind:
     type: string

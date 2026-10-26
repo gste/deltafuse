@@ -146,7 +146,7 @@ draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
 - `implementing`: пишется минимальный продуктовый код;
 - `implemented`: тест и регрессии прошли успешно (Green evidence);
 - `verified`: сходимость задачи подтверждена в ходе общей верификации Change;
-- `blocked`: заявленный оракул оказался неверным; запуск останавливается до решения человека. Достижим из `declaring`, `declared`, `implementing` и `implemented`. Воркер ставит его (`deltafuse state <change-dir> --task <id> --status blocked`) только после того, как ядро записало Green против оракула, замороженного Red, и тесты оракула не изменены;
+- `blocked`: заявленный оракул оказался неверным; запуск останавливается до решения человека. Достижим из `pending` (если Red уже записан), `declaring`, `declared`, `implementing` и `implemented`. Воркер ставит его (`deltafuse state <change-dir> --task <id> --status blocked`) только после того, как ядро записало Green против оракула, замороженного Red, и тесты оракула не изменены;
 - `cancelled`: задача отменена — только решением человека, не воркера: `deltafuse decide <change-dir> --task <id> --status cancelled` (пароль Human Gate, если задан; квитанция вида `task` в журнале). `deltafuse state` такой переход отказывает;
 - из `blocked` выходит только человек: отменой (выше) или переоткрытием `deltafuse decide <change-dir> --task <id> --status reopened [--note "<почему>"]` — доказательства задачи переносятся в `reopened/<task>.<n>/`, её продуктовые файлы возвращаются к копиям, снятым гейтом `declaring`, в журнал пишется квитанция `task`/`reopened`, задача возвращается в `pending`, и только её можно объявить заново, когда Change уже `declared` или `implementing`;
 - `superseded`: заменена другой задачей.

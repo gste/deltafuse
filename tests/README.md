@@ -29,25 +29,17 @@ tests/
 │   └── test_failure_modes.py     # Negative lifecycle flows and orphan claims
 ├── fixtures/
 │   └── change_builder.py         # Fluent builder for constructing Change packages
-├── validate-layout.ps1 / .sh     # Legacy shell layout validators (canonical in python `deltafuse validate-layout`)
+├── validate-layout.ps1 / .sh     # Python-free layout validators for the shell installers (the Python one is `deltafuse validate-layout`, which `deltafuse init` also runs)
 └── smoke-test.ps1 / .sh          # Legacy shell smoke test scripts
 ```
 
 ## Running Tests
 
 ### Run Full Pytest Suite
+In parallel (`pytest-xdist`, in the `dev` extras): the suite is about 850 tests, most of which
+install a product and run the Core on it, so one process takes 7-8 minutes and `-n auto` about 2.
 ```bash
-python -m pytest -v
-```
-
-### Validate Product Layout
-```bash
-deltafuse validate-layout .
-```
-
-### Lint Change Context Budget
-```bash
-deltafuse lint-context docs/changes/CHG-001
+python -m pytest -n auto
 ```
 
 ### Record evidence (kernel)

@@ -183,3 +183,16 @@ def test_a_draft_with_a_direct_root_over_files_halts_and_over_nothing_does_not(t
     product2 = _product(second, {"stats": _cap("draft", "src/monitoring/*")})
     (product2 / "src" / "monitoring").mkdir(parents=True)
     assert _uncharacterized_draft_errors(_routed_to(product2, "core.stats"), product2) == []
+
+
+def test_validate_config_checks_the_catalog_against_its_schema(tmp_path: Path):
+    # fuseback handoff asked `deltafuse artifact validate --kind capability`, removed in 3.3.9.
+    (tmp_path / "good").mkdir()
+    (tmp_path / "bad").mkdir()
+    good = _product(tmp_path / "good", {"a": _cap("active", "src/a/")})
+    assert validate_config(good) == []
+    bad = _product(tmp_path / "bad", {"a": {**_cap("active", "src/a/"), "status": "shipped"}})
+    errors = validate_config(bad)
+    assert any(e.startswith("catalog: docs/spec/_capabilities.yaml:") and "status" in e for e in errors), errors
+    (bad / "docs" / "spec" / "_capabilities.yaml").unlink()
+    assert validate_config(bad) == []  # no catalog yet is not a config error

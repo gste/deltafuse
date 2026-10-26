@@ -25,6 +25,7 @@ def test_unknown_and_out_of_range_values_fail(tmp_path: Path, repo_root: Path):
         "  leash: sideways\n"          # invalid mode
         "  integrity_profile: seal\n"  # unknown profile
         "  code_roots: [src]\n"        # not a glob
+        "  evidence_timeout: soon\n"   # not seconds
         "  test_commands: [\"pytest\"]\n",
         encoding="utf-8",
     )
@@ -32,6 +33,7 @@ def test_unknown_and_out_of_range_values_fail(tmp_path: Path, repo_root: Path):
     text = " ".join(errors)
     assert "baseline" in text and "unknown project keys" in text
     assert "leash" in text and "integrity_profile" in text and "code_roots" in text
+    assert "evidence_timeout" in text
 
 
 def test_legacy_schema_version_fails_closed(tmp_path: Path, repo_root: Path):

@@ -39,9 +39,7 @@ WORKER_CMDS = (
     "evidence",
     "coverage",
     "archive",
-    "validate",
     "validate-layout",
-    "lint-context",
     "board",
     "leash",
 )

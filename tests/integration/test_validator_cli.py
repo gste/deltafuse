@@ -1,17 +1,16 @@
 import sys
 import yaml
-import pytest
 from pathlib import Path
 from deltafuse.cli import main
 from deltafuse.core.installer import install
 
-def test_cli_validate_and_check_gate(tmp_path: Path, repo_root: Path, monkeypatch, capsys):
+def test_cli_check_gate(tmp_path: Path, repo_root: Path, monkeypatch, capsys):
     install(target_dir=tmp_path, framework_root=repo_root)
     change_dir = tmp_path / 'docs' / 'changes' / 'CHG-001-test'
     change_dir.mkdir(parents=True)
 
     # Test failure on empty dir
-    ret = main(['validate', str(change_dir)])
+    ret = main(['check-gate', str(change_dir), '--gate', 'intake'])
     assert ret == 1
     out, err = capsys.readouterr()
     assert 'Missing required change.yaml' in err
@@ -48,66 +47,29 @@ def test_cli_validate_and_check_gate(tmp_path: Path, repo_root: Path, monkeypatc
 
 
 def test_cli_validate_layout(tmp_path: Path, repo_root: Path, capsys):
+    # fuseback handoff checks the product it hands over with this command.
     install(target_dir=tmp_path, framework_root=repo_root)
-    ret = main(['validate-layout', str(tmp_path)])
-    assert ret == 0
+    assert main(['validate-layout', str(tmp_path)]) == 0
     out, _ = capsys.readouterr()
     assert "DeltaFuse product layout at" in out and "is valid." in out
 
 
-def test_cli_lint_context(tmp_path: Path, repo_root: Path, capsys):
-    from tests.fixtures.change_builder import MockChangeBuilder
-    install(target_dir=tmp_path, framework_root=repo_root)
-    builder = MockChangeBuilder(tmp_path, change_id="CHG-001").step_intake().step_analyze()
-    ret = main(['lint-context', str(builder.change_dir)])
-    assert ret == 0
-    out, _ = capsys.readouterr()
-    assert "is within limits" in out
+def test_cli_init_checks_the_layout_it_installed(tmp_path: Path, monkeypatch, capsys):
+    assert main(['init', str(tmp_path / "ok"), '--agents-md', 'bridge']) == 0
+    capsys.readouterr()
 
-
-def test_cli_lint_context_missing_spec_ref_is_error(tmp_path: Path, repo_root: Path, capsys):
-    from tests.fixtures.change_builder import MockChangeBuilder
-    from deltafuse.core.frontmatter import parse_frontmatter
-    install(target_dir=tmp_path, framework_root=repo_root)
-    builder = MockChangeBuilder(tmp_path, change_id="CHG-004").step_intake().step_analyze()
-    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
-    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-    meta["spec_refs"] = ["docs/spec/does-not-exist.md"]
-    slice_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
-    ret = main(['lint-context', str(builder.change_dir)])
-    assert ret == 1
+    import deltafuse.cli as cli
+    monkeypatch.setattr(cli, "validate_product_layout", lambda root: ["adapter skill 'run' is stale"])
+    assert main(['init', str(tmp_path / "broken"), '--agents-md', 'bridge']) == 1
     _, err = capsys.readouterr()
-    assert "does not exist" in err
-
-
-def test_cli_lint_context_rejects_path_traversal(tmp_path: Path, repo_root: Path, capsys):
-    from tests.fixtures.change_builder import MockChangeBuilder
-    from deltafuse.core.frontmatter import parse_frontmatter
-    product = tmp_path / "product"
-    (tmp_path / "outside.md").write_text("word " * 50, encoding="utf-8")
-    install(target_dir=product, framework_root=repo_root)
-    builder = MockChangeBuilder(product, change_id="CHG-004").step_intake().step_analyze()
-    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
-    meta, body = parse_frontmatter(slice_file.read_text(encoding="utf-8"))
-    meta["spec_refs"] = ["../outside.md"]
-    slice_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
-    ret = main(['lint-context', str(builder.change_dir)])
-    assert ret == 1
-    _, err = capsys.readouterr()
-    assert "Path traversal forbidden" in err
+    assert "product layout" in err and "adapter skill 'run' is stale" in err
 
 
 def test_cli_evidence_red_already_green(tmp_path: Path, repo_root: Path, capsys):
     from tests.fixtures.change_builder import MockChangeBuilder
 
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-027", title="CLI evidence")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-027", title="CLI evidence").step_through_decompose()
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
     (tests_dir / "test_task-001.py").write_text("assert True\n", encoding="utf-8")

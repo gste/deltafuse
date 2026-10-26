@@ -4,7 +4,6 @@ import yaml
 
 from deltafuse.cli import main
 from deltafuse.core.frontmatter import parse_frontmatter
-from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from deltafuse.core.queue import build_work_queue, select_next
 from deltafuse.core.specify import next_specify_pass

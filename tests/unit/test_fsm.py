@@ -9,7 +9,6 @@ from deltafuse.core.fsm import (
     missing_analyze_artifacts,
     VALID_CHANGE_STATUSES,
 )
-from deltafuse.core.archiver import is_change_id_archived
 from deltafuse.core.evidence import write_stamped_evidence
 from deltafuse.core.installer import install
 from deltafuse.core.frontmatter import parse_frontmatter
@@ -173,13 +172,6 @@ def test_decision_blocking_gate(tmp_path: Path, repo_root: Path):
     assert not any("without deltafuse decide" in e for e in check_gate(change_dir, "analyzed"))
 
 
-def test_is_change_id_archived(tmp_path: Path):
-    arch_dir = tmp_path / "docs" / "archive" / "changes" / "2026-09-05-CHG-999"
-    arch_dir.mkdir(parents=True)
-    assert is_change_id_archived("CHG-999", tmp_path)
-    assert not is_change_id_archived("CHG-888", tmp_path)
-
-
 def test_task_design_ref_validation(tmp_path: Path, repo_root: Path):
     from tests.fixtures.change_builder import MockChangeBuilder
     from deltafuse.core.frontmatter import parse_frontmatter
@@ -188,10 +180,7 @@ def test_task_design_ref_validation(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-005", title="Design Ref Test")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
@@ -446,10 +435,7 @@ def test_targeting_accepts_already_green(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-016", title="Already green lift")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     tests_dir = tmp_path / "tests"
@@ -485,10 +471,7 @@ def test_already_green_red_cannot_carry_the_implemented_gate(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-101", title="Already green lift")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
@@ -542,10 +525,7 @@ def test_converged_gate_reads_the_verification_verdict(tmp_path: Path, repo_root
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-103", title="Gap verdict")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -581,10 +561,7 @@ def test_targeting_rejects_import_error_red(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-026", title="Import red")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     red_file = builder.change_dir / "evidence" / "red" / "TASK-001.yaml"
@@ -601,10 +578,7 @@ def test_targeting_rejects_private_red_test(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-017", title="Private red")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     tests_dir = tmp_path / "tests"
@@ -628,10 +602,7 @@ def test_implemented_rejects_stale_green_after_spec_change(tmp_path: Path, repo_
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-018", title="Stale green")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )
@@ -692,10 +663,7 @@ def test_converged_rejects_wiped_added_spec_after_specify(tmp_path: Path, repo_r
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-019", title="Wiped spec")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -722,10 +690,7 @@ def test_converged_rejects_removed_spec_still_on_disk(tmp_path: Path, repo_root:
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-020", title="Removed still live")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -765,13 +730,7 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
 def test_decomposed_rejects_task_without_budget(tmp_path: Path, repo_root: Path):
     """F-002 / RM-002: TASK without context_budget fails decomposed."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-022", title="No budget")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-022", title="No budget").step_through_decompose()
     assert check_gate(builder.change_dir, "decomposed") == []
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
@@ -784,13 +743,7 @@ def test_decomposed_rejects_task_without_budget(tmp_path: Path, repo_root: Path)
 def test_decomposed_rejects_fifty_allowed_paths(tmp_path: Path, repo_root: Path):
     """F-002 / RM-002: 50 allowed_paths exceed max_files 24."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = (
-        MockChangeBuilder(tmp_path, change_id="CHG-023", title="Fifty files")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
-    )
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-023", title="Fifty files").step_through_decompose()
     src = tmp_path / "src"
     src.mkdir(exist_ok=True)
     allowed = []
@@ -810,10 +763,7 @@ def test_targeting_rejects_src_in_red_changed_paths(tmp_path: Path, repo_root: P
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-024", title="Red writes src")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
@@ -839,10 +789,7 @@ def test_declare_may_write_the_stub_its_task_declared(tmp_path: Path, repo_root:
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-024-stub", title="Compiled Red stub")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
     )
     stub = "src/app/penalty.py"
@@ -1025,10 +972,7 @@ def test_docs_route_rejects_src_allowed_paths(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-033", title="Docs forbids src", route="docs")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
@@ -1042,10 +986,7 @@ def test_docs_route_implemented_without_product_regression(tmp_path: Path, repo_
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-034", title="Docs green", route="docs")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )
@@ -1058,10 +999,7 @@ def test_code_route_still_requires_regression(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-035", title="Code still pytest")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
     )
@@ -1270,10 +1208,7 @@ def test_decompose_refuses_forbidden_tests_on_code_route(
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-701", title="Forbidden tests")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     assert not any("forbidden_paths covers tests/**" in e for e in validate_change_package(builder.change_dir))
     _forbid(builder, forbidden)
@@ -1285,10 +1220,7 @@ def test_docs_route_may_forbid_tests(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-702", title="Docs forbid", route="docs")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
     _forbid(builder, '[src/secret.py, "tests/**"]')
     errors = validate_change_package(builder.change_dir)

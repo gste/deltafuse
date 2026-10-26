@@ -4,7 +4,6 @@ Validates verification phase evidence execution (task=null, run.yaml),
 Core stamp verification, authorization, and baseline binding.
 """
 
-import json
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +12,6 @@ import yaml
 
 from deltafuse.core.evidence import run_evidence, EvidenceRunError, evidence_stamp_error
 from deltafuse.core.installer import install
-from deltafuse.core.fsm import check_gate
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -21,10 +19,7 @@ def _decomposed_change(tmp_path: Path, repo_root: Path, change_id: str = "CHG-12
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
         MockChangeBuilder(tmp_path, change_id=change_id, title="Verification Integration")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
 
 
@@ -185,7 +180,7 @@ def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
         argv=[sys.executable, "-m", "pytest", "tests/test_other.py"],
         changed_paths=["tests/test_other.py"],
     )
-    assert any("did not turn the Red tests green" in e for e in green.errors), green.errors
+    assert any("did not pass the tests Red recorded as failing" in e for e in green.errors), green.errors
 
     # The same test, once the product implements it, does.
     (tmp_path / "src" / "limiter.py").write_text(
@@ -198,7 +193,7 @@ def test_green_must_pass_the_tests_red_listed(tmp_path: Path, repo_root: Path):
         argv=[sys.executable, "-m", "pytest", "tests/test_penalty.py"],
         changed_paths=["src/limiter.py"],
     )
-    assert not [e for e in green.errors if "did not turn the Red tests green" in e], green.errors
+    assert not [e for e in green.errors if "did not pass the tests Red recorded as failing" in e], green.errors
 
 
 def test_the_recorded_category_follows_the_report_the_gate_reads(tmp_path: Path, repo_root: Path):

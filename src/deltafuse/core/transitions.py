@@ -223,11 +223,6 @@ def load_receipts(product_root: Path, change_id: str) -> list[dict[str, Any]]:
     return [row for row in read_jsonl(transitions_path(product_root)) if row.get("change") == change_id]
 
 
-def last_receipt(product_root: Path, change_id: str) -> dict[str, Any] | None:
-    rows = load_receipts(product_root, change_id)
-    return rows[-1] if rows else None
-
-
 def latest_transition_field(product_root: Path | str, change_id: str, gate: str, field: str) -> Any:
     """`field` of the Change's latest `gate` transition receipt; None when there is none."""
     for row in reversed(load_receipts(Path(product_root), change_id)):
@@ -549,6 +544,9 @@ def advance_change(
 # V3-FIX-010: Core-owned artifact status transitions. The Worker asks the Core
 # (`deltafuse state`) instead of hand-editing task/slice/Change frontmatter.
 TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    # `blocked` stays reachable from `pending` on purpose: a task may hold its Red before it is set
+    # `declared`, and green_attempt_error then says exactly what is missing (no Red, no Green
+    # attempt) instead of a bare "cannot set status" (codebase audit 2026-10-22).
     "pending": {"declaring", "declared", "blocked", "cancelled", "superseded"},
     "declaring": {"declared", "blocked", "superseded"},
     "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},

@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import yaml
 
 from deltafuse.core.ownership import _root_prefix, owners, under_routing
+from tests.fixtures.git import git
 
 CHANGE = "docs/changes/CHG-710-own"
-
-
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", "-c", "user.email=o@test", "-c", "user.name=o", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True,
-    )
 
 
 def _product(tmp_path: Path, roots: dict[str, list[str]], routed: dict[str, list[str]]) -> Path:
@@ -39,9 +32,9 @@ def _product(tmp_path: Path, roots: dict[str, list[str]], routed: dict[str, list
         for prefix in prefixes:
             (tmp_path / prefix).mkdir(parents=True, exist_ok=True)
             (tmp_path / prefix / "__init__.py").write_text("", encoding="utf-8")
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-q", "-m", "intake")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-q", "-m", "intake")
     return tmp_path
 
 

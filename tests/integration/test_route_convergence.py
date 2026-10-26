@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deltafuse.core.archiver import archive_change, is_change_id_archived
+from deltafuse.core.archiver import archive_change
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from tests.fixtures.change_builder import MockChangeBuilder
@@ -17,10 +17,7 @@ def _full_change(tmp_path: Path, repo_root: Path, change_id: str, route: str) ->
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
         MockChangeBuilder(tmp_path, change_id=change_id, title=route.title(), route=route)
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
@@ -41,7 +38,7 @@ def test_route_reaches_archive_with_passing_converged_gate(
 
     dest = archive_change(builder.change_dir, repo_root=tmp_path)
     assert dest.is_dir()
-    assert is_change_id_archived(change_id, tmp_path)
+    assert any(p.name.endswith(f"-{change_id}") for p in (tmp_path / "docs" / "archive" / "changes").iterdir())
     data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))
     assert data["status"] == "archived"
 

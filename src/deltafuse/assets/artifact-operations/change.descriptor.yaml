@@ -3,8 +3,6 @@ operation_version: "1"
 storage_schema_id: https://deltafuse.dev/schemas/v3/change.schema.yaml
 allowed_operations:
   - update
-  - validate
-  - describe
 creatable_semantic_fields: []
 updatable_semantic_fields:
   - /title

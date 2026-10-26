@@ -45,10 +45,7 @@ def _builder(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     install(target_dir=tmp_path, framework_root=repo_root)
     return (
         MockChangeBuilder(tmp_path, change_id="CHG-090", title="Regression without tests")
-        .step_intake()
-        .step_analyze()
-        .step_specify()
-        .step_decompose()
+        .step_through_decompose()
     )
 
 
