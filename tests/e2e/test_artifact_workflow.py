@@ -83,4 +83,8 @@ def test_e2e_artifact_writer_workflow_docs_route(tmp_path: Path, repo_root: Path
 
     data = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8"))
     assert data["route"] == "docs"
+    assert check_gate(change_dir, "intake"), "the scaffold has no claims; Intake does not close on it"
+    request = change_dir / "request.md"
+    claims = "\n## Claims\n\n- CR-001 (expectation): the guide names the flag\n"
+    request.write_text(request.read_text(encoding="utf-8") + claims, encoding="utf-8")
     assert check_gate(change_dir, "intake") == []

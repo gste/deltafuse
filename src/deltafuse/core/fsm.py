@@ -1513,6 +1513,10 @@ def _check_gate(
     if gate_lower == "intake":
         if not req_file.is_file():
             errors.append("Gate intake: request.md is missing")
+        elif not extract_claims_from_request(req_file.read_text(encoding="utf-8", errors="replace")):
+            # The scaffold `deltafuse new` writes has no claims: Intake closes on the normalized request,
+            # not on the stub (a Worker that advanced while its write failed stamped the stub).
+            errors.append("Gate intake: request.md has no claims (CR-001, ...); write the normalized request first")
 
     elif gate_lower == "analyzed":
         if not req_file.is_file():

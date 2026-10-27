@@ -30,7 +30,8 @@ def test_scaffold_creates_minimal_package_without_closing_intake(
     assert "claims" not in request, "scaffolding fabricates no claims"
     for sub in ("slices", "tasks", "evidence"):
         assert (change_dir / sub).is_dir()
-    assert check_gate(change_dir, "intake") == [], "Intake gate must stay open"
+    errors = check_gate(change_dir, "intake")
+    assert any("request.md has no claims" in e for e in errors), "Intake closes on claims, not the scaffold"
 
 
 def test_scaffold_is_deterministic_and_refuses_collisions(
