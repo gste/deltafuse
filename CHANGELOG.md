@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The pre-commit hook lets a branch without DeltaFuse commit.** The hook lives in the git dir, so it ran on
+  every branch of the repository: on one cut from the mainline before DeltaFuse was installed it refused
+  every commit ("Not a DeltaFuse product"). It now exits 0 when `.deltafuse/lock.yaml` is neither on disk
+  nor at HEAD; removing the pin on a DeltaFuse branch still runs the leash. Re-run `deltafuse init --force`
+  to get the new hook.
 - **Coverage follows a claim routed to another slice.** `coverage.yaml` kept a claim's previous slice whenever
   that slice still existed, with its spec_refs, tasks and evidence: after a `tasks-missing` gap pass routed
   three claims to the slices whose tasks test them, they stayed on a slice with no task and `converged` would
