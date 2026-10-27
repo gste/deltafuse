@@ -328,7 +328,10 @@ def _assign_slice(
 ) -> SliceRecord | None:
     listed = [row for row in slices if claim_id in row.claims]
     if listed:
-        return min(listed, key=lambda row: row.slice_id)
+        # A claim two slices list goes where routing sends it (a gap pass routes it on and may leave
+        # the old slice's list as it was).
+        routed = [row for row in listed if routing_cap and row.primary_capability == routing_cap]
+        return min(routed or listed, key=lambda row: row.slice_id)
     if routing_cap:
         same = [row for row in slices if row.primary_capability == routing_cap]
         if same:
@@ -473,15 +476,17 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     unmapped: list[str] = []
     for cid in req_claims:
         prev = existing_claims.get(cid) if isinstance(existing_claims.get(cid), dict) else {}
-        record: SliceRecord | None = None
+        record: SliceRecord | None = _assign_slice(cid, caps.get(cid), slices)
         prev_slice = prev.get("slice") if isinstance(prev, dict) else None
-        if isinstance(prev_slice, str) and prev_slice in slice_ids:
+        if record is None and isinstance(prev_slice, str) and prev_slice in slice_ids:
             record = next(row for row in slices if row.slice_id == prev_slice)
-        else:
-            record = _assign_slice(cid, caps.get(cid), slices)
         if record is None:
             unmapped.append(cid)
             continue
+        if prev_slice != record.slice_id:
+            # Routed to another slice (a tasks-missing gap pass, 2026-10-27): the old slice's
+            # spec_refs, tasks and evidence are not this claim's any more.
+            prev = {}
         prev_refs = prev.get("spec_refs") if isinstance(prev, dict) else None
         if isinstance(prev_refs, list) and any(isinstance(item, str) for item in prev_refs):
             spec_refs = [item for item in prev_refs if isinstance(item, str)]

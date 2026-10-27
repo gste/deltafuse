@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Coverage follows a claim routed to another slice.** `coverage.yaml` kept a claim's previous slice whenever
+  that slice still existed, with its spec_refs, tasks and evidence: after a `tasks-missing` gap pass routed
+  three claims to the slices whose tasks test them, they stayed on a slice with no task and `converged` would
+  refuse again. The slice now comes from the slices' claim lists, the one routing sends the claim to first
+  when two list it; a claim whose slice changed starts its record afresh.
+- **The leash takes the gap pass's writes after a reopen.** The chain of steps since the commit base ran
+  from Verify back to Analyze, and a chain going backwards added no envelope: the routing and coverage of
+  the gap pass were refused once the `analyzed` gate had moved the Change to Specify. A `decide --gap`
+  since the base now restarts the chain at Analyze.
 - **The leash takes the records `decide --gap` archived as the human's under `core.autocrlf`.** It matched a
   deleted Green or regression record by the digest of its bytes at the base, git's LF blob, against the
   archive's working-tree bytes, CRLF on such a checkout; every moved record read as a Worker's deletion and

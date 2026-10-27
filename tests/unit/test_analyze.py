@@ -168,6 +168,29 @@ def test_write_coverage_maps_claims_and_preserves_tasks(tmp_path: Path, repo_roo
     assert again["claims"]["CR-002"]["status"] == "decomposed"
 
 
+def test_write_coverage_follows_a_claim_routed_to_another_slice(tmp_path: Path, repo_root: Path):
+    """2026-10-27, an owner's service: a tasks-missing gap pass routed three claims on and added them
+    to the slices whose tasks test them, leaving the old slice's list as it was; coverage kept the old
+    slice, its spec_refs and no tasks, and `converged` refused the Change again."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-061", title="Re-routed").step_intake(claims=["CR-001"])
+    _routing(builder.change_dir, builder.change_id, {"CR-001": "platform.vocabulary"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "billing.invoices", [],
+           spec_refs=["docs/spec/billing.md#REQ-01"])
+    _slice(builder.change_dir, builder.change_id, "SLICE-03", "platform.vocabulary", ["CR-001"],
+           spec_refs=["docs/spec/vocabulary.md"])
+    dest = write_coverage(builder.change_dir)
+    assert yaml.safe_load(dest.read_text(encoding="utf-8"))["claims"]["CR-001"]["slice"] == "SLICE-03"
+
+    _routing(builder.change_dir, builder.change_id, {"CR-001": "billing.invoices"})
+    _slice(builder.change_dir, builder.change_id, "SLICE-01", "billing.invoices", ["CR-001"],
+           spec_refs=["docs/spec/billing.md#REQ-01"])
+    write_coverage(builder.change_dir)
+    claim = yaml.safe_load(dest.read_text(encoding="utf-8"))["claims"]["CR-001"]
+    assert claim["slice"] == "SLICE-01"
+    assert claim["spec_refs"] == ["docs/spec/billing.md#REQ-01"]
+
+
 def test_write_coverage_finds_tests_when_trace_claims_is_warn(tmp_path: Path, repo_root: Path):
     """P12: with workflow.trace_claims: warn, coverage.yaml names the test each claim's own
     tasks proved it through - including through Red's already-green fallback (M04, night of

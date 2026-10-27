@@ -854,12 +854,15 @@ def collect_chain_envelopes(
     def last_gates(lines: list[str]) -> dict[str, str]:
         out: dict[str, str] = {}
         for entry in _json_rows(lines):
-            if (
-                entry.get("kind") == "transition"
-                and isinstance(entry.get("change"), str)
-                and entry.get("gate") in gate_step
-            ):
+            if not isinstance(entry.get("change"), str):
+                continue
+            if entry.get("kind") == "transition" and entry.get("gate") in gate_step:
                 out[entry["change"]] = entry["gate"]
+            elif entry.get("kind") == "gap-reopen":
+                # `decide --gap` rewinds the Change to Analyze: the chain goes on from the step after
+                # intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside
+                # the Specify envelope, the chain since base having gone backwards).
+                out[entry["change"]] = "intake"
         return out
 
     def step_after(gate: str | None) -> int:
@@ -872,9 +875,22 @@ def collect_chain_envelopes(
     base_last, now_last = last_gates(at_base), last_gates(now)
     changed = {posix_relpath(path) for path in (dirty or [])}
 
+    def reopens(lines: list[str]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for entry in _json_rows(lines):
+            if entry.get("kind") == "gap-reopen" and isinstance(entry.get("change"), str):
+                out[entry["change"]] = out.get(entry["change"], 0) + 1
+        return out
+
+    reopened_since_base = reopens(now)
+    for change_id, count in reopens(at_base).items():
+        reopened_since_base[change_id] = reopened_since_base.get(change_id, 0) - count
+
     envelopes: list[dict[str, Any]] = []
     for change_id, change_dir in _change_dirs(root).items():
         low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
+        if reopened_since_base.get(change_id, 0) > 0:
+            low = step_after("intake")  # the chain since base went back to Analyze and on from there
         if high < low:
             continue  # a rewound chain is receipt_chain_errors' business, not a wider fence
         rel_dir = change_dir.relative_to(root).as_posix()
