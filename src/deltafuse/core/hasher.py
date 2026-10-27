@@ -62,13 +62,38 @@ def compute_file_sha256(path: Path) -> str:
     return hasher.hexdigest().lower()
 
 
+def normalize_line_endings(data: bytes) -> bytes:
+    """CRLF -> LF for text; bytes with a NUL are binary and stay untouched.
+
+    The rule scripts/sync_assets.py copies assets by (QF-024). A framework
+    identity is a content identity: git with core.autocrlf rewrites a file's
+    line endings on checkout without changing its content, and a pin taken
+    from CRLF bytes stopped matching once the same file came back LF.
+    """
+    if b"\x00" in data:
+        return data
+    return data.replace(b"\r\n", b"\n")
+
+
 def compute_framework_content_hash(framework_root: Path | str | None = None) -> str:
     """
     Computes the canonical framework content hash across docs/, process/, scripts/,
     tests/, src/ and pyproject.toml. DF3-003 / SEC-02: the executable Core
     (src/deltafuse/**) and the declared entrypoints are part of the versioned
     manifest, so tampering with Core code changes the pinned hash.
+    Each file is hashed line-ending-normalized, so a CRLF and an LF checkout of
+    the same tree pin the same hash.
     Matches the algorithm in scripts/init.ps1 and scripts/init.sh.
+    """
+    return compute_framework_content_hashes(framework_root)[0]
+
+
+def compute_framework_content_hashes(framework_root: Path | str | None = None) -> tuple[str, str]:
+    """(current, legacy) framework content hash, from one walk of the tree.
+
+    `legacy` is the algorithm over raw file bytes that locks were written with
+    up to 3.3.11; it equals `current` on an LF tree. Locks written by it are
+    still accepted until 4.0.0 (see get_executing_framework_identity).
     """
     if framework_root is None:
         framework_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -76,6 +101,13 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
         framework_root = Path(framework_root).resolve()
 
     records: list[str] = []
+    legacy_records: list[str] = []
+
+    def add(name: str, path: Path) -> None:
+        data = path.read_bytes()
+        records.append(f"{name}:{hashlib.sha256(normalize_line_endings(data)).hexdigest().lower()}")
+        legacy_records.append(f"{name}:{hashlib.sha256(data).hexdigest().lower()}")
+
     roots = ["docs", "process", "scripts", "tests", "src"]
     for root_name in roots:
         root_dir = framework_root / root_name
@@ -89,23 +121,21 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
                     # wheel build, which moved a checkout's hash with no framework change
                     if any(part.endswith(".egg-info") for part in file_path.relative_to(framework_root).parts):
                         continue
-                    rel_path = file_path.relative_to(framework_root).as_posix().lower()
-                    file_hash = compute_file_sha256(file_path)
-                    records.append(f"{rel_path}:{file_hash}")
+                    add(file_path.relative_to(framework_root).as_posix().lower(), file_path)
 
     version_path = framework_root / "VERSION"
     if version_path.is_file():
-        version_hash = compute_file_sha256(version_path)
-        records.append(f"version:{version_hash}")
+        add("version", version_path)
 
     pyproject_path = framework_root / "pyproject.toml"
     if pyproject_path.is_file():
-        pyproject_hash = compute_file_sha256(pyproject_path)
-        records.append(f"pyproject:{pyproject_hash}")
+        add("pyproject", pyproject_path)
 
-    records.sort()
-    payload = "\n".join(records) + "\n"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
+    def digest(lines: list[str]) -> str:
+        payload = "\n".join(sorted(lines)) + "\n"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
+
+    return digest(records), digest(legacy_records)
 
 
 _SKIP_PARTS = {"__pycache__", ".pytest_cache"}

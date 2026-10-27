@@ -25,27 +25,56 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def get_executing_framework_identity() -> tuple[str, set[str]]:
-    """Return (running_version, set_of_valid_content_hashes) for executing framework assets."""
-    from deltafuse import __version__
-    from deltafuse.core.hasher import compute_framework_content_hash
+def manifest_identity_digests(manifest_path: Path) -> tuple[str, set[str]]:
+    """(current, legacy) digests of a bundle manifest, bare hex.
 
-    valid_hashes: set[str] = set()
+    `current` hashes the line-ending-normalized bytes, so the manifest pins the
+    same identity whether git checked it out CRLF or LF. `legacy` holds what a
+    lock written up to 3.3.11 may carry for the same content: the raw bytes on
+    disk, and the CRLF form sync_assets.py wrote on Windows before it wrote LF.
+    """
+    from deltafuse.core.hasher import normalize_line_endings
+
+    raw = manifest_path.read_bytes()
+    normalized = normalize_line_endings(raw)
+    current = hashlib.sha256(normalized).hexdigest().lower()
+    legacy = {
+        hashlib.sha256(raw).hexdigest().lower(),
+        hashlib.sha256(normalized.replace(b"\n", b"\r\n")).hexdigest().lower(),
+    }
+    legacy.discard(current)
+    return current, legacy
+
+
+def get_executing_framework_identity() -> tuple[str, set[str]]:
+    """Return (running_version, set_of_valid_content_hashes) for executing framework assets.
+
+    Transition until 4.0.0: besides the current line-ending-independent digests,
+    the set holds the legacy raw-byte digests of the same content
+    (manifest_identity_digests, compute_framework_content_hashes), so a lock
+    written up to 3.3.11 keeps verifying. New locks pin only the current digest.
+    """
+    from deltafuse import __version__
+    from deltafuse.core.hasher import compute_framework_content_hashes
+
+    digests: set[str] = set()
 
     bundle = bundle_root()
     if bundle is not None:
         manifest_path = bundle / "manifest.json"
         if manifest_path.is_file():
-            digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest().lower()
-            valid_hashes.add(digest)
-            valid_hashes.add(f"sha256:{digest}")
+            current, legacy = manifest_identity_digests(manifest_path)
+            digests.add(current)
+            digests |= legacy
 
     source = source_assets_root()
     if source is not None:
-        digest = compute_framework_content_hash().lower()
+        digests.update(compute_framework_content_hashes())
+
+    valid_hashes: set[str] = set()
+    for digest in digests:
         valid_hashes.add(digest)
         valid_hashes.add(f"sha256:{digest}")
-
     return __version__, valid_hashes
 
 
@@ -60,14 +89,11 @@ def get_installed_lock_hash() -> str:
     """
     bundle = bundle_root()
     if bundle is not None and (bundle / "manifest.json").is_file():
-        digest = hashlib.sha256((bundle / "manifest.json").read_bytes()).hexdigest().lower()
-        return f"sha256:{digest}"
-    _, valid_hashes = get_executing_framework_identity()
-    for h in sorted(valid_hashes):
-        if h.startswith("sha256:"):
-            return h
-    if valid_hashes:
-        return f"sha256:{sorted(valid_hashes)[0]}"
+        return f"sha256:{manifest_identity_digests(bundle / 'manifest.json')[0]}"
+    if source_assets_root() is not None:
+        from deltafuse.core.hasher import compute_framework_content_hash
+
+        return f"sha256:{compute_framework_content_hash()}"
     return "sha256:" + ("0" * 64)
 
 

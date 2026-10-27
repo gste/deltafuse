@@ -13,6 +13,25 @@ $TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
 $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
 $SchemaVersion = 3
 
+# Must stay in sync with normalize_line_endings in src/deltafuse/core/hasher.py: a file with
+# no NUL byte is text and hashes with CRLF read as LF, so a CRLF and an LF checkout pin alike
+function Get-IdentityFileHash {
+    param([string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ([System.Array]::IndexOf($bytes, [byte]13) -ge 0 -and [System.Array]::IndexOf($bytes, [byte]0) -lt 0) {
+        # Latin-1 maps every byte to one char and back, so only CRLF pairs change
+        $latin1 = [System.Text.Encoding]::GetEncoding(28591)
+        $bytes = $latin1.GetBytes($latin1.GetString($bytes).Replace("`r`n", "`n"))
+    }
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($hasher.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $hasher.Dispose()
+    }
+}
+
 function Get-FrameworkContentHash {
     $roots = @("docs", "process", "scripts", "tests", "src")
     $records = foreach ($root in $roots) {
@@ -22,17 +41,17 @@ function Get-FrameworkContentHash {
                 # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches and pip's build metadata
                 if ($_.FullName.Substring($FrameworkRoot.Length) -match '(__pycache__|\.pytest_cache|[^\\/]+\.egg-info)[\\/]') { return }
                 $relative = $_.FullName.Substring($FrameworkRoot.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
-                $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                $fileHash = Get-IdentityFileHash $_.FullName
                 "$relative`:$fileHash"
             }
         }
     }
     $versionPath = Join-Path $FrameworkRoot "VERSION"
-    $versionHash = (Get-FileHash -LiteralPath $versionPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $versionHash = Get-IdentityFileHash $versionPath
     $records += "version:$versionHash"
     # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too
     $pyprojectPath = Join-Path $FrameworkRoot "pyproject.toml"
-    $pyprojectHash = (Get-FileHash -LiteralPath $pyprojectPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $pyprojectHash = Get-IdentityFileHash $pyprojectPath
     $records += "pyproject:$pyprojectHash"
 
     $orderedRecords = [string[]]$records

@@ -26,6 +26,25 @@ sha256_file() {
   fi
 }
 
+# Must stay in sync with normalize_line_endings in src/deltafuse/core/hasher.py: a file with
+# no NUL byte is text and hashes with CRLF read as LF, so a CRLF and an LF checkout pin alike
+identity_sha256_file() {
+  # tr | cmp rather than grep: Git Bash's grep reads CRLF as a plain line end
+  if ! tr -d '\r' < "$1" | cmp -s - "$1" && tr -d '\000' < "$1" | cmp -s - "$1"; then
+    if [ -z "$(tail -c 1 "$1")" ]; then
+      sed $'s/\r$//' "$1"
+    else
+      sed $'$!s/\r$//' "$1"
+    fi | if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum | awk '{print $1}'
+    else
+      shasum -a 256 | awk '{print $1}'
+    fi
+  else
+    sha256_file "$1"
+  fi
+}
+
 framework_hash() {
   local manifest result
   manifest="$(mktemp)"
@@ -40,11 +59,11 @@ framework_hash() {
       printf '%s\n' "$SCRIPT_DIR/VERSION"
     } | while IFS= read -r file; do
       relative="$(printf '%s' "${file#"$SCRIPT_DIR/"}" | tr '[:upper:]' '[:lower:]')"
-      printf '%s:%s\n' "$relative" "$(sha256_file "$file")"
+      printf '%s:%s\n' "$relative" "$(identity_sha256_file "$file")"
     done
     # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too, under the
     # record name hasher.py and init.ps1 use (this script once wrote `pyproject.toml:`)
-    printf 'pyproject:%s\n' "$(sha256_file "$SCRIPT_DIR/pyproject.toml")"
+    printf 'pyproject:%s\n' "$(identity_sha256_file "$SCRIPT_DIR/pyproject.toml")"
   } | LC_ALL=C sort > "$manifest"
   result="$(sha256_file "$manifest")"
   rm -f -- "$manifest"

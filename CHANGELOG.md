@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The framework identity a product lock pins no longer depends on line endings.** Both digests
+  hashed raw bytes: the bundle manifest's (`get_executing_framework_identity`,
+  `get_installed_lock_hash`, `deltafuse init` from a wheel) and the checkout's content hash
+  (`compute_framework_content_hash`, `init.ps1`, `init.sh`). On Windows `sync_assets.py` wrote
+  `manifest.json` CRLF (`write_text`) while git, with `eol=lf`, still showed it clean; products
+  pinned that digest, a checkout to another branch and back rewrote the file LF, and the Artifact
+  Writer refused every write in every product pinned to that version ("does not match running
+  framework asset identity", 2026-10-27). Now a text file (no NUL byte) is hashed with CRLF read
+  as LF - the rule `sync_assets.py` already copied assets by - and binary files stay byte-exact;
+  `sync_assets.py` writes the manifest as LF bytes. A test hashes the same content CRLF and LF.
 - **The pre-commit hook lets a branch without DeltaFuse commit.** The hook lives in the git dir, so it ran on
   every branch of the repository: on one cut from the mainline before DeltaFuse was installed it refused
   every commit ("Not a DeltaFuse product"). It now exits 0 when `.deltafuse/lock.yaml` is neither on disk
@@ -44,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   owner's service, 222 requirements and ~72k tokens), so any task citing one of them failed `decomposed`
   against the 64000-token default however it was split. A `spec_ref` without an anchor, an anchor with no
   heading in the module, or a module the task also writes still counts the whole file.
+
+### Deprecated
+
+- **Locks pinned with the raw-byte digest are accepted until 4.0.0.** A lock written up to 3.3.11
+  carries the old digest, and every evidence stamp of an active Change carries the lock's pin, so
+  re-pinning would invalidate them. Until 4.0.0 the Core accepts, beside the new digest, the old
+  one of the same content: the raw bytes on disk, and for the bundle manifest also its CRLF form
+  (what `sync_assets.py` wrote on Windows), so a lock taken from either form verifies whichever
+  form is on disk. `deltafuse init` re-run on such a product keeps the old pin instead of
+  calling the lock different; new locks pin only the new digest. On an LF checkout the old and
+  new digests are the same.
 
 ## [3.3.11] - 2026-10-26
 

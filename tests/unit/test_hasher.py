@@ -103,7 +103,12 @@ def _framework_tree(root: Path) -> Path:
     (root / "tests" / "__pycache__").mkdir(parents=True)
     (root / "tests" / "__pycache__" / "t.pyc").write_bytes(b"\0")
     (root / "VERSION").write_text("9.9.9\n", encoding="utf-8")
-    (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    (root / "pyproject.toml").write_bytes(b"[project]\r\n")
+    # the installers normalize line endings the way hasher.py does: CRLF in text only
+    (root / "process" / "crlf.md").write_bytes(b"one\r\ntwo\r\n")
+    (root / "process" / "no-final-eol.md").write_bytes(b"one\r\ntwo\r")
+    (root / "process" / "lone-cr.md").write_bytes(b"one\rtwo\r\n")
+    (root / "src" / "blob.bin").write_bytes(b"\0\r\n")
     return root
 
 
@@ -126,7 +131,7 @@ def test_shell_installers_compute_the_same_framework_hash(tmp_path: Path, repo_r
         sh = (repo_root / "scripts" / "init.sh").read_text(encoding="utf-8")
         functions = "\n".join(
             re.search(rf"^{name}\(\) {{.*?^}}", sh, re.S | re.M).group(0)
-            for name in ("sha256_file", "framework_hash")
+            for name in ("sha256_file", "identity_sha256_file", "framework_hash")
         )
         out = subprocess.run(
             [bash, "-c", functions + "\nframework_hash"],
@@ -139,9 +144,11 @@ def test_shell_installers_compute_the_same_framework_hash(tmp_path: Path, repo_r
     if pwsh:
         script = (
             "$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:DF_INIT, [ref]$null, [ref]$null);"
-            "$fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]"
-            " -and $n.Name -eq 'Get-FrameworkContentHash' }, $true) | Select-Object -First 1;"
-            "$FrameworkRoot = $env:DF_ROOT; . ([scriptblock]::Create($fn.Extent.Text)); Get-FrameworkContentHash"
+            "$fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]"
+            " -and $n.Name -in 'Get-IdentityFileHash', 'Get-FrameworkContentHash' }, $true);"
+            "$FrameworkRoot = $env:DF_ROOT;"
+            " . ([scriptblock]::Create(($fns | ForEach-Object { $_.Extent.Text }) -join [System.Environment]::NewLine));"
+            " Get-FrameworkContentHash"
         )
         out = subprocess.run(
             [pwsh, "-NoProfile", "-NonInteractive", "-Command", script],
