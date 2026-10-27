@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The task context budget counts the requirements a task cites, not the whole spec module.** A `spec_ref`
+  with an anchor counts the module's preamble and that requirement's section; the implement skill reads exact
+  spec references. A module Fuseback writes holds every characterized requirement of a capability (on an
+  owner's service, 222 requirements and ~72k tokens), so any task citing one of them failed `decomposed`
+  against the 64000-token default however it was split. A `spec_ref` without an anchor, an anchor with no
+  heading in the module, or a module the task also writes still counts the whole file.
+
 ## [3.3.11] - 2026-10-26
 
 No framework changes. Released as the pair of Fuseback 3.3.11, whose changes are Spring services on the JVM:

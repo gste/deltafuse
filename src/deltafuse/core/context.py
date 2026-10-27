@@ -5,6 +5,7 @@ import fnmatch
 import json
 import math
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -467,8 +468,9 @@ def _budget_errors(
     max_tokens: Any,
     files_loaded: int,
     counted_files: list[Path],
+    sections: dict[Path, set[str]] | None = None,
 ) -> list[str]:
-    """The max_files and max_tokens verdicts."""
+    """The max_files and max_tokens verdicts. A file in `sections` counts only those requirements."""
     errors: list[str] = []
     if max_files is not None and files_loaded > max_files:
         errors.append(
@@ -476,7 +478,15 @@ def _budget_errors(
             f"maximum allowed is {max_files}"
         )
     if max_tokens is not None:
-        estimated, _ = count_files_tokens(counted_files)
+        sections = sections or {}
+        estimated, _ = count_files_tokens([f for f in counted_files if f not in sections])
+        for f in counted_files:
+            if f in sections:
+                text = anchored_sections(f, sections[f])
+                if text is None:  # an anchor the file does not hold: the whole file, as before
+                    estimated += count_files_tokens([f])[0]
+                else:
+                    estimated += count_tokens(text).tokens
         if estimated > max_tokens:
             errors.append(
                 f"Context budget exceeded: estimated {estimated} tokens loaded, "
@@ -564,13 +574,45 @@ def path_is_listed(rel_path: str, listed: Sequence[str]) -> bool:
     return False
 
 
+_HEADING = re.compile(r"^(#{1,6})\s")
+
+
+def anchored_sections(path: Path, anchors: set[str]) -> str | None:
+    """The part of a spec module a TASK reads for these requirement anchors: the module's preamble (title,
+    code roots) and each anchored requirement's section, from its heading to the next heading of the same or a
+    higher level. None when some anchor has no heading in the file.
+
+    The implement skill reads "exact spec references", not the module: a module Fuseback writes holds every
+    characterized requirement of a capability (hundreds), so counting all of it put any task that cites one of
+    them over the budget however the task was split.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    first = next((i for i, line in enumerate(lines)
+                  if i and (m := _HEADING.match(line)) and len(m.group(1)) >= 2), len(lines))
+    parts = ["\n".join(lines[:first])]
+    for anchor in sorted(anchors):
+        heading = re.compile(r"^(#{1,6})\s+" + re.escape(anchor) + r"(?=\s|$)")
+        start = next((i for i, line in enumerate(lines) if heading.match(line)), None)
+        if start is None:
+            return None
+        level = len(heading.match(lines[start]).group(1))
+        end = next((i for i in range(start + 1, len(lines))
+                    if (m := _HEADING.match(lines[i])) and len(m.group(1)) <= level), len(lines))
+        parts.append("\n".join(lines[start:end]))
+    return "\n".join(parts)
+
+
 def validate_task_context_budget(
     context_budget: dict[str, Any],
     spec_refs: Sequence[Any],
     allowed_paths: Sequence[Any],
     repo_root: Path,
 ) -> list[str]:
-    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes."""
+    """Budget for a TASK: spec_refs must exist; allowed_paths may be future writes. A spec_ref with an anchor
+    counts the anchored requirement (anchored_sections); one without, or a file the task may write, counts whole."""
     errors: list[str] = []
     max_files = context_budget.get("max_files")
     max_tokens = context_budget.get("max_tokens")
@@ -578,6 +620,8 @@ def validate_task_context_budget(
     unique_declared: list[Path] = []
     unique_existing: list[Path] = []
     seen: set[Path] = set()
+    anchors: dict[Path, set[str]] = {}
+    whole: set[Path] = set()
 
     def consider(raw: Any, *, must_exist: bool) -> None:
         if not isinstance(raw, str) or not raw:
@@ -593,6 +637,11 @@ def validate_task_context_budget(
                 f"Path traversal forbidden: '{file_part}' is outside repository root"
             )
             return
+        anchor = raw.split("#", 1)[1] if "#" in raw else ""
+        if anchor and must_exist:
+            anchors.setdefault(resolved, set()).add(anchor)
+        else:
+            whole.add(resolved)
         if resolved in seen:
             return
         seen.add(resolved)
@@ -607,4 +656,5 @@ def validate_task_context_budget(
     for apath in allowed_paths:
         consider(apath, must_exist=False)
 
-    return errors + _budget_errors(max_files, max_tokens, len(unique_declared), unique_existing)
+    sections = {f: a for f, a in anchors.items() if f not in whole}
+    return errors + _budget_errors(max_files, max_tokens, len(unique_declared), unique_existing, sections)
