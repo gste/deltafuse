@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `intake` gate needs a claim.** It checked only that `request.md` exists, so it closed on the scaffold
+  `deltafuse new` writes: a Worker advanced while its write of the request failed, and the transition receipt
+  was stamped on a request with no claims. The gate now refuses a `request.md` with no `CR-NNN` (or `O1`/`E1`)
+  claim.
+- **`tasks-missing` has a route back.** `deltafuse decide <change-dir> --gap tasks-missing --status reopened`
+  sends the Change to Analyze as `spec-gap` does, and the `gap` pass routes the claims no task carried to the
+  slice whose task tests them, or leaves them for Decompose to give their slice a task. Before, Verify recorded
+  the gap honestly and `next` halted with no way out: on an owner's service three claims were routed to a
+  slice that got no task, though the other slices' tasks implemented and tested them.
 - **The task context budget counts the requirements a task cites, not the whole spec module.** A `spec_ref`
   with an anchor counts the module's preamble and that requirement's section; the implement skill reads exact
   spec references. A module Fuseback writes holds every characterized requirement of a capability (on an

@@ -106,3 +106,19 @@ def test_reopen_needs_the_recorded_gap(tmp_path: Path, repo_root: Path):
     (builder.change_dir / "verification.md").write_text("# V\n\n- Outcome: converged\n", encoding="utf-8")
     with pytest.raises(DecideError, match="records no gap"):
         apply_decision(builder.change_dir, status="reopened", gap="spec-gap")
+
+
+def test_tasks_missing_goes_back_to_analyze_to_route_its_claims(tmp_path: Path, repo_root: Path):
+    """2026-10-27, an owner's service: three claims routed to a slice that got no task, though the
+    other slices' tasks tested them; Verify recorded tasks-missing and nothing led back."""
+    builder = _gap_found(tmp_path, repo_root, outcome="tasks-missing")
+    change = builder.change_dir
+    assert "--gap tasks-missing --status reopened" in build_work_queue(tmp_path).blocked[0].reason
+
+    result = apply_decision(change, status="reopened", gap="tasks-missing", note="CR-008 is tested by TASK-001")
+    assert result["ok"] and result["change_status"] == "analyzing"
+    assert receipt_chain_errors(tmp_path, change) == []
+    ready = build_work_queue(tmp_path).ready
+    assert ready and ready[0].step == "analyze" and ready[0].analyze_pass == "gap"
+    assert "Route each claim the gap names" in ready[0].reason
+    assert "docs/changes/*/routing.yaml" in ready[0].allowed_write

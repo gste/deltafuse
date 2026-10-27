@@ -453,7 +453,7 @@ def _main(argv: list[str] | None = None) -> int:
     )
     decide_parser.add_argument(
         "--gap", default=None,
-        help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap -> Analyze)",
+        help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap, tasks-missing -> Analyze)",
     )
     decide_parser.add_argument(
         "--note", default=None, help="With --status reopened: what the human passes on to the next Declare"

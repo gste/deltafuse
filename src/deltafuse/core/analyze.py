@@ -267,13 +267,22 @@ def _gap_pass(change_path: Path, product_root: Path | str) -> PassCursor | None:
     info = latest_gap_reopen(change_path) or {}
     note = str(info.get("note") or "").strip()
     where = f"docs/changes/{change_path.name}/{info['path']}/" if info.get("path") else "reopened/"
+    if info.get("gap") == "tasks-missing":
+        fix = (
+            "Route each claim the gap names so a task carries its evidence: to the slice whose task "
+            "implements and tests it (the claim in routing.yaml, the slices' claims), or keep it in "
+            "its slice and Decompose gives that slice a task"
+        )
+    else:
+        fix = (
+            "Bound the slices so Specify can write what the gap names: add the specification file "
+            "to a slice's spec_refs, or route the capability that owns it and write its slice"
+        )
     return PassCursor(
         pass_name="gap",
         reason=(
             f"Verify recorded '{info.get('gap') or 'a gap'}' and the human reopened the Change for "
-            f"Analyze; the verification is archived in {where}. Bound the slices so Specify can "
-            "write what the gap names: add the specification file to a slice's spec_refs, or route "
-            "the capability that owns it and write its slice. Then advance --gate analyzed; "
+            f"Analyze; the verification is archived in {where}. {fix}. Then advance --gate analyzed; "
             "every slice is back to draft, and Specify follows"
             + (f". The human's note: {note}" if note else "")
         ),

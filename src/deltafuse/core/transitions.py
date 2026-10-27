@@ -232,7 +232,7 @@ def latest_transition_field(product_root: Path | str, change_id: str, gate: str,
 
 
 # The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
-# <change> --gap spec-gap --status reopened`); the chain replays it as a rewind.
+# <change> --gap spec-gap|tasks-missing --status reopened`); the chain replays it as a rewind.
 GAP_REOPEN_KIND = "gap-reopen"
 GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
 GAP_REOPEN_TO = "analyzing"

@@ -507,6 +507,8 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             ], []
 
     if status in {"implemented", "verifying"}:
+        from deltafuse.core.decide import GAP_ROUTES
+
         gap = verification_gap(change_path)
         if gap is not None:
             # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2
@@ -514,7 +516,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             route = (
                 f"The human reopens it for Analyze with `deltafuse decide {rel} --gap {gap} "
                 '--status reopened --note "<what the gap names>"`'
-                if gap == "spec-gap"
+                if gap in GAP_ROUTES
                 else "The Core has no route back for this gap yet; the human settles it"
             )
             return _halt(

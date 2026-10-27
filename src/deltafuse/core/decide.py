@@ -361,8 +361,11 @@ def reopen_task(
 
 
 # Gaps a human can send back today, and where to: spec-gap needs the slice bounds Analyze
-# writes (ref-m04-365-2: the missing catalogue row sat in a spec file no slice named).
-GAP_ROUTES = {"spec-gap": GAP_REOPEN_TO}
+# writes (ref-m04-365-2: the missing catalogue row sat in a spec file no slice named);
+# tasks-missing needs the claim routing Analyze writes (2026-10-27, an owner's service: three
+# claims routed to a slice that got no task, though the other slices' tasks tested them) - or a
+# slice Decompose then gives a task, which comes after Analyze too.
+GAP_ROUTES = {"spec-gap": GAP_REOPEN_TO, "tasks-missing": GAP_REOPEN_TO}
 
 
 def reopen_gap(
