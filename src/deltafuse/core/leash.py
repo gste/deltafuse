@@ -274,7 +274,7 @@ def human_decision_judge(
         for path in reopened.rglob("*"):
             rel = path.relative_to(root).as_posix()
             if path.is_file() and reopen_archive_path(root, rel):
-                archived.add(hashlib.sha256(path.read_bytes()).hexdigest())
+                archived.add(_eol_digest(path.read_bytes()))
                 task_reopened = task_reopened or _REOPEN_ARCHIVE.match(rel) is not None
         if task_reopened:
             restored.update((declaring_snapshot(root, change_id) or {}).items())
@@ -284,11 +284,18 @@ def human_decision_judge(
         data = _bytes_at(root, rel, head=head)
         if data is None:
             before = _bytes_at(root, rel, head=base or "HEAD")
-            return before is not None and hashlib.sha256(before).hexdigest() in archived
+            return before is not None and _eol_digest(before) in archived
         digest = hashlib.sha256(data).hexdigest()
         return digest in decided.get(rel, set()) or restored.get(rel) == digest
 
     return judge
+
+
+def _eol_digest(data: bytes) -> str:
+    """The digest of a record whatever line endings it has: the base's bytes are git's blob (LF), the
+    archive's are the working tree's, CRLF where `core.autocrlf` is true (2026-10-27, an owner's service:
+    every Green and regression record `decide --gap` moved read as a Worker's deletion)."""
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def reopen_archive_path(product_root: Path, rel_path: str) -> bool:

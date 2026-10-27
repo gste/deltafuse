@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The leash takes the records `decide --gap` archived as the human's under `core.autocrlf`.** It matched a
+  deleted Green or regression record by the digest of its bytes at the base, git's LF blob, against the
+  archive's working-tree bytes, CRLF on such a checkout; every moved record read as a Worker's deletion and
+  the pre-commit hook refused the human's reopen. Both sides are now compared with LF line endings.
 - **The `intake` gate needs a claim.** It checked only that `request.md` exists, so it closed on the scaffold
   `deltafuse new` writes: a Worker advanced while its write of the request failed, and the transition receipt
   was stamped on a request with no claims. The gate now refuses a `request.md` with no `CR-NNN` (or `O1`/`E1`)

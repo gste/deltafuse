@@ -734,3 +734,35 @@ def test_advance_cli_prints_an_advisory_leash_finding(tmp_path: Path, repo_root:
     assert main(["advance", str(builder.change_dir), "--gate", "intake"]) == 0
     _, err = capsys.readouterr()
     assert "leash (advisory)" in err and "src/app.py" in err
+
+
+def test_a_record_decide_gap_archived_is_the_humans_whatever_its_line_endings(tmp_path: Path):
+    """2026-10-27, an owner's service with core.autocrlf: the base's blob is LF, the archive `decide --gap`
+    moved the record into is the working tree's CRLF, and every moved Green and regression read as a
+    Worker's deletion."""
+    from deltafuse.core.leash import human_decision_judge
+
+    change = tmp_path / "docs" / "changes" / "CHG-001"
+    green = change / "evidence" / "green" / "TASK-001.yaml"
+    green.parent.mkdir(parents=True)
+    (change / "change.yaml").write_bytes(b"id: CHG-001\nstatus: implemented\n")
+    green.write_bytes(b"task: TASK-001\nresult: passed\n")
+    other = change / "evidence" / "green" / "TASK-002.yaml"
+    other.write_bytes(b"task: TASK-002\nresult: passed\n")
+    journal = tmp_path / ".deltafuse" / "transitions.jsonl"
+    journal.parent.mkdir()
+    journal.write_text("", encoding="utf-8")
+    _git_init_commit(tmp_path)
+
+    archive = change / "reopened" / "verify.1"
+    journal.write_text(json.dumps({"kind": "gap-reopen", "change": "CHG-001", "to": "analyzing",
+                                   "archive": "docs/changes/CHG-001/reopened/verify.1"}) + "\n", encoding="utf-8")
+    moved = archive / "evidence" / "green" / "TASK-001.yaml"
+    moved.parent.mkdir(parents=True)
+    moved.write_bytes(green.read_bytes().replace(b"\n", b"\r\n"))
+    green.unlink()
+    other.unlink()  # deleted, but not into the archive
+
+    judge = human_decision_judge(tmp_path)
+    assert judge("docs/changes/CHG-001/evidence/green/TASK-001.yaml")
+    assert not judge("docs/changes/CHG-001/evidence/green/TASK-002.yaml")
