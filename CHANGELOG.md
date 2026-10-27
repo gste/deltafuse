@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.12] - 2026-11-12
+
 ### Fixed
 
 - **The `intake` gate needs a claim.** It checked only that `request.md` exists, so it closed on the scaffold
