@@ -115,13 +115,26 @@ def read_junit_xml(path: Path, *, error_means: str) -> dict[str, str]:
             continue
         if case.find("skipped") is not None:
             outcomes[name] = SKIPPED
-        elif case.find("failure") is not None:
-            outcomes[name] = FAILED
-        elif case.find("error") is not None:
-            outcomes[name] = error_means
+        elif case.find("failure") is not None or case.find("error") is not None:
+            if error_means == FAILED and _class_level(case):
+                # Audit 2026-11-16 (df-evidence #8): a throwing `@BeforeAll` (JUnit 4:
+                # `initializationError`) is reported against the class, not a method. Read as a
+                # failed test `demo.CalcTest::`, it was accepted as Red and no Green could ever
+                # pass a test of that name. The class's tests never ran.
+                outcomes[name] = NOT_RUN
+            else:
+                outcomes[name] = FAILED if case.find("failure") is not None else error_means
         else:
             outcomes[name] = PASSED
     return outcomes
+
+
+def _class_level(case: ET.Element) -> bool:
+    """A JVM testcase that stands for its class, not a method: no name, the class's own name,
+    or JUnit 4's `initializationError`."""
+    name = (case.get("name") or "").strip()
+    classname = (case.get("classname") or "").strip()
+    return not name or name == classname or name == classname.rsplit(".", 1)[-1] or name == "initializationError"
 
 
 def read_junit_failures(path: Path) -> dict[str, tuple[str, str]]:
@@ -277,9 +290,16 @@ def red_is_authentic(report: TestReport) -> tuple[bool, str | None]:
         )
     not_run = report.ids(NOT_RUN)
     if not_run:
+        class_level = [name for name in not_run if name.endswith("::")]
         return False, (
             "tests could not run (collection, compilation or a fixture), so the "
             f"failure is in the test, not in the product: {not_run[:5]}"
+            + (
+                ". A class-level setup failed (`@BeforeAll`, a static initializer), so none of "
+                "the class's tests ran: move what it calls into the tests themselves, so each "
+                "test runs and fails on its own"
+                if class_level else ""
+            )
         )
     if not report.ids(FAILED):
         return False, "every test that ran passed: there is nothing red here"

@@ -184,3 +184,16 @@ def test_maven_modules_keep_their_own_test_ids(tmp_path: Path):
     _surefire(single, "", "demo.CalcTest", '<testcase classname="demo.CalcTest" name="adds"/>')
     assert read_report(["mvn", "test"], single).ids(PASSED) == ["demo.CalcTest::adds"]
 
+
+def test_a_jvm_class_level_failure_is_a_test_that_never_ran(tmp_path: Path):
+    """Audit 2026-11-16 (df-evidence #8): a throwing `@BeforeAll` is reported by Surefire as a
+    testcase with no method name. It was read as the failed test `demo.CalcTest::`, accepted as
+    Red, and no Green could ever pass a test of that name. The class's tests never ran."""
+    _surefire(tmp_path, "", "demo.CalcTest",
+              '<testcase classname="demo.CalcTest" name="" time="0">'
+              '<error type="java.lang.IllegalStateException" message="no database"/></testcase>')
+    report = read_report(["mvn", "test"], tmp_path)
+    assert report.ids(FAILED) == []
+    assert report.ids(NOT_RUN) == ["demo.CalcTest::"]
+    ok, why = red_is_authentic(report)
+    assert not ok and "demo.CalcTest" in why
