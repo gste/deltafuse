@@ -164,8 +164,10 @@ def test_write_coverage_maps_claims_and_preserves_tasks(tmp_path: Path, repo_roo
     dest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     write_coverage(builder.change_dir)
     again = yaml.safe_load(dest.read_text(encoding="utf-8"))
-    assert again["claims"]["CR-002"]["tasks"] == ["TASK-001"]
-    assert again["claims"]["CR-002"]["status"] == "decomposed"
+    # Tasks and status are derived from the task files, not kept from a hand edit: there is no
+    # TASK-001 (audit 2026-11-16, df-evidence #12).
+    assert again["claims"]["CR-002"]["tasks"] == []
+    assert again["claims"]["CR-002"]["status"] == "pending"
 
 
 def test_write_coverage_follows_a_claim_routed_to_another_slice(tmp_path: Path, repo_root: Path):

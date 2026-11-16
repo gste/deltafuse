@@ -89,7 +89,8 @@ def test_a_pytest_regression_with_the_workers_own_report_path_is_read(tmp_path: 
         builder.change_dir,
         phase="regression",
         task="TASK-001",
-        argv=[sys.executable, "-m", "pytest", "tests/test_old.py", "--junitxml", "out/report.xml"],
+        # The whole suite (`tests`): a regression over one named file is refused as a subset.
+        argv=[sys.executable, "-m", "pytest", "tests", "--junitxml", "out/report.xml"],
     )
     assert outcome.payload["tests"]["passed"], outcome.payload
     assert not any("not evidence" in e for e in outcome.errors), outcome.errors

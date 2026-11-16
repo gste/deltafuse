@@ -481,7 +481,8 @@ def test_already_green_red_cannot_carry_the_implemented_gate(
         "def test_cooldown_window():\n    cooldown = 0\n    assert cooldown >= 0\n",
         encoding="utf-8",
     )
-    argv = [sys.executable, "tests/test_task-001.py"]
+    # pytest, not `python <file>`: a bare interpreter is refused where the tests are pytest tests.
+    argv = [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "tests/test_task-001.py"]
 
     red = run_evidence(
         builder.change_dir,

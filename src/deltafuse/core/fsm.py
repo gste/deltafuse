@@ -9,6 +9,7 @@ from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
 from deltafuse.core.context import (
     validate_context_budget,
     validate_task_context_budget,
+    product_task_budget,
     validate_paths_against_globs,
     path_is_listed,
     phase_write_globs,
@@ -37,7 +38,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.schemas import SchemaRegistry
-from deltafuse.core.test_reports import no_test_error, no_test_ran
+from deltafuse.core.test_reports import no_test_error, no_test_ran, suite_errors
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -381,8 +382,10 @@ def _validate_package(
                             "(max_tokens/max_files) for Declare and Implement"
                         )
                     else:
+                        # The product's ceiling, not the Worker's own field (audit 2026-11-16,
+                        # df-evidence #11).
                         b_errs = validate_task_context_budget(
-                            context_budget,
+                            product_task_budget(repo_root),
                             srefs if isinstance(srefs, list) else [],
                             allowed,
                             repo_root,
@@ -436,6 +439,10 @@ def _validate_package(
                 stamp_err = evidence_stamp_error(ev_data, repo_root)
                 if stamp_err:
                     errors.append(f"{rel_ev}: {stamp_err}")
+                # Audit 2026-11-16 (df-gates #2, df-evidence #6): the record is written even when
+                # `deltafuse evidence` refused its command, so the gate asks again whether the
+                # runner was authorized and whether it is one that reports the tests it ran.
+                errors.extend(f"{rel_ev}: {e}" for e in _runner_errors(ev_data, route, repo_root))
 
                 rel_path = ev_file.relative_to(evidence_dir)
                 parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
@@ -510,6 +517,13 @@ def _validate_package(
                     # The record is written even when `deltafuse evidence` refused it,
                     # so the gate asks again whether the run ran any test.
                     errors.extend(_ran_no_test(ev_data, f"{rel_ev}: {phase}"))
+                if phase in {"regression", "verification"} and route == "code":
+                    # Audit 2026-11-16 (df-evidence #4): a failing test with exit 0 (`-fn`, an
+                    # exitstatus hook) or a run narrowed to part of the suite is no regression.
+                    errors.extend(
+                        f"{rel_ev}: {e}"
+                        for e in suite_errors(phase, ev_data.get("command"), ev_data.get("tests"), repo_root)
+                    )
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")
@@ -535,6 +549,25 @@ def _validate_package(
                 errors.append(f"{rel_ev} parsing error: {ex}")
 
     return errors, loaded_route
+
+
+def _runner_errors(record: dict[str, Any], route: str, repo_root: Path) -> list[str]:
+    """Why a record's command could not have been evidence: an unauthorized runner, or a bare
+    interpreter on a product whose tests run under a runner that reports them."""
+    from deltafuse.core.runners import report_less_runner_error, runner_is_authorized
+    from deltafuse.core.test_reports import _command_argv
+
+    argv = _command_argv(record.get("command"))
+    errors: list[str] = []
+    if not runner_is_authorized(argv, route=route, product_root=repo_root):
+        errors.append(
+            f"command {argv[:3]} is not an authorized runner for route '{route}', so the record is "
+            "not evidence; record it again with the product's test runner (workflow.test_commands)"
+        )
+    report_less = report_less_runner_error(argv, route=route, product_root=repo_root)
+    if report_less:
+        errors.append(report_less)
+    return errors
 
 
 def _load_mapping(path: Path) -> dict[str, Any] | None:
@@ -1225,6 +1258,27 @@ def _red_category_hint(ev_data: dict) -> str:
             "so it would never pass; `deltafuse evidence` named the test and the line. Fix "
             "the test so it fails only because the behaviour is missing, and record Red again"
         )
+    if ev_data.get("failure_category") == "not-the-tasks-tests":
+        # Audit 2026-11-16 (df-evidence #1).
+        return (
+            ". The run failed, but not on this task's own tests (the test files it declared, or "
+            "those its command names): they passed or did not run. A failure of another test is "
+            "not this task's Red - write or name the test that shows the missing behaviour"
+        )
+    if ev_data.get("failure_category") == "environment-error":
+        # Audit 2026-11-16 (df-evidence #7).
+        return (
+            ". A test failed on its environment - a test data file that does not exist, or a "
+            "package that is not installed - which no product change turns green; "
+            "`deltafuse evidence` named the test and the cause. Fix the test's environment, "
+            "and record Red again"
+        )
+    if ev_data.get("failure_category") == "tests-not-named":
+        return (
+            ". The record does not say which tests are this task's: declare the test file "
+            "(it is in changed_paths once written) or name it on the command line, and record "
+            "Red again"
+        )
     summary = str(ev_data.get("summary") or "").strip().splitlines()
     last = summary[-1].strip()[:160] if summary else ""
     said = f"; the record says: {last}" if last else ""
@@ -1387,6 +1441,69 @@ def _human_gate_errors(
             "Gate specified: leaving specification-proposed needs spec-delta.md "
             f"accepted via deltafuse decide (Human Gate); got {spec_status!r}"
         )
+    return errors
+
+
+def coverage_claim_errors(
+    change_path: Path, route: str, *, document: dict[str, Any] | None = None
+) -> list[str]:
+    """Each claim has live tasks of its own slice, and its evidence links are files on disk that
+    belong to those tasks: green, and regression on the code route.
+
+    Audit 2026-11-16 (df-gates #3, df-evidence #12): the gate asked only that the `green` and
+    `regression` links were non-empty strings, so a hand edit of coverage.yaml naming another
+    task's records covered a claim that had no task, and the Change converged. The document is
+    the one the Core derives now; a hand-written file is read only when it cannot be derived,
+    and is checked against the disk the same way.
+    """
+    change_path = Path(change_path)
+    if document is None:
+        document = _derived_coverage(change_path)
+    if document is None:
+        cov_file = change_path / "coverage.yaml"
+        if not cov_file.is_file():
+            return []
+        try:
+            document = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - the package validation reports an unreadable file
+            return []
+    claims = document.get("claims") if isinstance(document, dict) else None
+    if not isinstance(claims, dict):
+        return []
+    tasks = _task_frontmatter_by_id(change_path)
+    errors: list[str] = []
+    for cid, claim in claims.items():
+        if not isinstance(claim, dict):
+            continue
+        listed = [t for t in claim.get("tasks") or [] if isinstance(t, str)]
+        own = [
+            t for t in listed
+            if t in tasks and tasks[t].get("status") != "cancelled" and tasks[t].get("slice") == claim.get("slice")
+        ]
+        if not own:
+            errors.append(
+                f"Gate converged: claim '{cid}' has no task in its slice {claim.get('slice')!r}, so nothing "
+                "implements or tests it; Decompose gives that slice a task (a `tasks-missing` gap)"
+            )
+        evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
+        required = ("green", "regression") if route == "code" else ("green",)
+        missing = [phase for phase in required if not evidence.get(phase)]
+        if missing:
+            errors.append(
+                f"Gate converged: claim '{cid}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
+            )
+        for phase in ("red", "green", "regression"):
+            link = evidence.get(phase)
+            if not isinstance(link, str) or not link:
+                continue
+            rel = link.replace("\\", "/")
+            stem = Path(rel).stem
+            if rel != f"evidence/{phase}/{stem}.yaml" or stem not in own or not (change_path / rel).is_file():
+                errors.append(
+                    f"Gate converged: claim '{cid}' links {phase} evidence '{link}', which is not a record "
+                    f"of its own tasks ({', '.join(own) or 'none'}); coverage.yaml is the Core's - do not "
+                    "edit it by hand"
+                )
     return errors
 
 
@@ -1680,26 +1797,7 @@ def _check_gate(
         # Coverage evidence mapping check (P4). DF3-002 / F-02: route-aware —
         # docs/ops routes keep their own green oracle and are not required to
         # carry product-source regression evidence.
-        cov_file = change_path / "coverage.yaml"
-        derived = _derived_coverage(change_path)
-        if derived is not None or cov_file.is_file():
-            try:
-                cov_data = derived if derived is not None else yaml.safe_load(cov_file.read_text(encoding="utf-8"))
-                claims_map = cov_data.get("claims", {})
-                for c_id, c_val in claims_map.items():
-                    if isinstance(c_val, dict):
-                        ev_map = c_val.get("evidence", {})
-                        missing = []
-                        if not ev_map.get("green"):
-                            missing.append("green")
-                        if route == "code" and not ev_map.get("regression"):
-                            missing.append("regression")
-                        if missing:
-                            errors.append(
-                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
-                            )
-            except Exception:
-                pass
+        errors.extend(coverage_claim_errors(change_path, route))
 
         if spec_delta_file.is_file():
             ops, parse_errs = _spec_delta_ops(spec_delta_file)

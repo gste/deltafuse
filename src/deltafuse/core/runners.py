@@ -8,6 +8,7 @@ as ``python -c "print('green')"`` cannot stamp authentic evidence.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +95,82 @@ def _load_config_prefixes(product_root: Path | None) -> tuple[tuple[str, ...], .
         if parts:
             out.append(parts)
     return tuple(out)
+
+
+_JVM_BUILD_FILES = ("pom.xml", "mvnw", "build.gradle", "build.gradle.kts", "settings.gradle",
+                    "settings.gradle.kts", "gradlew")
+_PYTEST_CONFIG_FILES = ("pytest.ini", ".pytest.ini", "conftest.py", "tests/conftest.py", "test/conftest.py")
+_PYTEST_SECTIONS = (("pyproject.toml", "[tool.pytest.ini_options]"), ("tox.ini", "[pytest]"),
+                    ("setup.cfg", "[tool:pytest]"))
+_PYTEST_TEST = re.compile(r"(?m)^\s*(?:async\s+)?def test|^class Test")
+
+
+def product_test_runner(product_root: Path | None) -> str:
+    """`pytest` or `jvm` when the product's tests run under a runner whose report the Core reads;
+    `` when they do not, or it cannot tell.
+
+    The product's own `workflow.test_commands` decides when it declares any. Otherwise its build
+    says so: a Maven/Gradle build file, a pytest configuration, or pytest-style tests (`def test_`
+    in `tests/**/test_*.py`).
+    """
+    from deltafuse.core.test_reports import runner_family
+
+    if product_root is None:
+        return ""
+    root = Path(product_root)
+    configured = _load_config_prefixes(root)
+    if configured:
+        families = {runner_family(list(entry)) for entry in configured} - {""}
+        return sorted(families)[0] if families else ""
+    if any((root / name).is_file() for name in _JVM_BUILD_FILES):
+        return "jvm"
+    if any((root / name).is_file() for name in _PYTEST_CONFIG_FILES):
+        return "pytest"
+    for name, section in _PYTEST_SECTIONS:
+        try:
+            if section in (root / name).read_text(encoding="utf-8", errors="replace"):
+                return "pytest"
+        except OSError:
+            continue
+    for folder in ("tests", "test"):
+        for i, path in enumerate(sorted((root / folder).rglob("*.py")) if (root / folder).is_dir() else []):
+            if i >= 500:
+                break
+            if not (path.name.startswith("test_") or path.name.endswith("_test.py")):
+                continue
+            try:
+                if _PYTEST_TEST.search(path.read_text(encoding="utf-8", errors="replace")):
+                    return "pytest"
+            except OSError:
+                continue
+    return ""
+
+
+def report_less_runner_error(argv: list[str], *, route: str, product_root: Path | None) -> str | None:
+    """Why *argv* is no evidence on this product: a bare interpreter (`python <file>.py`,
+    `python -c ...`) where the product's tests run under a runner that reports them.
+
+    Audit 2026-11-16 (df-evidence #6, df-gates #2): `python tests/red_check.py` for Red and
+    `python tests/green_check.py` for Green and regression converged a Change with no product
+    change. Such a run reports no test, so nothing links Green to the Red it answers.
+    """
+    if route != "code" or not argv:
+        return None
+    if _as_runner_name(str(argv[0])).lower() not in {"python", "python3"}:
+        return None
+    from deltafuse.core.test_reports import runner_family
+
+    if runner_family(argv):
+        return None  # `python -m pytest`: the runner itself
+    family = product_test_runner(product_root)
+    if not family:
+        return None
+    runner = "pytest" if family == "pytest" else "Maven/Gradle"
+    return (
+        f"`{' '.join(str(a) for a in argv[:3])}` runs a bare interpreter, which reports no test, on a "
+        f"product whose tests run under {runner}, which does: record it with the product's test "
+        "runner, naming the task's tests"
+    )
 
 
 def runner_is_authorized(

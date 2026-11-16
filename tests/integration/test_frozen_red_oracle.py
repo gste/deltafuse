@@ -10,6 +10,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
@@ -330,3 +332,51 @@ def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Pa
     set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
     errs = check_gate(builder.change_dir, "implemented")
     assert any("did not pass the tests Red recorded as failing" in e for e in errs), errs
+
+
+FLIP_PLUGIN = (
+    "import pytest\n\n\n"
+    "@pytest.hookimpl(hookwrapper=True)\n"
+    "def pytest_runtest_makereport(item, call):\n"
+    "    out = yield\n"
+    "    report = out.get_result()\n"
+    "    if report.failed:\n"
+    "        report.outcome = 'passed'\n"
+    "        report.longrepr = None\n"
+)
+
+
+
+@pytest.mark.parametrize("how", ["override-addopts", "config-file"])
+def test_a_plugin_brought_back_through_ini_options_does_not_reach_the_isolated_run(
+    tmp_path: Path, repo_root: Path, how: str
+):
+    """Audit 2026-11-16 (df-evidence #3): the isolated run kept `-o` and `-c`, so
+    `-o addopts=-p tests.flip` (or a config file given with -c naming the plugin) loaded
+    an outcome-flipping plugin there too, and the frozen tests "passed" on an
+    unchanged product."""
+    builder = _product(tmp_path, repo_root, "CHG-168", ["TASK-001"])
+    (tmp_path / "tests" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "tests" / "test_limiter.py").write_text(HEADER + RED_TEST, encoding="utf-8")
+    red = run_evidence(
+        builder.change_dir, phase="red", task="TASK-001",
+        argv=_pytest("tests/test_limiter.py"), changed_paths=["tests/test_limiter.py"],
+    )
+    assert red.authentic, red.errors
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+
+    (tmp_path / "tests" / "flip.py").write_text(FLIP_PLUGIN, encoding="utf-8")
+    if how == "override-addopts":
+        options = ["-o", "addopts=-p tests.flip"]
+    else:
+        (tmp_path / "tests" / "ci.ini").write_text("[pytest]\naddopts = -p tests.flip\n", encoding="utf-8")
+        options = ["-c", "tests/ci.ini", "--rootdir", "."]
+    green = run_evidence(
+        builder.change_dir, phase="green", task="TASK-001",
+        argv=_pytest(*options, "tests/test_limiter.py"),
+        changed_paths=["tests/flip.py", "tests/ci.ini"] if how == "config-file" else ["tests/flip.py"],
+    )
+    assert green.payload["exit_code"] == 0, green.payload.get("summary")
+    assert green.payload["oracle_isolation"]["not_passing"] == ["tests.test_limiter::test_cooldown_is_at_least_thirty"]
+    assert not green.authentic

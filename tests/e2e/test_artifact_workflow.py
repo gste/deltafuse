@@ -43,7 +43,7 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
         "spec_refs": ["docs/spec/core.md#REQ-01"],
         "allowed_paths": ["src/app.py"],
         "forbidden_paths": [],
-        "context_budget": {"max_tokens": 1000, "max_files": 5},
+        # No context_budget: the Core writes the product's, and refuses one from the Worker.
     }
     input_file = tmp_path / "task_input.json"
     input_file.write_text(json.dumps(task_payload), encoding="utf-8")
