@@ -204,3 +204,18 @@ def test_the_init_scripts_write_the_installers_hook(repo_root: Path):
     body = re.search(r"\$script = \(@\((.*?)\) -join", ps1, re.S).group(1)
     lines = [re.sub(r"`(.)", r"\1", m) for m in re.findall(r'^\s*"(.*)",?\s*$', body, re.M)]
     assert "\n".join(lines) + "\n" == HOOK_SCRIPT
+
+
+def test_untracking_the_lock_does_not_switch_the_hook_off(tmp_path: Path, repo_root: Path):
+    """df-leash #6: `git rm --cached .deltafuse/lock.yaml` kept the lock in the working tree, the leash read
+    the working tree and passed the commit (`.deltafuse/**` is exempt); from the next commit on the lock
+    was in neither HEAD nor the working tree and the hook skipped as on a branch without DeltaFuse."""
+    root = product(tmp_path, repo_root)
+    git(root, "rm", "-q", "--cached", ".deltafuse/lock.yaml")
+    proc = commit(root, "untrack lock")
+    assert proc.returncode != 0
+    assert ".deltafuse/lock.yaml" in proc.stdout + proc.stderr
+    git(root, "reset", "-q")
+    # Deleting it outright is refused too (the leash cannot find the product), as before.
+    git(root, "rm", "-q", ".deltafuse/lock.yaml")
+    assert commit(root, "drop lock").returncode != 0
