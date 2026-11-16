@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.13] - 2026-11-16
+
+An audit of 3.3.12 in five areas (lifecycle, leash and Writer, evidence, and Fuseback's JVM harness and pipeline)
+found that the proof the gates rely on was weaker than the documents promised. This release fixes what a Worker
+reaches by mistake or while trying to get to green. What it still cannot stop - deliberate forgery by a Worker that
+shares the human's shell - is listed in [core-and-worker.md](docs/core-and-worker.md#what-the-core-does-not-stop).
+
+### Changed
+
+- **Regression and verification must run the whole suite and pass it.** A run with any failed or not-run test is
+  refused whatever its exit code (Maven `-fn`, pytest exitstatus hooks), and so is a run over part of the suite: one
+  file, `-k`, `-Dtest=`, `-pl`, or anything added to the declared `workflow.test_commands`. A product that declares
+  `mvn -B test` runs exactly that for regression; `mvn -B test -Dtest=...` is refused.
+- **Red is judged on the task's own tests.** A failing test elsewhere in the suite made an authentic Red while the
+  task's own test already passed. Red now looks only at the test files Declare wrote or, for a committed test, the
+  file or class the command names (`pytest tests/test_x.py`, `mvn test -Dtest=CalcTest`); a failure of another test
+  is refused as `not-the-tasks-tests`, a Red that names no test as `tests-not-named`.
+- **A Change closes without converging only by the human's recorded verdict.** `rejected`, `duplicate`,
+  `superseded` and `not-reproduced` had no writer: a status written by hand archived with no check, vanished from
+  `next` and lifted the `init --force` guard. `deltafuse decide <change-dir> --close --status <status> --note "<why>"`
+  now writes them, with the rationale, the other `CHG-NNN` for duplicate/superseded and the not-reproduced proof,
+  and records receipts. A hand-set terminal status halts `next` and does not archive. An `analyzed` Change (for
+  example after the human rejected its specification) can now be closed `rejected`, `duplicate` or `superseded`.
+  The run and verify skills tell the Worker to stop and report; the human closes.
+- **A commit cannot relax the leash it is judged by.** The verdict uses the base's `workflow.leash` and
+  `workflow.code_roots`; a commit that relaxes the leash or changes the code roots is refused, so the human commits
+  that change on its own. Within a step `advance` keeps the mode the step started with.
+- **A task's context budget is the product's.** The decomposed gate checks the `context` budget in
+  `.deltafuse/config.yaml`, not the task's own field; `artifact write` refuses a `context_budget` from the Worker,
+  and a glob in `allowed_paths` counts the files it covers.
+
+### Fixed
+
+- **A feature Change can no longer skip the specification Human Gate.** `advance --gate decomposed` from `analyzed`
+  is the bugfix path with the spec unchanged, but it was open to every Change: a feature whose spec-delta.md was
+  still `proposed` converged and archived without a human seeing the specification. From `analyzed` the gate now
+  refuses any intent but `bugfix`, and a bugfix whose spec-delta.md changes anything; `converged` and `archive` need
+  spec-delta.md accepted with a `decide --spec` receipt that still matches its bytes.
+- **Decompose gets its turn after a `tasks-missing` reopen.** Accepting the specification again walked `decomposed`
+  and `declaring` on the old tasks, so a slice left for Decompose could never get a task that could be declared.
+  When a slice has no task the Change now stays `specified` and `next` sends Decompose naming those slices.
+- **A Red over a committed test freezes that test.** Nothing was frozen when Declare wrote no test file, so
+  Implement could weaken the test and pass Green.
+- **A Red that fails on its environment is refused** (`environment-error`): a missing data file under a test
+  directory, or a package neither installed nor written by the task. **An all-skipped or xfail Red is no longer
+  already-green**; it is `blocked`.
+- **Gates re-check the runner.** A record `deltafuse evidence` refused (`python -c`, an unauthorized runner) still
+  satisfied the gates, and a bare `python <file>.py` with no report stood in for pytest or Maven. Gates now re-check
+  authorization, and a report-less interpreter is refused on a product whose tests run under pytest, Maven or Gradle.
+- **coverage.yaml is derived from the tasks every time.** Claim status stayed `pending`, every claim of a slice was
+  covered by the first task's evidence, and a hand edit could cover a claim with no task. Claim status now follows
+  the claim's tasks, a cancelled task stops covering, a later task is listed, and `converged` refuses a claim with
+  no task of its own or linked to records that are not its tasks'.
+- **The isolated oracle run no longer brings plugins back** through `-o addopts=...` or an unfrozen `-c` file.
+- **Maven multi-module test ids carry the module**, so a same-named passing test in another module no longer
+  overwrites a failing Red test. **A JVM `@BeforeAll` failure is a test that never ran**, not a Red no Green
+  could pass.
+- **`--timeout` stops the whole test run**: on Windows the tree of `mvn.cmd`, cmd.exe and java is killed, so a
+  hanging test no longer hangs `deltafuse evidence`. **Evidence summaries decode the runner's own encoding**
+  (cp1251), and **verification records the changed paths the Core computes**, so an honest verification on a dirty
+  tree is authentic and a refused one no longer satisfies `converged`.
+- **The pre-commit hook judges what the commit records.** It diffed the working tree, so a write that was staged
+  and then reverted in the working tree committed unseen; it now judges the staged tree and its bytes.
+- **`advance` judges the whole step, its commits included**, from the commit the step started from, so one
+  `git commit --no-verify` no longer launders a write outside the envelope. Merges are left to CI.
+- **Non-ASCII paths and renames are seen** (`-z`, `core.quotePath=false`, no rename detection). **Dropping the lock
+  from the index** (`git rm --cached`) no longer turns the hook off.
+- **Junk evidence opens no envelope**: only a record `deltafuse evidence` stamped for that Change, task and phase
+  opens a task's Declare/Implement envelope, also while a human decides. **A human decision's archive vouches only
+  for its own record.** **A declared task keeps its paths**: the Writer refuses `allowed_paths`/`forbidden_paths`
+  once a task leaves `pending`, and the envelope reads them from the task as declared at the base.
+- **The Writer works on autocrlf checkouts and stays in its Change.** Updates on a CRLF checkout were refused with
+  `format_change_required`; a target such as `../../../src/evil.yaml` was written outside the Change; a nested
+  Core-owned field such as `analysis/routing` was writable. All three are fixed.
+- **CI judges a pull request from its merge base** (`B...H`), and **the hook is installed where `core.hooksPath`
+  points** (a shared hooks directory outside the repository gets a message instead).
+- **init.sh and init.ps1 pin the same identity as the Python installer** on `\r\r\n`, upper-case non-ASCII names
+  and Hidden files.
+- **A Decision's Human Gate receipt is bound to the bytes the human answered.** An accepted DEC rewritten later
+  still read as accepted, and a second file reusing an accepted id counted as answered.
+- **The transition chain refuses a gate out of turn** (a single `normalized -> converged` receipt replayed as valid).
+- **`decide` with stdin from NUL refuses instead of hanging** on Windows, and **`deltafuse state` keeps Cyrillic
+  readable** in the frontmatter it rewrites.
+- **Docs say what a Human Gate proves**: that a verdict came from `decide` and still matches its bytes, not who ran
+  it.
+
 ## [3.3.12] - 2026-11-12
 
 ### Fixed
