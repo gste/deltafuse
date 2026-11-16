@@ -164,6 +164,22 @@ def write_artifact(
     else:
         path = service._resolve_target_path(kind, target or identity)
 
+    if kind == "task" and "context_budget" in fields:
+        # Audit 2026-11-16 (df-evidence #11): the Worker raised its own task's budget to 10
+        # million tokens and the decomposed gate read that as the ceiling. The budget is the
+        # product's (`context` in .deltafuse/config.yaml), written by the Core; restating the
+        # value the task already has is not a change.
+        fields = dict(fields)
+        given = fields.pop("context_budget")
+        have = _current_metadata(path).get("context_budget") if path.is_file() else _product_budget(root)
+        if given != have:
+            raise ArtifactServiceError(
+                f"context_budget is the Core's: a task's budget is the product's `context` budget "
+                f"({have}), set in .deltafuse/config.yaml by the human, not by the task. Leave the "
+                "field out; if the task does not fit the budget, split it",
+                code="core_owned_field",
+            )
+
     if path.is_file():
         descriptor = service.registry.get_descriptor(kind)
         core_owned = set(descriptor.get("core_owned_fields") or [])

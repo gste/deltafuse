@@ -9,6 +9,7 @@ from deltafuse.core.frontmatter import parse_frontmatter, yaml_error_hint
 from deltafuse.core.context import (
     validate_context_budget,
     validate_task_context_budget,
+    product_task_budget,
     validate_paths_against_globs,
     path_is_listed,
     phase_write_globs,
@@ -379,8 +380,10 @@ def _validate_package(
                             "(max_tokens/max_files) for Declare and Implement"
                         )
                     else:
+                        # The product's ceiling, not the Worker's own field (audit 2026-11-16,
+                        # df-evidence #11).
                         b_errs = validate_task_context_budget(
-                            context_budget,
+                            product_task_budget(repo_root),
                             srefs if isinstance(srefs, list) else [],
                             allowed,
                             repo_root,

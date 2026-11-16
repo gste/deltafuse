@@ -605,6 +605,48 @@ def anchored_sections(path: Path, anchors: set[str]) -> str | None:
     return "\n".join(parts)
 
 
+def product_task_budget(repo_root: Path) -> dict[str, int]:
+    """The product's task budget: `context.max_tokens` / `context.max_files` of
+    `.deltafuse/config.yaml`, else DEFAULT_TASK_BUDGET.
+
+    Audit 2026-11-16 (df-evidence #11): the decomposed gate read the ceiling from the task's own
+    `context_budget`, which the Worker writes, so raising it to 10 million tokens passed any task.
+    The ceiling is the product's; the task's field only repeats it.
+    """
+    budget = dict(DEFAULT_TASK_BUDGET)
+    section = config_section(repo_root, "context")
+    for key in ("max_tokens", "max_files"):
+        value = section.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            budget[key] = value
+    return budget
+
+
+_GLOB_SKIP_DIRS = frozenset({".git", ".deltafuse", "__pycache__", "node_modules", ".venv", "venv", "target", "build"})
+
+
+def _glob_files(root: Path, pattern: str) -> list[str]:
+    """Existing files under *root* an allowed_paths glob lists (`path_is_listed`), POSIX, sorted.
+    The walk starts at the pattern's literal directory prefix."""
+    pattern = posix_relpath(pattern)
+    literal = []
+    for part in pattern.split("/"):
+        if any(ch in part for ch in "*?["):
+            break
+        literal.append(part)
+    base = root.joinpath(*literal) if literal else root
+    if base.is_file():
+        return [posix_relpath(base.relative_to(root).as_posix())]
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = [d for d in dirnames if d not in _GLOB_SKIP_DIRS]
+        for name in filenames:
+            rel = Path(dirpath, name).relative_to(root).as_posix()
+            if path_is_listed(rel, [pattern]):
+                out.append(rel)
+    return sorted(out)
+
+
 def validate_task_context_budget(
     context_budget: dict[str, Any],
     spec_refs: Sequence[Any],
@@ -654,6 +696,13 @@ def validate_task_context_budget(
     for sref in spec_refs:
         consider(sref, must_exist=True)
     for apath in allowed_paths:
+        if isinstance(apath, str) and any(ch in apath for ch in "*?["):
+            # Audit 2026-11-16 (df-evidence #11): a glob counted as one file of zero tokens
+            # however much it covered (`src/**`). It counts the existing files it lets the task
+            # touch, matched the way the leash matches allowed_paths.
+            for rel in _glob_files(root, apath):
+                consider(rel, must_exist=False)
+            continue
         consider(apath, must_exist=False)
 
     sections = {f: a for f, a in anchors.items() if f not in whole}
