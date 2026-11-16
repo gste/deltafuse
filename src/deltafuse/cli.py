@@ -537,7 +537,7 @@ def _main(argv: list[str] | None = None) -> int:
     leash_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
     leash_parser.add_argument(
         "--base", default=None,
-        help="Exact base SHA: diff the committed range base..head instead of the local worktree (DF3-003)",
+        help="Exact base SHA: diff the committed range base...head (from the merge base) instead of the local worktree (DF3-003)",
     )
     leash_parser.add_argument("--head", default=None, help="Exact head SHA (default: HEAD); requires --base")
     leash_parser.add_argument("--file", action="append", default=[], dest="files",

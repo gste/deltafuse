@@ -38,6 +38,20 @@ A **Human Gate** (DEC / spec accept / merge) is a stop in the Process. Only a hu
 
 What the Core can verify: a verdict was written by `deltafuse decide`, which records a receipt bound to the bytes answered, and nothing changed it since. It cannot tell who ran `decide`. Without a Human Gate password (`deltafuse gate-password set`) a Worker that runs `decide` itself passes the Gate, and its receipt reads `human_check: none` like the human's. With one, `decide` reads the password only from an interactive console (`human_check: password`); the password file is still a file in the working tree, so a Worker that moves it aside answers with `human_check: none` again. Read `human_check` in the gate journal; against a Worker that edits files on purpose, isolate it on the host.
 
+## What the Core does not stop
+
+The Core is built against a Worker that errs, not one that attacks it. It refuses what a model reaches by mistake or while trying to get to green: a partial test run, a test file run directly, a weakened test, a relaxed leash, widened task paths, a `--no-verify` commit, a junk or hand-written record, a hand-edited `coverage.yaml`. A Worker with the same shell as the human can still forge on purpose, and the Core does not claim otherwise:
+
+- Receipts in `.deltafuse/` (transitions, gate journal, Artifact Writer receipts) are not keyed: a crafted one has the Core's shape. Moving the gate-password file aside answers a Gate with `human_check: none`.
+- The isolated Red oracle run drops `-p`, `-o addopts`, unfrozen `-c` files and `PYTEST_ADDOPTS`/`PYTEST_PLUGINS`; a plugin installed as a package entry point still loads.
+- A clean `git merge` runs no `pre-commit` hook; removing the lock in a `--no-verify` commit makes the branch one without DeltaFuse.
+- Environment failures of a Red are recognised from pytest's report only; on the JVM a missing resource or `NoClassDefFoundError` reads as a behavioural failure.
+- Only a bare interpreter (`python <file>.py`, `python -c`) is refused as a report-less runner; `tox`, `npm test` and the like still run without a report. Without `workflow.test_commands`, "the whole suite" is judged heuristically.
+- Maven reports are read at the root and one module level deep.
+- A product installed from the wheel pins the digest of the bundled assets (`assets/manifest.json`), not of the Core's code; a source checkout pins both.
+
+The backstop for all of these is outside the Worker's reach: the CI leash job, the human's review of the diff, and host isolation of the Worker.
+
 ## Through-mode
 
 Default LLM Worker entry is `/run`. The Worker calls `deltafuse next`, loads the named skill, and continues in the same session. The human does not paste each slash command.
