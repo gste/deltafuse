@@ -10,7 +10,6 @@ the record; a runner found nowhere is named in the record.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -25,20 +24,15 @@ def _decomposed(tmp_path: Path, repo_root: Path) -> MockChangeBuilder:
     return MockChangeBuilder(tmp_path, change_id="CHG-200", title="JVM runner").step_through_decompose()
 
 
-REAL_RUN = subprocess.run
-
-
 def _capture_runs(monkeypatch) -> list[list[str]]:
-    """Test commands are captured; the Core's own git calls run for real."""
+    """Test commands are captured (`evidence._launch`); the Core's own git calls run for real."""
     launched: list[list[str]] = []
 
-    def fake_run(argv, **kwargs):
-        if argv and argv[0] == "git":
-            return REAL_RUN(argv, **kwargs)
+    def fake_launch(argv, **kwargs):
         launched.append(list(argv))
-        return subprocess.CompletedProcess(argv, 1, stdout="Tests run: 1, Failures: 1\nAssertionError", stderr="")
+        return 1, b"Tests run: 1, Failures: 1\nAssertionError", b"", False
 
-    monkeypatch.setattr(evidence.subprocess, "run", fake_run)
+    monkeypatch.setattr(evidence, "_launch", fake_launch)
     return launched
 
 
@@ -63,12 +57,10 @@ def test_a_runner_found_nowhere_is_named_not_winerror(tmp_path: Path, repo_root:
     launched: list[list[str]] = []
 
     def missing(argv, **kwargs):
-        if argv and argv[0] == "git":
-            return REAL_RUN(argv, **kwargs)
         launched.append(list(argv))
         raise FileNotFoundError(2, "[WinError 2] The system cannot find the file specified")
 
-    monkeypatch.setattr(evidence.subprocess, "run", missing)
+    monkeypatch.setattr(evidence, "_launch", missing)
     monkeypatch.setattr(evidence, "_on_windows", lambda: True)
     monkeypatch.setattr(evidence.shutil, "which", lambda name, path=None: None)
     outcome = evidence.run_evidence(builder.change_dir, phase="red", task="TASK-001", argv=["mvn", "-B", "test"])

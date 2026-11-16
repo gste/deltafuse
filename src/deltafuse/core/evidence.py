@@ -192,6 +192,65 @@ def _runner_not_found(program: str, ex: OSError) -> str:
     return f"runner `{program}` not found on PATH ({ex})"
 
 
+# After the timeout kills the run, how long the Core still waits for its output pipes to close.
+_DRAIN_SECONDS = 15
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill *proc* and every process it started.
+
+    Audit 2026-11-16 (df-evidence #9): `subprocess.run(timeout=...)` killed only the program it
+    started. Maven on Windows is `mvn.cmd`, so that was cmd.exe; java, its child, held the output
+    pipes open, a 10 s timeout took 49.6 s, and a hanging test hung `deltafuse evidence`.
+    """
+    try:
+        if _on_windows():
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=_DRAIN_SECONDS,
+            )
+        else:
+            import signal
+
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _launch(
+    argv: list[str], *, cwd: Path, timeout: int, env: dict[str, str] | None = None
+) -> tuple[int, bytes, bytes, bool]:
+    """Run a test command: (exit code, stdout, stderr, timed out). FileNotFoundError when the
+    program does not exist. On timeout the whole process tree is killed (`_kill_tree`)."""
+    popen_kwargs: dict[str, Any] = {}
+    if not _on_windows():
+        popen_kwargs["start_new_session"] = True  # its own process group, killed as one
+    proc = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        **popen_kwargs,
+    )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return int(proc.returncode), out or b"", err or b"", False
+    except subprocess.TimeoutExpired:
+        _kill_tree(proc)
+        try:
+            out, err = proc.communicate(timeout=_DRAIN_SECONDS)
+        except subprocess.TimeoutExpired:
+            out, err = b"", b""  # a grandchild outlived the kill and still holds the pipes
+        return 124, out or b"", err or b"", True
+
+
 def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) -> list[str]:
     """The gate's changed_paths check on this record, now rather than at the gate.
 
@@ -262,21 +321,9 @@ def _isolated_oracle_run(
     env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_ADDOPTS", "PYTEST_PLUGINS"}}
     started_at = time.time()
     try:
-        proc = subprocess.run(
-            resolve_runner(run_argv, repo_root),
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=env,
-        )
-        exit_code = int(proc.returncode)
+        exit_code = _launch(resolve_runner(run_argv, repo_root), cwd=repo_root, timeout=timeout, env=env)[0]
     except FileNotFoundError:
         exit_code = 127
-    except subprocess.TimeoutExpired:
-        exit_code = 124
     report = read_report(iso_argv, repo_root, junit_path=junit_path, newer_than=started_at)
     not_passing = green_covers_red(expected, report) if report is not None else list(expected)
     return {
@@ -591,26 +638,13 @@ def run_evidence(
     launch_argv = resolve_runner(run_argv, repo_root)
     started_at = time.time()
     try:
-        proc = subprocess.run(
-            launch_argv,
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        exit_code = int(proc.returncode)
-        log = (_as_text(proc.stdout) + _as_text(proc.stderr)).strip()
+        exit_code, out, err, timed_out = _launch(launch_argv, cwd=repo_root, timeout=timeout)
+        log = (_as_text(out) + _as_text(err)).strip()
+        if timed_out and not log:
+            log = f"command timed out after {timeout}s"
     except FileNotFoundError as ex:
         exit_code = 127
         log = _runner_not_found(str(argv[0]), ex)
-    except subprocess.TimeoutExpired as ex:
-        exit_code = 124
-        log = (_as_text(ex.stdout) + _as_text(ex.stderr)).strip()
-        if not log:
-            log = f"command timed out after {timeout}s"
-        timed_out = True
 
     report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
