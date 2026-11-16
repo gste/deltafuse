@@ -243,6 +243,18 @@ def _load_tasks(change_path: Path) -> list[tuple[str, str, Path, dict[str, Any]]
     return found
 
 
+def slices_without_tasks(change_path: Path) -> list[str]:
+    """Slice ids no task (other than a cancelled one) belongs to - what a `tasks-missing` gap
+    pass leaves for Decompose (df-gates #5)."""
+    slice_ids = [
+        meta["id"] for _, meta in iter_frontmatter(Path(change_path) / "slices") if isinstance(meta.get("id"), str)
+    ]
+    covered = {
+        meta.get("slice") for _, _, _, meta in _load_tasks(Path(change_path)) if meta.get("status") != "cancelled"
+    }
+    return [sid for sid in slice_ids if sid not in covered]
+
+
 def _stale_task_evidence(
     product_root: Path, change_path: Path, task_ids: list[str]
 ) -> list[tuple[str, list[str]]]:
@@ -568,19 +580,22 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         return [_item_for_pass("specify", change_id=change_id, path=rel, cursor=cursor)], []
 
     if status == "specified":
-        return [
-            _item_for_step(
-                "decompose",
-                change_id=change_id,
-                path=rel,
-                reason=(
-                    "Task files are on disk but the decomposed gate has not passed; fix what "
-                    "advance --gate decomposed reports, then run it again"
-                    if tasks
-                    else "Change is specified; next is Decompose"
-                ),
+        bare = slices_without_tasks(change_path) if tasks else []
+        if bare:
+            # A tasks-missing gap pass left these for Decompose (df-gates #5).
+            reason = (
+                f"{', '.join(bare)} {'has' if len(bare) == 1 else 'have'} no task: give "
+                f"{'it' if len(bare) == 1 else 'each'} a task, then close the decomposed gate "
+                "with advance --gate decomposed"
             )
-        ], []
+        elif tasks:
+            reason = (
+                "Task files are on disk but the decomposed gate has not passed; fix what "
+                "advance --gate decomposed reports, then run it again"
+            )
+        else:
+            reason = "Change is specified; next is Decompose"
+        return [_item_for_step("decompose", change_id=change_id, path=rel, reason=reason)], []
 
     if status == "decomposed" and not tasks:
         return [

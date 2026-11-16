@@ -494,10 +494,19 @@ def _walk_gates_after_gap(change_dir: Path) -> list[str]:
     disk. The walk stops at the first gate that refuses - typically `implemented`, whose Green
     and regression predate the specification change and are re-run in Implement, as the queue
     then says.
+
+    A `tasks-missing` gap pass that left a slice with no task leaves the walk to Decompose:
+    walking `decomposed` and `declaring` on the old tasks closed Decompose before it could give
+    that slice its task, which then could never be declared (df-gates #5).
     """
+    from deltafuse.core.queue import slices_without_tasks
+
     product_root = find_repo_root(change_dir)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
-    if open_gap_reopen(product_root, change_id, until_gate="converged") is None:
+    reopen = open_gap_reopen(product_root, change_id, until_gate="converged")
+    if reopen is None:
+        return []
+    if reopen.get("gap") == "tasks-missing" and slices_without_tasks(change_dir):
         return []
     walked: list[str] = []
     for gate in ("decomposed", "declaring", "implemented"):

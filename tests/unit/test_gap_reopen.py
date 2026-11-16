@@ -122,3 +122,47 @@ def test_tasks_missing_goes_back_to_analyze_to_route_its_claims(tmp_path: Path, 
     assert ready and ready[0].step == "analyze" and ready[0].analyze_pass == "gap"
     assert "Route each claim the gap names" in ready[0].reason
     assert "docs/changes/*/routing.yaml" in ready[0].allowed_write
+
+
+def test_tasks_missing_leaves_decompose_its_turn_for_a_slice_with_no_task(tmp_path: Path, repo_root: Path):
+    """df-gates #5: after `decide --gap tasks-missing`, accepting the specification walked
+    `decomposed` and `declaring` on the old tasks at once, so the task Decompose was to give the
+    uncovered slice could never be declared and `next` never offered Decompose (CHANGELOG 3.3.12:
+    the gap pass "leaves them for Decompose to give their slice a task")."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = (
+        MockChangeBuilder(tmp_path, change_id="CHG-221", title="Gap")
+        .step_intake(claims=["CR-001", "CR-002"])
+        .step_analyze(slices=["SLICE-01", "SLICE-02"])
+        .step_specify()
+        .step_decompose()  # TASK-001 on SLICE-01; SLICE-02 gets no task
+        .step_declare()
+        .step_implement()
+    )
+    change = builder.change_dir
+    (change / "verification.md").write_text(
+        "# Verification\n\n- Outcome: tasks-missing\n\nCR-002 (SLICE-02) has no task.\n", encoding="utf-8"
+    )
+    apply_decision(change, status="reopened", gap="tasks-missing", note="SLICE-02 needs a task")
+    advance_change(change, "analyzed")
+    for slice_id in ("SLICE-01", "SLICE-02"):
+        set_artifact_status(change, status="specified", slice_id=slice_id)
+    set_artifact_status(change, status="specification-proposed", change_status=True)
+    accepted = apply_decision(change, status="accepted", spec=True)
+    assert accepted["ok"], accepted
+
+    assert _status(change / "change.yaml") == "specified"
+    ready = build_work_queue(tmp_path).ready
+    assert ready and ready[0].step == "decompose" and "SLICE-02" in ready[0].reason, ready
+
+    task = (change / "tasks" / "TASK-001.md").read_text(encoding="utf-8")
+    (change / "tasks" / "TASK-002.md").write_text(
+        task.replace("TASK-001", "TASK-002").replace("slice: SLICE-01", "slice: SLICE-02")
+        .replace("status: declared", "status: pending"),
+        encoding="utf-8",
+    )
+    assert advance_change(change, "decomposed")["to"] == "decomposed"
+    assert receipt_chain_errors(tmp_path, change) == []
+    ready = build_work_queue(tmp_path).ready
+    assert ready and ready[0].step == "declare" and ready[0].task == "TASK-002", ready
+    assert set_artifact_status(change, status="declared", task_id="TASK-002")["to"] == "declared"
