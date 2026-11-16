@@ -1442,6 +1442,69 @@ def _human_gate_errors(
     return errors
 
 
+def coverage_claim_errors(
+    change_path: Path, route: str, *, document: dict[str, Any] | None = None
+) -> list[str]:
+    """Each claim has live tasks of its own slice, and its evidence links are files on disk that
+    belong to those tasks: green, and regression on the code route.
+
+    Audit 2026-11-16 (df-gates #3, df-evidence #12): the gate asked only that the `green` and
+    `regression` links were non-empty strings, so a hand edit of coverage.yaml naming another
+    task's records covered a claim that had no task, and the Change converged. The document is
+    the one the Core derives now; a hand-written file is read only when it cannot be derived,
+    and is checked against the disk the same way.
+    """
+    change_path = Path(change_path)
+    if document is None:
+        document = _derived_coverage(change_path)
+    if document is None:
+        cov_file = change_path / "coverage.yaml"
+        if not cov_file.is_file():
+            return []
+        try:
+            document = yaml.safe_load(cov_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - the package validation reports an unreadable file
+            return []
+    claims = document.get("claims") if isinstance(document, dict) else None
+    if not isinstance(claims, dict):
+        return []
+    tasks = _task_frontmatter_by_id(change_path)
+    errors: list[str] = []
+    for cid, claim in claims.items():
+        if not isinstance(claim, dict):
+            continue
+        listed = [t for t in claim.get("tasks") or [] if isinstance(t, str)]
+        own = [
+            t for t in listed
+            if t in tasks and tasks[t].get("status") != "cancelled" and tasks[t].get("slice") == claim.get("slice")
+        ]
+        if not own:
+            errors.append(
+                f"Gate converged: claim '{cid}' has no task in its slice {claim.get('slice')!r}, so nothing "
+                "implements or tests it; Decompose gives that slice a task (a `tasks-missing` gap)"
+            )
+        evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
+        required = ("green", "regression") if route == "code" else ("green",)
+        missing = [phase for phase in required if not evidence.get(phase)]
+        if missing:
+            errors.append(
+                f"Gate converged: claim '{cid}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
+            )
+        for phase in ("red", "green", "regression"):
+            link = evidence.get(phase)
+            if not isinstance(link, str) or not link:
+                continue
+            rel = link.replace("\\", "/")
+            stem = Path(rel).stem
+            if rel != f"evidence/{phase}/{stem}.yaml" or stem not in own or not (change_path / rel).is_file():
+                errors.append(
+                    f"Gate converged: claim '{cid}' links {phase} evidence '{link}', which is not a record "
+                    f"of its own tasks ({', '.join(own) or 'none'}); coverage.yaml is the Core's - do not "
+                    "edit it by hand"
+                )
+    return errors
+
+
 def _derived_coverage(change_path: Path) -> dict[str, Any] | None:
     """coverage.yaml as the Core would write it now, or None when it cannot."""
     from deltafuse.core.analyze import CoverageError, build_coverage_document
@@ -1728,26 +1791,7 @@ def _check_gate(
         # Coverage evidence mapping check (P4). DF3-002 / F-02: route-aware —
         # docs/ops routes keep their own green oracle and are not required to
         # carry product-source regression evidence.
-        cov_file = change_path / "coverage.yaml"
-        derived = _derived_coverage(change_path)
-        if derived is not None or cov_file.is_file():
-            try:
-                cov_data = derived if derived is not None else yaml.safe_load(cov_file.read_text(encoding="utf-8"))
-                claims_map = cov_data.get("claims", {})
-                for c_id, c_val in claims_map.items():
-                    if isinstance(c_val, dict):
-                        ev_map = c_val.get("evidence", {})
-                        missing = []
-                        if not ev_map.get("green"):
-                            missing.append("green")
-                        if route == "code" and not ev_map.get("regression"):
-                            missing.append("regression")
-                        if missing:
-                            errors.append(
-                                f"Gate converged: claim '{c_id}' in coverage.yaml is missing {' and '.join(missing)} evidence mapping"
-                            )
-            except Exception:
-                pass
+        errors.extend(coverage_claim_errors(change_path, route))
 
         if spec_delta_file.is_file():
             ops, parse_errs = _spec_delta_ops(spec_delta_file)

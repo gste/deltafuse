@@ -349,14 +349,52 @@ def _change_id(change_path: Path) -> str:
 
 
 def _slice_tasks(change_path: Path) -> dict[str, list[str]]:
-    """Task ids per slice, from task frontmatter, in id order."""
+    """Live (not cancelled) task ids per slice, from task frontmatter, in id order."""
     out: dict[str, list[str]] = {}
     for _, meta in iter_frontmatter(change_path / "tasks"):
+        if meta.get("status") == "cancelled":
+            continue
         if isinstance(meta.get("id"), str) and isinstance(meta.get("slice"), str):
             out.setdefault(meta["slice"], []).append(meta["id"])
     for ids in out.values():
         ids.sort()
     return out
+
+
+# A task's status as the lifecycle step its claim has reached. A superseded task's behaviour is
+# already there (its Red passed on unchanged code); a blocked one is still being implemented.
+_CLAIM_STEP_OF_TASK = {
+    "pending": "decomposed",
+    "declaring": "declaring",
+    "declared": "declared",
+    "implementing": "implementing",
+    "blocked": "implementing",
+    "implemented": "implemented",
+    "superseded": "implemented",
+    "verified": "verified",
+}
+_CLAIM_STEPS = ("decomposed", "declaring", "declared", "implementing", "implemented", "verified")
+# Outcomes the Core records for a claim that tasks do not express.
+_CLAIM_TERMINAL = frozenset({"rejected", "not-reproduced"})
+
+
+def _task_statuses(change_path: Path) -> dict[str, str]:
+    return {
+        meta["id"]: str(meta.get("status") or "")
+        for _, meta in iter_frontmatter(change_path / "tasks")
+        if isinstance(meta.get("id"), str)
+    }
+
+
+def _claim_status(task_ids: list[str], statuses: dict[str, str]) -> str:
+    """The least advanced step among the claim's tasks; `pending` when it has none.
+
+    Audit 2026-11-16 (df-evidence #12): the status was never derived and stayed `pending`.
+    """
+    steps = [_CLAIM_STEP_OF_TASK.get(statuses.get(tid, ""), "decomposed") for tid in task_ids]
+    if not steps:
+        return "pending"
+    return min(steps, key=_CLAIM_STEPS.index)
 
 
 def _derived_evidence(change_path: Path, task_ids: list[str]) -> dict[str, str]:
@@ -463,6 +501,7 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
     existing_claims = existing.get("claims") if isinstance(existing.get("claims"), dict) else {}
     slice_ids = {row.slice_id for row in slices}
     slice_tasks = _slice_tasks(path)
+    task_statuses = _task_statuses(path)
 
     # P12 (workflow.trace_claims: warn, default off): costs one config read and, only when
     # asked for, a scan of each claim's own test files. `off` changes nothing below.
@@ -492,22 +531,14 @@ def build_coverage_document(change_path: Path | str) -> dict[str, Any]:
             spec_refs = [item for item in prev_refs if isinstance(item, str)]
         else:
             spec_refs = list(record.spec_refs)
-        prev_tasks = prev.get("tasks") if isinstance(prev, dict) else None
-        tasks = [item for item in prev_tasks if isinstance(item, str)] if isinstance(prev_tasks, list) else []
-        if not tasks:
-            tasks = list(slice_tasks.get(record.slice_id, []))
-        prev_evidence = prev.get("evidence") if isinstance(prev, dict) else None
-        evidence: dict[str, str] = {}
-        if isinstance(prev_evidence, dict):
-            for key in ("red", "green", "regression", "verification"):
-                value = prev_evidence.get(key)
-                if isinstance(value, str) and value:
-                    evidence[key] = value
-        for key, value in _derived_evidence(path, tasks).items():
-            evidence.setdefault(key, value)  # an explicit link wins
-        status = prev.get("status") if isinstance(prev, dict) else None
-        if not isinstance(status, str) or status not in _COVERAGE_STATUSES:
-            status = "pending"
+        # Tasks, evidence and status are derived every time, never kept from the file: a task
+        # added later was never listed, a cancelled one kept covering the claim, and a hand-written
+        # link to another task's evidence covered a claim with no task at all (audit 2026-11-16,
+        # df-evidence #12, df-gates #3).
+        tasks = list(slice_tasks.get(record.slice_id, []))
+        evidence = _derived_evidence(path, tasks)
+        prev_status = prev.get("status") if isinstance(prev, dict) else None
+        status = prev_status if prev_status in _CLAIM_TERMINAL else _claim_status(tasks, task_statuses)
         claims_out[cid] = {
             "slice": record.slice_id,
             "tasks": tasks,
