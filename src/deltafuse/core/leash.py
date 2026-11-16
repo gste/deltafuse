@@ -395,8 +395,14 @@ def human_decision_judge(
         rel = posix_relpath(raw)
         data = _bytes_at(root, rel, head=head)
         if data is None:
-            before = _bytes_at(root, rel, head=base or "HEAD")
-            return before is not None and _eol_digest(before) in archived.get(rel, set())
+            # The bytes `decide` moved: the base's, or - when the base is a step's start and the
+            # record changed in a commit since (`advance`, df-leash #2) - the last committed ones.
+            revs = [base or "HEAD"] + (["HEAD"] if base and head in (None, INDEX) else [])
+            for rev in revs:
+                before = _bytes_at(root, rel, head=rev)
+                if before is not None and _eol_digest(before) in archived.get(rel, set()):
+                    return True
+            return False
         digest = hashlib.sha256(data).hexdigest()
         return digest in decided.get(rel, set()) or restored.get(rel) == digest
 
@@ -1231,8 +1237,13 @@ def git_dirty_paths(
     *,
     base: str | None = None,
     head: str | None = None,
+    since: str | None = None,
 ) -> list[str]:
     """Changed paths as repo-relative posix names.
+
+    ``since`` (`advance`, df-leash #2): the working tree against HEAD plus what every commit
+    after ``since`` on this line changed - merge commits excepted, whose changes come from
+    another line that CI judges - so a `git commit --no-verify` inside a step is still judged.
 
     DF3-003 / SEC-01: pass ``base`` (and optionally ``head``) with exact SHAs to
     diff a commit range — a clean PR/push checkout has no local diff, so CI must
@@ -1272,9 +1283,53 @@ def git_dirty_paths(
     tracked = _git_names(root, *diff_args, what="read git diff")
     if head == INDEX:
         return _unique(tracked)
+    committed: list[str] = []
+    if since:
+        listing = _git(root, "rev-list", "--no-merges", "--first-parent", f"{since}..HEAD")
+        if listing.returncode != 0:
+            err = (listing.stderr or listing.stdout or "git rev-list failed").strip()
+            raise LeashError(f"leash could not list the step's commits: {err}")
+        for commit in (line.strip() for line in listing.stdout.splitlines() if line.strip()):
+            committed += _git_names(
+                root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--no-renames", "--root", commit,
+                what="read a commit of the step",
+            )
     untracked = _git_names(root, "ls-files", "--others", "--exclude-standard", what="list untracked files")
     # _unique normalizes slashes and drops blank lines.
-    return _unique(tracked + untracked)
+    return _unique(tracked + committed + untracked)
+
+
+def step_base(product_root: Path, change_dir: Path) -> str | None:
+    """The commit a Change's current step started from (df-leash #2), or None for HEAD.
+
+    The step started when its last step receipt (a `transition` or a `gap-reopen`) was written;
+    the commit before the one that recorded that receipt is where the step's own commits begin.
+    A Change with no such receipt started with the commit that added it. None when that commit
+    is not made yet: the uncommitted diff is the whole step.
+    """
+    root = Path(product_root)
+    try:
+        data = yaml.safe_load((Path(change_dir) / "change.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    change_id = str((data.get("id") if isinstance(data, dict) else None) or Path(change_dir).name)
+    text = (root / ".deltafuse" / "transitions.jsonl")
+    lines = text.read_text(encoding="utf-8").splitlines() if text.is_file() else []
+    digest = None
+    for entry in _json_rows(lines):
+        if entry.get("change") == change_id and entry.get("kind") in {"transition", "gap-reopen"}:
+            digest = entry.get("receipt") if isinstance(entry.get("receipt"), str) else digest
+    if digest:
+        found = _git(root, "log", "--reverse", "--format=%H", "-S", digest, "HEAD", "--",
+                     ".deltafuse/transitions.jsonl")
+    else:
+        rel = (Path(change_dir).resolve() / "change.yaml").relative_to(root.resolve()).as_posix()
+        found = _git(root, "log", "--reverse", "--format=%H", "--diff-filter=A", "HEAD", "--", rel)
+    first = next((line.strip() for line in (found.stdout or "").splitlines() if line.strip()), None)
+    if found.returncode != 0 or first is None:
+        return None
+    parent = _git(root, "rev-parse", "--verify", "--quiet", f"{first}^")
+    return (parent.stdout or "").strip() or first if parent.returncode == 0 else first
 
 
 def merge_base(product_root: Path, base: str, head: str | None) -> str:

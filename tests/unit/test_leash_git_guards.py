@@ -258,3 +258,69 @@ def test_a_stricter_leash_is_not_a_violation(tmp_path: Path, repo_root: Path):
     proc = commit(root, "enforce")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "workflow.leash" not in proc.stdout + proc.stderr
+
+
+def _intake_with_scaffold(tmp_path: Path, repo_root: Path):
+    root = tmp_path / "prod"
+    root.mkdir()
+    install(target_dir=root, framework_root=repo_root)
+    set_workflow(root, leash="enforce")
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "scaffold")
+    builder = MockChangeBuilder(root, change_id="CHG-001", title="t").step_intake()
+    return root, builder
+
+
+def test_advance_judges_what_the_step_committed(tmp_path: Path, repo_root: Path):
+    """df-leash #2: `advance` judged only the uncommitted diff, so one `git commit --no-verify` laundered a
+    write outside the step's envelope before the gate."""
+    from deltafuse.core.transitions import TransitionError, advance_change
+
+    root, builder = _intake_with_scaffold(tmp_path, repo_root)
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "evil.py").write_text("print('evil')\n", encoding="utf-8")
+    with pytest.raises(TransitionError):
+        advance_change(builder.change_dir, "intake")  # control: refused while dirty
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "w")
+    with pytest.raises(TransitionError, match="src/evil.py"):
+        advance_change(builder.change_dir, "intake")
+
+
+def test_advance_judges_commits_since_the_last_receipt_was_committed(tmp_path: Path, repo_root: Path):
+    """After a committed gate the next step starts there: its own --no-verify commit is still judged,
+    the step before it is not judged again."""
+    from deltafuse.core.transitions import TransitionError, advance_change
+
+    root, builder = _intake_with_scaffold(tmp_path, repo_root)
+    advance_change(builder.change_dir, "intake")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "intake done")
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "evil.py").write_text("print('evil')\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "w")
+    from deltafuse.core.leash_run import leash_at_advance
+
+    leash = leash_at_advance(builder.change_dir, root)
+    assert any("src/evil.py" in v for v in leash["violations"]), leash
+
+
+def test_advance_does_not_judge_what_a_merge_brought_in(tmp_path: Path, repo_root: Path):
+    """Another line's commits merged into the Change's branch are that line's (CI judges them)."""
+    from deltafuse.core.leash_run import leash_at_advance
+
+    root, builder = _intake_with_scaffold(tmp_path, repo_root)
+    git(root, "checkout", "-q", "-b", "feature")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "intake")
+    git(root, "checkout", "-q", "main")
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "hotfix.py").write_text("x = 1\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "hotfix")
+    git(root, "checkout", "-q", "feature")
+    git(root, "merge", "-q", "--no-ff", "--no-edit", "main")
+    leash = leash_at_advance(builder.change_dir, root)
+    assert leash["violations"] == [], leash
