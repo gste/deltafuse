@@ -84,3 +84,14 @@ def test_a_non_ascii_product_path_is_judged(tmp_path: Path, repo_root: Path):
     proc = commit(root)
     assert proc.returncode != 0
     assert "src/модуль.py" in proc.stdout + proc.stderr
+
+
+def test_a_rename_out_of_src_shows_the_deletion(tmp_path: Path, repo_root: Path):
+    """df-leash #5: with rename detection `git diff --name-only` named only the new path, so
+    `git mv src/app.py docs/intake/app.py` removed product code in Analyze unseen."""
+    root = product(tmp_path, repo_root)
+    (root / "docs" / "intake").mkdir(parents=True, exist_ok=True)
+    git(root, "mv", "src/app.py", "docs/intake/app.py")
+    proc = commit(root)
+    assert proc.returncode != 0
+    assert "src/app.py" in proc.stdout + proc.stderr

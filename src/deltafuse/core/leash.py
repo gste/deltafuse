@@ -1060,7 +1060,9 @@ def git_dirty_paths(
     if probe.returncode != 0:
         err = (probe.stderr or probe.stdout or "git rev-parse failed").strip()
         raise LeashError(f"leash needs a git repository: {err}")
-    diff_args = ["diff", "--name-only"]
+    # --no-renames (df-leash #5): with rename detection a `git mv src/app.py docs/intake/app.py`
+    # lists only the new path, and the product file's removal is never judged.
+    diff_args = ["diff", "--name-only", "--no-renames"]
     if base:
         diff_args.append(f"{base}..{head or 'HEAD'}")
     else:
