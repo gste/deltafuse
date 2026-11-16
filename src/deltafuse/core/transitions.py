@@ -419,7 +419,7 @@ def _record_trace_warnings(change_path: Path) -> None:
     warnings = claim_trace_warnings(change_path)
     atomic_write(
         change_path / "evidence" / "verification" / "trace_warnings.yaml",
-        yaml.safe_dump({"warnings": warnings}, sort_keys=False).encode("utf-8"),
+        yaml.safe_dump({"warnings": warnings}, sort_keys=False, allow_unicode=True).encode("utf-8"),
     )
 
 
@@ -882,7 +882,9 @@ def set_artifact_status(
                         f"first with deltafuse advance)"
                     )
             meta["status"] = status
-            atomic_write(file, f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8"))
+            atomic_write(
+                file, f"---\n{yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)}---\n{body}".encode("utf-8")
+            )
 
         entry: dict[str, Any] = {
             "kind": "artifact-status",

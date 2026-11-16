@@ -78,3 +78,22 @@ def test_record_trace_warnings_writes_nothing_when_off(tmp_path: Path, repo_root
     builder = MockChangeBuilder(tmp_path, change_id="CHG-081", title="Off").step_intake()
     _record_trace_warnings(builder.change_dir)
     assert not (builder.change_dir / "evidence").exists()
+
+
+def test_state_keeps_cyrillic_frontmatter_readable(tmp_path: Path, repo_root: Path):
+    """df-evidence #13: `deltafuse state` rewrote the frontmatter with yaml.safe_dump without
+    allow_unicode, so a Russian slice title came back as `\u0412\u043a...` escapes."""
+    from deltafuse.core.installer import install
+    from deltafuse.core.transitions import set_artifact_status
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-082", title="Unicode").step_intake().step_analyze()
+    slice_file = builder.change_dir / "slices" / "SLICE-01.md"
+    slice_file.write_text(
+        slice_file.read_text(encoding="utf-8").replace("title: Title for SLICE-01", "title: Открытие вклада"),
+        encoding="utf-8",
+    )
+    set_artifact_status(builder.change_dir, status="specified", slice_id="SLICE-01")
+    text = slice_file.read_text(encoding="utf-8")
+    assert "title: Открытие вклада" in text, text
