@@ -213,6 +213,12 @@ def serialize_artifact(
         candidate_output = canonical_yaml
 
     if existing_raw_content is not None:
+        if "\r\n" in existing_raw_content:
+            # Audit 2026-11-16 (df-leash #10): core.autocrlf=true checks an artifact out with CRLF.
+            # Line endings are not formatting the Writer owns: compare and write in git's form, LF,
+            # so the receipt digest is the bytes git stores.
+            existing_raw_content = existing_raw_content.replace("\r\n", "\n")
+            candidate_output = candidate_output.replace("\r\n", "\n")
         try:
             old_res = strict_read_artifact(existing_raw_content, has_frontmatter_delimiters=has_frontmatter_delimiters)
             old_raw_meta = old_res.raw_metadata.strip()
