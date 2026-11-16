@@ -36,6 +36,8 @@ If a sentence is about jobs, queues, or merge, do not say Worker.
 
 A **Human Gate** (DEC / spec accept / merge) is a stop in the Process. Only a human may pass it. Filling `/analyze` or `/declare` as a person is Worker work. Accepting `DEC-*` is Gate work. Same human, different hat. The Core must not auto-accept Gates. The Worker must not pretend a Gate is a step.
 
+What the Core can verify: a verdict was written by `deltafuse decide`, which records a receipt bound to the bytes answered, and nothing changed it since. It cannot tell who ran `decide`. Without a Human Gate password (`deltafuse gate-password set`) a Worker that runs `decide` itself passes the Gate, and its receipt reads `human_check: none` like the human's. With one, `decide` reads the password only from an interactive console (`human_check: password`); the password file is still a file in the working tree, so a Worker that moves it aside answers with `human_check: none` again. Read `human_check` in the gate journal; against a Worker that edits files on purpose, isolate it on the host.
+
 ## Through-mode
 
 Default LLM Worker entry is `/run`. The Worker calls `deltafuse next`, loads the named skill, and continues in the same session. The human does not paste each slash command.
