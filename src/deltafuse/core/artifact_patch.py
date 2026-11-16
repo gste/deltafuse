@@ -35,6 +35,18 @@ class PatchOutcome:
     applied_ops_count: int
 
 
+_ABSENT = object()
+
+
+def _value_at(data: Any, tokens: list[str]) -> Any:
+    """The value at a token path, or _ABSENT."""
+    for token in tokens:
+        if not isinstance(data, dict) or token not in data:
+            return _ABSENT
+        data = data[token]
+    return data
+
+
 def _parse_pointer(ptr: str) -> list[str]:
     if not isinstance(ptr, str) or not ptr.startswith("/"):
         raise ArtifactPatchError(f"Invalid JSON Pointer '{ptr}'; must start with '/'", code="invalid_pointer")
@@ -101,16 +113,23 @@ def apply_artifact_patch(
 
     _check_pointer_overlaps(all_pointers)
 
-    # Core-owned field protection check
+    # Core-owned field protection check. A Core-owned name may be a path (`analysis/routing`):
+    # a pointer at it or inside it is refused outright; a pointer at one of its ancestors
+    # (`/analysis`) is refused below when it changes the Core-owned value (audit 2026-11-16,
+    # df-leash #17: only the first token was compared, so setting /analysis rewrote it).
+    owned_paths = [[tok for tok in str(field).split("/") if tok] for field in core_owned]
+    guarded_ancestors: list[list[str]] = []
     for ptr in all_pointers:
         tokens = _parse_pointer(ptr)
-        root_field = tokens[0] if tokens else ""
-        if root_field in core_owned:
-            raise ArtifactPatchError(
-                f"Field '{root_field}' target by pointer '{ptr}' is Core-owned and immutable",
-                code="core_owned_field",
-                path=ptr,
-            )
+        for owned in owned_paths:
+            if owned and tokens[: len(owned)] == owned:
+                raise ArtifactPatchError(
+                    f"Field '{'/'.join(owned)}' target by pointer '{ptr}' is Core-owned and immutable",
+                    code="core_owned_field",
+                    path=ptr,
+                )
+            if owned and owned[: len(tokens)] == tokens:
+                guarded_ancestors.append(owned)
 
     updated_meta = copy.deepcopy(metadata)
     applied_count = 0
@@ -151,6 +170,16 @@ def apply_artifact_patch(
             applied_count += 1
         else:
             raise ArtifactPatchError(f"Target key '{target_key}' in pointer '{ptr}' does not exist", code="remove_target_missing", path=ptr)
+
+    for owned in guarded_ancestors:
+        if _value_at(metadata, owned) != _value_at(updated_meta, owned):
+            name = "/".join(owned)
+            raise ArtifactPatchError(
+                f"Field '{name}' is Core-owned and immutable; a patch of '/{owned[0]}' must keep it "
+                f"(set the fields beside it by their own pointers)",
+                code="core_owned_field",
+                path="/" + name,
+            )
 
     # Post-patch storage schema validation
     val_res = registry.validate_storage_schema(kind, updated_meta)

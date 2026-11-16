@@ -66,3 +66,37 @@ def test_a_writer_update_works_on_a_crlf_checkout(tmp_path: Path, repo_root: Pat
     assert meta["allowed_paths"] == ["src/app.py", "src/b.py"]
     assert "P" in body
     assert b"\r\n" not in data, "the Writer writes one line ending, LF, so the receipt digest is git's blob"
+
+
+def _analyzed_change(tmp_path: Path, repo_root: Path) -> dict:
+    import yaml
+
+    builder = _specified(tmp_path, repo_root)
+    meta = yaml.safe_load((builder.change_dir / "change.yaml").read_text(encoding="utf-8"))
+    meta["analysis"] = {"routing": "routing.yaml", "summary": "old"}
+    return meta
+
+
+@pytest.mark.parametrize("patch", [
+    {"set": [{"path": "/analysis", "value": {"routing": "forged.yaml", "summary": "s"}}]},
+    {"set": [{"path": "/analysis/routing", "value": "forged.yaml"}]},
+    {"remove": ["/analysis"]},
+])
+def test_a_nested_core_owned_field_is_guarded_by_its_full_pointer(tmp_path: Path, repo_root: Path, patch: dict):
+    """df-leash #17: change.descriptor.yaml makes `analysis/routing` Core-owned; the patch compared only a
+    pointer's first token ('analysis') with the Core-owned names, so setting /analysis rewrote it."""
+    from deltafuse.core.artifact_patch import ArtifactPatchError, apply_artifact_patch
+
+    meta = _analyzed_change(tmp_path, repo_root)
+    with pytest.raises(ArtifactPatchError, match="analysis/routing"):
+        apply_artifact_patch(meta, patch, kind="change")
+
+
+def test_a_sibling_of_a_nested_core_owned_field_stays_writable(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.artifact_patch import apply_artifact_patch
+
+    meta = _analyzed_change(tmp_path, repo_root)
+    out = apply_artifact_patch(meta, {"set": [{"path": "/analysis/summary", "value": "new"}]}, kind="change")
+    assert out.updated_metadata["analysis"] == {"routing": "routing.yaml", "summary": "new"}
+    same = {"set": [{"path": "/analysis", "value": {"routing": "routing.yaml", "summary": "new"}}]}
+    assert apply_artifact_patch(meta, same, kind="change").updated_metadata["analysis"]["summary"] == "new"
