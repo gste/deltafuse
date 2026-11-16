@@ -250,11 +250,12 @@ def has_valid_receipt(
     """
     root = Path(product_root)
     want_rel = rel_path.replace("\\", "/") if rel_path else None
-    current_digest = (
-        _digest(Path(artifact).read_bytes())
-        if artifact is not None and Path(artifact).is_file()
-        else None
-    )
+    # `decide` writes LF; a checkout under core.autocrlf gives back the same text with CRLF,
+    # which is still the bytes the human answered.
+    current_digests: set[str] | None = None
+    if artifact is not None and Path(artifact).is_file():
+        data = Path(artifact).read_bytes()
+        current_digests = {_digest(data), _digest(data.replace(b"\r\n", b"\n"))}
     for entry in reversed(load_receipts(root)):
         if entry.get("kind") != kind or entry.get("status") != status:
             continue
@@ -267,9 +268,9 @@ def has_valid_receipt(
             if version != RECEIPT_VERSION or not _chain_intact(entry):
                 continue
         if (
-            current_digest is not None
+            current_digests is not None
             and version is not None
-            and entry.get("artifact_sha256") != current_digest
+            and entry.get("artifact_sha256") not in current_digests
         ):
             continue  # stale: artifact changed after the click
         return True

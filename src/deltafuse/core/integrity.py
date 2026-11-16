@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 import yaml
-from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_click
+from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_valid_receipt
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 
 
@@ -220,12 +220,13 @@ def validate_decision_ref(design_ref: str | None, repo_root: Path) -> list[str]:
                 f"Referenced decision '{dec_path.name}' has status '{status}', "
                 f"must be 'accepted' (Change is blocked-on-decision)"
             )
-        elif not has_click(
+        elif not has_valid_receipt(
             repo_root,
             kind="decision",
             status="accepted",
             artifact_id=str(meta.get("id") or "") or None,
             rel_path=dec_path.resolve().relative_to(repo_root.resolve()).as_posix(),
+            artifact=dec_path,
         ):
             errors.append(
                 f"Referenced decision '{dec_path.name}' is accepted without deltafuse decide"
@@ -344,20 +345,55 @@ def validate_catalog_capability_specs(
     return errors
 
 
+_COMMITTED_CHANGE_LINE = re.compile(r"^\+change:\s*['\"]?(CHG-[0-9A-Za-z-]+)['\"]?\s*$")
+
+
+def _committed_change_bindings(repo_root: Path, rel: str) -> set[str]:
+    """Every Change id a committed revision of this decision file named in `change:`.
+
+    A proposed Decision blocks its Change until the human answers it; editing `change:` away
+    unblocked the gate with no answer (df-gates #7). Only what git recorded can say where the
+    Decision was bound before: a binding never committed leaves no trace here.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "log", "-p", "--format=", "--no-color", "--no-ext-diff", "--no-renames", "--", rel],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+        )
+    except OSError:
+        return set()
+    if proc.returncode != 0:
+        return set()
+    return {m.group(1) for line in proc.stdout.splitlines() if (m := _COMMITTED_CHANGE_LINE.match(line))}
+
+
 def list_proposed_decisions_for_change(change_id: str, repo_root: Path) -> list[dict[str, str]]:
-    """Proposed DEC-* records for a Change: id, path (relative), title, filename."""
+    """Proposed DEC-* records for a Change: id, path (relative), title, filename.
+
+    A proposed record whose `change:` now names another Change (or none) still counts when a
+    committed revision bound it to this one; its row carries `detached_to` with the value now.
+    """
     found: list[dict[str, str]] = []
     for dec_file, meta in iter_frontmatter(repo_root / "docs" / "decisions"):
-        if meta.get("change") != change_id or meta.get("status") != "proposed":
+        if meta.get("status") != "proposed":
             continue
+        rel = dec_file.relative_to(repo_root).as_posix()
+        row: dict[str, str] = {}
+        if meta.get("change") != change_id:
+            if change_id not in _committed_change_bindings(repo_root, rel):
+                continue
+            row["detached_to"] = str(meta.get("change"))
         dec_id = meta.get("id")
         title = meta.get("title")
         found.append(
             {
                 "id": dec_id if isinstance(dec_id, str) else dec_file.stem,
-                "path": dec_file.relative_to(repo_root).as_posix(),
+                "path": rel,
                 "filename": dec_file.name,
                 "title": title if isinstance(title, str) and title.strip() else dec_file.stem,
+                **row,
             }
         )
     return found
@@ -367,6 +403,12 @@ def find_unresolved_decisions_for_change(change_id: str, repo_root: Path) -> lis
     """Finds any decision records in docs/decisions/ associated with change_id that are in 'proposed' status."""
     return [
         f"Decision '{row['filename']}' for Change '{change_id}' is in 'proposed' status"
+        + (
+            f" (its `change:` was edited to {row['detached_to']!r} after git recorded it for "
+            f"'{change_id}'; only the human answers it, with deltafuse decide)"
+            if "detached_to" in row
+            else ""
+        )
         for row in list_proposed_decisions_for_change(change_id, repo_root)
     ]
 
@@ -382,16 +424,20 @@ def find_unrecorded_terminal_decisions_for_change(change_id: str, repo_root: Pat
             continue
         rel = dec_file.relative_to(repo_root).as_posix()
         dec_id = meta.get("id") if isinstance(meta.get("id"), str) else dec_file.stem
-        if has_click(
+        # The receipt must name this file and id and still match its bytes: a matching id or
+        # path alone let a rewritten or id-reusing record pass as answered (df-gates #7).
+        if has_valid_receipt(
             repo_root,
             kind="decision",
             status=str(status),
             artifact_id=dec_id,
             rel_path=rel,
+            artifact=dec_file,
         ):
             continue
         found.append(
-            f"Decision '{dec_file.name}' is {status} without deltafuse decide"
+            f"Decision '{dec_file.name}' is {status} without deltafuse decide, or was edited "
+            "after the human answered it"
         )
     return found
 
