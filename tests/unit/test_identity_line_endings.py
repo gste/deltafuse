@@ -16,11 +16,7 @@ import pytest
 from deltafuse import __version__
 from deltafuse.core import assets
 from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
-from deltafuse.core.hasher import (
-    compute_framework_content_hash,
-    compute_framework_content_hashes,
-    normalize_line_endings,
-)
+from deltafuse.core.hasher import compute_framework_content_hash, normalize_line_endings
 
 MANIFEST_LF = b'{\n  "files": {\n    "__init__.py": "ab"\n  },\n  "schema_version": 1\n}\n'
 
@@ -55,10 +51,6 @@ def test_framework_content_hash_is_the_same_for_crlf_and_lf_checkouts(tmp_path: 
     crlf = _tree(tmp_path / "crlf", b"\r\n")
 
     assert compute_framework_content_hash(crlf) == compute_framework_content_hash(lf)
-    current, legacy = compute_framework_content_hashes(crlf)
-    assert current == compute_framework_content_hash(lf)
-    assert legacy != current, "the legacy digest is the raw-byte one a CRLF checkout pinned"
-    assert compute_framework_content_hashes(lf) == (current, current)
 
 
 def test_framework_content_hash_keeps_binary_files_byte_exact(tmp_path: Path):
@@ -82,13 +74,7 @@ def test_manifest_identity_is_the_same_for_crlf_and_lf(tmp_path: Path):
     lf.write_bytes(MANIFEST_LF)
     crlf.write_bytes(MANIFEST_LF.replace(b"\n", b"\r\n"))
 
-    current_lf, legacy_lf = assets.manifest_identity_digests(lf)
-    current_crlf, legacy_crlf = assets.manifest_identity_digests(crlf)
-    assert current_lf == current_crlf == _sha(MANIFEST_LF)
-    # either way round, the raw digest of the other form is still known
-    assert _sha(crlf.read_bytes()) in legacy_lf
-    assert _sha(crlf.read_bytes()) in legacy_crlf
-    assert current_lf not in legacy_lf
+    assert assets.manifest_identity_digest(lf) == assets.manifest_identity_digest(crlf) == _sha(MANIFEST_LF)
 
 
 def _bundle(root: Path, manifest: bytes, monkeypatch) -> Path:
@@ -113,50 +99,21 @@ def _lock(product: Path, content_hash: str) -> None:
 
 @pytest.mark.parametrize("disk_eol", [b"\n", b"\r\n"], ids=["disk-lf", "disk-crlf"])
 def test_product_lock_survives_the_manifest_changing_line_endings(tmp_path: Path, monkeypatch, disk_eol):
-    """The incident: a lock taken from CRLF bytes, the manifest now LF (and the reverse)."""
+    """The incident: a lock taken with the manifest one way, the manifest now the other way."""
     bundle = _bundle(tmp_path / "bundle", MANIFEST_LF.replace(b"\n", disk_eol), monkeypatch)
     product = tmp_path / "product"
     registry = ArtifactRegistry()
 
-    new_pin = assets.get_installed_lock_hash()
-    assert new_pin == f"sha256:{_sha(MANIFEST_LF)}", "new locks pin the normalized digest"
-    _lock(product, new_pin)
+    pin = assets.get_installed_lock_hash()
+    assert pin == f"sha256:{_sha(MANIFEST_LF)}", "locks pin the normalized digest"
+    _lock(product, pin)
     registry.verify_product_lock(product)
 
-    # transition until 4.0.0: a lock written up to 3.3.11 from either form verifies
-    for eol in (b"\n", b"\r\n"):
-        _lock(product, "sha256:" + _sha(MANIFEST_LF.replace(b"\n", eol)))
-        registry.verify_product_lock(product)
+    other_eol = b"\r\n" if disk_eol == b"\n" else b"\n"
+    (bundle / "manifest.json").write_bytes(MANIFEST_LF.replace(b"\n", other_eol))
+    registry.verify_product_lock(product)
 
     # it is still a content identity
     (bundle / "manifest.json").write_bytes(MANIFEST_LF.replace(b'"ab"', b'"cd"').replace(b"\n", disk_eol))
     with pytest.raises(ArtifactRegistryError, match="does not match running framework asset identity"):
         registry.verify_product_lock(product)
-
-
-def test_init_keeps_a_legacy_pin_of_the_same_framework(tmp_path: Path, repo_root: Path, monkeypatch):
-    """Re-running `deltafuse init` must not re-pin a lock written up to 3.3.11: every
-    evidence stamp of an active Change carries the pin it was taken under."""
-    from deltafuse.core import installer
-
-    current = compute_framework_content_hash(repo_root)
-    legacy = "e" * 64
-    monkeypatch.setattr(installer, "compute_framework_content_hashes", lambda root: (current, legacy))
-
-    installer.install(target_dir=tmp_path, framework_root=repo_root)
-    lock_path = tmp_path / ".deltafuse" / "lock.yaml"
-    lock_path.write_text(
-        lock_path.read_text(encoding="utf-8").replace(f"sha256:{current}", f"sha256:{legacy}"),
-        encoding="utf-8",
-    )
-
-    result = installer.install(target_dir=tmp_path, framework_root=repo_root)
-    assert result.content_hash == legacy
-    assert f"content_hash: sha256:{legacy}" in lock_path.read_text(encoding="utf-8")
-
-    lock_path.write_text(
-        lock_path.read_text(encoding="utf-8").replace(f"sha256:{legacy}", "sha256:" + "f" * 64),
-        encoding="utf-8",
-    )
-    with pytest.raises(installer.InstallationError, match="different DeltaFuse lock"):
-        installer.install(target_dir=tmp_path, framework_root=repo_root)

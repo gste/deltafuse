@@ -85,28 +85,16 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
     the same tree pin the same hash.
     Matches the algorithm in scripts/init.ps1 and scripts/init.sh.
     """
-    return compute_framework_content_hashes(framework_root)[0]
-
-
-def compute_framework_content_hashes(framework_root: Path | str | None = None) -> tuple[str, str]:
-    """(current, legacy) framework content hash, from one walk of the tree.
-
-    `legacy` is the algorithm over raw file bytes that locks were written with
-    up to 3.3.11; it equals `current` on an LF tree. Locks written by it are
-    still accepted until 4.0.0 (see get_executing_framework_identity).
-    """
     if framework_root is None:
         framework_root = Path(__file__).resolve().parent.parent.parent.parent
     else:
         framework_root = Path(framework_root).resolve()
 
     records: list[str] = []
-    legacy_records: list[str] = []
 
     def add(name: str, path: Path) -> None:
-        data = path.read_bytes()
-        records.append(f"{name}:{hashlib.sha256(normalize_line_endings(data)).hexdigest().lower()}")
-        legacy_records.append(f"{name}:{hashlib.sha256(data).hexdigest().lower()}")
+        data = normalize_line_endings(path.read_bytes())
+        records.append(f"{name}:{hashlib.sha256(data).hexdigest().lower()}")
 
     roots = ["docs", "process", "scripts", "tests", "src"]
     for root_name in roots:
@@ -131,11 +119,8 @@ def compute_framework_content_hashes(framework_root: Path | str | None = None) -
     if pyproject_path.is_file():
         add("pyproject", pyproject_path)
 
-    def digest(lines: list[str]) -> str:
-        payload = "\n".join(sorted(lines)) + "\n"
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
-
-    return digest(records), digest(legacy_records)
+    payload = "\n".join(sorted(records)) + "\n"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
 
 
 _SKIP_PARTS = {"__pycache__", ".pytest_cache"}

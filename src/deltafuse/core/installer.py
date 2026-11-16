@@ -15,8 +15,8 @@ from deltafuse.core.adapters import (
     is_framework_uri,
     resolve_effective_adapter_mode,
 )
-from deltafuse.core.assets import manifest_identity_digests, resolve_assets, source_assets_root
-from deltafuse.core.hasher import compute_framework_content_hashes
+from deltafuse.core.assets import manifest_identity_digest, resolve_assets, source_assets_root
+from deltafuse.core.hasher import compute_framework_content_hash
 from deltafuse.core.leash import load_leash_mode, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
 
@@ -250,8 +250,7 @@ def install(
         if not version_file.is_file():
             raise InstallationError(f"VERSION file not found in framework root: {framework_root}")
         version = version_file.read_text(encoding="utf-8").strip()
-        content_hash, legacy_hash = compute_framework_content_hashes(framework_root)
-        legacy_hashes = {legacy_hash} - {content_hash}
+        content_hash = compute_framework_content_hash(framework_root)
     else:
         from importlib.metadata import version as _package_version
 
@@ -259,19 +258,11 @@ def install(
         manifest_path = bundle_assets / "manifest.json"
         if not manifest_path.is_file():
             raise InstallationError("deltafuse asset bundle is incomplete: manifest.json missing")
-        content_hash, legacy_hashes = manifest_identity_digests(manifest_path)
+        content_hash = manifest_identity_digest(manifest_path)
 
     lock_path = target_root / ".deltafuse" / "lock.yaml"
     if lock_path.is_file():
         lock_text = lock_path.read_text(encoding="utf-8")
-        if f"content_hash: sha256:{content_hash}" not in lock_text:
-            # A lock written up to 3.3.11 pins the raw-byte digest of this same
-            # framework: keep that pin rather than re-pin, since every evidence
-            # stamp of an active Change carries it (transition until 4.0.0).
-            for legacy in sorted(legacy_hashes):
-                if f"content_hash: sha256:{legacy}" in lock_text:
-                    content_hash = legacy
-                    break
         lock_differs = f"content_hash: sha256:{content_hash}" not in lock_text
         if lock_differs and not force:
             raise InstallationError("A different DeltaFuse lock already exists. Rerun with --force for an explicit upgrade.")
