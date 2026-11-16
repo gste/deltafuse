@@ -95,3 +95,61 @@ def test_a_rename_out_of_src_shows_the_deletion(tmp_path: Path, repo_root: Path)
     proc = commit(root)
     assert proc.returncode != 0
     assert "src/app.py" in proc.stdout + proc.stderr
+
+
+def test_ci_judges_a_pr_from_its_merge_base(tmp_path: Path, repo_root: Path):
+    """df-leash #15: CI diffed `base..head` (tree to tree). When the base branch moved on after the PR
+    branched, its own new commits read as the PR's writes and the PR was refused for them."""
+    from deltafuse.core.leash import git_dirty_paths
+    from deltafuse.core.leash_run import run_leash
+
+    root = tmp_path / "p"
+    root.mkdir()
+    install(target_dir=root, framework_root=repo_root)
+    set_workflow(root, leash="enforce")
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "scaffold")
+    git(root, "checkout", "-q", "-b", "pr")
+    MockChangeBuilder(root, change_id="CHG-001", title="t").step_intake()
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "intake")
+    pr_head = git(root, "rev-parse", "HEAD").stdout.strip()
+    git(root, "checkout", "-q", "main")
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "hotfix.py").write_text("x = 1\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "hotfix on main")
+    base = git(root, "rev-parse", "HEAD").stdout.strip()
+    git(root, "checkout", "-q", "pr")
+    paths = git_dirty_paths(root, base=base, head=pr_head)
+    assert "src/hotfix.py" not in paths
+    payload = run_leash(root, base=base, head=pr_head)
+    assert payload["violations"] == [], payload
+
+
+def test_ci_still_refuses_the_prs_own_write(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.leash_run import run_leash
+
+    root = tmp_path / "p"
+    root.mkdir()
+    install(target_dir=root, framework_root=repo_root)
+    set_workflow(root, leash="enforce")
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "scaffold")
+    git(root, "checkout", "-q", "-b", "pr")
+    MockChangeBuilder(root, change_id="CHG-001", title="t").step_intake()
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "evil.py").write_text("x = 1\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "intake")
+    pr_head = git(root, "rev-parse", "HEAD").stdout.strip()
+    git(root, "checkout", "-q", "main")
+    (root / "README.md").write_text("moved on\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "main moved")
+    base = git(root, "rev-parse", "HEAD").stdout.strip()
+    git(root, "checkout", "-q", "pr")
+    payload = run_leash(root, base=base, head=pr_head)
+    assert any("src/evil.py" in v for v in payload["violations"]), payload

@@ -14,8 +14,8 @@ jobs:
       # v5 runs on Node 24; v4 is force-migrated from deprecated Node 20.
       - uses: actions/checkout@v5
         with:
-          # DF3-003 / SEC-01: leash diffs an exact base..head SHA range, so the
-          # runner needs history to resolve the base commit.
+          # DF3-003 / SEC-01: leash diffs an exact base...head SHA range (from the
+          # merge base), so the runner needs history to resolve both commits.
           fetch-depth: 0
           submodules: recursive
       # v6 runs on Node 24; the product Python version remains pinned below.
@@ -40,8 +40,9 @@ jobs:
           fi
       - name: Leash
         run: |
-          # DF3-003 / SEC-01: a clean checkout has no worktree diff; judge the
-          # committed base..head range instead. Untracked files stay checked.
+          # DF3-003 / SEC-01: a clean checkout has no worktree diff; judge what
+          # head committed since it left base (base...head, three dots: commits the
+          # base branch got later are not the PR's). Untracked files stay checked.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
             HEAD="${{ github.event.pull_request.head.sha }}"

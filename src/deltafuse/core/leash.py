@@ -1064,7 +1064,10 @@ def git_dirty_paths(
     # lists only the new path, and the product file's removal is never judged.
     diff_args = ["diff", "--name-only", "--no-renames"]
     if base:
-        diff_args.append(f"{base}..{head or 'HEAD'}")
+        # Three dots (df-leash #15): what `head` changed since it left `base`'s line. Two dots
+        # compared the trees, so commits the base branch got after the PR branched (a hotfix
+        # merged by someone else) read as the PR's writes.
+        diff_args.append(f"{base}...{head or 'HEAD'}")
     else:
         # A repository with no commits has no HEAD to diff against, and git says
         # so in its own words ("fatal: ambiguous argument 'HEAD'"). That is the
@@ -1083,6 +1086,17 @@ def git_dirty_paths(
     untracked = _git_names(root, "ls-files", "--others", "--exclude-standard", what="list untracked files")
     # _unique normalizes slashes and drops blank lines.
     return _unique(tracked + untracked)
+
+
+def merge_base(product_root: Path, base: str, head: str | None) -> str:
+    """The commit `head` left `base`'s line at: what a `base...head` diff is taken from, and so
+    the base a journal or a record is compared with (df-leash #15)."""
+    proc = _git(Path(product_root), "merge-base", base, head or "HEAD")
+    found = (proc.stdout or "").strip()
+    if proc.returncode != 0 or not found:
+        err = (proc.stderr or proc.stdout or "git merge-base failed").strip()
+        raise LeashError(f"leash could not find where {head or 'HEAD'} left {base}: {err}")
+    return found
 
 
 def _git_names(root: Path, *args: str, what: str) -> list[str]:

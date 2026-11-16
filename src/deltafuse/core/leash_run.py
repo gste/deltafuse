@@ -20,6 +20,7 @@ from deltafuse.core.leash import (
     git_dirty_paths,
     load_baseline,
     load_leash_mode,
+    merge_base,
 )
 from deltafuse.core.queue import (
     QueueError,
@@ -51,6 +52,9 @@ def run_leash(
     envelope = snapshot.get("envelope")
     halt = snapshot.get("halt")
     dirty = list(files) if files else git_dirty_paths(root, base=base, head=head)
+    if base and not files:
+        # The range is base...head: journals and records are compared with where head branched.
+        base = merge_base(root, base, head)
     # Ready envelopes name only the next step; the receipt chain adds the
     # steps already worked since the base, so a finished step's writes
     # are not judged against the step after it. A halt stops new work,
