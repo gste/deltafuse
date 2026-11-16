@@ -657,10 +657,12 @@ def run_evidence(
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])
-    if not rel_paths and phase != "verification":
+    if not rel_paths:
         # The Core computes the changed set from git anyway and refused a list
         # that missed any of it; with no list it records its own (roadmap item
         # 4: box B -> box A). A list the Worker gives is still checked.
+        # Verification too: it recorded none and then refused itself for not
+        # listing the dirty set (audit 2026-11-16, df-gates #10).
         rel_paths = _posix_paths(_core_computed_changed_paths(repo_root, change_path))
 
     _as_text = decode_output
