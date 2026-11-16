@@ -1077,16 +1077,26 @@ def git_dirty_paths(
                 "`deltafuse leash` again"
             )
         diff_args.append("HEAD")
-    tracked = _git(root, *diff_args)
-    if tracked.returncode != 0:
-        err = (tracked.stderr or tracked.stdout or "git diff failed").strip()
-        raise LeashError(f"leash could not read git diff: {err}")
-    untracked = _git(root, "ls-files", "--others", "--exclude-standard")
-    if untracked.returncode != 0:
-        err = (untracked.stderr or untracked.stdout or "git ls-files failed").strip()
-        raise LeashError(f"leash could not list untracked files: {err}")
+    tracked = _git_names(root, *diff_args, what="read git diff")
+    untracked = _git_names(root, "ls-files", "--others", "--exclude-standard", what="list untracked files")
     # _unique normalizes slashes and drops blank lines.
-    return _unique((tracked.stdout or "").splitlines() + (untracked.stdout or "").splitlines())
+    return _unique(tracked + untracked)
+
+
+def _git_names(root: Path, *args: str, what: str) -> list[str]:
+    """Path names a git listing command prints, NUL-separated and unquoted.
+
+    Audit 2026-11-16 (df-leash #4): under `core.quotePath` (git's default) a name with a byte
+    above 0x7f comes out quoted and octal-escaped ("src/\\320\\274...py"), matched no glob, and a
+    Cyrillic file in src/ was never judged. `-z` prints names raw; git writes them in UTF-8.
+    """
+    proc = subprocess.run(
+        ["git", "-c", "core.quotePath=false", *args, "-z"], cwd=root, capture_output=True, check=False
+    )
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace").strip()
+        raise LeashError(f"leash could not {what}: {err or 'git failed'}")
+    return [name for name in proc.stdout.decode("utf-8", errors="surrogateescape").split("\0") if name]
 
 
 def _chmod_exec(path: Path) -> None:
