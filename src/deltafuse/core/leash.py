@@ -126,6 +126,84 @@ def load_leash_mode(product_root: Path, *, missing: str = DEFAULT_LEASH_MODE) ->
     return mode if mode is not None else missing
 
 
+CONFIG_REL = ".deltafuse/config.yaml"
+_LEASH_STRENGTH = {"off": 0, "advisory": 1, "enforce": 2}
+
+
+def config_at(product_root: Path, rev: str | None) -> dict[str, Any] | None:
+    """`.deltafuse/config.yaml` as of a revision (INDEX: staged; None: the working tree).
+
+    None when it is absent there or is not a YAML mapping."""
+    data = _bytes_at(Path(product_root), CONFIG_REL, head=rev)
+    if data is None:
+        return None
+    try:
+        parsed = yaml.safe_load(data.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _guarded_workflow(data: dict[str, Any]) -> tuple[str, tuple[str, ...] | None]:
+    """(leash mode, code roots) of a config mapping, normalized the way the Core reads them."""
+    workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
+    mode = normalize_leash_mode(workflow.get("leash")) or DEFAULT_LEASH_MODE
+    roots = workflow.get("code_roots")
+    clean = (
+        tuple(dict.fromkeys(posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()))
+        if isinstance(roots, list) else ()
+    )
+    return mode, clean or None
+
+
+def verdict_leash_mode(
+    product_root: Path, *, base: str | None, head: str | None, missing: str = DEFAULT_LEASH_MODE
+) -> str:
+    """The mode a diff is judged in: its base's, or a stricter one the judged tree or the working
+    tree sets (df-leash #3: a tree that relaxes the mode is not judged in the mode it sets itself;
+    the human who turns `enforce` on has it at once)."""
+    modes: list[str] = []
+    for rev in dict.fromkeys((base, head, None)):
+        data = config_at(product_root, rev)
+        if data is None:
+            continue
+        workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
+        raw = workflow.get("leash")
+        modes.append(missing if raw is None else (normalize_leash_mode(raw) or missing))
+    if not modes:
+        return load_leash_mode(product_root, missing=missing)
+    return max(modes, key=lambda mode: _LEASH_STRENGTH.get(mode, 0))
+
+
+def config_guard_errors(product_root: Path, *, base: str, head: str | None) -> list[str]:
+    """A judged tree that relaxes `workflow.leash` or changes `workflow.code_roots` (df-leash #3).
+
+    The leash judges a tree with its base's mode and code roots; a change of them in the tree
+    being judged is outside every Worker envelope (`.deltafuse/**` is exempt as a whole, so the
+    mode and the roots were the one thing a commit could change to judge itself). A stricter
+    mode is no violation: it is judged by the mode it replaces.
+    """
+    before = config_at(product_root, base)
+    after = config_at(product_root, head)
+    if before is None or after is None:
+        return []
+    (mode_before, roots_before), (mode_after, roots_after) = _guarded_workflow(before), _guarded_workflow(after)
+    errors: list[str] = []
+    if _LEASH_STRENGTH[mode_after] < _LEASH_STRENGTH[mode_before]:
+        errors.append(
+            f"leash: '{CONFIG_REL}' sets workflow.leash from '{mode_before}' to '{mode_after}'; the "
+            f"leash is the human's setting, outside every Worker envelope, and this diff is judged "
+            f"as '{mode_before}' (the human changes it in a commit of their own)"
+        )
+    if roots_after != roots_before:
+        errors.append(
+            f"leash: '{CONFIG_REL}' changes workflow.code_roots from {list(roots_before or ())} to "
+            f"{list(roots_after or ())}; they decide what is product code, are the human's setting, "
+            f"outside every Worker envelope, and this diff is judged with the old ones"
+        )
+    return errors
+
+
 def load_baseline(product_root: Path) -> str:
     raw = str(config_section(product_root, "project").get("baseline") or "draft").strip().lower()
     return "accepted" if raw == "accepted" else "draft"

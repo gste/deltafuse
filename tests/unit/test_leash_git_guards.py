@@ -219,3 +219,42 @@ def test_untracking_the_lock_does_not_switch_the_hook_off(tmp_path: Path, repo_r
     # Deleting it outright is refused too (the leash cannot find the product), as before.
     git(root, "rm", "-q", ".deltafuse/lock.yaml")
     assert commit(root, "drop lock").returncode != 0
+
+
+def test_relaxing_the_leash_in_the_judged_commit_does_not_relax_its_verdict(tmp_path: Path, repo_root: Path):
+    """df-leash #3: the mode was read from the tree being judged and `.deltafuse/**` is exempt, so one
+    commit setting `workflow.leash: advisory` and writing src/ passed under enforce."""
+    root = product(tmp_path, repo_root)
+    set_workflow(root, leash="advisory")
+    (root / "src" / "app.py").write_text("print('evil')\n", encoding="utf-8")
+    git(root, "add", "-A")
+    proc = commit(root)
+    assert proc.returncode != 0
+    out = proc.stdout + proc.stderr
+    assert "src/app.py" in out and "workflow.leash" in out
+
+
+def test_redefining_the_code_roots_in_the_judged_commit_is_refused(tmp_path: Path, repo_root: Path):
+    """df-leash #3: `workflow.code_roots` decides what is product code; redefined in the same commit it
+    made src/ no product code at all."""
+    root = product(tmp_path, repo_root)
+    set_workflow(root, code_roots=["nothing/**"])
+    (root / "src" / "app.py").write_text("print('evil')\n", encoding="utf-8")
+    git(root, "add", "-A")
+    proc = commit(root)
+    assert proc.returncode != 0
+    out = proc.stdout + proc.stderr
+    assert "src/app.py" in out and "workflow.code_roots" in out
+
+
+def test_a_stricter_leash_is_not_a_violation(tmp_path: Path, repo_root: Path):
+    """Turning the leash on (the human, after baseline acceptance) is judged by the mode it replaces."""
+    root = product(tmp_path, repo_root)
+    set_workflow(root, leash="advisory")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "advisory")
+    set_workflow(root, leash="enforce")
+    git(root, "add", "-A")
+    proc = commit(root, "enforce")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "workflow.leash" not in proc.stdout + proc.stderr
