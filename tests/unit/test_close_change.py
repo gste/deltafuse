@@ -89,6 +89,34 @@ def test_closing_needs_what_the_state_machine_asks(tmp_path: Path, repo_root: Pa
     assert receipt_chain_errors(tmp_path, change) == []
 
 
+def test_the_human_closes_an_analyzed_change(tmp_path: Path, repo_root: Path):
+    """Owner, 2026-11-16: a Change whose specification the human rejected is back at `analyzed`
+    and must be closable; the table allowed rejected/duplicate/superseded only before it."""
+    for status, note in (
+        ("rejected", "Spec rejected: out of scope"),
+        ("duplicate", "Duplicate of CHG-007"),
+        ("superseded", "Superseded by CHG-009"),
+    ):
+        root = tmp_path / status
+        root.mkdir()
+        builder = MockChangeBuilder(root, change_id="CHG-404")
+        install(target_dir=root, framework_root=repo_root)
+        change = builder.step_intake().step_analyze().change_dir
+        builder._core_advance("analyzed")
+        assert _status(change) == "analyzed"
+        assert apply_decision(change, status=status, close=True, note=note)["ok"]
+        assert _status(change) == status
+        assert receipt_chain_errors(root, change) == []
+    with pytest.raises(DecideError, match="cannot become 'not-reproduced'"):
+        root = tmp_path / "nr"
+        root.mkdir()
+        install(target_dir=root, framework_root=repo_root)
+        builder = MockChangeBuilder(root, change_id="CHG-405")
+        change = builder.step_intake().step_analyze().change_dir
+        builder._core_advance("analyzed")
+        apply_decision(change, status="not-reproduced", close=True, note="no defect")
+
+
 def test_not_reproduced_from_declare_needs_a_red_that_did_not_fail(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-402").step_through_decompose()

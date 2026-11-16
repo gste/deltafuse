@@ -41,6 +41,9 @@ stateDiagram-v2
     normalized --> duplicate: duplicate of existing change
     analyzing --> duplicate: duplicate of existing change
     analyzing --> superseded: superseded by newer change
+    analyzed --> rejected: the human rejects the change (e.g. after rejecting its spec)
+    analyzed --> duplicate: duplicate of existing change
+    analyzed --> superseded: superseded by newer change
     analyzing --> not_reproduced: defect unreproducible
     declaring --> not_reproduced: unable to reproduce red failure
     verifying --> not_reproduced: no-op / unreproduced closure
@@ -59,7 +62,7 @@ stateDiagram-v2
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
 | `analyzing` | Routing and slice analysis in progress. `deltafuse next` names one Analyze pass at a time; `analyzed` still needs routing+slices covering every routing primary capability+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
-| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. A bugfix goes to Decompose instead. | `specification-proposed`, `decomposed` (bugfix: spec unchanged; the `decomposed` gate proves the exact `spec_refs`, and refuses any other intent, or a `spec-delta.md` that adds, modifies or removes anything) | Zero unaccepted blocking decisions. |
+| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. A bugfix goes to Decompose instead. | `specification-proposed`, `decomposed` (bugfix: spec unchanged; the `decomposed` gate proves the exact `spec_refs`, and refuses any other intent, or a `spec-delta.md` that adds, modifies or removes anything), `rejected`, `duplicate`, `superseded` (the human's `decide --close`, e.g. after rejecting the specification) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. Entered only when every machine check of the `specified` gate passes except the two that are the human's to settle when they accept - their receipt, and a capability this Change routes into that is still a `draft`; otherwise `deltafuse state` refuses and returns the errors to the Worker. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` added/modified files must stay in slice `spec_refs`. `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `declaring` | All tasks validated against `task.schema.yaml`. |
