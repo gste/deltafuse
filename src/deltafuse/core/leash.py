@@ -924,6 +924,24 @@ def core_status_writes(
     return out
 
 
+def _core_evidence(
+    product_root: Path, rel: str, *, change: str, task: str, phase: str, head: str | None
+) -> bool:
+    """The record at ``rel`` is one `deltafuse evidence` stamped, for this Change, task and phase."""
+    from deltafuse.core.evidence import evidence_stamp_error
+
+    data = _bytes_at(Path(product_root), rel, head=head)
+    if data is None:
+        return False
+    try:
+        record = yaml.safe_load(data.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError):
+        return False
+    if not isinstance(record, dict) or evidence_stamp_error(record, Path(product_root)) is not None:
+        return False
+    return record.get("change") == change and record.get("task") == task and record.get("phase") == phase
+
+
 def collect_chain_envelopes(
     product_root: Path,
     *,
@@ -1001,8 +1019,16 @@ def collect_chain_envelopes(
                 phases = {"declare": ("red",), "implement": ("green", "regression")}[step]
                 for task_id, _, task_file, _ in _load_tasks(change_dir):
                     task_rel = task_file.relative_to(root).as_posix()
+                    # df-leash #7: only a record `deltafuse evidence` wrote for this task and
+                    # phase - any file at that path opened the task's envelope, a never-declared
+                    # task's product paths included, also while the human was deciding.
                     wrote_evidence = any(
-                        f"{rel_dir}/evidence/{phase}/{task_id}.yaml" in changed for phase in phases
+                        f"{rel_dir}/evidence/{phase}/{task_id}.yaml" in changed
+                        and _core_evidence(
+                            root, f"{rel_dir}/evidence/{phase}/{task_id}.yaml",
+                            change=change_id, task=task_id, phase=phase, head=head,
+                        )
+                        for phase in phases
                     )
                     if task_rel in changed or wrote_evidence:
                         items.append(
