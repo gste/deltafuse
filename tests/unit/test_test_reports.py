@@ -158,3 +158,29 @@ def test_the_gate_repeats_what_the_record_said_and_what_is_not_the_fix():
     assert "AttributeError or TypeError" in hint
     # A record without a summary still says what to do.
     assert "Do not edit product code" in _red_category_hint({})
+
+
+def _surefire(root: Path, module: str, cls: str, cases: str) -> None:
+    folder = root / module / "target" / "surefire-reports" if module else root / "target" / "surefire-reports"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"TEST-{cls}.xml").write_text(
+        f'<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="{cls}">{cases}</testsuite>\n', encoding="utf-8"
+    )
+
+
+def test_maven_modules_keep_their_own_test_ids(tmp_path: Path):
+    """Audit 2026-11-16 (df-evidence #5): the reports of two modules were merged by
+    `class::method`, so a passing test of the same name in module b overwrote the failing Red
+    test of module a. A module's ids carry the module; the root module's stay as they were."""
+    _surefire(tmp_path, "a", "demo.CalcTest",
+              '<testcase classname="demo.CalcTest" name="adds"><failure type="AssertionError"/></testcase>')
+    _surefire(tmp_path, "b", "demo.CalcTest", '<testcase classname="demo.CalcTest" name="adds"/>')
+    report = read_report(["mvn", "-fn", "test"], tmp_path)
+    assert report is not None
+    assert report.ids(FAILED) == ["a/demo.CalcTest::adds"]
+    assert report.ids(PASSED) == ["b/demo.CalcTest::adds"]
+
+    single = tmp_path / "single"
+    _surefire(single, "", "demo.CalcTest", '<testcase classname="demo.CalcTest" name="adds"/>')
+    assert read_report(["mvn", "test"], single).ids(PASSED) == ["demo.CalcTest::adds"]
+

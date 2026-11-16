@@ -139,6 +139,21 @@ def read_junit_failures(path: Path) -> dict[str, tuple[str, str]]:
     return found
 
 
+def jvm_module_prefix(rel: str) -> str:
+    """`a/` for a report or source under module `a` (`a/target/...`, `a/src/test/...`); `` for
+    the root module.
+
+    Audit 2026-11-16 (df-evidence #5): the reports of a multi-module build were merged by
+    `class::method`, so a passing test of the same name in another module overwrote the failing
+    Red test. A module's test ids carry the module; a single-module product's are unchanged.
+    """
+    parts = rel.replace("\\", "/").split("/")
+    for i, part in enumerate(parts):
+        if part in {"target", "build"} or parts[i:i + 2] == ["src", "test"]:
+            return "/".join(parts[:i]) + "/" if i else ""
+    return ""
+
+
 def read_report(
     argv: list[str],
     repo_root: Path,
@@ -181,7 +196,10 @@ def read_report(
                 # Surefire and Gradle call any non-assertion exception an
                 # `<error>`, but the test did run: a stub that throws is the
                 # normal shape of a Java red.
-                outcomes.update(read_junit_xml(path, error_means=FAILED))
+                prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
+                outcomes.update(
+                    (prefix + name, got) for name, got in read_junit_xml(path, error_means=FAILED).items()
+                )
         return TestReport("surefire", outcomes) if found else None
     return None
 
