@@ -97,3 +97,40 @@ def test_state_keeps_cyrillic_frontmatter_readable(tmp_path: Path, repo_root: Pa
     set_artifact_status(builder.change_dir, status="specified", slice_id="SLICE-01")
     text = slice_file.read_text(encoding="utf-8")
     assert "title: Открытие вклада" in text, text
+
+
+def test_chain_replay_refuses_a_gate_out_of_turn(tmp_path: Path, repo_root: Path):
+    """df-gates #8: the replay accepted a receipt whose own `from` matched the chain state, even
+    when its gate may not follow that state: one `normalized -> converged` line replayed as a valid
+    chain. Each receipt's gate must be allowed from the replayed state."""
+    import json
+
+    from deltafuse.core.installer import install
+    from deltafuse.core.transitions import _receipt, receipt_chain_errors, transitions_path
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-083", title="Jump").step_intake()
+    entry = {"kind": "transition", "change": "CHG-083", "gate": "converged", "from": "normalized",
+             "to": "converged", "recorded": "2026-11-16T00:00:00Z"}
+    entry["receipt"] = _receipt(entry)
+    with transitions_path(tmp_path).open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry) + "\n")
+    cfile = builder.change_dir / "change.yaml"
+    data = yaml.safe_load(cfile.read_text(encoding="utf-8"))
+    data["status"] = "converged"
+    cfile.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    errors = receipt_chain_errors(tmp_path, builder.change_dir)
+    assert any("out of order" in e and "'converged'" in e for e in errors), errors
+
+
+def test_chain_replay_keeps_the_honest_walk(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.installer import install
+    from deltafuse.core.transitions import receipt_chain_errors
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-084", title="Walk")
+    builder.step_intake().step_analyze().step_specify().step_decompose().step_declare().step_implement().step_verify()
+    assert receipt_chain_errors(tmp_path, builder.change_dir) == []

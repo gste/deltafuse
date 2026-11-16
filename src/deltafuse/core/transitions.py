@@ -314,7 +314,10 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             )
             break
         allowed_from = GATE_ALLOWED_FROM.get(gate or "", set())
-        if row.get("from") != current and current not in allowed_from:
+        # The replayed state decides, not the receipt's own `from`: a receipt whose `from`
+        # merely matched the chain let one `normalized -> converged` line replay as a valid
+        # chain (df-gates #8). `from` may be an in-flight status the gate also starts from.
+        if current not in allowed_from:
             errors.append(
                 f"Core transition chain is out of order at step {i + 1}: "
                 f"gate '{gate}' cannot apply from the chain state "
