@@ -131,7 +131,7 @@ def test_shell_installers_compute_the_same_framework_hash(tmp_path: Path, repo_r
         sh = (repo_root / "scripts" / "init.sh").read_text(encoding="utf-8")
         functions = "\n".join(
             re.search(rf"^{name}\(\) {{.*?^}}", sh, re.S | re.M).group(0)
-            for name in ("sha256_file", "identity_sha256_file", "framework_hash")
+            for name in ("sha256_file", "identity_sha256_file", "lower_names", "framework_hash")
         )
         out = subprocess.run(
             [bash, "-c", functions + "\nframework_hash"],
@@ -158,5 +158,68 @@ def test_shell_installers_compute_the_same_framework_hash(tmp_path: Path, repo_r
         assert out.stdout.strip() == expected, "init.ps1"
         checked += 1
 
+    if not checked:
+        pytest.skip("neither bash nor PowerShell is available")
+
+
+def test_shell_installers_agree_on_identity_edge_cases(tmp_path: Path, repo_root: Path):
+    """df-leash #16: init.sh read `\r\r\n` as one line ending (Git Bash's sed drops a CR itself) and
+    lower-cased only ASCII names; init.ps1 left Hidden files out. hasher.py is the reference."""
+    import ctypes
+    import os
+
+    root = tmp_path / "fw"
+    (root / "docs").mkdir(parents=True)
+    (root / "VERSION").write_bytes(b"9.9.9\n")
+    (root / "pyproject.toml").write_bytes(b"[project]\n")
+    (root / "docs" / "cr-cr-lf.md").write_bytes(b"a\r\r\nb\r\n")
+    (root / "docs" / "cr-cr-lf-no-eol.md").write_bytes(b"a\r\r\nb\r\r")
+    (root / "docs" / "ПРИМЕР.md").write_bytes(b"upper cyrillic\n")
+    hidden = root / "docs" / "Thumbs.db"
+    hidden.write_bytes(b"thumb\n")
+    if os.name == "nt":
+        ctypes.windll.kernel32.SetFileAttributesW(str(hidden), 0x2)  # FILE_ATTRIBUTE_HIDDEN
+    _assert_installers_hash_like_hasher(root, repo_root)
+
+
+def _assert_installers_hash_like_hasher(root: Path, repo_root: Path) -> None:
+    import os
+    import re
+    import shutil
+    import subprocess
+
+    import pytest
+
+    expected = compute_framework_content_hash(root)
+    checked = 0
+    bash = shutil.which("bash")
+    if bash and not (os.name == "nt" and "system32" in bash.lower()):
+        sh = (repo_root / "scripts" / "init.sh").read_text(encoding="utf-8")
+        names = re.findall(r"^([a-z0-9_]+)\(\) \{", sh, re.M)
+        wanted = [n for n in names if n in ("sha256_file", "identity_sha256_file", "lower_names", "framework_hash")]
+        functions = "\n".join(re.search(rf"^{name}\(\) {{.*?^}}", sh, re.S | re.M).group(0) for name in wanted)
+        out = subprocess.run(
+            [bash, "-c", functions + "\nframework_hash"],
+            env={**os.environ, "SCRIPT_DIR": root.as_posix()}, capture_output=True, check=True,
+        )
+        assert out.stdout.decode().strip() == expected, "init.sh"
+        checked += 1
+    pwsh = shutil.which("pwsh") or shutil.which("powershell")
+    if pwsh:
+        script = (
+            "$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:DF_INIT, [ref]$null, [ref]$null);"
+            "$fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]"
+            " -and $n.Name -in 'Get-IdentityFileHash', 'Get-FrameworkContentHash' }, $true);"
+            "$FrameworkRoot = $env:DF_ROOT;"
+            " . ([scriptblock]::Create(($fns | ForEach-Object { $_.Extent.Text }) -join [System.Environment]::NewLine));"
+            " Get-FrameworkContentHash"
+        )
+        out = subprocess.run(
+            [pwsh, "-NoProfile", "-NonInteractive", "-Command", script],
+            env={**os.environ, "DF_INIT": str(repo_root / "scripts" / "init.ps1"), "DF_ROOT": str(root)},
+            capture_output=True, text=True, check=True,
+        )
+        assert out.stdout.strip() == expected, "init.ps1"
+        checked += 1
     if not checked:
         pytest.skip("neither bash nor PowerShell is available")

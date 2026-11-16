@@ -31,10 +31,14 @@ sha256_file() {
 identity_sha256_file() {
   # tr | cmp rather than grep: Git Bash's grep reads CRLF as a plain line end
   if ! tr -d '\r' < "$1" | cmp -s - "$1" && tr -d '\000' < "$1" | cmp -s - "$1"; then
+    # sed -b where it exists: Git Bash's sed otherwise drops a CR before LF itself, and `\r\r\n`
+    # lost both (hasher.py turns it into `\r\n`); GNU sed elsewhere ignores -b, BSD sed lacks it
+    local binary=""
+    if sed -b -n '' /dev/null 2>/dev/null; then binary="-b"; fi
     if [ -z "$(tail -c 1 "$1")" ]; then
-      sed $'s/\r$//' "$1"
+      sed $binary $'s/\r$//' "$1"
     else
-      sed $'$!s/\r$//' "$1"
+      sed $binary $'$!s/\r$//' "$1"
     fi | if command -v sha256sum >/dev/null 2>&1; then
       sha256sum | awk '{print $1}'
     else
@@ -42,6 +46,19 @@ identity_sha256_file() {
     fi
   else
     sha256_file "$1"
+  fi
+}
+
+# Must stay in sync with hasher.py, which lower-cases record names with Python's str.lower:
+# `tr` lower-cases ASCII only, so a non-ASCII upper-case name (ПРИМЕР.md) pinned another hash.
+# Without a Python the ASCII rule is the best there is.
+lower_names() {
+  local python
+  python="$(command -v python3 || command -v python || true)"
+  if [ -n "$python" ] && "$python" -c 'pass' 2>/dev/null; then
+    "$python" -c 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read().decode("utf-8", "surrogateescape").lower().encode("utf-8", "surrogateescape"))'
+  else
+    tr '[:upper:]' '[:lower:]'
   fi
 }
 
@@ -58,13 +75,12 @@ framework_hash() {
       done
       printf '%s\n' "$SCRIPT_DIR/VERSION"
     } | while IFS= read -r file; do
-      relative="$(printf '%s' "${file#"$SCRIPT_DIR/"}" | tr '[:upper:]' '[:lower:]')"
-      printf '%s:%s\n' "$relative" "$(identity_sha256_file "$file")"
+      printf '%s:%s\n' "${file#"$SCRIPT_DIR/"}" "$(identity_sha256_file "$file")"
     done
     # DF3-003 / SEC-02: entrypoints (pyproject.toml scripts table) are pinned too, under the
     # record name hasher.py and init.ps1 use (this script once wrote `pyproject.toml:`)
     printf 'pyproject:%s\n' "$(identity_sha256_file "$SCRIPT_DIR/pyproject.toml")"
-  } | LC_ALL=C sort > "$manifest"
+  } | lower_names | LC_ALL=C sort > "$manifest"
   result="$(sha256_file "$manifest")"
   rm -f -- "$manifest"
   printf '%s\n' "$result"

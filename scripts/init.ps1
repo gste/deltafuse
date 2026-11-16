@@ -37,7 +37,8 @@ function Get-FrameworkContentHash {
     $records = foreach ($root in $roots) {
         $absolute = Join-Path $FrameworkRoot $root
         if (Test-Path -LiteralPath $absolute) {
-            Get-ChildItem -LiteralPath $absolute -Recurse -File | ForEach-Object {
+            # -Force: hasher.py hashes Hidden and System files too (Thumbs.db, desktop.ini)
+            Get-ChildItem -LiteralPath $absolute -Recurse -File -Force | ForEach-Object {
                 # Must stay in sync with src/deltafuse/core/hasher.py: skip transient caches and pip's build metadata
                 if ($_.FullName.Substring($FrameworkRoot.Length) -match '(__pycache__|\.pytest_cache|[^\\/]+\.egg-info)[\\/]') { return }
                 $relative = $_.FullName.Substring($FrameworkRoot.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
