@@ -563,7 +563,11 @@ def structural_kind(rel_path: str) -> str | None:
 
 
 def _git(root: Path, *args: str, text: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=text, check=False)
+    try:
+        return subprocess.run(["git", *args], cwd=root, capture_output=True, text=text, check=False)
+    except OSError as ex:  # no git at all: answer as git would for a missing revision
+        empty = "" if text else b""
+        return subprocess.CompletedProcess(["git", *args], 127, empty, str(ex) if text else str(ex).encode())
 
 
 def _git_bytes(product_root: Path, ref: str, rel_path: str) -> bytes | None:
