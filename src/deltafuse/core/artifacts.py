@@ -147,6 +147,21 @@ class ArtifactService:
                 path=str(identity_or_target),
             )
 
+        # Audit 2026-11-16 (df-leash #12): the target is resolved above, so a `..` in it is gone by
+        # the time the Change boundary below looks, and that boundary only looked at paths under
+        # docs/changes/: `../../../src/evil.yaml` created src/evil.yaml. A Change's artifacts lie in
+        # its own directory; a Decision lies in docs/decisions/.
+        fence = (self.product_root / "docs" / "decisions") if kind == "decision" else self.change_dir
+        try:
+            target_path.relative_to(fence)
+        except ValueError:
+            raise ArtifactPolicyError(
+                f"Target path '{identity_or_target}' is outside "
+                f"{'docs/decisions' if kind == 'decision' else 'the Change directory'}",
+                code="change_boundary_violation",
+                path=str(identity_or_target),
+            )
+
         if self.auth_context and self.auth_context.change_id and "docs/changes/" in target_path.as_posix():
             expected_prefix = (self.product_root / "docs" / "changes" / self.auth_context.change_id).as_posix()
             if not target_path.as_posix().startswith(expected_prefix) and self.product_root.name != self.auth_context.change_id:
