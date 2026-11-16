@@ -32,7 +32,7 @@ from deltafuse.core.hasher import compute_product_baseline_revision, compute_red
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
 from deltafuse.core.red_cause import environment_error, own_code_error
-from deltafuse.core.runners import runner_is_authorized
+from deltafuse.core.runners import report_less_runner_error, runner_is_authorized
 from deltafuse.core.test_reports import (
     FAILED,
     NOT_RUN,
@@ -840,6 +840,9 @@ def run_evidence(
             f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
             "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
         )
+    report_less = report_less_runner_error(argv, route=route, product_root=repo_root)
+    if report_less:
+        errors.append(f"evidence: {report_less}")
     computed = _core_computed_changed_paths(repo_root, change_path)
     if computed:
         worker_paths = set(rel_paths)

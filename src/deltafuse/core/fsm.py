@@ -434,6 +434,10 @@ def _validate_package(
                 stamp_err = evidence_stamp_error(ev_data, repo_root)
                 if stamp_err:
                     errors.append(f"{rel_ev}: {stamp_err}")
+                # Audit 2026-11-16 (df-gates #2, df-evidence #6): the record is written even when
+                # `deltafuse evidence` refused its command, so the gate asks again whether the
+                # runner was authorized and whether it is one that reports the tests it ran.
+                errors.extend(f"{rel_ev}: {e}" for e in _runner_errors(ev_data, route, repo_root))
 
                 rel_path = ev_file.relative_to(evidence_dir)
                 parent_phase_dir = rel_path.parts[0] if len(rel_path.parts) > 1 else None
@@ -540,6 +544,25 @@ def _validate_package(
                 errors.append(f"{rel_ev} parsing error: {ex}")
 
     return errors, loaded_route
+
+
+def _runner_errors(record: dict[str, Any], route: str, repo_root: Path) -> list[str]:
+    """Why a record's command could not have been evidence: an unauthorized runner, or a bare
+    interpreter on a product whose tests run under a runner that reports them."""
+    from deltafuse.core.runners import report_less_runner_error, runner_is_authorized
+    from deltafuse.core.test_reports import _command_argv
+
+    argv = _command_argv(record.get("command"))
+    errors: list[str] = []
+    if not runner_is_authorized(argv, route=route, product_root=repo_root):
+        errors.append(
+            f"command {argv[:3]} is not an authorized runner for route '{route}', so the record is "
+            "not evidence; record it again with the product's test runner (workflow.test_commands)"
+        )
+    report_less = report_less_runner_error(argv, route=route, product_root=repo_root)
+    if report_less:
+        errors.append(report_less)
+    return errors
 
 
 def _load_mapping(path: Path) -> dict[str, Any] | None:
