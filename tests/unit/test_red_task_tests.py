@@ -95,3 +95,73 @@ def test_a_committed_test_the_command_names_is_the_tasks(tmp_path: Path, repo_ro
     red = _red(builder, _pytest("tests/test_add.py"), ["src/calc.py"])
     assert red.authentic, red.errors
     assert red.payload["tests"]["failed"] == ["tests.test_add::test_add"]
+
+
+
+# --- df-evidence #7: a Red that fails on its environment -----------------------------------------
+
+TABLE_TEST = HEADER + '''import json, pathlib
+
+
+def test_add_table():
+    table = json.loads(pathlib.Path('tests/data/cases.json').read_text())
+    for a, b, want in table:
+        assert add(a, b) == want
+'''
+
+
+def test_a_missing_test_data_file_is_not_red(tmp_path: Path, repo_root: Path):
+    builder = _product(tmp_path, repo_root, "CHG-224")
+    (tmp_path / "tests" / "test_table.py").write_text(TABLE_TEST, encoding="utf-8")
+    red = _red(builder, _pytest("tests/test_table.py"), ["tests/test_table.py"])
+    assert not red.authentic
+    assert red.payload["failure_category"] == "environment-error"
+    assert any("tests/data/cases.json" in e for e in red.errors), red.errors
+    assert any("environment-error" in e for e in _declaring_errors(builder))
+
+
+def test_a_package_that_is_not_installed_is_not_red(tmp_path: Path, repo_root: Path):
+    builder = _product(tmp_path, repo_root, "CHG-225")
+    (tmp_path / "tests" / "test_dep.py").write_text(
+        '''def test_uses_dep():
+    import definitely_not_installed_pkg_xyz
+    assert definitely_not_installed_pkg_xyz.ok()
+''',
+        encoding="utf-8",
+    )
+    red = _red(builder, _pytest("tests/test_dep.py"), ["tests/test_dep.py"])
+    assert not red.authentic
+    assert red.payload["failure_category"] == "environment-error"
+
+
+def test_a_module_the_task_writes_and_a_file_the_product_reads_are_red(tmp_path: Path, repo_root: Path):
+    """What the product decides stays Red: a module the task's allowed_paths will create, and a
+    FileNotFoundError raised inside product code."""
+    builder = _product(tmp_path, repo_root, "CHG-226")
+    (tmp_path / "src" / "calc.py").write_text(
+        '''def add(a, b):
+    return 0
+
+
+def load():
+    return open('cfg/limits.ini').read()
+''',
+        encoding="utf-8",
+    )
+    (tmp_path / "tests" / "test_new.py").write_text(
+        HEADER + '''
+
+def test_new_module():
+    import calc.missing_part
+    assert calc.missing_part
+
+
+def test_load():
+    from calc import load
+    assert load()
+''',
+        encoding="utf-8",
+    )
+    red = _red(builder, _pytest("tests/test_new.py"), ["tests/test_new.py"])
+    assert red.authentic, red.errors
+    assert red.payload["failure_category"] == "behavioral-mismatch"

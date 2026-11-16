@@ -31,7 +31,7 @@ from deltafuse.core.fsm import (
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
-from deltafuse.core.red_cause import own_code_error
+from deltafuse.core.red_cause import environment_error, own_code_error
 from deltafuse.core.runners import runner_is_authorized
 from deltafuse.core.test_reports import (
     FAILED,
@@ -56,6 +56,8 @@ OWN_CODE_RED_CATEGORY = "test-own-error"
 NOT_THE_TASKS_RED_CATEGORY = "not-the-tasks-tests"
 # Nothing named the task's tests: no declared test file, no file or class on the command line.
 UNNAMED_RED_CATEGORY = "tests-not-named"
+# The task's tests fail on their environment (audit 2026-11-16, df-evidence #7).
+ENVIRONMENT_RED_CATEGORY = "environment-error"
 RECORDED_BY = "deltafuse-evidence"
 STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
@@ -508,6 +510,20 @@ def _task_status(change_path: Path, task: str) -> tuple[str, Any] | None:
     return task_id, (meta.get("status") if isinstance(meta, dict) else None)
 
 
+def _task_allowed_paths(change_path: Path, task: str) -> list[str]:
+    """The task's declared allowed_paths; empty when the task file cannot be read."""
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, _ = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []
+    allowed = meta.get("allowed_paths") if isinstance(meta, dict) else None
+    return [str(p) for p in allowed or [] if isinstance(p, str)]
+
+
 def _refuse_red_after_declare(change_path: Path, task: str) -> None:
     """Red belongs to Declare; past it, retaking Red would re-freeze the oracle.
 
@@ -721,6 +737,11 @@ def run_evidence(
         own_code = own_code_error(task_report, repo_root)
         if own_code:
             category = OWN_CODE_RED_CATEGORY
+        else:
+            # Audit 2026-11-16 (df-evidence #7): a missing data file or package is not Red.
+            own_code = environment_error(task_report, repo_root, _task_allowed_paths(change_path, str(task)))
+            if own_code:
+                category = ENVIRONMENT_RED_CATEGORY
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":

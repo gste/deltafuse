@@ -1230,6 +1230,14 @@ def _red_category_hint(ev_data: dict) -> str:
             "those its command names): they passed or did not run. A failure of another test is "
             "not this task's Red - write or name the test that shows the missing behaviour"
         )
+    if ev_data.get("failure_category") == "environment-error":
+        # Audit 2026-11-16 (df-evidence #7).
+        return (
+            ". A test failed on its environment - a test data file that does not exist, or a "
+            "package that is not installed - which no product change turns green; "
+            "`deltafuse evidence` named the test and the cause. Fix the test's environment, "
+            "and record Red again"
+        )
     if ev_data.get("failure_category") == "tests-not-named":
         return (
             ". The record does not say which tests are this task's: declare the test file "
