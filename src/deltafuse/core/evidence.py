@@ -192,6 +192,31 @@ def _runner_not_found(program: str, ex: OSError) -> str:
     return f"runner `{program}` not found on PATH ({ex})"
 
 
+def decode_output(raw: object) -> str:
+    """A child's output as text: UTF-8 when it is valid UTF-8, else the locale's encoding.
+
+    Audit 2026-11-16 (df-evidence #14): on a Russian Windows a child writes its pipe in the ANSI
+    code page (cp1251) and the Core decoded it as UTF-8 with `replace`, so a Cyrillic message in a
+    record's summary was mojibake. Text in a legacy code page is almost never valid UTF-8, so
+    trying UTF-8 first keeps runners that write UTF-8 (pytest under PYTHONUTF8, Maven with
+    `-Dfile.encoding=UTF-8`) as they are.
+    """
+    if raw is None:
+        return ""
+    if not isinstance(raw, bytes):
+        return str(raw)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    import locale
+
+    try:
+        return raw.decode(locale.getpreferredencoding(False) or "utf-8", errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
+
+
 # After the timeout kills the run, how long the Core still waits for its output pipes to close.
 _DRAIN_SECONDS = 15
 
@@ -614,12 +639,7 @@ def run_evidence(
         # 4: box B -> box A). A list the Worker gives is still checked.
         rel_paths = _posix_paths(_core_computed_changed_paths(repo_root, change_path))
 
-    def _as_text(raw: object) -> str:
-        if raw is None:
-            return ""
-        if isinstance(raw, bytes):
-            return raw.decode("utf-8", errors="replace")
-        return str(raw)
+    _as_text = decode_output
 
     timed_out = False
     # pytest writes a machine-readable report only when asked; the Core asks,
