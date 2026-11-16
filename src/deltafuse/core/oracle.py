@@ -352,18 +352,52 @@ def frozen_test_ids(recorded: dict[str, Any], red_failed: Iterable[str]) -> list
 # and options whose value (often a path) must not be read as a selection.
 _DROP = frozenset({"-p", "-k", "-m", "--deselect", "--ignore", "--ignore-glob", "--junitxml", "--junit-xml"})
 _DROP_FLAGS = frozenset({"--lf", "--last-failed", "--ff", "--failed-first", "--sw", "--stepwise", "--pyargs"})
-_KEEP = frozenset({"-c", "--config-file", "-o", "--override-ini", "--rootdir", "--import-mode", "--confcutdir",
-                   "--basetemp", "-W", "--pythonwarnings"})
+_KEEP = frozenset({"--rootdir", "--import-mode", "--confcutdir", "--basetemp", "-W", "--pythonwarnings"})
+# Options whose value is an ini setting or a config file. They stay unless the value can load code
+# into the run: an `addopts` override (`-o addopts=-p plugin`) or a config file the frozen oracle
+# does not hold (`-c ci.cfg` with its own addopts) - audit 2026-11-16, df-evidence #3.
+_INI_OVERRIDE = frozenset({"-o", "--override-ini"})
+_CONFIG_FILE = frozenset({"-c", "--config-file"})
+_CODE_LOADING_INI_KEYS = frozenset({"addopts"})
+
+
+def _split_option(arg: str, names: frozenset[str]) -> tuple[str, str | None] | None:
+    """(`-o`, value) for `-o` (value next), `-ovalue` and `--override-ini=value`; None otherwise."""
+    for name in names:
+        if arg == name:
+            return name, None
+        if name.startswith("--") and arg.startswith(name + "="):
+            return name, arg[len(name) + 1:]
+        if not name.startswith("--") and arg.startswith(name) and len(arg) > len(name):
+            return name, arg[len(name):]
+    return None
+
+
+def _ini_override_loads_code(value: str) -> bool:
+    return value.split("=", 1)[0].strip().lower() in _CODE_LOADING_INI_KEYS
+
+
+def _frozen_config_file(value: str, recorded: dict[str, Any], repo_root: Path | str) -> bool:
+    """A config file given with `-c` is kept only when it is one of those the Red oracle froze:
+    a pytest config file name on the frozen tests' path."""
+    rel = value.replace("\\", "/").removeprefix("./")
+    if PurePosixPath(rel).name not in CONFIG_FILES:
+        return False
+    test_files = sorted({str(e.get("path")) for e in recorded.get("tests") or []})
+    on_path = {r for name in CONFIG_FILES for r in _on_path(test_files, name)}
+    return rel in on_path and (Path(repo_root) / rel).is_file()
 
 
 def isolation_plan(argv: list[str], recorded: dict[str, Any], red_failed: Iterable[str],
                    repo_root: Path | str = ".") -> tuple[list[str], list[str]] | None:
     """The pytest command running only the frozen tests, and the ids it must pass.
 
-    The Worker's options stay (`-c`, `-o`, `--import-mode`, a plugin's own
-    options may be what the suite needs); its test selection and `-p` go. A
-    bare argument that is not an existing path is an option's value and stays.
-    None when the runner is not pytest or nothing is frozen.
+    The Worker's options stay (`-o`, `--import-mode`, a plugin's own options
+    may be what the suite needs); its test selection and `-p` go, and so do
+    the ini overrides and config files that would bring a plugin back (`-o
+    addopts=...`, a `-c` file the oracle did not freeze). A bare argument that
+    is not an existing path is an option's value and stays. None when the
+    runner is not pytest or nothing is frozen.
     """
     from deltafuse.core.test_reports import PYTEST_RUNNERS, runner_family, runner_head
 
@@ -377,7 +411,17 @@ def isolation_plan(argv: list[str], recorded: dict[str, Any], red_failed: Iterab
     kept: list[str] = []
     rest = iter(argv[split:])
     for arg in rest:
-        if arg in _DROP:
+        ini = _split_option(arg, _INI_OVERRIDE)
+        config = _split_option(arg, _CONFIG_FILE)
+        if ini is not None or config is not None:
+            _name, value = ini or config
+            given = [arg] if value is not None else [arg, next(rest, "")]
+            value = value if value is not None else given[-1]
+            if ini is not None and not _ini_override_loads_code(value):
+                kept += given
+            elif config is not None and _frozen_config_file(value, recorded, repo_root):
+                kept += given
+        elif arg in _DROP:
             next(rest, None)
         elif arg in _KEEP:
             kept += [arg, next(rest, "")]
