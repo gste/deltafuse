@@ -86,3 +86,33 @@ def test_a_core_written_record_of_another_task_does_not_open_this_ones(tmp_path:
     (root / "src" / "other.py").write_text("x = 1\n", encoding="utf-8")
     payload = run_leash(root)
     assert any("src/other.py" in v for v in payload["violations"]), payload
+
+
+def test_a_deletion_is_the_humans_only_for_its_own_archived_copy(tmp_path: Path, repo_root: Path):
+    """df-leash #8: after `decide --gap`, a deleted file was the human's when its bytes matched ANY file in
+    the receipted archive, so a copy of src/victim.py dropped there made its deletion "the human's"."""
+    from deltafuse.core.decide import apply_decision
+    from deltafuse.core.leash_run import leash_at_advance
+    from tests.unit.test_decide_without_commit import _enforce, _git_commit_all
+    from tests.unit.test_gap_reopen import _gap_found
+
+    root = tmp_path / "p"
+    root.mkdir()
+    builder = _gap_found(root, repo_root)
+    victim = root / "src" / "victim.py"
+    victim.parent.mkdir(parents=True, exist_ok=True)
+    victim.write_text("def keep():\n    return 42\n", encoding="utf-8")
+    _enforce(root)
+    _git_commit_all(root)
+    apply_decision(builder.change_dir, status="reopened", gap="spec-gap", note="row missing")
+    _git_commit_all(root)
+
+    data = victim.read_bytes()
+    victim.unlink()
+    assert run_leash(root)["violations"], "control: a src/ deletion in Analyze is refused"
+    smuggle = builder.change_dir / "reopened" / "verify.1" / "evidence" / "green" / "TASK-999.yaml"
+    smuggle.parent.mkdir(parents=True, exist_ok=True)
+    smuggle.write_bytes(data)
+    payload = run_leash(root)
+    assert any("src/victim.py" in v for v in payload["violations"]), payload
+    assert leash_at_advance(builder.change_dir, root)["violations"]

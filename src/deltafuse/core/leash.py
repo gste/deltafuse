@@ -351,7 +351,9 @@ def human_decision_judge(
             digest = str(entry.get("artifact_sha256") or "").removeprefix("sha256:").lower()
             if digest:
                 decided.setdefault(posix_relpath(entry["path"]), set()).add(digest)
-    archived: set[str] = set()
+    # Original path -> digests of its archived copies (df-leash #8: a digest that any archived
+    # file had made any deleted file with those bytes the human's).
+    archived: dict[str, set[str]] = {}
     restored: dict[str, str] = {}
     for change_id, change_dir in _change_dirs(root).items():
         reopened = change_dir / "reopened"
@@ -361,7 +363,9 @@ def human_decision_judge(
         for path in reopened.rglob("*"):
             rel = path.relative_to(root).as_posix()
             if path.is_file() and reopen_archive_path(root, rel):
-                archived.add(_eol_digest(path.read_bytes()))
+                origin = archived_from(rel)
+                if origin is not None:
+                    archived.setdefault(origin, set()).add(_eol_digest(path.read_bytes()))
                 task_reopened = task_reopened or _REOPEN_ARCHIVE.match(rel) is not None
         if task_reopened:
             restored.update((declaring_snapshot(root, change_id) or {}).items())
@@ -371,11 +375,35 @@ def human_decision_judge(
         data = _bytes_at(root, rel, head=head)
         if data is None:
             before = _bytes_at(root, rel, head=base or "HEAD")
-            return before is not None and _eol_digest(before) in archived
+            return before is not None and _eol_digest(before) in archived.get(rel, set())
         digest = hashlib.sha256(data).hexdigest()
         return digest in decided.get(rel, set()) or restored.get(rel) == digest
 
     return judge
+
+
+def archived_from(rel_path: str) -> str | None:
+    """Where `decide` took an archived record from, or None for a file it writes itself.
+
+    decide.py moves `evidence/<phase>/<task>.yaml` to `reopened/<task>.<n>/<phase>.yaml` when a
+    task is reopened, and `verification.md`, `evidence/verification/run.yaml` and every
+    `evidence/{green,regression}/*.yaml` under `reopened/verify.<n>/` when a gap is.
+    """
+    rel = posix_relpath(rel_path)
+    gap = _GAP_ARCHIVE.match(rel)
+    if gap is not None:
+        change = gap["dir"].rsplit("/reopened/", 1)[0]
+        name = gap["name"]
+        if name.startswith("evidence/"):
+            return f"{change}/{name}"
+        return {"verification.md": f"{change}/verification.md",
+                "run.yaml": f"{change}/evidence/verification/run.yaml"}.get(name)
+    match = _REOPEN_ARCHIVE.match(rel)
+    if match is None or match["name"] == "reopen.yaml":
+        return None
+    phase = match["name"].removesuffix(".yaml")
+    change = rel.split("/reopened/", 1)[0]
+    return f"{change}/evidence/{phase}/{match['task']}.yaml"
 
 
 def _eol_digest(data: bytes) -> str:
