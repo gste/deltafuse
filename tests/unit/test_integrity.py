@@ -140,3 +140,73 @@ def test_a_missing_anchor_is_refused_with_the_anchors_the_file_has(tmp_path: Pat
     err = validate_spec_ref("docs/spec/monitoring/usage_stats.md#us-001-stats-view-shape", tmp_path)
     assert err is not None and "not found" in err
     assert "REQ-RL-01, US-001, US-002" in err, err
+
+
+# df-gates #7: a Decision's Human Gate receipt was matched by id or path alone (has_click), never by
+# the bytes the human answered, and nothing remembered which Change a proposed Decision blocked.
+_DEC = "---\nid: {id}\ntitle: Storage choice\nstatus: {status}\nchange: {change}\n---\n\n# Decision\n{body}\n"
+
+
+def _dec_product(tmp_path: Path, repo_root: Path, *changes: str) -> Path:
+    from deltafuse.core.installer import install
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    for change in changes:
+        MockChangeBuilder(tmp_path, change_id=change).step_intake()
+    (tmp_path / "docs" / "decisions").mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+
+def _write_dec(root: Path, name: str, **fields: str) -> Path:
+    path = root / "docs" / "decisions" / name
+    path.write_text(_DEC.format(**fields), encoding="utf-8")
+    return path
+
+
+def test_accepted_decision_rewritten_after_the_click_is_unrecorded(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.decide import apply_decision
+    from deltafuse.core.integrity import find_unrecorded_terminal_decisions_for_change, validate_decision_ref
+
+    root = _dec_product(tmp_path, repo_root, "CHG-001")
+    dec = _write_dec(root, "DEC-0001-storage.md", id="DEC-0001", status="proposed", change="CHG-001", body="Use Postgres.")
+    apply_decision(root, status="accepted", decision="DEC-0001")
+    assert find_unrecorded_terminal_decisions_for_change("CHG-001", root) == []
+    assert validate_decision_ref("docs/decisions/DEC-0001-storage.md", root) == []
+
+    # The same bytes with CRLF line ends (a checkout under core.autocrlf) are still the human's.
+    dec.write_bytes(dec.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    assert find_unrecorded_terminal_decisions_for_change("CHG-001", root) == []
+
+    dec.write_text(dec.read_text(encoding="utf-8").replace("Use Postgres.", "Use a CSV file."), encoding="utf-8")
+    assert find_unrecorded_terminal_decisions_for_change("CHG-001", root)
+    assert validate_decision_ref("docs/decisions/DEC-0001-storage.md", root)
+
+
+def test_a_reused_decision_id_does_not_borrow_the_answer(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.decide import apply_decision
+    from deltafuse.core.integrity import find_unrecorded_terminal_decisions_for_change
+
+    root = _dec_product(tmp_path, repo_root, "CHG-001", "CHG-002")
+    _write_dec(root, "DEC-0001-storage.md", id="DEC-0001", status="proposed", change="CHG-001", body="Use Postgres.")
+    apply_decision(root, status="accepted", decision="DEC-0001")
+    _write_dec(root, "DEC-0002-skip-auth.md", id="DEC-0001", status="accepted", change="CHG-002", body="Skip auth.")
+    assert find_unrecorded_terminal_decisions_for_change("CHG-002", root)
+
+
+def test_a_blocking_decision_detached_from_its_change_still_blocks(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.integrity import find_unresolved_decisions_for_change
+    from tests.fixtures.git import git
+
+    root = _dec_product(tmp_path, repo_root, "CHG-001")
+    dec = _write_dec(root, "DEC-0001-storage.md", id="DEC-0001", status="proposed", change="CHG-001", body="Use Postgres.")
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "analyze: DEC-0001 blocks CHG-001")
+    assert find_unresolved_decisions_for_change("CHG-001", root)
+
+    dec.write_text(dec.read_text(encoding="utf-8").replace("change: CHG-001", "change: null"), encoding="utf-8")
+    assert find_unresolved_decisions_for_change("CHG-001", root), "uncommitted detach"
+    git(root, "commit", "-q", "-am", "detach")
+    errors = find_unresolved_decisions_for_change("CHG-001", root)
+    assert errors and "DEC-0001-storage.md" in errors[0], errors

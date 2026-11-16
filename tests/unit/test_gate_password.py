@@ -155,3 +155,29 @@ def test_journal_json_carries_no_secret(tmp_path: Path, repo_root: Path):
     journal = (root / gate_receipts.JOURNAL_REL).read_text(encoding="utf-8")
     assert PASSWORD not in journal
     assert all(json.loads(line) for line in journal.splitlines())
+
+
+@pytest.mark.skipif(__import__("sys").platform != "win32", reason="the NUL device is a Windows console look-alike")
+def test_cli_refuses_stdin_from_nul_instead_of_hanging(tmp_path: Path, repo_root: Path):
+    """df-gates #9: on Windows `isatty()` is True for stdin redirected from NUL - what an agent's
+    shell often gives a command - so `decide` passed the terminal check and blocked in getpass,
+    which reads the console, for ever. Only a real console counts as a terminal."""
+    import os
+    import subprocess
+    import sys
+
+    root = _product(tmp_path, repo_root)
+    gate_password.set_password(root, PASSWORD)
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(repo_root / "src"), str(repo_root)]))
+    with open(os.devnull, "rb") as nul:
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-m", "deltafuse", "decide", str(root), "--decision", "DEC-0009",
+                 "--status", "accepted"],
+                stdin=nul, capture_output=True, text=True, env=env, timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            pytest.fail("decide with stdin from NUL waited for a password instead of refusing")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "interactive terminal" in proc.stderr
+    assert "status: proposed" in _decision(root).read_text(encoding="utf-8")

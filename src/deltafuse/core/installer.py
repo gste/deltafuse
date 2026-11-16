@@ -37,8 +37,14 @@ class InstallationError(Exception):
 
 
 def _active_change_ids(target_root: Path) -> list[str]:
-    """Change ids whose status is not terminal (fail-closed upgrade, C-02)."""
-    terminal = {"archived", "rejected", "duplicate", "superseded", "not-reproduced"}
+    """Change ids whose status is not terminal (fail-closed upgrade, C-02).
+
+    A terminal status counts only as the human recorded it (`decide --close`): one written by
+    hand lifted this guard (df-gates #6). `archived` is not a status a package under
+    docs/changes/ holds - archive moves it out.
+    """
+    from deltafuse.core.transitions import CLOSE_STATUSES, terminal_status_errors
+
     out: list[str] = []
     root = target_root / "docs" / "changes"
     if not root.is_dir():
@@ -50,7 +56,7 @@ def _active_change_ids(target_root: Path) -> list[str]:
             data = {}
         if not isinstance(data, dict):
             continue
-        if data.get("status") not in terminal:
+        if data.get("status") not in CLOSE_STATUSES or terminal_status_errors(target_root, path.parent):
             out.append(str(data.get("id") or path.parent.name))
     return out
 

@@ -61,10 +61,15 @@ def test_noop_not_reproduced_lifecycle(tmp_path: Path, repo_root: Path):
     set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert check_gate(builder.change_dir, "declaring") == []
 
-    # Transition change to terminal not-reproduced status
+    # The human closes the Change as not-reproduced (df-gates #6: a hand-set terminal status
+    # no longer archives); the Red record above is the proof the Core asks for.
     assert can_transition("declaring", "not-reproduced")
-    cdata["status"] = "not-reproduced"
-    cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
+    from deltafuse.core.decide import apply_decision
+
+    closed = apply_decision(
+        builder.change_dir, status="not-reproduced", close=True, note="Bug could not be reproduced"
+    )
+    assert closed["ok"] and closed["change_status"] == "not-reproduced"
 
     # Package is valid in terminal not-reproduced state
     assert validate_change_package(builder.change_dir) == []

@@ -124,11 +124,37 @@ def _report(cmd: str, target: Path, errors: list[str], failed: str, valid: str, 
     return 0
 
 
+def _stdin_is_console() -> bool:
+    """True when stdin is an interactive terminal a human types into.
+
+    On Windows `isatty()` is True for any character device, the NUL device too: `decide < NUL`,
+    what an agent's shell often gives a command, passed the check, and getpass - which reads
+    the console, not stdin - then waited for ever (df-gates #9). There only a console handle,
+    one GetConsoleMode accepts, counts.
+    """
+    try:
+        if not sys.stdin.isatty():
+            return False
+    except (AttributeError, ValueError, OSError):
+        return False
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    import msvcrt
+
+    try:
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+    except (AttributeError, ValueError, OSError):
+        return False
+    mode = ctypes.c_uint32()
+    return bool(ctypes.windll.kernel32.GetConsoleMode(ctypes.c_void_p(handle), ctypes.byref(mode)))
+
+
 def _read_secret(prompt: str, hint: str = "") -> str:
     """Read a secret from the terminal; refuse when no human is at one."""
     import getpass
 
-    if not sys.stdin.isatty():
+    if not _stdin_is_console():
         raise gate_password.GatePasswordError(
             "the Human Gate password is read only from an interactive terminal" + hint
         )
@@ -448,15 +474,23 @@ def _main(argv: list[str] | None = None) -> int:
         help="Answer this blocked task of the Change on the path (--status cancelled or reopened)",
     )
     decide_parser.add_argument(
-        "--status", required=True, choices=["accepted", "rejected", "cancelled", "reopened"],
-        help="Recorded human choice (cancelled, reopened: only with --task)",
+        "--status", required=True,
+        choices=["accepted", "rejected", "cancelled", "reopened", "duplicate", "superseded", "not-reproduced"],
+        help="Recorded human choice (cancelled, reopened: only with --task or --gap; duplicate, "
+        "superseded, not-reproduced: only with --close)",
+    )
+    decide_parser.add_argument(
+        "--close", action="store_true",
+        help="Close the Change on the path without converging it (--status rejected, duplicate, superseded "
+        "or not-reproduced; --note with the rationale, naming the other CHG-NNN for duplicate/superseded)",
     )
     decide_parser.add_argument(
         "--gap", default=None,
         help="With --status reopened: send the Change whose Verify recorded this gap back (spec-gap, tasks-missing -> Analyze)",
     )
     decide_parser.add_argument(
-        "--note", default=None, help="With --status reopened: what the human passes on to the next Declare"
+        "--note", default=None,
+        help="With --status reopened: what the human passes on to the next Declare; with --close: the rationale"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
@@ -772,11 +806,11 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "decide":
         target = Path(args.path)
         which = (f"--decision {args.decision}" if args.decision else f"--task {args.task}" if args.task
-                 else f"--gap {args.gap}" if args.gap else "--spec")
+                 else f"--gap {args.gap}" if args.gap else "--close" if args.close else "--spec")
         try:
             result = apply_decision(
                 target, status=args.status, decision=args.decision, spec=args.spec, task=args.task,
-                gap=args.gap, note=args.note,
+                gap=args.gap, note=args.note, close=args.close,
                 password_prompt=lambda: _gate_password_prompt(
                     f"deltafuse decide {args.path} {which} --status {args.status}"
                 ),

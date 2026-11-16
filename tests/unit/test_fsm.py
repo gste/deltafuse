@@ -648,14 +648,24 @@ def _write_ops_spec_delta(
     spec_delta = (
         "---\n"
         f"change: {change_id}\n"
-        "status: proposed\n"
+        "status: accepted\n"
         "slices: [SLICE-01]\n"
         f"added: {added or []}\n"
         f"modified: {modified or []}\n"
         f"removed: {removed or []}\n"
         "---\n\n# Spec Delta\n"
     )
-    (change_dir / "spec-delta.md").write_text(spec_delta, encoding="utf-8")
+    delta = change_dir / "spec-delta.md"
+    delta.write_text(spec_delta, encoding="utf-8")
+    # The receipt `deltafuse decide --spec --status accepted` records: converged needs the
+    # specification the human accepted (df-gates #1).
+    from deltafuse.core import gate_receipts
+
+    root = change_dir.parent.parent.parent
+    gate_receipts.record_receipt(
+        root, kind="spec", status="accepted", rel_path=delta.relative_to(root).as_posix(),
+        artifact_id=change_id, change=change_id, artifact=delta,
+    )
 
 
 def test_converged_rejects_wiped_added_spec_after_specify(tmp_path: Path, repo_root: Path):
@@ -718,7 +728,12 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
         MockChangeBuilder(tmp_path, change_id="CHG-021", title="Bugfix no specify")
         .step_intake()
         .step_analyze()
-        .step_decompose()
+    )
+    # The test is about the bugfix path, which the builder's default intent (feature) is not:
+    # a feature without spec-delta.md no longer converges (df-gates #1).
+    builder._update_change_yaml({"intent": "bugfix"})
+    (
+        builder.step_decompose()
         .step_declare()
         .step_implement()
         .step_verify()
