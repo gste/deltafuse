@@ -141,6 +141,9 @@ function Sync-LeashHook {
         "cd `"`$root`" || exit 1",
         "[ -f .deltafuse/lock.yaml ] || git cat-file -e HEAD:.deltafuse/lock.yaml 2>/dev/null || exit 0",
         "py=`"`${DELTAFUSE_PYTHON:-python}`"",
+        "# Judge the index, which is what this commit records (df-leash #1).",
+        "DELTAFUSE_LEASH_INDEX=1",
+        "export DELTAFUSE_LEASH_INDEX",
         "exec `"`$py`" -m deltafuse leash `"`$root`""
     ) -join "`n") + "`n"
     $utf8 = New-Object System.Text.UTF8Encoding $false

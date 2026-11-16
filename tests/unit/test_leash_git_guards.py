@@ -153,3 +153,54 @@ def test_ci_still_refuses_the_prs_own_write(tmp_path: Path, repo_root: Path):
     git(root, "checkout", "-q", "pr")
     payload = run_leash(root, base=base, head=pr_head)
     assert any("src/evil.py" in v for v in payload["violations"]), payload
+
+
+def test_the_hook_judges_what_is_staged_not_the_working_tree(tmp_path: Path, repo_root: Path):
+    """df-leash #1: the hook diffed the working tree against HEAD while git commits the index: a src/
+    write staged and then reverted in the working tree committed unseen."""
+    root = product(tmp_path, repo_root)
+    app = root / "src" / "app.py"
+    original = app.read_bytes()
+    app.write_text("print('evil')\n", encoding="utf-8")
+    git(root, "add", "src/app.py")
+    app.write_bytes(original)
+    proc = commit(root)
+    assert proc.returncode != 0, git(root, "show", "HEAD:src/app.py").stdout
+    assert "src/app.py" in proc.stdout + proc.stderr
+
+
+def test_the_hook_judges_staged_bytes_of_a_structural_artifact(tmp_path: Path, repo_root: Path):
+    """The bytes judged are the staged ones: a hand-written routing.yaml staged, the working tree then
+    set back, is still a hand-written artifact in the commit."""
+    root = product(tmp_path, repo_root)
+    routing = root / "docs" / "changes" / "CHG-001" / "routing.yaml"
+    routing.write_text("change: CHG-001\nclaims: {}\n", encoding="utf-8")
+    git(root, "add", "-A")
+    routing.unlink()
+    proc = commit(root)
+    assert proc.returncode != 0
+    assert "written by hand" in proc.stdout + proc.stderr
+
+
+def test_the_hook_does_not_judge_what_is_left_out_of_the_commit(tmp_path: Path, repo_root: Path):
+    root = product(tmp_path, repo_root)
+    (root / "src" / "app.py").write_text("print('later')\n", encoding="utf-8")  # not staged
+    (root / "AGENTS.md").write_text("notes\n", encoding="utf-8")
+    git(root, "add", "AGENTS.md")
+    proc = commit(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_the_init_scripts_write_the_installers_hook(repo_root: Path):
+    """init.sh and init.ps1 write the same pre-commit hook as the Python installer."""
+    import re
+
+    from deltafuse.core.leash import HOOK_SCRIPT
+
+    sh = (repo_root / "scripts" / "init.sh").read_text(encoding="utf-8")
+    block = re.search(r"HOOK_SCRIPT=\$\(cat <<'EOF'\n(.*?)\nEOF\n\)", sh, re.S)
+    assert block is not None and block.group(1) + "\n" == HOOK_SCRIPT
+    ps1 = (repo_root / "scripts" / "init.ps1").read_text(encoding="utf-8")
+    body = re.search(r"\$script = \(@\((.*?)\) -join", ps1, re.S).group(1)
+    lines = [re.sub(r"`(.)", r"\1", m) for m in re.findall(r'^\s*"(.*)",?\s*$', body, re.M)]
+    assert "\n".join(lines) + "\n" == HOOK_SCRIPT

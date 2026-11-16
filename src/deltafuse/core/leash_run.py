@@ -9,10 +9,13 @@ receipt, so the answer does not depend on the Worker's habits.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Sequence
 
 from deltafuse.core.leash import (
+    INDEX,
+    INDEX_ENV,
     LeashError,
     check_paths,
     collect_chain_envelopes,
@@ -37,12 +40,20 @@ def run_leash(
     base: str | None = None,
     head: str | None = None,
     files: Sequence[str] | None = None,
+    staged: bool | None = None,
 ) -> dict[str, Any]:
     """The leash payload for `target` (a product root, or one Change directory).
+
+    ``staged`` judges the index against HEAD - what a commit records - instead of
+    the working tree; it defaults to whether the pre-commit hook set INDEX_ENV.
 
     Raises `LeashError` (git could not answer) or `QueueError` (the queue could
     not be built), as the command always did.
     """
+    if staged is None:
+        staged = os.environ.get(INDEX_ENV) == "1"
+    if staged and not base and not files:
+        head = INDEX
     target = Path(target)
     only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
     root = load_product_root(target if only is None else only)
@@ -60,7 +71,7 @@ def run_leash(
     # are not judged against the step after it. A halt stops new work,
     # not the record of work done, so the chain applies either way.
     covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
-        root, base=base, dirty=dirty
+        root, base=base, dirty=dirty, head=head
     )
     errors = check_paths(
         dirty,
@@ -91,7 +102,7 @@ def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | 
     if mode == "off":
         return None
     try:
-        payload = run_leash(change_path)
+        payload = run_leash(change_path, staged=False)
     except (LeashError, QueueError, OSError) as ex:
         return {"mode": mode, "checked": False, "reason": str(ex), "violations": []}
     return {"mode": mode, "checked": True, "violations": list(payload["violations"])}
