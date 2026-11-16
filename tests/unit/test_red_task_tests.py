@@ -9,6 +9,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
@@ -193,3 +195,31 @@ def test_a_committed_red_test_is_frozen(tmp_path: Path, repo_root: Path):
     green = run_evidence(builder.change_dir, phase="green", task="TASK-001", argv=_pytest("tests/test_add.py"))
     assert not green.authentic
     assert any("frozen Red oracle" in e for e in green.errors), green.errors
+
+
+# --- df-evidence #10: a Red where nothing passed is not already-green -----------------------------
+
+
+@pytest.mark.parametrize("marker", ["@pytest.mark.skip(reason='later')", "@pytest.mark.xfail(reason='later')"])
+def test_a_skipped_or_xfailed_red_is_not_already_green(tmp_path: Path, repo_root: Path, marker: str):
+    builder = _product(tmp_path, repo_root, "CHG-228")
+    (tmp_path / "tests" / "test_add.py").write_text(
+        "import pytest\n" + HEADER + f"\n{marker}\ndef test_add():\n    assert add(1, 2) == 3\n", encoding="utf-8"
+    )
+    red = _red(builder, _pytest("tests/test_add.py"), ["tests/test_add.py"])
+    assert red.payload["exit_code"] == 0
+    assert red.payload["result"] != "already-green"
+    assert not red.authentic
+    assert any("skipped or expected to fail" in e for e in red.errors), red.errors
+    assert _declaring_errors(builder)
+
+
+def test_a_passing_red_test_is_still_already_green(tmp_path: Path, repo_root: Path):
+    builder = _product(tmp_path, repo_root, "CHG-229")
+    (tmp_path / "src" / "calc.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_add.py").write_text(
+        HEADER + "\ndef test_add():\n    assert add(1, 2) == 3\n", encoding="utf-8"
+    )
+    red = _red(builder, _pytest("tests/test_add.py"), ["tests/test_add.py"])
+    assert red.payload["result"] == "already-green"
+    assert red.authentic, red.errors

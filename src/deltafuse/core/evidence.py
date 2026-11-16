@@ -697,13 +697,13 @@ def run_evidence(
     if phase == "red" and report is not None:
         named, named_by = task_test_ids(report, rel_paths, argv, repo_root)
         task_report = restricted(report, named or [])
-        if named is None and exit_code != 0:
+        if named is None:
             category = UNNAMED_RED_CATEGORY
             red_why = (
                 "Red does not say which tests are the task's: no test file is among its changed_paths "
                 "and the command names no test file or class (`pytest tests/test_x.py`, "
-                "`mvn test -Dtest=CalcTest`), so a failure anywhere in the suite would read as this "
-                "task's Red. Name the task's tests and record Red again"
+                "`mvn test -Dtest=CalcTest`), so a failure (or a pass) anywhere in the suite would "
+                "read as this task's Red. Name the task's tests and record Red again"
             )
     if phase == "red" and exit_code != 0 and report is not None and red_why is None:
         # The gate reads this field, and the Core has just judged Red by the
@@ -754,6 +754,20 @@ def run_evidence(
         result = "already-green" if exit_code == 0 else "expected-failure"
     else:
         result = "passed" if exit_code == 0 else "failed"
+    if result == "already-green" and task_report is not None and not task_report.ids(PASSED):
+        # Audit 2026-11-16 (df-evidence #10): every test of the task skipped (or xfailed), or
+        # none of them ran, and the run still exited 0. Nothing passed, so nothing shows the
+        # behaviour is already there - and an already-green Red lets the task be superseded,
+        # leaving no test of it at all.
+        result = "blocked"
+        skipped = task_report.ids(SKIPPED)
+        red_why = red_why or (
+            "none of the task's tests passed or failed - "
+            + (f"they were skipped or expected to fail (xfail): {', '.join(skipped[:5])}" if skipped
+               else "the runner's report names none of them")
+            + "; a Red that ran nothing shows neither that the behaviour is missing nor that it is "
+            "already there. Make the task's tests run, and record Red again"
+        )
 
     payload: dict[str, Any] = {
         "schema_version": 3,
@@ -836,6 +850,8 @@ def run_evidence(
             )
     errors.extend(private_errors)
     errors.extend(_contract_errors_now(change_path, phase, dest, route))
+    if phase == "red" and route == "code" and result == "blocked" and red_why:
+        errors.append(f"Red is not authentic: {red_why}")
     if phase == "red" and route == "code" and result == "expected-failure":
         if report is not None:
             # The runner's own report, read through its ecosystem's meaning of
