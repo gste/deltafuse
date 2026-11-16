@@ -519,3 +519,163 @@ def task_test_files(
             if path.suffix in JVM_TEST_SUFFIXES:
                 found.add(path.relative_to(repo_root).as_posix())
     return sorted(found)
+
+
+# --- regression and verification run the whole suite ---------------------------------------------
+#
+# Audit 2026-11-16 (df-evidence #4, df-gates "narrow verification"): regression and verification
+# were judged by the exit code and by the tests the Change's own records name. A conftest that set
+# the session's exit status to 0, or Maven's `-fn`, recorded "passed" over failing tests; a
+# command narrowed to the task's own test file converged a Change that broke the rest of the suite.
+
+# Options that run part of the suite: pytest's selection and Maven/Gradle's test and module filters.
+_PYTEST_SELECTING = ("-k", "-m", "--deselect", "--ignore", "--ignore-glob", "--lf", "--last-failed",
+                     "--sw", "--stepwise", "--sw-skip", "--stepwise-skip")
+_JVM_SELECTING = ("-Dtest=", "-Dit.test=", "-Dgroups=", "-DexcludedGroups=", "-Dsurefire.includesFile=",
+                  "-Dsurefire.excludesFile=", "-Dtest.single=", "--tests", "-pl", "--projects", "-rf",
+                  "--resume-from", "-x", "--exclude-task")
+_SUITE_SKIP_DIRS = frozenset({"node_modules", "__pycache__", "site-packages", "venv", "build", "dist", "target"})
+
+
+def _configured_commands(repo_root: Path) -> list[list[str]]:
+    from deltafuse.core.runners import _load_config_prefixes
+
+    return [list(entry) for entry in _load_config_prefixes(repo_root)]
+
+
+def _normalized(argv: list[str]) -> list[str]:
+    """argv with the runner as its bare name (`.venv/Scripts/pytest.exe` -> `pytest`) and a
+    `python -m pytest` read as `pytest`, so a declared command matches however it is spelled."""
+    if not argv:
+        return []
+    head = runner_head(argv[0])
+    if head in {"python", "python3"} and argv[1:3] == ["-m", "pytest"]:
+        return ["pytest", *[str(a) for a in argv[3:]]]
+    return [head, *[str(a) for a in argv[1:]]]
+
+
+def _selecting_options(argv: list[str]) -> list[str]:
+    family = runner_family(argv)
+    out: list[str] = []
+    for arg in argv[1:]:
+        arg = str(arg)
+        if family == "pytest":
+            if any(arg == opt or arg.startswith(opt + "=") or (len(opt) == 2 and arg.startswith(opt) and len(arg) > 2)
+                   for opt in _PYTEST_SELECTING):
+                out.append(arg)
+        elif family == "jvm":
+            if any(arg == opt or arg.startswith(opt if opt.endswith("=") else opt + "=") for opt in _JVM_SELECTING):
+                out.append(arg)
+    return out
+
+
+def _pytest_testpaths(repo_root: Path) -> list[str] | None:
+    """`testpaths` from the product's pytest configuration at its root, when it sets one."""
+    import configparser
+
+    pyproject = repo_root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            import tomllib
+
+            data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            paths = ((data.get("tool") or {}).get("pytest") or {}).get("ini_options", {}).get("testpaths")
+            if paths:
+                return [paths] if isinstance(paths, str) else [str(p) for p in paths]
+        except (OSError, ValueError, AttributeError):
+            pass
+    for name, section in (("pytest.ini", "pytest"), (".pytest.ini", "pytest"), ("tox.ini", "pytest"),
+                          ("setup.cfg", "tool:pytest")):
+        path = repo_root / name
+        if not path.is_file():
+            continue
+        parser = configparser.ConfigParser(interpolation=None)
+        try:
+            parser.read(path, encoding="utf-8")
+        except (OSError, configparser.Error):
+            continue
+        if parser.has_option(section, "testpaths"):
+            return parser.get(section, "testpaths").split()
+    return None
+
+
+def _pytest_test_files(repo_root: Path, scope: list[str]) -> list[str]:
+    """The pytest test files (`test_*.py`, `*_test.py`) under *scope*, POSIX, sorted."""
+    import os
+
+    found: list[str] = []
+    for base in scope:
+        top = repo_root / base
+        if top.is_file():
+            found.append(base)
+            continue
+        for dirpath, dirnames, filenames in os.walk(top):
+            dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SUITE_SKIP_DIRS]
+            for name in filenames:
+                if name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py")):
+                    found.append(Path(dirpath, name).relative_to(repo_root).as_posix())
+    return sorted(set(found))
+
+
+def suite_subset(command: object, repo_root: Path) -> str | None:
+    """Why *command* runs only part of the product's suite; None when it runs the whole of it.
+
+    A command the product declares in `workflow.test_commands` is the whole suite as written;
+    anything added to it that selects tests narrows it. Without a declaration, a test-selecting
+    option narrows the suite, and so does a pytest path that leaves test files out (a file or
+    node id, or a directory with test files outside it).
+    """
+    argv = _command_argv(command)
+    family = runner_family(argv)
+    if not family:
+        return None
+    norm = _normalized(argv)
+    declared = [_normalized(entry) for entry in _configured_commands(repo_root)]
+    if norm in declared:
+        return None
+    base = next((d for d in declared if norm[: len(d)] == d), None)
+    extra = norm[len(base):] if base is not None else norm[1:]
+    selecting = _selecting_options([norm[0], *extra])
+    if selecting:
+        return f"it selects part of the suite ({' '.join(selecting[:3])})"
+    if family != "pytest":
+        return None
+    positionals = pytest_positionals(["pytest", *extra], repo_root)
+    if not positionals:
+        return None
+    named = [p for p in positionals if "::" in p or (repo_root / p).is_file()]
+    if named:
+        return f"it names single test files or tests ({', '.join(named[:3])}), not the suite"
+    dirs = [p.rstrip("/").removeprefix("./") for p in positionals]
+    if any(d in {".", ""} for d in dirs):
+        return None
+    scope = _pytest_testpaths(repo_root) or ["."]
+    outside = [
+        f for f in _pytest_test_files(repo_root, scope)
+        if not any(f.startswith(d + "/") for d in dirs)
+    ]
+    if outside:
+        return f"it leaves out test files of the suite ({', '.join(outside[:3])})"
+    return None
+
+
+def suite_errors(label: str, command: object, tests: object, repo_root: Path) -> list[str]:
+    """What keeps a regression or verification run from showing the suite passes."""
+    errors: list[str] = []
+    if isinstance(tests, dict):
+        failing = [str(t) for t in (tests.get(FAILED) or []) + (tests.get("not_run") or [])]
+        if failing:
+            errors.append(
+                f"{label} is not evidence: {len(failing)} test(s) failed or did not run "
+                f"({', '.join(failing[:5])}), whatever the exit code says - every test of the suite "
+                "must pass. Fix what broke them and record it again"
+            )
+    narrowed = suite_subset(command, repo_root)
+    if narrowed:
+        errors.append(
+            f"{label} is not evidence: {narrowed}. Regression and verification run the product's "
+            "whole test suite"
+            + (" as `workflow.test_commands` declares it" if _configured_commands(repo_root) else "")
+            + "; record it again with the full command"
+        )
+    return errors

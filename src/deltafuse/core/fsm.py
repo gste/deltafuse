@@ -37,7 +37,7 @@ from deltafuse.core.integrity import (
 )
 from deltafuse.core.gate_receipts import TERMINAL_STATUSES
 from deltafuse.core.schemas import SchemaRegistry
-from deltafuse.core.test_reports import no_test_error, no_test_ran
+from deltafuse.core.test_reports import no_test_error, no_test_ran, suite_errors
 
 VALID_CHANGE_STATUSES = {
     "normalized",
@@ -508,6 +508,13 @@ def _validate_package(
                     # The record is written even when `deltafuse evidence` refused it,
                     # so the gate asks again whether the run ran any test.
                     errors.extend(_ran_no_test(ev_data, f"{rel_ev}: {phase}"))
+                if phase in {"regression", "verification"} and route == "code":
+                    # Audit 2026-11-16 (df-evidence #4): a failing test with exit 0 (`-fn`, an
+                    # exitstatus hook) or a run narrowed to part of the suite is no regression.
+                    errors.extend(
+                        f"{rel_ev}: {e}"
+                        for e in suite_errors(phase, ev_data.get("command"), ev_data.get("tests"), repo_root)
+                    )
 
                 if phase in {"green", "regression", "verification"}:
                     recorded = ev_data.get("base_revision")

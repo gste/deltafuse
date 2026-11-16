@@ -43,6 +43,7 @@ from deltafuse.core.test_reports import (
     read_report,
     red_is_authentic,
     restricted,
+    suite_errors,
     runner_family,
     task_test_files,
     task_test_ids,
@@ -881,6 +882,9 @@ def run_evidence(
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if phase in {"green", "regression", "verification"} and route == "code" and result == "passed":
         errors.extend(no_test_error(phase, argv, payload.get("tests"), log))  # the full log, not the summary
+    if phase in {"regression", "verification"} and route == "code":
+        # Every test of the whole suite, whatever the exit code (audit 2026-11-16, df-evidence #4).
+        errors.extend(suite_errors(phase, argv, payload.get("tests"), repo_root))
     if timed_out:
         errors.append(f"command timed out after {timeout}s")
 
