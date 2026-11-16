@@ -165,3 +165,31 @@ def test_load():
     red = _red(builder, _pytest("tests/test_new.py"), ["tests/test_new.py"])
     assert red.authentic, red.errors
     assert red.payload["failure_category"] == "behavioral-mismatch"
+
+
+# --- df-evidence #2: a Red over a committed test freezes that test --------------------------------
+
+
+def test_a_committed_red_test_is_frozen(tmp_path: Path, repo_root: Path):
+    """Red over a test already in git: the Core-computed changed_paths hold no test file, and the
+    freeze followed changed_paths only - Implement weakened the test and Green passed."""
+    from tests.fixtures.git import git
+
+    builder = _product(tmp_path, repo_root, "CHG-227")
+    test_file = tmp_path / "tests" / "test_add.py"
+    test_file.write_text(HEADER + "\ndef test_add():\n    assert add(1, 2) == 3\n", encoding="utf-8")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-q", "-m", "base")
+    red = _red(builder, _pytest("tests/test_add.py"), None)
+    assert red.authentic, red.errors
+    assert "tests/test_add.py" not in red.payload["changed_paths"]
+    frozen = red.payload.get("red_oracle_tests") or {}
+    assert [(t["path"], t["test"]) for t in frozen.get("tests", [])] == [("tests/test_add.py", "test_add")]
+
+    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    builder._core_advance("declaring")
+    test_file.write_text(HEADER + "\ndef test_add():\n    assert add(1, 2) == 0\n", encoding="utf-8")
+    green = run_evidence(builder.change_dir, phase="green", task="TASK-001", argv=_pytest("tests/test_add.py"))
+    assert not green.authentic
+    assert any("frozen Red oracle" in e for e in green.errors), green.errors

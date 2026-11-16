@@ -44,6 +44,7 @@ from deltafuse.core.test_reports import (
     red_is_authentic,
     restricted,
     runner_family,
+    task_test_files,
     task_test_ids,
     wants_junit_flag,
     worker_junit_path,
@@ -793,7 +794,11 @@ def run_evidence(
         # can only freeze the declared files whole, as 3.3.5 first did.
         red_failed = task_report.ids(FAILED) if task_report is not None else []
         if red_failed:
-            frozen = freeze_red_oracle(repo_root, rel_paths, red_failed)
+            # The files the failed tests live in, also when Declare did not write them: a Red
+            # over a committed test froze nothing, and Implement weakened that test (audit
+            # 2026-11-16, df-evidence #2).
+            oracle_files = sorted(set(rel_paths) | set(task_test_files(report, rel_paths, argv, repo_root)))
+            frozen = freeze_red_oracle(repo_root, oracle_files, red_failed)
             if frozen:
                 payload["red_oracle_tests"] = frozen
         else:
