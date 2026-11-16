@@ -15,7 +15,7 @@ from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core.hasher import compute_product_baseline_revision
 from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
-from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
+from deltafuse.core.transitions import CLOSE_STATUSES, receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -342,9 +342,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         return [], []
     change_id = data["id"]
     status = data.get("status")
-    if not isinstance(status, str) or status in TERMINAL_CHANGE:
+    if not isinstance(status, str):
         return [], []
     rel = _rel(product_root, change_path)
+    if status in TERMINAL_CHANGE:
+        # A terminal status the human did not record (`decide --close`) is not one: it halts
+        # instead of dropping the Change from the queue (df-gates #6).
+        hand_set = receipt_mismatch(product_root, change_path) if status in CLOSE_STATUSES else None
+        return _halt(change_id, rel, hand_set) if hand_set else ([], [])
     mismatch = receipt_mismatch(product_root, change_path)
     if mismatch:
         # DF3-004: change.yaml must agree with the last Core receipt; a
@@ -519,8 +524,16 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             ], []
 
     if status in {"implemented", "verifying"}:
-        from deltafuse.core.decide import GAP_ROUTES
+        from deltafuse.core.decide import GAP_ROUTES, verification_outcome
 
+        if verification_outcome(change_path) == "not-reproduced":
+            return _halt(
+                change_id,
+                rel,
+                f"Change {change_id}: Verify recorded `not-reproduced` in verification.md. The human "
+                f"closes it with `deltafuse decide {rel} --close --status not-reproduced --note "
+                '"<what was tried>"`',
+            )
         gap = verification_gap(change_path)
         if gap is not None:
             # Verify recorded a gap: Verify again would only record it again (ref-m04-365-2

@@ -95,10 +95,12 @@ Change может быть переведён в терминальное сос
 | `implemented` / `verifying` | `analyzing` | Verify записал `spec-gap` или `tasks-missing`; человек переоткрывает его: `deltafuse decide <change-dir> --gap <gap> --status reopened`. | **Escalation Gate**: возврат на анализ только решением человека (квитанция `gap-reopen`), без несанкционированных правок. |
 | `verifying` | `not-reproduced` | Закрытие Change как невоспроизведённого дефекта или подтверждённого no-op. | В `verification.md` зафиксирован исход `not-reproduced`. |
 | `analyzing` / `declaring` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |
-| `normalized` / `analyzing` | `rejected` | Запрос нереализуем или отвергнут по результатам маршрутизации/анализа. | Обоснование отказа задокументировано (опционально `analysis.md` или заметки Change). |
-| `normalized` / `analyzing` | `duplicate` | Запрос дублирует уже существующий активный или архивный Change. | Ссылка на оригинальный `CHG-*` зафиксирована в `change.yaml`. |
-| `analyzing` | `superseded` | Change заменён более широким или реструктурированным запросом. | Ссылка на замещающий Change зафиксирована в `change.yaml`. |
+| `normalized` / `analyzing` | `rejected` | Запрос нереализуем или отвергнут по результатам маршрутизации/анализа. | Решение человека с обоснованием (`--note`). |
+| `normalized` / `analyzing` | `duplicate` | Запрос дублирует уже существующий активный или архивный Change. | Решение человека; заметка называет оригинальный `CHG-*`. |
+| `analyzing` | `superseded` | Change заменён более широким или реструктурированным запросом. | Решение человека; заметка называет замещающий `CHG-*`. |
 | `converged` | `archived` | Пакет Change целиком перемещён в `docs/archive/changes/<date>-<change-id>/`. | Change удалён из активных списков, история неизменна. |
+
+Терминальные `rejected`, `duplicate`, `superseded` и `not-reproduced` пишет только `deltafuse decide <change-dir> --close --status <status> --note "<почему>"` (с паролем Human Gate, если он задан) из статуса, который допускает таблица (из Declare и Verify — через их промежуточный шаг); для `not-reproduced` из Declare нужен Red с `result: not-reproduced` или `already-green`, из Verify — `- Outcome: not-reproduced` в `verification.md`. Команда пишет receipt статуса в `transitions.jsonl` и receipt Human Gate на `change.yaml`; терминальный статус, записанный руками, останавливает `deltafuse next`, не архивируется и оставляет Change активным для защиты `init --force`.
 
 Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может.
 

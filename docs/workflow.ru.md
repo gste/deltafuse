@@ -108,7 +108,7 @@ Intake
 | `spec-conflict` | Запрос противоречит принятому поведению | Эскалация человеку или оформление Decision |
 | `decision-required` | Архитектурная, продуктовая или технологическая развилка | Создание проекта решения `DEC-NNNN` в `docs/decisions/` |
 | `capability-gap` | Запрос выходит за границы существующих capabilities | Предложение catalog delta и ожидание Human Gate |
-| `out-of-scope` | Запрос не относится к продукту или отклонён | Завершение Change с терминальным статусом `rejected` |
+| `out-of-scope` | Запрос не относится к продукту или отклонён | Остановка: человек закрывает Change статусом `rejected` (`deltafuse decide <change-dir> --close --status rejected --note "<почему>"`) |
 | `not-enough-information` | Недостаточно данных для локализации и границ | Остановка и запрос информации у пользователя (Stop-and-Ask) |
 
 ### Decision Convergence Loop

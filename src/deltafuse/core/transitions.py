@@ -250,6 +250,46 @@ def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> d
     return None
 
 
+# Terminal statuses a Change reaches without converging. Each is the human's verdict, recorded
+# by `deltafuse decide <change-dir> --close --status <status> --note "<rationale>"`: a status
+# written by hand archived with no check and lifted the `init --force` guard (df-gates #6).
+CLOSE_STATUSES = frozenset({"rejected", "duplicate", "superseded", "not-reproduced"})
+CLOSE_RECEIPT_KIND = "change"
+
+
+def terminal_status_errors(product_root: Path, change_path: Path) -> list[str]:
+    """Why the Change's non-converged terminal status is not the human's recorded verdict.
+
+    Empty for any other status. The verdict counts while the `decide --close` receipt in the
+    gate journal still matches change.yaml's bytes.
+    """
+    from deltafuse.core.gate_receipts import has_valid_receipt
+
+    try:
+        data = _load_change_yaml(change_path)
+    except TransitionError:
+        return []
+    status = data.get("status")
+    if status not in CLOSE_STATUSES:
+        return []
+    change_file = Path(change_path) / "change.yaml"
+    rel = change_file.resolve().relative_to(Path(product_root).resolve()).as_posix()
+    if has_valid_receipt(
+        product_root,
+        kind=CLOSE_RECEIPT_KIND,
+        status=str(status),
+        artifact_id=str(data.get("id") or Path(change_path).name),
+        rel_path=rel,
+        artifact=change_file,
+    ):
+        return []
+    return [
+        f"status '{status}' was not recorded by `deltafuse decide <change-dir> --close --status "
+        f"{status} --note \"<why>\"`, the human's verdict; a hand-set terminal status is not "
+        "evidence - restore change.yaml and ask the human"
+    ]
+
+
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     """V3-FIX-009: fail-closed receipt chain validation.
 
@@ -267,9 +307,11 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     status = data.get("status")
     if status == INITIAL_STATUS:
         return []
+    if status in CLOSE_STATUSES:
+        return terminal_status_errors(product_root, change_path)
     if status not in VALID_CHAIN_STATUSES:
-        # Terminal and other statuses (rejected, archived, ...) are governed
-        # by their own contracts, not the forward transition chain.
+        # Other statuses (archived, ...) are governed by their own contracts,
+        # not the forward transition chain.
         return []
 
     all_receipts = load_receipts(product_root, change_id)

@@ -48,6 +48,8 @@ _VERDICTS = {
     "spec": TERMINAL_STATUSES,
     "task": TASK_VERDICTS,
     "gap": frozenset({"reopened"}),
+    # The human closes a Change without converging it (transitions.CLOSE_STATUSES).
+    "change": frozenset({"rejected", "duplicate", "superseded", "not-reproduced"}),
 }
 LOCAL_GUARANTEE = (
     "local profile: chain detects accidental corruption only; it does not "

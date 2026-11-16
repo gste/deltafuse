@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -19,12 +20,15 @@ from deltafuse.core.integrity import list_proposed_decisions_for_change
 from deltafuse.core.queue import load_product_root
 from deltafuse.core.task_snapshot import apply_restore, restore_plan
 from deltafuse.core.transitions import (
+    CLOSE_RECEIPT_KIND,
+    CLOSE_STATUSES,
     GAP_REOPEN_FROM,
     GAP_REOPEN_KIND,
     GAP_REOPEN_TO,
     GATE_TARGETS,
     TransitionError,
     _artifact_file,
+    _gate_reachable,
     advance_change,
     open_gap_reopen,
     record_change_status,
@@ -482,6 +486,107 @@ def reopen_gap(
     return _result("gap", "reopened", human_check, ids, written, change_status=GAP_ROUTES[gap])
 
 
+_CHANGE_REF = re.compile(r"\bCHG-[0-9]{3,}(?:-[a-z0-9-]+)?\b")
+_NOT_REPRODUCED_RED = frozenset({"not-reproduced", "already-green"})
+
+
+def verification_outcome(change_dir: Path) -> str | None:
+    """The `- Outcome:` verdict verification.md records, lower-cased, or None."""
+    from deltafuse.core.fsm import _OUTCOME_LINE
+
+    try:
+        text = (Path(change_dir) / "verification.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    match = _OUTCOME_LINE.search(text)
+    return match.group("value").strip().strip("`").strip().lower() if match else None
+
+
+def _not_reproduced_proof(change_dir: Path, current: str) -> str | None:
+    """Why `not-reproduced` lacks its proof (docs/state-machine.md), or None.
+
+    From Analyze the human's note is the diagnosis; from Declare a Red record shows the oracle
+    did not fail; from Verify verification.md records the verdict.
+    """
+    if current in {"decomposed", "declaring"}:
+        for record in sorted((change_dir / "evidence" / "red").glob("*.yaml")):
+            try:
+                data = yaml.safe_load(record.read_text(encoding="utf-8"))
+            except (OSError, yaml.YAMLError):
+                continue
+            if isinstance(data, dict) and data.get("result") in _NOT_REPRODUCED_RED:
+                return None
+        return "no Red record shows the defect did not reproduce (result not-reproduced or already-green)"
+    if current in {"implemented", "verifying"} and verification_outcome(change_dir) != "not-reproduced":
+        return "verification.md does not record `- Outcome: not-reproduced`"
+    return None
+
+
+def close_change(
+    change_dir: Path,
+    status: str,
+    *,
+    note: str | None = None,
+    password_prompt: Callable[[], str] | None = None,
+) -> dict[str, Any]:
+    """The human closes a Change without converging it: rejected, duplicate, superseded, not-reproduced.
+
+    No command wrote these statuses: they were set by hand, archived with no check and lifted the
+    `init --force` guard (df-gates #6). The verdict needs what docs/state-machine.md asks - a
+    rationale (the note), the other Change for `duplicate`/`superseded`, the proof for
+    `not-reproduced` - and records a status receipt in transitions.jsonl and a Human Gate
+    receipt on change.yaml, which `archive` and the upgrade guard check.
+    """
+    if status not in CLOSE_STATUSES:
+        raise DecideError(f"--close takes --status {', '.join(sorted(CLOSE_STATUSES))}, got {status!r}")
+    _require_change_dir(change_dir, "--close")
+    _check_note(note)
+    if not (note or "").strip():
+        raise DecideError(f"--close --status {status} needs --note with the rationale; nothing was written")
+    change_file = change_dir / "change.yaml"
+    data = _load_yaml_mapping(change_file)
+    change_id = _change_id_from_dir(change_dir) or change_dir.name
+    current = str(data.get("status"))
+    if not _gate_reachable(current, status):
+        raise DecideError(f"a Change at '{current}' cannot become '{status}' (docs/state-machine.md)")
+    if status in {"duplicate", "superseded"}:
+        others = [ref for ref in _CHANGE_REF.findall(note or "") if ref != change_id]
+        if not others:
+            raise DecideError(f"--note must name the other Change (CHG-NNN) this one is {status} by")
+    if status == "not-reproduced":
+        missing = _not_reproduced_proof(change_dir, current)
+        if missing:
+            raise DecideError(f"cannot close as not-reproduced from '{current}': {missing}")
+    product_root = find_repo_root(change_dir)
+    human_check = _check_password(product_root, password_prompt)
+    with ProductMutationLock(product_root):
+        record_change_status(
+            change_dir,
+            status=status,
+            kind="artifact-status",
+            gate="decide",
+            artifact="change",
+            reason=f"closed {status}",
+            note=note.strip(),
+        )
+        try:
+            gate_receipts.record_receipt(
+                product_root,
+                kind=CLOSE_RECEIPT_KIND,
+                status=status,
+                rel_path=_rel(product_root, change_file),
+                artifact_id=change_id,
+                change=change_id,
+                artifact=change_file,
+                human_check=human_check,
+            )
+        except (ReceiptError, OSError) as ex:
+            raise DecideError(f"Change {status}, but its Human Gate receipt was not recorded: {ex}") from ex
+    return _result(
+        "change", status, human_check, {"from": current}, [_rel(product_root, change_file)], change_status=status
+    )
+
+
 def latest_gap_reopen(change_dir: Path) -> dict[str, Any] | None:
     """The newest `reopened/verify.<n>/reopen.yaml`, with its `path` relative to the Change."""
     return _latest_run(change_dir, "verify")
@@ -527,6 +632,7 @@ def apply_decision(
     task: str | None = None,
     gap: str | None = None,
     note: str | None = None,
+    close: bool = False,
     password_prompt: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Write the human's recorded choice. Does not run from `next`.
@@ -534,6 +640,10 @@ def apply_decision(
     `password_prompt` is called only when the product has a Human Gate password;
     it is asked before the mutation lock, so a human typing holds nothing.
     """
+    if close:
+        if decision or spec or task or gap:
+            raise DecideError("Pass exactly one of --decision, --spec, --task, --gap or --close")
+        return close_change(Path(start).resolve(), status, note=note, password_prompt=password_prompt)
     if gap:
         if decision or spec or task:
             raise DecideError("Pass exactly one of --decision, --spec, --task or --gap")

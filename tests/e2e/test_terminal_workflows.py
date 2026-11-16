@@ -5,6 +5,7 @@ import yaml
 from deltafuse.core.fsm import validate_change_package
 from deltafuse.core.installer import install
 from deltafuse.core.archiver import archive_change
+from deltafuse.core.decide import apply_decision
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -14,11 +15,9 @@ def test_rejected_change_lifecycle_and_archival(tmp_path: Path, repo_root: Path)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-301", title="Out of Scope Change")
     builder.step_intake(["CR-001"])
 
-    # Analyze determines change is out of scope and marks it rejected
-    cfile = builder.change_dir / "change.yaml"
-    cdata = yaml.safe_load(cfile.read_text(encoding="utf-8"))
-    cdata["status"] = "rejected"
-    cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
+    # Analyze finds the change out of scope; the human rejects it (df-gates #6: a hand-set
+    # terminal status no longer archives).
+    apply_decision(builder.change_dir, status="rejected", close=True, note="Out of scope")
 
     # Package is valid in terminal status without decomposed tasks
     errs = validate_change_package(builder.change_dir)
@@ -36,10 +35,7 @@ def test_duplicate_change_lifecycle_and_archival(tmp_path: Path, repo_root: Path
     builder = MockChangeBuilder(tmp_path, change_id="CHG-302", title="Duplicate Change")
     builder.step_intake(["CR-001"])
 
-    cfile = builder.change_dir / "change.yaml"
-    cdata = yaml.safe_load(cfile.read_text(encoding="utf-8"))
-    cdata["status"] = "duplicate"
-    cfile.write_text(yaml.safe_dump(cdata, sort_keys=False), encoding="utf-8")
+    apply_decision(builder.change_dir, status="duplicate", close=True, note="Duplicate of CHG-301")
 
     errs = validate_change_package(builder.change_dir)
     assert errs == []
