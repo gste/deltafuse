@@ -42,7 +42,9 @@ from deltafuse.core.test_reports import (
     no_test_error,
     read_report,
     red_is_authentic,
+    restricted,
     runner_family,
+    task_test_ids,
     wants_junit_flag,
     worker_junit_path,
 )
@@ -50,6 +52,10 @@ from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
 OWN_CODE_RED_CATEGORY = "test-own-error"
+# The run failed, but not on the task's own tests (audit 2026-11-16, df-evidence #1).
+NOT_THE_TASKS_RED_CATEGORY = "not-the-tasks-tests"
+# Nothing named the task's tests: no declared test file, no file or class on the command line.
+UNNAMED_RED_CATEGORY = "tests-not-named"
 RECORDED_BY = "deltafuse-evidence"
 STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
@@ -668,23 +674,51 @@ def run_evidence(
 
     report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
-    if phase == "red" and exit_code != 0 and report is not None:
+    # Red is judged on the task's own tests, not on the whole report (`task_test_ids`).
+    task_report = report
+    red_why: str | None = None  # why the runner's report does not make this an authentic Red
+    if phase == "red" and report is not None:
+        named, named_by = task_test_ids(report, rel_paths, argv, repo_root)
+        task_report = restricted(report, named or [])
+        if named is None and exit_code != 0:
+            category = UNNAMED_RED_CATEGORY
+            red_why = (
+                "Red does not say which tests are the task's: no test file is among its changed_paths "
+                "and the command names no test file or class (`pytest tests/test_x.py`, "
+                "`mvn test -Dtest=CalcTest`), so a failure anywhere in the suite would read as this "
+                "task's Red. Name the task's tests and record Red again"
+            )
+    if phase == "red" and exit_code != 0 and report is not None and red_why is None:
         # The gate reads this field, and the Core has just judged Red by the
         # runner's own report. The two must not disagree: in the runs of
         # 2026-09-25/26, 23 of 44 Red records whose report said "the tests ran
         # and failed" were still recorded `fixture-error` (the log had no
         # `assert `), and the `declaring` gate refused them.
-        if red_is_authentic(report)[0]:
+        ok, why = red_is_authentic(task_report)
+        others = [t for t in report.ids(FAILED) + report.ids(NOT_RUN) if t not in task_report.outcomes]
+        if ok:
             category = AUTHENTIC_RED_CATEGORY
-        elif category == AUTHENTIC_RED_CATEGORY:
-            # The log mentioned an assertion but nothing ran, or a test could not
-            # run: not a behavioural failure however the log reads.
-            category = "fixture-error"
+        elif not task_report.ids(FAILED) and not task_report.ids(NOT_RUN) and others:
+            # Audit 2026-11-16 (df-evidence #1): the run failed, but on tests that are not the
+            # task's, while the task's own tests passed or did not run.
+            category = NOT_THE_TASKS_RED_CATEGORY
+            red_why = (
+                f"the task's own tests - {named_by} - did not fail "
+                f"({'passed: ' + ', '.join(task_report.ids(PASSED)[:5]) if task_report.ids(PASSED) else 'none of them ran'}); "
+                f"the run failed on other tests ({', '.join(others[:5])}), and a failure of a test "
+                "that is not the task's is not its Red"
+            )
+        else:
+            red_why = f"{why}{_missing_import_hint(log)}"
+            if category == AUTHENTIC_RED_CATEGORY:
+                # The log mentioned an assertion but nothing ran, or a test could not
+                # run: not a behavioural failure however the log reads.
+                category = "fixture-error"
     own_code = None
     if phase == "red" and exit_code != 0 and report is not None and category == AUTHENTIC_RED_CATEGORY:
         # The gate reads the category, so a test no product code can pass is not
         # recorded as a behavioural failure (ref-m02-339, core/red_cause.py).
-        own_code = own_code_error(report, repo_root)
+        own_code = own_code_error(task_report, repo_root)
         if own_code:
             category = OWN_CODE_RED_CATEGORY
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
@@ -716,9 +750,11 @@ def run_evidence(
     if report is not None:
         payload["tests"] = {
             "source": report.source,
-            "failed": report.ids(FAILED),
+            # A Red record's failures are its oracle: the task's own tests, not every test
+            # that failed in the run (another task's, or one broken before the Change).
+            "failed": (task_report if phase == "red" else report).ids(FAILED),
             "passed": report.ids(PASSED),
-            "not_run": report.ids(NOT_RUN),
+            "not_run": (task_report if phase == "red" else report).ids(NOT_RUN),
             "skipped": report.ids(SKIPPED),
         }
     isolation = None
@@ -734,7 +770,7 @@ def run_evidence(
         # test rewritten during Implement. With the runner's report the Core
         # knows which tests are the oracle and freezes those; without one it
         # can only freeze the declared files whole, as 3.3.5 first did.
-        red_failed = report.ids(FAILED) if report is not None else []
+        red_failed = task_report.ids(FAILED) if task_report is not None else []
         if red_failed:
             frozen = freeze_red_oracle(repo_root, rel_paths, red_failed)
             if frozen:
@@ -779,9 +815,8 @@ def run_evidence(
             # The runner's own report, read through its ecosystem's meaning of
             # `<error>`: pytest says the test never ran, Surefire says it ran
             # and threw. The rule is written in neutral words for that reason.
-            ok, why = red_is_authentic(report)
-            if not ok:
-                errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
+            if red_why:
+                errors.append(f"Red is not authentic: {red_why}")
             elif own_code:
                 errors.append(own_code)
         elif category != AUTHENTIC_RED_CATEGORY:

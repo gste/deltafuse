@@ -1223,6 +1223,19 @@ def _red_category_hint(ev_data: dict) -> str:
             "so it would never pass; `deltafuse evidence` named the test and the line. Fix "
             "the test so it fails only because the behaviour is missing, and record Red again"
         )
+    if ev_data.get("failure_category") == "not-the-tasks-tests":
+        # Audit 2026-11-16 (df-evidence #1).
+        return (
+            ". The run failed, but not on this task's own tests (the test files it declared, or "
+            "those its command names): they passed or did not run. A failure of another test is "
+            "not this task's Red - write or name the test that shows the missing behaviour"
+        )
+    if ev_data.get("failure_category") == "tests-not-named":
+        return (
+            ". The record does not say which tests are this task's: declare the test file "
+            "(it is in changed_paths once written) or name it on the command line, and record "
+            "Red again"
+        )
     summary = str(ev_data.get("summary") or "").strip().splitlines()
     last = summary[-1].strip()[:160] if summary else ""
     said = f"; the record says: {last}" if last else ""

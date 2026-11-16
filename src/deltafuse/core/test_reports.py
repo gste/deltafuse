@@ -316,3 +316,206 @@ def green_covers_red(red_failed: list[str], report: TestReport) -> list[str]:
     """
     passed = {name for name, got in report.outcomes.items() if got == PASSED}
     return sorted(name for name in red_failed if name not in passed)
+
+
+# --- the task's own tests -----------------------------------------------------------------------
+#
+# Audit 2026-11-16 (df-evidence #1, q7 decision): Red was judged on the whole report, so a
+# pre-existing broken test elsewhere in the suite made an authentic Red while the task's own test
+# already passed, and Green then closed `implemented` with no product change. Red is about the
+# tests the task names: the test files Declare wrote (its `changed_paths`), or, for a test that
+# is already committed, the tests its command selects.
+
+JVM_TEST_SUFFIXES = (".java", ".kt", ".groovy", ".scala")
+_JVM_TEST_ROOT = re.compile(r"(?:^|/)src/test/[^/]+/")
+
+
+def is_test_file(rel: str) -> bool:
+    """A file a runner reads tests from: `test_*.py` / `*_test.py`, or JVM test source."""
+    rel = rel.replace("\\", "/")
+    name = rel.rsplit("/", 1)[-1]
+    if name.endswith(".py"):
+        return name.startswith("test_") or name.endswith("_test.py")
+    return name.endswith(JVM_TEST_SUFFIXES) and bool(_JVM_TEST_ROOT.search(rel))
+
+
+def declared_test_files(changed_paths: list[str]) -> list[str]:
+    """The test files among a record's changed_paths."""
+    return sorted({
+        p.replace("\\", "/").lstrip("/") for p in changed_paths if isinstance(p, str) and is_test_file(p)
+    })
+
+
+def _pytest_id_in(test_id: str, rel: str) -> bool:
+    """A pytest JUnit id (`dotted.module[.Class]::name`, or a bare module for a collection
+    error) names a test of *rel*. The dotted part is relative to pytest's rootdir, so a trailing
+    part of the module path must start it (the reading oracle._resolve uses)."""
+    if not rel.endswith(".py"):
+        return False
+    classname, sep, _name = test_id.rpartition("::")
+    dotted = (classname if sep else test_id).split("[", 1)[0]
+    cparts = [p for p in dotted.split(".") if p]
+    mparts = rel[:-3].split("/")
+    return any(cparts[:k] == mparts[-k:] for k in range(len(mparts), 0, -1))
+
+
+def _jvm_class_of(rel: str) -> tuple[str, str]:
+    """(module prefix, fully qualified class) of a JVM test source under `src/test/<lang>/`."""
+    rel = rel.replace("\\", "/")
+    stem = rel.rsplit(".", 1)[0]
+    match = _JVM_TEST_ROOT.search(rel)
+    start = match.end() if match else len(stem) - len(stem.rsplit("/", 1)[-1])
+    return jvm_module_prefix(rel), stem[start:].replace("/", ".")
+
+
+def _jvm_id_class(test_id: str) -> tuple[str, str]:
+    """(module prefix, top-level class) of a JVM test id `[module/]pkg.Class[$Inner]::method`."""
+    classname = test_id.split("::", 1)[0]
+    prefix, _, classname = classname.rpartition("/")
+    return (prefix + "/" if prefix else ""), classname.split("$", 1)[0]
+
+
+def _jvm_id_in(test_id: str, rel: str) -> bool:
+    if not rel.endswith(JVM_TEST_SUFFIXES):
+        return False
+    return _jvm_class_of(rel) == _jvm_id_class(test_id)
+
+
+def test_in_files(test_id: str, files: list[str], family: str) -> bool:
+    """True when *test_id*, as *family*'s report spells it, is a test of one of *files*."""
+    if family == "jvm":
+        return any(_jvm_id_in(test_id, rel) for rel in files)
+    return any(_pytest_id_in(test_id, rel) for rel in files)
+
+
+test_in_files.__test__ = False  # a helper, not a test, for pytest collecting a module importing it
+
+# pytest options whose value is the next argument, so that value is not read as a test path.
+_PYTEST_VALUE_OPTIONS = frozenset({
+    "-k", "-m", "-p", "-c", "-o", "--deselect", "--ignore", "--ignore-glob", "--rootdir", "--junitxml",
+    "--junit-xml", "--basetemp", "--import-mode", "--confcutdir", "-W", "--pythonwarnings", "--maxfail",
+    "--tb", "--durations", "--config-file", "--override-ini",
+})
+
+
+def pytest_positionals(argv: list[str], repo_root: Path) -> list[str]:
+    """The test paths and node ids a pytest command names (existing paths only), POSIX form."""
+    if runner_family(argv) != "pytest":
+        return []
+    start = 1 if runner_head(argv[0]) in PYTEST_RUNNERS else argv.index("pytest") + 1
+    out: list[str] = []
+    rest = iter(argv[start:])
+    for arg in rest:
+        if arg in _PYTEST_VALUE_OPTIONS:
+            next(rest, None)
+            continue
+        if arg.startswith("-"):
+            continue
+        posix = arg.replace("\\", "/")
+        if (repo_root / posix.split("::", 1)[0]).exists():
+            out.append(posix)
+    return out
+
+
+def jvm_test_selection(argv: list[str]) -> list[str]:
+    """The class patterns a Maven `-Dtest=` / `-Dit.test=` or Gradle `--tests` names."""
+    patterns: list[str] = []
+    args = [str(a) for a in argv[1:]]
+    for i, arg in enumerate(args):
+        value = None
+        for flag in ("-Dtest=", "-Dit.test="):
+            if arg.startswith(flag):
+                value = arg[len(flag):]
+        if arg == "--tests" and i + 1 < len(args):
+            value = args[i + 1]
+        elif arg.startswith("--tests="):
+            value = arg.split("=", 1)[1]
+        for item in (value or "").split(","):
+            item = item.strip().lstrip("!")
+            if item:
+                patterns.append(item.split("#", 1)[0])
+    return patterns
+
+
+def _jvm_selected(test_id: str, patterns: list[str]) -> bool:
+    import fnmatch
+
+    _prefix, cls = _jvm_id_class(test_id)
+    simple = cls.rsplit(".", 1)[-1]
+    for pattern in patterns:
+        if pattern.endswith((".java", ".class", ".kt")):
+            pattern = pattern.rsplit(".", 1)[0]
+        pattern = pattern.replace("/", ".")
+        if fnmatch.fnmatchcase(cls if "." in pattern else simple, pattern):
+            return True
+    return False
+
+
+def report_family(report: TestReport) -> str:
+    return "jvm" if report.source == "surefire" else "pytest"
+
+
+def _named_files(argv: list[str], repo_root: Path) -> list[str]:
+    return sorted({
+        p.split("::", 1)[0] for p in pytest_positionals(argv, repo_root)
+        if (repo_root / p.split("::", 1)[0]).is_file()
+    })
+
+
+def task_test_ids(
+    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path
+) -> tuple[list[str] | None, str]:
+    """The report's tests that are the task's, and how they were named; (None, "") when nothing
+    names them - no declared test file and no test file or class selected on the command line."""
+    family = report_family(report)
+    declared = declared_test_files(changed_paths)
+    if declared:
+        return (
+            sorted(t for t in report.outcomes if test_in_files(t, declared, family)),
+            f"the test files the task declared ({', '.join(declared[:5])})",
+        )
+    if family == "jvm":
+        patterns = jvm_test_selection(argv)
+        if not patterns:
+            return None, ""
+        return (
+            sorted(t for t in report.outcomes if _jvm_selected(t, patterns)),
+            f"the test classes the command selects ({', '.join(patterns[:5])})",
+        )
+    files = _named_files(argv, repo_root)
+    if not files:
+        return None, ""
+    return (
+        sorted(t for t in report.outcomes if test_in_files(t, files, family)),
+        f"the test files the command names ({', '.join(files[:5])})",
+    )
+
+
+def restricted(report: TestReport, ids: list[str]) -> TestReport:
+    """*report* with only *ids*."""
+    keep = set(ids)
+    return TestReport(
+        report.source,
+        {k: v for k, v in report.outcomes.items() if k in keep},
+        {k: v for k, v in report.failures.items() if k in keep},
+    )
+
+
+def task_test_files(
+    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path
+) -> list[str]:
+    """The test files that hold the task's tests: those declared, or those the command names.
+    A JVM class selected with `-Dtest=` is looked up under `src/test/<lang>/`."""
+    declared = declared_test_files(changed_paths)
+    if declared:
+        return declared
+    if report_family(report) != "jvm":
+        return _named_files(argv, repo_root)
+    named, _ = task_test_ids(report, changed_paths, argv, repo_root)
+    found: set[str] = set()
+    for test_id in named or []:
+        prefix, cls = _jvm_id_class(test_id)
+        for path in repo_root.glob(f"{prefix}src/test/*/{cls.replace('.', '/')}.*"):
+            if path.suffix in JVM_TEST_SUFFIXES:
+                found.add(path.relative_to(repo_root).as_posix())
+    return sorted(found)
