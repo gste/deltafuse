@@ -207,3 +207,70 @@ def test_ops_route_change_is_routed_by_the_queue_to_converged(tmp_path: Path, re
     write_coverage(change)
     assert check_gate(change, "converged") == []
     assert advance_change(change, "converged")["to"] == "converged"
+
+
+# df-gates #1: `advance --gate decomposed` from `analyzed` is the bugfix path (spec unchanged); it
+# worked for any Change, so a feature skipped the specification Human Gate and converged and
+# archived with spec-delta.md still `proposed`.
+_DELTA = (
+    "---\nchange: {cid}\nstatus: proposed\nslices: [SLICE-01]\n"
+    "added: [docs/spec/core.md#REQ-01]\nmodified: []\nremoved: []\n---\n\n# Spec Delta\nNew REQ-01\n"
+)
+
+
+def test_a_feature_cannot_skip_the_spec_human_gate_to_decompose(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-992", title="Feature").step_intake().step_analyze()
+    assert advance_change(builder.change_dir, "analyzed")["to"] == "analyzed"
+    (builder.change_dir / "spec-delta.md").write_text(_DELTA.format(cid="CHG-992"), encoding="utf-8")
+    builder._core_advance = lambda gate: None  # the Worker writes tasks; the Core advances
+    builder.step_decompose()
+
+    errors = check_gate(builder.change_dir, "decomposed")
+    assert any("specification Human Gate" in e for e in errors), errors
+    import pytest
+
+    from deltafuse.core.transitions import TransitionError
+
+    with pytest.raises(TransitionError, match="specification Human Gate"):
+        advance_change(builder.change_dir, "decomposed")
+
+
+def test_a_bugfix_that_changes_the_spec_goes_through_specify(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-993", title="Bug").step_intake().step_analyze()
+    builder._update_change_yaml({"intent": "bugfix"})
+    assert advance_change(builder.change_dir, "analyzed")["to"] == "analyzed"
+    (builder.change_dir / "spec-delta.md").write_text(_DELTA.format(cid="CHG-993"), encoding="utf-8")
+    builder._core_advance = lambda gate: None
+    builder.step_decompose()
+    assert any("spec-delta.md" in e for e in check_gate(builder.change_dir, "decomposed"))
+
+
+def test_converged_and_archive_need_the_accepted_spec_delta(tmp_path: Path, repo_root: Path):
+    from deltafuse.core.archiver import ArchivalError, archive_change
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-994", title="Feature").step_intake().step_analyze()
+    builder.step_decompose().step_declare().step_implement().step_verify()  # receipts forged past Specify
+    assert any("spec-delta.md" in e for e in check_gate(builder.change_dir, "converged"))
+
+    delta = builder.change_dir / "spec-delta.md"
+    delta.write_text(_DELTA.format(cid="CHG-994").replace("added: [docs/spec/core.md#REQ-01]", "added: []"), encoding="utf-8")
+    errors = check_gate(builder.change_dir, "converged")
+    assert any("spec-delta.md" in e and "accepted" in e for e in errors), errors
+    import pytest
+
+    with pytest.raises(ArchivalError, match="spec-delta.md"):
+        archive_change(builder.change_dir, repo_root=tmp_path)
+
+    # Accepted by hand, with no receipt from deltafuse decide: still not the human's.
+    delta.write_text(delta.read_text(encoding="utf-8").replace("status: proposed", "status: accepted"), encoding="utf-8")
+    assert any("spec-delta.md" in e for e in check_gate(builder.change_dir, "converged"))
+
+
+def test_the_golden_walk_through_specify_still_converges(tmp_path: Path, repo_root: Path):
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-995", title="Feature").step_intake().step_analyze()
+    builder.step_specify().step_decompose().step_declare().step_implement().step_verify()
+    assert check_gate(builder.change_dir, "converged") == []
