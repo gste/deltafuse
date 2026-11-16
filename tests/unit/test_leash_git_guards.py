@@ -324,3 +324,42 @@ def test_advance_does_not_judge_what_a_merge_brought_in(tmp_path: Path, repo_roo
     git(root, "merge", "-q", "--no-ff", "--no-edit", "main")
     leash = leash_at_advance(builder.change_dir, root)
     assert leash["violations"] == [], leash
+
+
+def test_the_hook_goes_where_core_hookspath_points(tmp_path: Path, repo_root: Path):
+    """df-leash #13: with core.hooksPath set (husky, a team template) the hook went to .git/hooks, which
+    git never runs, and the src/ write committed."""
+    root = tmp_path / "prod"
+    root.mkdir()
+    install(target_dir=root, framework_root=repo_root)
+    set_workflow(root, leash="enforce")
+    git(root, "init", "-q")
+    git(root, "config", "core.hooksPath", ".githooks")
+    (root / ".githooks").mkdir()
+    MockChangeBuilder(root, change_id="CHG-001", title="t").step_intake()
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "--no-verify", "-m", "scaffold")
+    sync_leash_hook(root, "enforce")
+    assert (root / ".githooks" / "pre-commit").is_file()
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "evil.py").write_text("print('evil')\n", encoding="utf-8")
+    git(root, "add", "-A")
+    assert commit(root).returncode != 0
+
+
+def test_a_shared_hookspath_outside_the_repository_is_left_alone_with_a_message(
+    tmp_path: Path, repo_root: Path, capsys
+):
+    root = tmp_path / "prod"
+    root.mkdir()
+    shared = tmp_path / "shared-hooks"
+    shared.mkdir()
+    install(target_dir=root, framework_root=repo_root)
+    git(root, "init", "-q")
+    git(root, "config", "core.hooksPath", shared.as_posix())
+    capsys.readouterr()
+    sync_leash_hook(root, "enforce")
+    assert not (shared / "pre-commit").exists()
+    assert not (root / ".git" / "hooks" / "pre-commit").exists()
+    err = capsys.readouterr().err
+    assert "core.hooksPath" in err and ".deltafuse/hooks/pre-commit" in err

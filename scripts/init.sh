@@ -144,24 +144,50 @@ remove_marked_hook() {
   fi
 }
 
+# Where git runs this repository's hooks from, as src/deltafuse/core/leash.py finds it: honours
+# core.hooksPath and a `.git` file (submodule, worktree). Prints nothing when there is no git or
+# the directory lies outside the repository and its git directory (shared with other repositories).
+leash_hooks_dir() {
+  [ -e "$TARGET_ROOT/.git" ] || return 0
+  local hooks common
+  hooks="$(cd "$TARGET_ROOT" && git rev-parse --git-path hooks 2>/dev/null)" || return 0
+  common="$(cd "$TARGET_ROOT" && git rev-parse --git-common-dir 2>/dev/null)" || return 0
+  case "$hooks" in
+    ../*|..) ;;
+    /*|[A-Za-z]:*)
+      case "$hooks" in
+        "$common"/*) printf '%s\n' "$hooks"; return 0 ;;
+      esac
+      ;;
+    *) printf '%s\n' "$TARGET_ROOT/$hooks"; return 0 ;;
+  esac
+  if [ "$2" != quiet ]; then
+    printf 'deltafuse: core.hooksPath points at %s, outside this repository; the leash pre-commit hook was not put there. Run .deltafuse/hooks/pre-commit from the pre-commit hook in that directory to have commits judged.\n' "$hooks" >&2
+  fi
+}
+
 sync_leash_hook() {
   local mode="$1"
   local managed="$TARGET_ROOT/.deltafuse/hooks/pre-commit"
-  local git_hook="$TARGET_ROOT/.git/hooks/pre-commit"
+  local hooks_dir git_hook
   case "$mode" in
     off|'')
       remove_marked_hook "$managed"
-      remove_marked_hook "$git_hook"
-      return
+      hooks_dir="$(leash_hooks_dir "" quiet)"
+      [ -n "$hooks_dir" ] && remove_marked_hook "$hooks_dir/pre-commit"
+      return 0
       ;;
   esac
   mkdir -p "$(dirname "$managed")"
   printf '%s\n' "$HOOK_SCRIPT" > "$managed"
   chmod +x "$managed" 2>/dev/null || true
-  if [ ! -d "$TARGET_ROOT/.git" ]; then
+  hooks_dir="$(leash_hooks_dir)"
+  if [ -z "$hooks_dir" ]; then
     return
   fi
+  git_hook="$hooks_dir/pre-commit"
   if [ -f "$git_hook" ] && ! grep -F -q "$HOOK_MARKER" "$git_hook"; then
+    printf 'deltafuse: %s is a pre-commit hook DeltaFuse did not write and is left as it is; run .deltafuse/hooks/pre-commit from it to have commits judged by the leash.\n' "$git_hook" >&2
     return
   fi
   mkdir -p "$(dirname "$git_hook")"

@@ -8,6 +8,7 @@ import json
 import re
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any, Callable
 
 import yaml
@@ -1375,20 +1376,40 @@ def _remove_marked_hook(path: Path) -> None:
     path.unlink()
 
 
-def _git_hooks_dir(product_root: Path) -> Path | None:
+def _git_hooks_dir(product_root: Path, *, announce: bool = True) -> Path | None:
+    """The directory git runs this repository's hooks from, or None (no git, or one not ours).
+
+    `git rev-parse --git-path hooks` answers for a plain repository, a submodule or a linked
+    worktree (`.git` is a file naming the real git directory: a service that is a submodule of an
+    aggregator repository) and honours `core.hooksPath` (df-leash #13: with husky or a team
+    template git runs the hooks from there, and a hook in .git/hooks never ran). A hooksPath
+    outside this repository and its git directory is shared with other repositories: the hook is
+    not put there, and the human is told how to wire it.
+    """
     git = product_root / ".git"
-    if git.is_dir():
-        return git / "hooks"
-    if not git.is_file():
+    if not git.exists():
         return None
-    # A submodule or a linked worktree: `.git` is a file naming the real git directory, and
-    # the hook went nowhere (a service that is a submodule of an aggregator repository).
-    done = subprocess.run(["git", "rev-parse", "--git-path", "hooks"], cwd=product_root,
-                          capture_output=True, text=True)
-    path = done.stdout.strip()
-    if done.returncode != 0 or not path:
+    try:
+        done = subprocess.run(["git", "rev-parse", "--git-path", "hooks", "--git-common-dir"],
+                              cwd=product_root, capture_output=True, text=True)
+    except OSError:
         return None
-    return Path(path) if Path(path).is_absolute() else product_root / path
+    lines = [line.strip() for line in (done.stdout or "").splitlines() if line.strip()]
+    if done.returncode != 0 or len(lines) != 2:
+        return git / "hooks" if git.is_dir() else None
+    hooks, common = (Path(p) if Path(p).is_absolute() else product_root / p for p in lines)
+    hooks, common = hooks.resolve(), common.resolve()
+    own = (Path(product_root).resolve(), common)
+    if not any(hooks == home or home in hooks.parents for home in own):
+        if announce:
+            print(
+                f"deltafuse: core.hooksPath points at {hooks}, outside this repository; the leash "
+                "pre-commit hook was not put there. Run .deltafuse/hooks/pre-commit from the "
+                "pre-commit hook in that directory to have commits judged.",
+                file=sys.stderr,
+            )
+        return None
+    return hooks
 
 
 def sync_leash_hook(product_root: Path, mode: str) -> None:
@@ -1404,7 +1425,7 @@ def sync_leash_hook(product_root: Path, mode: str) -> None:
     if normalized not in LEASH_MODES:
         normalized = "off"
     managed = root / ".deltafuse" / "hooks" / "pre-commit"
-    hooks_dir = _git_hooks_dir(root)
+    hooks_dir = _git_hooks_dir(root, announce=normalized != "off")
     git_hook = (hooks_dir / "pre-commit") if hooks_dir is not None else None
     if normalized == "off":
         _remove_marked_hook(managed)
@@ -1420,6 +1441,11 @@ def sync_leash_hook(product_root: Path, mode: str) -> None:
     if git_hook.is_file():
         existing = git_hook.read_text(encoding="utf-8", errors="replace")
         if HOOK_MARKER not in existing:
+            print(
+                f"deltafuse: {git_hook} is a pre-commit hook DeltaFuse did not write and is left as it "
+                "is; run .deltafuse/hooks/pre-commit from it to have commits judged by the leash.",
+                file=sys.stderr,
+            )
             return
     git_hook.write_text(HOOK_SCRIPT, encoding="utf-8", newline="\n")
     _chmod_exec(git_hook)
