@@ -43,7 +43,7 @@ def test_e2e_artifact_writer_workflow_feature(tmp_path: Path, repo_root: Path):
         "spec_refs": ["docs/spec/core.md#REQ-01"],
         "allowed_paths": ["src/app.py"],
         "forbidden_paths": [],
-        "context_budget": {"max_tokens": 1000, "max_files": 5},
+        # No context_budget: the Core writes the product's, and refuses one from the Worker.
     }
     input_file = tmp_path / "task_input.json"
     input_file.write_text(json.dumps(task_payload), encoding="utf-8")
@@ -83,4 +83,8 @@ def test_e2e_artifact_writer_workflow_docs_route(tmp_path: Path, repo_root: Path
 
     data = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8"))
     assert data["route"] == "docs"
+    assert check_gate(change_dir, "intake"), "the scaffold has no claims; Intake does not close on it"
+    request = change_dir / "request.md"
+    claims = "\n## Claims\n\n- CR-001 (expectation): the guide names the flag\n"
+    request.write_text(request.read_text(encoding="utf-8") + claims, encoding="utf-8")
     assert check_gate(change_dir, "intake") == []

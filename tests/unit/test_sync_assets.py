@@ -37,6 +37,12 @@ def asset_repo(tmp_path, monkeypatch):
     return sa
 
 
+def test_sync_writes_the_manifest_with_lf(asset_repo):
+    """2026-10-27: write_text left manifest.json CRLF on Windows (git status clean), products
+    pinned that file's digest, and a checkout rewrote it LF under them."""
+    assert b"\r\n" not in (sa.ASSETS / "manifest.json").read_bytes()
+
+
 def test_failed_generation_keeps_previous_bundle(asset_repo, monkeypatch):
     """QF-009: a crash mid-generation leaves the old bundle byte-for-byte."""
     before = _snapshot(sa.ASSETS)

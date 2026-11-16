@@ -178,6 +178,99 @@ def own_code_failures(report: TestReport, repo_root: Path) -> list[tuple[str, st
     return out
 
 
+# --- a Red that fails on its environment ----------------------------------------------------------
+#
+# Audit 2026-11-16 (df-evidence #7): a test that reads a data file nobody has written yet, or
+# imports a package that is not installed, fails whatever the product does - and was recorded
+# `behavioral-mismatch`, so Implement "turned it green" by adding the data file. The Core refuses
+# what is unambiguous, again from pytest's own report:
+#
+# * FileNotFoundError raised from the test's own code (the deepest frame in the product is a test
+#   file) for a path under a test directory - the test's data, not the product's output;
+# * ModuleNotFoundError for a top-level module that is neither in the product nor named by the
+#   task's allowed_paths - a package that is not installed, not code the task will write.
+
+_MISSING_MODULE = re.compile(r"No module named '([^']+)'")
+_MISSING_FILE = re.compile(r"No such file or directory: '([^']+)'")
+_ENV_SKIP_PARTS = frozenset({"site-packages", ".venv", "venv", ".tox", "node_modules"})
+_TEST_DIRS = frozenset({"tests", "test"})
+
+
+def _deepest_repo_frame(text: str, repo_root: Path) -> Path | None:
+    root = repo_root.resolve()
+    deepest = None
+    for raw, _line in _FRAME.findall(text or ""):
+        path = Path(raw.replace("\\", "/"))
+        try:
+            path = (path if path.is_absolute() else root / path).resolve()
+            rel = path.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if _ENV_SKIP_PARTS & set(rel.parts):
+            continue
+        deepest = path
+    return deepest
+
+
+def _module_is_the_tasks(top: str, repo_root: Path, allowed_paths: list[str]) -> bool:
+    if _product_module(top, repo_root):
+        return True
+    for raw in allowed_paths:
+        parts = str(raw).replace("\\", "/").split("/")
+        if top in parts or f"{top}.py" in parts:
+            return True
+    return False
+
+
+def _environment_cause(message: str, text: str, repo_root: Path, allowed_paths: list[str]) -> str | None:
+    exc = message.split(":", 1)[0].strip().rsplit(".", 1)[-1]
+    if exc == "ModuleNotFoundError":
+        found = _MISSING_MODULE.search(message)
+        top = found.group(1).split(".")[0] if found else ""
+        if top and not _module_is_the_tasks(top, repo_root, allowed_paths):
+            return f"module '{top}' is not installed and is neither in the product nor in the task's allowed_paths"
+        return None
+    if exc == "FileNotFoundError":
+        found = _MISSING_FILE.search(message)
+        frame = _deepest_repo_frame(text, repo_root)
+        if not found or frame is None or not _is_test_file(frame):
+            return None  # raised in product code, or no path to judge: the product decides
+        missing = Path(found.group(1).replace("\\", "/"))
+        try:
+            rel = (missing if missing.is_absolute() else repo_root / missing).resolve().relative_to(repo_root.resolve())
+        except (OSError, ValueError):
+            return None  # outside the product (a tmp_path output): may be the product's to write
+        if _TEST_DIRS & set(rel.parts[:-1]) or (len(rel.parts) > 2 and rel.parts[:2] == ("src", "test")):
+            return f"the test reads '{rel.as_posix()}', a test data file that does not exist"
+    return None
+
+
+def environment_failures(report: TestReport, repo_root: Path, allowed_paths: list[str]) -> list[tuple[str, str]]:
+    """Failed Red tests that fail on their environment, with the cause."""
+    out: list[tuple[str, str]] = []
+    for name in report.ids(FAILED):
+        detail = report.failures.get(name)
+        if detail is None:
+            continue
+        cause = _environment_cause(detail[0], detail[1], repo_root, allowed_paths)
+        if cause:
+            out.append((name, cause))
+    return out
+
+
+def environment_error(report: TestReport, repo_root: Path, allowed_paths: list[str]) -> str | None:
+    """The refusal for a Red with such tests, or None."""
+    found = environment_failures(report, repo_root, allowed_paths)
+    if not found:
+        return None
+    listed = "; ".join(f"{name}: {cause}" for name, cause in found[:5])
+    return (
+        "Red is not authentic: these tests fail on their environment, not on missing behaviour, "
+        f"so no product change is what turns them green - {listed}. Give the test its data (or "
+        "install the package), or test what the product itself must do, then take Red again"
+    )
+
+
 def own_code_error(report: TestReport, repo_root: Path) -> str | None:
     """The refusal for a Red with such tests, or None."""
     found = own_code_failures(report, repo_root)

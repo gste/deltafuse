@@ -25,27 +25,35 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def manifest_identity_digest(manifest_path: Path) -> str:
+    """Digest of a bundle manifest, bare hex, over its line-ending-normalized bytes,
+    so the manifest pins the same identity whether git checked it out CRLF or LF."""
+    from deltafuse.core.hasher import normalize_line_endings
+
+    return hashlib.sha256(normalize_line_endings(manifest_path.read_bytes())).hexdigest().lower()
+
+
 def get_executing_framework_identity() -> tuple[str, set[str]]:
     """Return (running_version, set_of_valid_content_hashes) for executing framework assets."""
     from deltafuse import __version__
     from deltafuse.core.hasher import compute_framework_content_hash
 
-    valid_hashes: set[str] = set()
+    digests: set[str] = set()
 
     bundle = bundle_root()
     if bundle is not None:
         manifest_path = bundle / "manifest.json"
         if manifest_path.is_file():
-            digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest().lower()
-            valid_hashes.add(digest)
-            valid_hashes.add(f"sha256:{digest}")
+            digests.add(manifest_identity_digest(manifest_path))
 
     source = source_assets_root()
     if source is not None:
-        digest = compute_framework_content_hash().lower()
+        digests.add(compute_framework_content_hash())
+
+    valid_hashes: set[str] = set()
+    for digest in digests:
         valid_hashes.add(digest)
         valid_hashes.add(f"sha256:{digest}")
-
     return __version__, valid_hashes
 
 
@@ -60,14 +68,11 @@ def get_installed_lock_hash() -> str:
     """
     bundle = bundle_root()
     if bundle is not None and (bundle / "manifest.json").is_file():
-        digest = hashlib.sha256((bundle / "manifest.json").read_bytes()).hexdigest().lower()
-        return f"sha256:{digest}"
-    _, valid_hashes = get_executing_framework_identity()
-    for h in sorted(valid_hashes):
-        if h.startswith("sha256:"):
-            return h
-    if valid_hashes:
-        return f"sha256:{sorted(valid_hashes)[0]}"
+        return f"sha256:{manifest_identity_digest(bundle / 'manifest.json')}"
+    if source_assets_root() is not None:
+        from deltafuse.core.hasher import compute_framework_content_hash
+
+        return f"sha256:{compute_framework_content_hash()}"
     return "sha256:" + ("0" * 64)
 
 

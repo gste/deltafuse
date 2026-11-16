@@ -49,6 +49,28 @@ def test_the_analyzed_gate_passes_after_a_gap_reopen_nobody_committed(tmp_path: 
     advance_change(builder.change_dir, "analyzed")
 
 
+def test_the_gap_pass_is_committed_after_the_analyzed_gate(tmp_path: Path, repo_root: Path):
+    """2026-10-27, an owner's service: the reopen committed, the gap pass's routing and the coverage
+    the `analyzed` gate wrote were refused at the commit, judged against Specify alone - the chain
+    since base ran from Verify back to Specify, and a chain going backwards added no envelope."""
+    from deltafuse.core.leash import check_paths, collect_chain_envelopes, git_dirty_paths
+
+    builder = _gap_found(tmp_path, repo_root)
+    _enforce(tmp_path)
+    _git_commit_all(tmp_path)
+    apply_decision(builder.change_dir, status="reopened", gap="spec-gap", note="the catalogue row is missing")
+    _git_commit_all(tmp_path)
+
+    advance_change(builder.change_dir, "analyzed")
+    coverage = builder.change_dir / "coverage.yaml"
+    coverage.write_text(coverage.read_text(encoding="utf-8") + "# refreshed\n", encoding="utf-8")
+    steps = {env.get("step") for env in collect_chain_envelopes(tmp_path, dirty=git_dirty_paths(tmp_path))}
+    assert {"analyze", "specify"} <= steps, steps
+    assert not [e for e in check_paths(["docs/changes/CHG-220/coverage.yaml"],
+                                       collect_chain_envelopes(tmp_path), product_root=tmp_path)
+                if "outside" in e]
+
+
 def test_a_reopened_task_is_judged_as_the_humans_write_before_a_commit(tmp_path: Path, repo_root: Path):
     builder = _gap_found(tmp_path, repo_root)  # a Change in Implement with TASK-001's code written
     (builder.change_dir / "verification.md").unlink()

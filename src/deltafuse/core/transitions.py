@@ -232,7 +232,7 @@ def latest_transition_field(product_root: Path | str, change_id: str, gate: str,
 
 
 # The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
-# <change> --gap spec-gap --status reopened`); the chain replays it as a rewind.
+# <change> --gap spec-gap|tasks-missing --status reopened`); the chain replays it as a rewind.
 GAP_REOPEN_KIND = "gap-reopen"
 GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
 GAP_REOPEN_TO = "analyzing"
@@ -248,6 +248,46 @@ def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> d
                 return None
             return rows[index]
     return None
+
+
+# Terminal statuses a Change reaches without converging. Each is the human's verdict, recorded
+# by `deltafuse decide <change-dir> --close --status <status> --note "<rationale>"`: a status
+# written by hand archived with no check and lifted the `init --force` guard (df-gates #6).
+CLOSE_STATUSES = frozenset({"rejected", "duplicate", "superseded", "not-reproduced"})
+CLOSE_RECEIPT_KIND = "change"
+
+
+def terminal_status_errors(product_root: Path, change_path: Path) -> list[str]:
+    """Why the Change's non-converged terminal status is not the human's recorded verdict.
+
+    Empty for any other status. The verdict counts while the `decide --close` receipt in the
+    gate journal still matches change.yaml's bytes.
+    """
+    from deltafuse.core.gate_receipts import has_valid_receipt
+
+    try:
+        data = _load_change_yaml(change_path)
+    except TransitionError:
+        return []
+    status = data.get("status")
+    if status not in CLOSE_STATUSES:
+        return []
+    change_file = Path(change_path) / "change.yaml"
+    rel = change_file.resolve().relative_to(Path(product_root).resolve()).as_posix()
+    if has_valid_receipt(
+        product_root,
+        kind=CLOSE_RECEIPT_KIND,
+        status=str(status),
+        artifact_id=str(data.get("id") or Path(change_path).name),
+        rel_path=rel,
+        artifact=change_file,
+    ):
+        return []
+    return [
+        f"status '{status}' was not recorded by `deltafuse decide <change-dir> --close --status "
+        f"{status} --note \"<why>\"`, the human's verdict; a hand-set terminal status is not "
+        "evidence - restore change.yaml and ask the human"
+    ]
 
 
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
@@ -267,9 +307,11 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     status = data.get("status")
     if status == INITIAL_STATUS:
         return []
+    if status in CLOSE_STATUSES:
+        return terminal_status_errors(product_root, change_path)
     if status not in VALID_CHAIN_STATUSES:
-        # Terminal and other statuses (rejected, archived, ...) are governed
-        # by their own contracts, not the forward transition chain.
+        # Other statuses (archived, ...) are governed by their own contracts,
+        # not the forward transition chain.
         return []
 
     all_receipts = load_receipts(product_root, change_id)
@@ -314,7 +356,10 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             )
             break
         allowed_from = GATE_ALLOWED_FROM.get(gate or "", set())
-        if row.get("from") != current and current not in allowed_from:
+        # The replayed state decides, not the receipt's own `from`: a receipt whose `from`
+        # merely matched the chain let one `normalized -> converged` line replay as a valid
+        # chain (df-gates #8). `from` may be an in-flight status the gate also starts from.
+        if current not in allowed_from:
             errors.append(
                 f"Core transition chain is out of order at step {i + 1}: "
                 f"gate '{gate}' cannot apply from the chain state "
@@ -419,7 +464,7 @@ def _record_trace_warnings(change_path: Path) -> None:
     warnings = claim_trace_warnings(change_path)
     atomic_write(
         change_path / "evidence" / "verification" / "trace_warnings.yaml",
-        yaml.safe_dump({"warnings": warnings}, sort_keys=False).encode("utf-8"),
+        yaml.safe_dump({"warnings": warnings}, sort_keys=False, allow_unicode=True).encode("utf-8"),
     )
 
 
@@ -882,7 +927,9 @@ def set_artifact_status(
                         f"first with deltafuse advance)"
                     )
             meta["status"] = status
-            atomic_write(file, f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}".encode("utf-8"))
+            atomic_write(
+                file, f"---\n{yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)}---\n{body}".encode("utf-8")
+            )
 
         entry: dict[str, Any] = {
             "kind": "artifact-status",

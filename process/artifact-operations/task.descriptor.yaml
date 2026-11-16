@@ -24,7 +24,6 @@ updatable_semantic_fields:
   - /design_ref
   - /allowed_paths
   - /forbidden_paths
-  - /context_budget
 core_owned_fields:
   - id
   - change

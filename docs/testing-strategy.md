@@ -181,7 +181,7 @@ deltafuse/
   - Missing files and paths outside `repo_root` are errors, not silent skips; duplicate resolved paths count once.
 * **5.2. Интеграция в FSM и CLI**:
   - Валидация frontmatter слайсов (`context_budget`) в `validate_change_package`.
-  - **F-002 / decomposed, declaring, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет; `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact).
+  - **F-002 / decomposed, declaring, implemented**: TASK требует `context_budget`; `spec_refs`+`allowed_paths` не могут превышать бюджет (`spec_ref` с якорем считается разделом требования, без якоря — файлом целиком); `changed_paths` сверяются с `PHASE_CONTRACTS` (не sandbox ADR/Pact).
 
 ---
 

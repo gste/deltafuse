@@ -1,7 +1,6 @@
 """Product installer and framework updater for DeltaFuse 2.0."""
 
 from __future__ import annotations
-import hashlib
 import os
 import re
 import shutil
@@ -16,7 +15,7 @@ from deltafuse.core.adapters import (
     is_framework_uri,
     resolve_effective_adapter_mode,
 )
-from deltafuse.core.assets import resolve_assets, source_assets_root
+from deltafuse.core.assets import manifest_identity_digest, resolve_assets, source_assets_root
 from deltafuse.core.hasher import compute_framework_content_hash
 from deltafuse.core.leash import load_leash_mode, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
@@ -38,8 +37,14 @@ class InstallationError(Exception):
 
 
 def _active_change_ids(target_root: Path) -> list[str]:
-    """Change ids whose status is not terminal (fail-closed upgrade, C-02)."""
-    terminal = {"archived", "rejected", "duplicate", "superseded", "not-reproduced"}
+    """Change ids whose status is not terminal (fail-closed upgrade, C-02).
+
+    A terminal status counts only as the human recorded it (`decide --close`): one written by
+    hand lifted this guard (df-gates #6). `archived` is not a status a package under
+    docs/changes/ holds - archive moves it out.
+    """
+    from deltafuse.core.transitions import CLOSE_STATUSES, terminal_status_errors
+
     out: list[str] = []
     root = target_root / "docs" / "changes"
     if not root.is_dir():
@@ -51,7 +56,7 @@ def _active_change_ids(target_root: Path) -> list[str]:
             data = {}
         if not isinstance(data, dict):
             continue
-        if data.get("status") not in terminal:
+        if data.get("status") not in CLOSE_STATUSES or terminal_status_errors(target_root, path.parent):
             out.append(str(data.get("id") or path.parent.name))
     return out
 
@@ -259,7 +264,7 @@ def install(
         manifest_path = bundle_assets / "manifest.json"
         if not manifest_path.is_file():
             raise InstallationError("deltafuse asset bundle is incomplete: manifest.json missing")
-        content_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        content_hash = manifest_identity_digest(manifest_path)
 
     lock_path = target_root / ".deltafuse" / "lock.yaml"
     if lock_path.is_file():

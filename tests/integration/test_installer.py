@@ -304,6 +304,34 @@ def test_enforce_hook_blocks_orphan_src_commit(tmp_path: Path, repo_root: Path):
     assert blocked.returncode != 0
 
 
+def test_the_hook_lets_a_branch_without_deltafuse_commit(tmp_path: Path, repo_root: Path):
+    """2026-10-27, an owner's service: the hook lives in the git dir, so it ran on a branch cut from
+    the mainline before DeltaFuse was installed and refused every commit ("Not a DeltaFuse product")."""
+    env = _leash_env(repo_root)
+    _git(["init"], cwd=tmp_path, env=env)
+    (tmp_path / "README.md").write_text("service\n", encoding="utf-8")
+    _git(["add", "-A"], cwd=tmp_path, env=env)
+    _commit(tmp_path, "mainline", env)
+    _git(["branch", "plain"], cwd=tmp_path, env=env)
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _set_leash(tmp_path, "enforce")
+    install(target_dir=tmp_path, force=True, framework_root=repo_root)
+    _git(["add", "-A"], cwd=tmp_path, env=env)
+    _commit(tmp_path, "deltafuse", env)
+
+    # Removing the pin on a DeltaFuse branch does not switch the leash off.
+    _git(["rm", "-q", ".deltafuse/lock.yaml"], cwd=tmp_path, env=env)
+    assert _commit(tmp_path, "unpinned", env, check=False).returncode != 0
+    _git(["reset", "-q", "--hard"], cwd=tmp_path, env=env)
+
+    _git(["checkout", "-q", "plain"], cwd=tmp_path, env=env)
+    src = tmp_path / "src" / "x.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text("print(1)\n", encoding="utf-8")
+    _git(["add", "src/x.py"], cwd=tmp_path, env=env)
+    assert _commit(tmp_path, "fix", env, check=False).returncode == 0
+
+
 def test_advisory_hook_allows_orphan_commit(tmp_path: Path, repo_root: Path):
     env = _leash_env(repo_root)
     _git(["init"], cwd=tmp_path, env=env)

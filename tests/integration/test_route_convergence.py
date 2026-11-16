@@ -43,13 +43,26 @@ def test_route_reaches_archive_with_passing_converged_gate(
     assert data["status"] == "archived"
 
 
-def test_hand_set_terminal_rejected_archives_without_converged_gate(
-    tmp_path: Path, repo_root: Path
-):
-    """DF3-002: explicit non-converged terminal outcomes keep their own policy —
-    no converged gate replay, but still archived atomically."""
+def test_hand_set_terminal_rejected_does_not_archive(tmp_path: Path, repo_root: Path):
+    """df-gates #6: a terminal status written by hand is not evidence. Before, this test
+    expected a hand-set `rejected` to archive (DF3-002); the human's recorded verdict
+    (`decide --close`) is what an explicit non-converged outcome is now."""
     builder = _full_change(tmp_path, repo_root, "CHG-940", "code")
     builder._update_change_yaml({"status": "rejected"})
+
+    with pytest.raises(Exception, match="hand-set terminal status"):
+        archive_change(builder.change_dir, repo_root=tmp_path)
+    assert builder.change_dir.is_dir()
+
+
+def test_human_rejected_archives_without_converged_gate(tmp_path: Path, repo_root: Path):
+    """DF3-002: explicit non-converged terminal outcomes keep their own policy —
+    no converged gate replay, but still archived atomically."""
+    from deltafuse.core.decide import apply_decision
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-941", title="Rejected").step_intake().step_analyze()
+    apply_decision(builder.change_dir, status="rejected", close=True, note="Unfeasible")
 
     dest = archive_change(builder.change_dir, repo_root=tmp_path)
     data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))

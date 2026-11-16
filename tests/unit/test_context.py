@@ -170,6 +170,43 @@ def test_validate_task_context_budget_counts_declared_files(tmp_path: Path):
     assert any("files loaded, maximum allowed is 24" in e for e in errs)
 
 
+def _module(tmp_path: Path) -> str:
+    """A spec module of 200 requirements, ~33k tokens whole, a few hundred per requirement."""
+    spec = tmp_path / "docs" / "spec" / "cap.md"
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    body = "".join(f"### REQ-CAP-{i:03d} (observed)\n\n" + "WHEN x THE SYSTEM SHALL y. " * 23 + "\n\n"
+                   for i in range(200))
+    spec.write_text("# cap\n\nCode: `src/Cap.java`\n\n## Requirements\n\n" + body, encoding="utf-8")
+    return "docs/spec/cap.md"
+
+
+def test_validate_task_context_budget_counts_only_cited_requirements(tmp_path: Path):
+    spec = _module(tmp_path)
+    refs = [f"{spec}#REQ-CAP-{i:03d}" for i in (13, 15, 199)]
+    assert validate_task_context_budget({"max_tokens": 2000}, refs, [], tmp_path) == []
+
+
+@pytest.mark.parametrize("refs,allowed", [
+    (["docs/spec/cap.md#REQ-CAP-013"], ["docs/spec/cap.md"]),  # a file the task writes is read whole
+    (["docs/spec/cap.md"], []),  # no anchor: the whole module
+    (["docs/spec/cap.md#REQ-CAP-013", "docs/spec/cap.md#REQ-CAP-999"], []),  # an anchor the module lacks
+])
+def test_validate_task_context_budget_counts_whole_module(tmp_path: Path, refs, allowed):
+    _module(tmp_path)
+    errs = validate_task_context_budget({"max_tokens": 2000}, refs, allowed, tmp_path)
+    assert any("tokens loaded, maximum allowed is 2000" in e for e in errs)
+
+
+def test_anchored_sections_ends_at_the_next_heading_of_its_level(tmp_path: Path):
+    from deltafuse.core.context import anchored_sections
+    spec = tmp_path / "cap.md"
+    spec.write_text("# cap\nintro\n## Requirements\n### REQ-1 (observed)\none\n#### detail\nmore\n"
+                    "### REQ-10\nten\n## Notes\nlast\n", encoding="utf-8")
+    assert anchored_sections(spec, {"REQ-1"}) == "# cap\nintro\n### REQ-1 (observed)\none\n#### detail\nmore"
+    assert anchored_sections(spec, {"REQ-10"}) == "# cap\nintro\n### REQ-10\nten"
+    assert anchored_sections(spec, {"REQ-2"}) is None
+
+
 def test_try_endpoint_token_count_skips_without_url(monkeypatch):
     monkeypatch.delenv("DELTAFUSE_TOKENIZE_URL", raising=False)
     assert try_endpoint_token_count("hello") is None

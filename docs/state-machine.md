@@ -34,13 +34,16 @@ stateDiagram-v2
     converged --> archived: move to docs/archive/changes/<date>-<change-id>
     
     verifying --> analyzing: gap / drift detected
-    implemented --> analyzing: the human reopens a spec-gap
+    implemented --> analyzing: the human reopens a spec-gap or tasks-missing
     
     normalized --> rejected: invalid / out of scope
     analyzing --> rejected: unfeasible
     normalized --> duplicate: duplicate of existing change
     analyzing --> duplicate: duplicate of existing change
     analyzing --> superseded: superseded by newer change
+    analyzed --> rejected: the human rejects the change (e.g. after rejecting its spec)
+    analyzed --> duplicate: duplicate of existing change
+    analyzed --> superseded: superseded by newer change
     analyzing --> not_reproduced: defect unreproducible
     declaring --> not_reproduced: unable to reproduce red failure
     verifying --> not_reproduced: no-op / unreproduced closure
@@ -59,7 +62,7 @@ stateDiagram-v2
 | `normalized` | Initial normalized request in `CHG-NNN/request.md`. | `analyzing`, `rejected`, `duplicate` | Request passes schema and format checks. |
 | `analyzing` | Routing and slice analysis in progress. `deltafuse next` names one Analyze pass at a time; `analyzed` still needs routing+slices covering every routing primary capability+coverage. | `blocked-on-decision`, `analyzed`, `rejected`, `duplicate`, `superseded`, `not-reproduced` | Initial capability routing mapped. |
 | `blocked-on-decision` | Blocked waiting for human decision on a `DEC-*` record. | `analyzing` | At least one blocking decision in `proposed`. |
-| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. A bugfix goes to Decompose instead. | `specification-proposed`, `decomposed` (bugfix: spec unchanged; the `decomposed` gate proves the exact `spec_refs`) | Zero unaccepted blocking decisions. |
+| `analyzed` | Routing, deltas, and slices computed; coverage mapped. `deltafuse next` names one Specify slice (`spec_refs` only), then `close`. A bugfix goes to Decompose instead. | `specification-proposed`, `decomposed` (bugfix: spec unchanged; the `decomposed` gate proves the exact `spec_refs`, and refuses any other intent, or a `spec-delta.md` that adds, modifies or removes anything), `rejected`, `duplicate`, `superseded` (the human's `decide --close`, e.g. after rejecting the specification) | Zero unaccepted blocking decisions. |
 | `specification-proposed` | Changes to `docs/spec/**` drafted in `spec-delta.md`. Entered only when every machine check of the `specified` gate passes except the two that are the human's to settle when they accept - their receipt, and a capability this Change routes into that is still a `draft`; otherwise `deltafuse state` refuses and returns the errors to the Worker. | `specified` | Human approval of specification delta. |
 | `specified` | Normative specification updated (or proven unchanged for bugs). | `decomposed` | Live `docs/spec/**` files and a valid `_capabilities.yaml` exist, or unchanged spec is proven by exact existing `spec_refs`; `spec-delta.md` added/modified files must stay in slice `spec_refs`. `spec-delta.md` is not sufficient alone. |
 | `decomposed` | Slices broken down into atomic dependency-ordered tasks. | `declaring` | All tasks validated against `task.schema.yaml`. |
@@ -68,12 +71,14 @@ stateDiagram-v2
 | `implementing` | Authoring minimal compliant change to turn the oracle green. | `implemented` | `code`: tests pass with Green and Regression, and the Red they answer actually failed - a Green answering an `already-green` Red proves no delta and does not close this gate. `docs`/`ops`: allowed files exist; no `src/**`. |
 | `implemented` | All tasks implemented and verified locally. | `verifying` | `code` requires Green and Regression; `docs`/`ops` require Green (file/schema). |
 | `verifying` | End-to-end traceability and convergence check. | `converged`, `analyzing`, `not-reproduced` | All claims mapped to green tests and spec (or no-op closure). |
-| `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded; tasks are `implemented`, `verified`, `cancelled`, or `superseded`; spec-delta still matches `docs/spec/**`. Archive is not a spec merge. |
+| `converged` | Convergence proven; package ready for archiving. | `archived` | Verification evidence recorded; tasks are `implemented`, `verified`, `cancelled`, or `superseded`; spec-delta still matches `docs/spec/**` and is the one the human accepted (`decide --spec` receipt on its current bytes; only a bugfix with the spec unchanged has none). Archive is not a spec merge. |
 | `archived` | Moved to `docs/archive/changes/<date>-<change-id>`. | *Terminal* | Directory moved to archive root. |
-| `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | Rationale documented (optional `analysis.md` or Change notes). |
-| `duplicate` | Identified as duplicate of another Change. | *Terminal* | Link to primary `CHG-*` documented in `change.yaml`. |
-| `not-reproduced` | Defect not reproduced during analysis, declaring, or verification. | *Terminal* | Diagnostic proof or evidence recorded with `result: not-reproduced` in `evidence/` or `verification.md`. |
-| `superseded` | Superseded by a newer or broader Change. | *Terminal* | Superseding Change reference recorded. |
+| `rejected` | Rejected as unfeasible or out of scope. | *Terminal* | The human's verdict with its rationale (`--note`). |
+| `duplicate` | Identified as duplicate of another Change. | *Terminal* | The human's verdict; the note names the primary `CHG-*`. |
+| `not-reproduced` | Defect not reproduced during analysis, declaring, or verification. | *Terminal* | The human's verdict with the diagnosis; from Declare a Red record with `result: not-reproduced` or `already-green`, from Verify `- Outcome: not-reproduced` in `verification.md`. |
+| `superseded` | Superseded by a newer or broader Change. | *Terminal* | The human's verdict; the note names the superseding `CHG-*`. |
+
+These four terminal statuses are written only by `deltafuse decide <change-dir> --close --status <status> --note "<why>"` (Human Gate password when set), from a status the table allows (from Declare or Verify through their in-flight step). It records a status receipt in `transitions.jsonl` and a Human Gate receipt on `change.yaml`; a terminal status written by hand halts `deltafuse next`, does not archive, and keeps the Change active for the `init --force` guard.
 
 No command writes `declaring`, `implementing` or `verifying` to a Change: the Worker's work in those phases is recorded on its tasks. `deltafuse advance` closes the next gate from the resting status and steps over the in-flight one — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged` — and the receipt records that step. A Change may still hold an in-flight status one legal step past its last receipt.
 

@@ -22,6 +22,7 @@ This file binds the Worker to an LLM. It is not the Core. The Core owns `next`, 
    - `done`: stop. Merge/push is a Human Gate. Do not git push.
 7. If `advance` or `evidence` fails: stop. Show the errors. Do not skip the step or auto-accept anything. The human inspects and restarts the named step or `/run`.
 8. Do not auto-accept Decisions or merge. Do not call `deltafuse decide` unless the human answered a halt choice in this turn.
+9. Never close a Change without converging it (`rejected`, `duplicate`, `superseded`, `not-reproduced`) and never write those statuses by hand: stop and report why the Change should close; the human closes it with `deltafuse decide <change-dir> --close`.
 
 ## Halt
 

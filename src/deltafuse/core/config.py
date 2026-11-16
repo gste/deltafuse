@@ -8,7 +8,11 @@ silently disabling a contract.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import os
 from pathlib import Path
+from typing import Any, Iterator
 
 import yaml
 
@@ -223,6 +227,29 @@ def load_evidence_timeout(product_root: Path | str) -> int:
     return DEFAULT_EVIDENCE_TIMEOUT
 
 
+_CONFIG_OVERRIDE: contextvars.ContextVar[tuple[str, Any] | None] = contextvars.ContextVar(
+    "deltafuse_config_override", default=None
+)
+
+
+def _root_key(product_root: Path | str) -> str:
+    return os.path.normcase(str(Path(product_root).resolve()))
+
+
+@contextlib.contextmanager
+def config_as_of(product_root: Path | str, data: Any) -> Iterator[None]:
+    """Read *data* as the product's `.deltafuse/config.yaml` while the block runs.
+
+    The leash judges a tree with the config of its base (df-leash #3): the mode and the code
+    roots in the tree being judged are what that tree may not change for itself.
+    """
+    token = _CONFIG_OVERRIDE.set((_root_key(product_root), data))
+    try:
+        yield
+    finally:
+        _CONFIG_OVERRIDE.reset(token)
+
+
 def config_section(
     product_root: Path | str,
     key: str,
@@ -230,11 +257,17 @@ def config_section(
     tolerate: tuple[type[BaseException], ...] = (Exception,),
 ) -> dict:
     """One top-level mapping of `.deltafuse/config.yaml`, or {} when the file, its YAML or the
-    key is missing or not a mapping. A read or parse error outside *tolerate* propagates."""
-    try:
-        data = yaml.safe_load((Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
-    except tolerate:
-        return {}
+    key is missing or not a mapping. A read or parse error outside *tolerate* propagates.
+
+    Inside `config_as_of`, the config given there stands in for the file."""
+    override = _CONFIG_OVERRIDE.get()
+    if override is not None and _root_key(product_root) == override[0]:
+        data = override[1]
+    else:
+        try:
+            data = yaml.safe_load((Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+        except tolerate:
+            return {}
     section = data.get(key) if isinstance(data, dict) else None
     return section if isinstance(section, dict) else {}
 

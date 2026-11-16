@@ -31,8 +31,8 @@ from deltafuse.core.fsm import (
 from deltafuse.core.hasher import compute_product_baseline_revision, compute_red_oracle_digest
 from deltafuse.core.oracle import freeze_red_oracle, isolation_plan
 from deltafuse.core.integrity import scan_changed_paths_for_private_test_access
-from deltafuse.core.red_cause import own_code_error
-from deltafuse.core.runners import runner_is_authorized
+from deltafuse.core.red_cause import environment_error, own_code_error
+from deltafuse.core.runners import report_less_runner_error, runner_is_authorized
 from deltafuse.core.test_reports import (
     FAILED,
     NOT_RUN,
@@ -42,7 +42,11 @@ from deltafuse.core.test_reports import (
     no_test_error,
     read_report,
     red_is_authentic,
+    restricted,
+    suite_errors,
     runner_family,
+    task_test_files,
+    task_test_ids,
     wants_junit_flag,
     worker_junit_path,
 )
@@ -50,6 +54,12 @@ from deltafuse.core.leash import git_dirty_paths, is_exempt_path, LeashError
 
 AUTHENTIC_RED_CATEGORY = "behavioral-mismatch"
 OWN_CODE_RED_CATEGORY = "test-own-error"
+# The run failed, but not on the task's own tests (audit 2026-11-16, df-evidence #1).
+NOT_THE_TASKS_RED_CATEGORY = "not-the-tasks-tests"
+# Nothing named the task's tests: no declared test file, no file or class on the command line.
+UNNAMED_RED_CATEGORY = "tests-not-named"
+# The task's tests fail on their environment (audit 2026-11-16, df-evidence #7).
+ENVIRONMENT_RED_CATEGORY = "environment-error"
 RECORDED_BY = "deltafuse-evidence"
 STAMP_KEYS = frozenset({"recorded_by", "recorded_sha256"})
 _SYNTAX_MARKERS = ("SyntaxError", "IndentationError", "TabError")
@@ -192,6 +202,90 @@ def _runner_not_found(program: str, ex: OSError) -> str:
     return f"runner `{program}` not found on PATH ({ex})"
 
 
+def decode_output(raw: object) -> str:
+    """A child's output as text: UTF-8 when it is valid UTF-8, else the locale's encoding.
+
+    Audit 2026-11-16 (df-evidence #14): on a Russian Windows a child writes its pipe in the ANSI
+    code page (cp1251) and the Core decoded it as UTF-8 with `replace`, so a Cyrillic message in a
+    record's summary was mojibake. Text in a legacy code page is almost never valid UTF-8, so
+    trying UTF-8 first keeps runners that write UTF-8 (pytest under PYTHONUTF8, Maven with
+    `-Dfile.encoding=UTF-8`) as they are.
+    """
+    if raw is None:
+        return ""
+    if not isinstance(raw, bytes):
+        return str(raw)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    import locale
+
+    try:
+        return raw.decode(locale.getpreferredencoding(False) or "utf-8", errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
+
+
+# After the timeout kills the run, how long the Core still waits for its output pipes to close.
+_DRAIN_SECONDS = 15
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill *proc* and every process it started.
+
+    Audit 2026-11-16 (df-evidence #9): `subprocess.run(timeout=...)` killed only the program it
+    started. Maven on Windows is `mvn.cmd`, so that was cmd.exe; java, its child, held the output
+    pipes open, a 10 s timeout took 49.6 s, and a hanging test hung `deltafuse evidence`.
+    """
+    try:
+        if _on_windows():
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=_DRAIN_SECONDS,
+            )
+        else:
+            import signal
+
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _launch(
+    argv: list[str], *, cwd: Path, timeout: int, env: dict[str, str] | None = None
+) -> tuple[int, bytes, bytes, bool]:
+    """Run a test command: (exit code, stdout, stderr, timed out). FileNotFoundError when the
+    program does not exist. On timeout the whole process tree is killed (`_kill_tree`)."""
+    popen_kwargs: dict[str, Any] = {}
+    if not _on_windows():
+        popen_kwargs["start_new_session"] = True  # its own process group, killed as one
+    proc = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        **popen_kwargs,
+    )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return int(proc.returncode), out or b"", err or b"", False
+    except subprocess.TimeoutExpired:
+        _kill_tree(proc)
+        try:
+            out, err = proc.communicate(timeout=_DRAIN_SECONDS)
+        except subprocess.TimeoutExpired:
+            out, err = b"", b""  # a grandchild outlived the kill and still holds the pipes
+        return 124, out or b"", err or b"", True
+
+
 def _contract_errors_now(change_path: Path, phase: str, dest: Path, route: str) -> list[str]:
     """The gate's changed_paths check on this record, now rather than at the gate.
 
@@ -262,21 +356,9 @@ def _isolated_oracle_run(
     env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_ADDOPTS", "PYTEST_PLUGINS"}}
     started_at = time.time()
     try:
-        proc = subprocess.run(
-            resolve_runner(run_argv, repo_root),
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=env,
-        )
-        exit_code = int(proc.returncode)
+        exit_code = _launch(resolve_runner(run_argv, repo_root), cwd=repo_root, timeout=timeout, env=env)[0]
     except FileNotFoundError:
         exit_code = 127
-    except subprocess.TimeoutExpired:
-        exit_code = 124
     report = read_report(iso_argv, repo_root, junit_path=junit_path, newer_than=started_at)
     not_passing = green_covers_red(expected, report) if report is not None else list(expected)
     return {
@@ -430,6 +512,20 @@ def _task_status(change_path: Path, task: str) -> tuple[str, Any] | None:
     return task_id, (meta.get("status") if isinstance(meta, dict) else None)
 
 
+def _task_allowed_paths(change_path: Path, task: str) -> list[str]:
+    """The task's declared allowed_paths; empty when the task file cannot be read."""
+    from deltafuse.core.frontmatter import parse_frontmatter
+    from deltafuse.core.transitions import _artifact_file
+
+    try:
+        task_file, _ = _artifact_file(change_path / "tasks", task, "task")
+        meta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []
+    allowed = meta.get("allowed_paths") if isinstance(meta, dict) else None
+    return [str(p) for p in allowed or [] if isinstance(p, str)]
+
+
 def _refuse_red_after_declare(change_path: Path, task: str) -> None:
     """Red belongs to Declare; past it, retaking Red would re-freeze the oracle.
 
@@ -561,18 +657,15 @@ def run_evidence(
     change_id = _load_change_id(change_path)
     route, route_errs = load_change_route(change_path)
     rel_paths = _posix_paths(changed_paths or [])
-    if not rel_paths and phase != "verification":
+    if not rel_paths:
         # The Core computes the changed set from git anyway and refused a list
         # that missed any of it; with no list it records its own (roadmap item
         # 4: box B -> box A). A list the Worker gives is still checked.
+        # Verification too: it recorded none and then refused itself for not
+        # listing the dirty set (audit 2026-11-16, df-gates #10).
         rel_paths = _posix_paths(_core_computed_changed_paths(repo_root, change_path))
 
-    def _as_text(raw: object) -> str:
-        if raw is None:
-            return ""
-        if isinstance(raw, bytes):
-            return raw.decode("utf-8", errors="replace")
-        return str(raw)
+    _as_text = decode_output
 
     timed_out = False
     # pytest writes a machine-readable report only when asked; the Core asks,
@@ -591,48 +684,68 @@ def run_evidence(
     launch_argv = resolve_runner(run_argv, repo_root)
     started_at = time.time()
     try:
-        proc = subprocess.run(
-            launch_argv,
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        exit_code = int(proc.returncode)
-        log = (_as_text(proc.stdout) + _as_text(proc.stderr)).strip()
+        exit_code, out, err, timed_out = _launch(launch_argv, cwd=repo_root, timeout=timeout)
+        log = (_as_text(out) + _as_text(err)).strip()
+        if timed_out and not log:
+            log = f"command timed out after {timeout}s"
     except FileNotFoundError as ex:
         exit_code = 127
         log = _runner_not_found(str(argv[0]), ex)
-    except subprocess.TimeoutExpired as ex:
-        exit_code = 124
-        log = (_as_text(ex.stdout) + _as_text(ex.stderr)).strip()
-        if not log:
-            log = f"command timed out after {timeout}s"
-        timed_out = True
 
     report = read_report(argv, repo_root, junit_path=junit_path, newer_than=started_at)
     category = classify_failure(log, exit_code)
-    if phase == "red" and exit_code != 0 and report is not None:
+    # Red is judged on the task's own tests, not on the whole report (`task_test_ids`).
+    task_report = report
+    red_why: str | None = None  # why the runner's report does not make this an authentic Red
+    if phase == "red" and report is not None:
+        named, named_by = task_test_ids(report, rel_paths, argv, repo_root)
+        task_report = restricted(report, named or [])
+        if named is None:
+            category = UNNAMED_RED_CATEGORY
+            red_why = (
+                "Red does not say which tests are the task's: no test file is among its changed_paths "
+                "and the command names no test file or class (`pytest tests/test_x.py`, "
+                "`mvn test -Dtest=CalcTest`), so a failure (or a pass) anywhere in the suite would "
+                "read as this task's Red. Name the task's tests and record Red again"
+            )
+    if phase == "red" and exit_code != 0 and report is not None and red_why is None:
         # The gate reads this field, and the Core has just judged Red by the
         # runner's own report. The two must not disagree: in the runs of
         # 2026-09-25/26, 23 of 44 Red records whose report said "the tests ran
         # and failed" were still recorded `fixture-error` (the log had no
         # `assert `), and the `declaring` gate refused them.
-        if red_is_authentic(report)[0]:
+        ok, why = red_is_authentic(task_report)
+        others = [t for t in report.ids(FAILED) + report.ids(NOT_RUN) if t not in task_report.outcomes]
+        if ok:
             category = AUTHENTIC_RED_CATEGORY
-        elif category == AUTHENTIC_RED_CATEGORY:
-            # The log mentioned an assertion but nothing ran, or a test could not
-            # run: not a behavioural failure however the log reads.
-            category = "fixture-error"
+        elif not task_report.ids(FAILED) and not task_report.ids(NOT_RUN) and others:
+            # Audit 2026-11-16 (df-evidence #1): the run failed, but on tests that are not the
+            # task's, while the task's own tests passed or did not run.
+            category = NOT_THE_TASKS_RED_CATEGORY
+            red_why = (
+                f"the task's own tests - {named_by} - did not fail "
+                f"({'passed: ' + ', '.join(task_report.ids(PASSED)[:5]) if task_report.ids(PASSED) else 'none of them ran'}); "
+                f"the run failed on other tests ({', '.join(others[:5])}), and a failure of a test "
+                "that is not the task's is not its Red"
+            )
+        else:
+            red_why = f"{why}{_missing_import_hint(log)}"
+            if category == AUTHENTIC_RED_CATEGORY:
+                # The log mentioned an assertion but nothing ran, or a test could not
+                # run: not a behavioural failure however the log reads.
+                category = "fixture-error"
     own_code = None
     if phase == "red" and exit_code != 0 and report is not None and category == AUTHENTIC_RED_CATEGORY:
         # The gate reads the category, so a test no product code can pass is not
         # recorded as a behavioural failure (ref-m02-339, core/red_cause.py).
-        own_code = own_code_error(report, repo_root)
+        own_code = own_code_error(task_report, repo_root)
         if own_code:
             category = OWN_CODE_RED_CATEGORY
+        else:
+            # Audit 2026-11-16 (df-evidence #7): a missing data file or package is not Red.
+            own_code = environment_error(task_report, repo_root, _task_allowed_paths(change_path, str(task)))
+            if own_code:
+                category = ENVIRONMENT_RED_CATEGORY
     summary = (log[-800:] if log else ("timed out" if timed_out else "no output"))
     private_errors: list[str] = []
     if phase == "red" and route == "code":
@@ -644,6 +757,20 @@ def run_evidence(
         result = "already-green" if exit_code == 0 else "expected-failure"
     else:
         result = "passed" if exit_code == 0 else "failed"
+    if result == "already-green" and task_report is not None and not task_report.ids(PASSED):
+        # Audit 2026-11-16 (df-evidence #10): every test of the task skipped (or xfailed), or
+        # none of them ran, and the run still exited 0. Nothing passed, so nothing shows the
+        # behaviour is already there - and an already-green Red lets the task be superseded,
+        # leaving no test of it at all.
+        result = "blocked"
+        skipped = task_report.ids(SKIPPED)
+        red_why = red_why or (
+            "none of the task's tests passed or failed - "
+            + (f"they were skipped or expected to fail (xfail): {', '.join(skipped[:5])}" if skipped
+               else "the runner's report names none of them")
+            + "; a Red that ran nothing shows neither that the behaviour is missing nor that it is "
+            "already there. Make the task's tests run, and record Red again"
+        )
 
     payload: dict[str, Any] = {
         "schema_version": 3,
@@ -662,9 +789,11 @@ def run_evidence(
     if report is not None:
         payload["tests"] = {
             "source": report.source,
-            "failed": report.ids(FAILED),
+            # A Red record's failures are its oracle: the task's own tests, not every test
+            # that failed in the run (another task's, or one broken before the Change).
+            "failed": (task_report if phase == "red" else report).ids(FAILED),
             "passed": report.ids(PASSED),
-            "not_run": report.ids(NOT_RUN),
+            "not_run": (task_report if phase == "red" else report).ids(NOT_RUN),
             "skipped": report.ids(SKIPPED),
         }
     isolation = None
@@ -680,9 +809,13 @@ def run_evidence(
         # test rewritten during Implement. With the runner's report the Core
         # knows which tests are the oracle and freezes those; without one it
         # can only freeze the declared files whole, as 3.3.5 first did.
-        red_failed = report.ids(FAILED) if report is not None else []
+        red_failed = task_report.ids(FAILED) if task_report is not None else []
         if red_failed:
-            frozen = freeze_red_oracle(repo_root, rel_paths, red_failed)
+            # The files the failed tests live in, also when Declare did not write them: a Red
+            # over a committed test froze nothing, and Implement weakened that test (audit
+            # 2026-11-16, df-evidence #2).
+            oracle_files = sorted(set(rel_paths) | set(task_test_files(report, rel_paths, argv, repo_root)))
+            frozen = freeze_red_oracle(repo_root, oracle_files, red_failed)
             if frozen:
                 payload["red_oracle_tests"] = frozen
         else:
@@ -709,6 +842,9 @@ def run_evidence(
             f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
             "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
         )
+    report_less = report_less_runner_error(argv, route=route, product_root=repo_root)
+    if report_less:
+        errors.append(f"evidence: {report_less}")
     computed = _core_computed_changed_paths(repo_root, change_path)
     if computed:
         worker_paths = set(rel_paths)
@@ -720,14 +856,15 @@ def run_evidence(
             )
     errors.extend(private_errors)
     errors.extend(_contract_errors_now(change_path, phase, dest, route))
+    if phase == "red" and route == "code" and result == "blocked" and red_why:
+        errors.append(f"Red is not authentic: {red_why}")
     if phase == "red" and route == "code" and result == "expected-failure":
         if report is not None:
             # The runner's own report, read through its ecosystem's meaning of
             # `<error>`: pytest says the test never ran, Surefire says it ran
             # and threw. The rule is written in neutral words for that reason.
-            ok, why = red_is_authentic(report)
-            if not ok:
-                errors.append(f"Red is not authentic: {why}{_missing_import_hint(log)}")
+            if red_why:
+                errors.append(f"Red is not authentic: {red_why}")
             elif own_code:
                 errors.append(own_code)
         elif category != AUTHENTIC_RED_CATEGORY:
@@ -750,6 +887,9 @@ def run_evidence(
         errors.append(f"{phase} command exited {exit_code}, expected 0")
     if phase in {"green", "regression", "verification"} and route == "code" and result == "passed":
         errors.extend(no_test_error(phase, argv, payload.get("tests"), log))  # the full log, not the summary
+    if phase in {"regression", "verification"} and route == "code":
+        # Every test of the whole suite, whatever the exit code (audit 2026-11-16, df-evidence #4).
+        errors.extend(suite_errors(phase, argv, payload.get("tests"), repo_root))
     if timed_out:
         errors.append(f"command timed out after {timeout}s")
 

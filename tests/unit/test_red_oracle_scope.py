@@ -142,11 +142,23 @@ def test_the_isolated_run_keeps_configuration_options_and_drops_selection_and_pl
         "--deselect=tests/test_limiter.py::test_other", "--lf", "tests", "tests/test_limiter.py::test_cooldown",
     ]
     iso, expected = isolation_plan(argv, record, FAILED, tmp_path)
+    # `-c tests/custom.ini` goes: the oracle does not freeze that file, and its addopts can load a
+    # plugin (audit 2026-11-16, df-evidence #3).
     assert iso == [
-        *py, "-c", "tests/custom.ini", "-o", "python_functions=check_*", "--import-mode=importlib",
+        *py, "-o", "python_functions=check_*", "--import-mode=importlib",
         "--asyncio-mode", "auto", "-q", *NODES, "-p", "no:cacheprovider",
     ]
     assert expected == FAILED
+
+
+def test_the_isolated_run_drops_ini_overrides_and_config_files_that_load_code(tmp_path: Path):
+    record = record_of(freeze(tmp_path, {TEST_FILE: ORACLE, "pytest.ini": "[pytest]\n"}, FAILED))
+    plan = isolation_plan(
+        ["pytest", "-o", "addopts=-p tests.flip", "--override-ini=ADDOPTS=-p x", "-oaddopts=-px",
+         "-o", "python_files=check_*.py", "--config-file=tests/ci.ini", "-c", "pytest.ini", "tests"],
+        record, FAILED, tmp_path,
+    )[0]
+    assert plan == ["pytest", "-o", "python_files=check_*.py", "-c", "pytest.ini", *NODES, "-p", "no:cacheprovider"]
     assert isolation_plan(["pytest.exe", "tests"], record, FAILED, tmp_path)[0] == [
         "pytest.exe", *NODES, "-p", "no:cacheprovider",
     ]

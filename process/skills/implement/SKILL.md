@@ -29,7 +29,7 @@ Do not change specification, Decisions, task scope, target oracle/assertions, or
 2. Implement the minimum production change inside allowed scope.
 3. Record Green with the kernel, not by hand-writing YAML:
    `deltafuse evidence <change-dir> --phase green --task <task-id> -- <target-command>`. The Core records the changed files itself (`--changed-path` is optional).
-4. Record scoped regression the same way (`--phase regression`). The runner fills `exit_code`, `failure_category`, and `base_revision`. A run that ran no test is refused; with Gradle add `--rerun`, or a test task left `UP-TO-DATE` since Green runs nothing.
+4. Record regression the same way (`--phase regression`) over the product's whole test suite - the command `workflow.test_commands` declares, or the runner with no test selection (no single test file, `-k`, `-Dtest=`, `-pl`). The runner fills `exit_code`, `failure_category`, and `base_revision`. A run that ran no test is refused; with Gradle add `--rerun`, or a test task left `UP-TO-DATE` since Green runs nothing. A run over part of the suite is refused, and so is one where any test failed or did not run, whatever its exit code: fix what broke, never leave it out.
 5. `changed_paths` must stay inside `PHASE_CONTRACTS` Implement write scope and outside the task `forbidden_paths`. For both Green and regression the test command exits 0 and `deltafuse evidence` accepts the record - it exits 0 only when the run is authentic and every check it owns passed. Green must pass the very tests the Red record lists as failed.
 6. Record the Core-owned task state: `deltafuse state <change-dir> --task <task-id> --status implemented`; retain the task file and its history inside the Change.
 

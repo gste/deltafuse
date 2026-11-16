@@ -47,7 +47,8 @@ def archive_change(
     # is always re-verified against the gate; only explicit non-converged
     # terminal outcomes archive without gate replay.
     # V3-FIX-009: archive is a Core action; it refuses a Change whose status
-    # is not backed by the full receipt chain.
+    # is not backed by the full receipt chain - for a non-converged terminal
+    # status, by the human's `decide --close` receipt (df-gates #6).
     from deltafuse.core.transitions import find_repo_root as _find_repo_root
     from deltafuse.core.transitions import receipt_chain_errors as _chain_errors
 

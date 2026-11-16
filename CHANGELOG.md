@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.12] - 2026-11-12
+
+### Fixed
+
+- **The framework identity a product lock pins no longer depends on line endings.** Both digests
+  hashed raw bytes: the bundle manifest's (`get_executing_framework_identity`,
+  `get_installed_lock_hash`, `deltafuse init` from a wheel) and the checkout's content hash
+  (`compute_framework_content_hash`, `init.ps1`, `init.sh`). On Windows `sync_assets.py` wrote
+  `manifest.json` CRLF (`write_text`) while git, with `eol=lf`, still showed it clean; products
+  pinned that digest, a checkout to another branch and back rewrote the file LF, and the Artifact
+  Writer refused every write in every product pinned to that version ("does not match running
+  framework asset identity", 2026-10-27). Now a text file (no NUL byte) is hashed with CRLF read
+  as LF - the rule `sync_assets.py` already copied assets by - and binary files stay byte-exact;
+  `sync_assets.py` writes the manifest as LF bytes. A test hashes the same content CRLF and LF.
+  Older locks get no transition: a product moves to 3.3.12 with `deltafuse init --force`, like any
+  version change, once its active Changes are archived.
+- **The pre-commit hook lets a branch without DeltaFuse commit.** The hook lives in the git dir, so it ran on
+  every branch of the repository: on one cut from the mainline before DeltaFuse was installed it refused
+  every commit ("Not a DeltaFuse product"). It now exits 0 when `.deltafuse/lock.yaml` is neither on disk
+  nor at HEAD; removing the pin on a DeltaFuse branch still runs the leash. Re-run `deltafuse init --force`
+  to get the new hook.
+- **Coverage follows a claim routed to another slice.** `coverage.yaml` kept a claim's previous slice whenever
+  that slice still existed, with its spec_refs, tasks and evidence: after a `tasks-missing` gap pass routed
+  three claims to the slices whose tasks test them, they stayed on a slice with no task and `converged` would
+  refuse again. The slice now comes from the slices' claim lists, the one routing sends the claim to first
+  when two list it; a claim whose slice changed starts its record afresh.
+- **The leash takes the gap pass's writes after a reopen.** The chain of steps since the commit base ran
+  from Verify back to Analyze, and a chain going backwards added no envelope: the routing and coverage of
+  the gap pass were refused once the `analyzed` gate had moved the Change to Specify. A `decide --gap`
+  since the base now restarts the chain at Analyze.
+- **The leash takes the records `decide --gap` archived as the human's under `core.autocrlf`.** It matched a
+  deleted Green or regression record by the digest of its bytes at the base, git's LF blob, against the
+  archive's working-tree bytes, CRLF on such a checkout; every moved record read as a Worker's deletion and
+  the pre-commit hook refused the human's reopen. Both sides are now compared with LF line endings.
+- **The `intake` gate needs a claim.** It checked only that `request.md` exists, so it closed on the scaffold
+  `deltafuse new` writes: a Worker advanced while its write of the request failed, and the transition receipt
+  was stamped on a request with no claims. The gate now refuses a `request.md` with no `CR-NNN` (or `O1`/`E1`)
+  claim.
+- **`tasks-missing` has a route back.** `deltafuse decide <change-dir> --gap tasks-missing --status reopened`
+  sends the Change to Analyze as `spec-gap` does, and the `gap` pass routes the claims no task carried to the
+  slice whose task tests them, or leaves them for Decompose to give their slice a task. Before, Verify recorded
+  the gap honestly and `next` halted with no way out: on an owner's service three claims were routed to a
+  slice that got no task, though the other slices' tasks implemented and tested them.
+- **The task context budget counts the requirements a task cites, not the whole spec module.** A `spec_ref`
+  with an anchor counts the module's preamble and that requirement's section; the implement skill reads exact
+  spec references. A module Fuseback writes holds every characterized requirement of a capability (on an
+  owner's service, 222 requirements and ~72k tokens), so any task citing one of them failed `decomposed`
+  against the 64000-token default however it was split. A `spec_ref` without an anchor, an anchor with no
+  heading in the module, or a module the task also writes still counts the whole file.
+
 ## [3.3.11] - 2026-10-26
 
 No framework changes. Released as the pair of Fuseback 3.3.11, whose changes are Spring services on the JVM:

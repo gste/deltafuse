@@ -349,7 +349,9 @@ def sync(assets: Path | None = None) -> list[str]:
             "files": files,
         }
         manifest_text = json.dumps(manifest, sort_keys=True, indent=2) + "\n"
-        (next_dir / "manifest.json").write_text(manifest_text, encoding="utf-8")
+        # LF bytes, as git checks it out: write_text wrote CRLF on Windows, and
+        # products pinned that file's digest until git rewrote it as LF.
+        (next_dir / "manifest.json").write_bytes(manifest_text.encode("utf-8"))
         _verify_bundle(next_dir)  # never swap an unverified bundle
         _swap_in(next_dir, assets)
     except Exception:

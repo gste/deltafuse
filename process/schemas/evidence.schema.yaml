@@ -27,7 +27,12 @@ properties:
       asked for one; Maven and Gradle write theirs anyway). `failed` means a
       test ran and did not pass, `not_run` that collection, compilation or a
       fixture kept it from running - the distinction the two ecosystems spell
-      differently and the Red rule is written in.
+      differently and the Red rule is written in. On a Red record these lists
+      hold the task's own tests only (the test files Declare wrote, or the file
+      or class the command names); a failure of another test is refused as
+      `not-the-tasks-tests`, a Red naming no test as `tests-not-named`, a
+      failure of the test's environment as `environment-error`, and a Red
+      where none of the task's tests passed or failed is `blocked`.
     properties:
       source: {enum: [junitxml, surefire]}
       failed: {type: array, items: {type: string}}
@@ -124,8 +129,9 @@ properties:
       Green only, when Red froze tests per test and Green ran pytest: the
       frozen Red tests run on their own - Green's command with its test
       selection (paths, node ids, -k, -m, --deselect, --ignore, --lf) replaced
-      by those tests and `-p` dropped, its configuration options (-c, -o,
-      --rootdir, --import-mode, a plugin's own options) kept, PYTEST_ADDOPTS and
+      by those tests, `-p`, `-o addopts=...` and a `-c` config file the oracle
+      did not freeze dropped, its other configuration options (--rootdir,
+      --import-mode, a plugin's own options) kept, PYTEST_ADDOPTS and
       PYTEST_PLUGINS cleared. `not_passing` lists the Red ids that did not pass
       there; the Green evidence call and the implemented gate refuse a Green
       where it is not empty, or where the runner reported tests and this field
