@@ -17,6 +17,7 @@ from typing import Any, Sequence
 from deltafuse.core.config import config_as_of
 from deltafuse.core.leash import (
     CONFIG_REL,
+    ENVELOPE_BASE,
     INDEX,
     INDEX_ENV,
     LeashError,
@@ -69,27 +70,31 @@ def run_leash(
     # df-leash #3: the tree is judged with its base's config - the mode and the code roots it
     # may not change for itself. No config at the base (no commit yet): the working tree's.
     base_config = config_at(root, base or "HEAD")
-    with config_as_of(root, base_config) if base_config is not None else contextlib.nullcontext():
-        queue = build_work_queue(target, only_change=only)
-        selected = select_next(queue)
-        snapshot = queue_snapshot(queue, selected=selected, product_root=root)
-        envelope = snapshot.get("envelope")
-        halt = snapshot.get("halt")
-        # Ready envelopes name only the next step; the receipt chain adds the
-        # steps already worked since the base, so a finished step's writes
-        # are not judged against the step after it. A halt stops new work,
-        # not the record of work done, so the chain applies either way.
-        covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
-            root, base=base, dirty=dirty, head=head
-        )
-        errors = check_paths(
-            dirty,
-            covering,
-            baseline=load_baseline(root),
-            product_root=root,
-            base=base,
-            head=head,
-        )
+    envelope_base = ENVELOPE_BASE.set(base or "HEAD")
+    try:
+        with config_as_of(root, base_config) if base_config is not None else contextlib.nullcontext():
+            queue = build_work_queue(target, only_change=only)
+            selected = select_next(queue)
+            snapshot = queue_snapshot(queue, selected=selected, product_root=root)
+            envelope = snapshot.get("envelope")
+            halt = snapshot.get("halt")
+            # Ready envelopes name only the next step; the receipt chain adds the
+            # steps already worked since the base, so a finished step's writes
+            # are not judged against the step after it. A halt stops new work,
+            # not the record of work done, so the chain applies either way.
+            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
+                root, base=base, dirty=dirty, head=head
+            )
+            errors = check_paths(
+                dirty,
+                covering,
+                baseline=load_baseline(root),
+                product_root=root,
+                base=base,
+                head=head,
+            )
+    finally:
+        ENVELOPE_BASE.reset(envelope_base)
     mode = verdict_leash_mode(root, base=base or "HEAD", head=head)
     if base_config is not None and CONFIG_REL in dirty:
         errors = config_guard_errors(root, base=base or "HEAD", head=head) + errors

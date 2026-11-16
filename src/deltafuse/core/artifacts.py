@@ -38,6 +38,10 @@ from deltafuse.core.artifact_transactions import (
 )
 
 
+# A task's paths bound its write envelope: fixed once it leaves `pending` (df-leash #9).
+FROZEN_TASK_FIELDS = ("allowed_paths", "forbidden_paths")
+
+
 class ArtifactServiceError(Exception):
     """Raised when artifact service operations fail."""
 
@@ -526,6 +530,21 @@ class ArtifactService:
         parse_res = strict_read_artifact(existing_bytes, has_frontmatter_delimiters=has_frontmatter)
         existing_meta = parse_res.metadata
         existing_body = parse_res.raw_body
+
+        if kind == "task" and existing_meta.get("status") not in (None, "pending"):
+            # Audit 2026-11-16 (df-leash #9): a task's paths bound its own write envelope; once it
+            # is past Decompose (declaring and on) the Worker widened them through the Writer.
+            pointers = [item.get("path") for item in (patch.get("set") or []) if isinstance(item, dict)]
+            pointers += [p for p in (patch.get("remove") or []) if isinstance(p, str)]
+            for field in FROZEN_TASK_FIELDS:
+                if any(isinstance(p, str) and (p == f"/{field}" or p.startswith(f"/{field}/")) for p in pointers):
+                    raise ArtifactServiceError(
+                        f"{existing_meta.get('id', 'the task')} is '{existing_meta.get('status')}': its "
+                        f"{field} were fixed when it was declared and bound its write envelope. If they "
+                        "are wrong, stop and return the task upstream; the human reopens it",
+                        code="policy_denied",
+                        path=f"/{field}",
+                    )
 
         patch_outcome = apply_artifact_patch(
             existing_meta,
