@@ -124,11 +124,37 @@ def _report(cmd: str, target: Path, errors: list[str], failed: str, valid: str, 
     return 0
 
 
+def _stdin_is_console() -> bool:
+    """True when stdin is an interactive terminal a human types into.
+
+    On Windows `isatty()` is True for any character device, the NUL device too: `decide < NUL`,
+    what an agent's shell often gives a command, passed the check, and getpass - which reads
+    the console, not stdin - then waited for ever (df-gates #9). There only a console handle,
+    one GetConsoleMode accepts, counts.
+    """
+    try:
+        if not sys.stdin.isatty():
+            return False
+    except (AttributeError, ValueError, OSError):
+        return False
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    import msvcrt
+
+    try:
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+    except (AttributeError, ValueError, OSError):
+        return False
+    mode = ctypes.c_uint32()
+    return bool(ctypes.windll.kernel32.GetConsoleMode(ctypes.c_void_p(handle), ctypes.byref(mode)))
+
+
 def _read_secret(prompt: str, hint: str = "") -> str:
     """Read a secret from the terminal; refuse when no human is at one."""
     import getpass
 
-    if not sys.stdin.isatty():
+    if not _stdin_is_console():
         raise gate_password.GatePasswordError(
             "the Human Gate password is read only from an interactive terminal" + hint
         )
