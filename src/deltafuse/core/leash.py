@@ -759,12 +759,34 @@ def _last_gates(lines: list[str]) -> dict[str, str]:
             continue
         if entry.get("kind") == "transition" and entry.get("gate") in _GATE_STEP:
             out[entry["change"]] = entry["gate"]
-        elif entry.get("kind") == "gap-reopen":
-            # `decide --gap` rewinds the Change to Analyze: the chain goes on from the step after
-            # intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside
-            # the Specify envelope, the chain since base having gone backwards).
-            out[entry["change"]] = "intake"
+        else:
+            gate = rewind_gate(entry)
+            if gate is not None:
+                out[entry["change"]] = gate
     return out
+
+
+SPEC_REJECTED_GAP = "spec-rejected"
+TASK_REOPEN_REASON = "task reopened"
+
+
+def rewind_gate(entry: dict[str, Any]) -> str | None:
+    """The gate a rewind receipt takes its Change back to, or None for any other receipt.
+
+    - `gap-reopen` (`decide --gap`): back to Analyze - the chain goes on from the step after
+      intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside the
+      Specify envelope, the chain since base having gone backwards).
+    - `gap-reopen` with gap `spec-rejected` (the human rejects an accepted specification, R8):
+      back to `analyzed` - Specify proposes again.
+    - `artifact-status` of the Change with reason "task reopened" (a task reopened after the
+      `implemented` gate): back to `declared`, the state the `declaring` gate leaves.
+    """
+    if entry.get("kind") == "gap-reopen":
+        return "analyzed" if entry.get("gap") == SPEC_REJECTED_GAP else "intake"
+    if (entry.get("kind") == "artifact-status" and entry.get("artifact") == "change"
+            and entry.get("reason") == TASK_REOPEN_REASON):
+        return "declaring"
+    return None
 
 
 def _step_after(gate: str | None) -> int:
@@ -1298,16 +1320,19 @@ def collect_chain_envelopes(
     base_last, now_last = last_gates(at_base), last_gates(now)
     changed = {posix_relpath(path) for path in (dirty or [])}
 
-    def reopens(lines: list[str]) -> dict[str, int]:
-        out: dict[str, int] = {}
+    def rewinds(lines: list[str]) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
         for entry in _json_rows(lines):
-            if entry.get("kind") == "gap-reopen" and isinstance(entry.get("change"), str):
-                out[entry["change"]] = out.get(entry["change"], 0) + 1
+            gate = rewind_gate(entry)
+            if gate is not None and isinstance(entry.get("change"), str):
+                out.setdefault(entry["change"], []).append(gate)
         return out
 
-    reopened_since_base = reopens(now)
-    for change_id, count in reopens(at_base).items():
-        reopened_since_base[change_id] = reopened_since_base.get(change_id, 0) - count
+    # Change -> the gates its rewinds since the base went back to (the journal is append-only).
+    seen = rewinds(at_base)
+    rewound_since_base = {
+        change_id: gates[len(seen.get(change_id, [])):] for change_id, gates in rewinds(now).items()
+    }
 
     final_gate = STEP_CONTRACTS[STEP_ORDER[-1]]["gate"]
     envelopes: list[dict[str, Any]] = []
@@ -1315,8 +1340,9 @@ def collect_chain_envelopes(
     judged = {**_archived_in_diff(root, changed), **_change_dirs(root)}
     for change_id, change_dir in judged.items():
         low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
-        if reopened_since_base.get(change_id, 0) > 0:
-            low = step_after("intake")  # the chain since base went back to Analyze and on from there
+        if rewound_since_base.get(change_id):
+            # The chain since base went back (to Analyze, to Specify, to Implement) and on from there.
+            low = min([low] + [step_after(gate) for gate in rewound_since_base[change_id]])
         elif base_last.get(change_id) == final_gate:
             # FW-11: converged at the base and not reopened since - no step is left to write for.
             # (`step_after` of the last gate is the last step, so its envelope stayed open for good.)
@@ -1631,7 +1657,7 @@ def step_base(product_root: Path, change_dir: Path) -> str | None:
     lines = text.read_text(encoding="utf-8").splitlines() if text.is_file() else []
     digest = None
     for entry in _json_rows(lines):
-        if entry.get("change") == change_id and entry.get("kind") in {"transition", "gap-reopen"}:
+        if entry.get("change") == change_id and (entry.get("kind") == "transition" or rewind_gate(entry)):
             digest = entry.get("receipt") if isinstance(entry.get("receipt"), str) else digest
     if digest:
         found = _git(root, "log", "--reverse", "--format=%H", "-S", digest, "HEAD", "--",

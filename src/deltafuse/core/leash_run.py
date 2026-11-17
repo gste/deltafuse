@@ -17,6 +17,7 @@ from typing import Any, Sequence
 
 from deltafuse.core.config import config_as_of
 from deltafuse.core.layout import PathRefused, product_relpath
+from deltafuse.core.lock import product_pin_errors
 from deltafuse.core.leash import (
     LOCK_REL,
     _bytes_at,
@@ -79,6 +80,10 @@ def run_leash(
     layout_error = repository_layout_error(root)
     if layout_error is not None:
         raise LeashError(layout_error)  # FW-2
+    pin_errors = product_pin_errors(root)
+    if pin_errors:
+        # FW-10: the hook and the leash judged by whatever Core was running, pinned or not.
+        raise LeashError("this Core is not the one the product pins: " + "; ".join(pin_errors))
     in_hook = bool(staged)
     if in_hook and not base and not files and not has_commit(root):
         # FW-15: the first commit has nothing to be judged against, and it is the commit
