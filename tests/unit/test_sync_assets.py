@@ -114,3 +114,17 @@ def test_check_detects_drift_without_modification(asset_repo):
     assert _snapshot(sa.ASSETS) == before or True  # check itself never mutates
     # rerun check on the restored bundle: green again
     assert sa.check() == 0
+
+
+def test_without_its_own_override_a_test_here_works_on_a_copy(tmp_path):
+    """The guard in tests/conftest.py: the module and a subprocess both point away from the checkout."""
+    import os
+    import subprocess
+
+    real = Path(__file__).resolve().parents[2]
+    assert real not in (sa.REPO, *sa.REPO.parents) and real not in sa.ASSETS.parents
+    assert sa.sync() != []  # the private directory has no process/** to bundle: problems, no bundle
+    assert not sa.ASSETS.exists()
+    script = real / "scripts" / "sync_assets.py"
+    proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=dict(os.environ))
+    assert proc.returncode != 0 and not (real / "src" / "deltafuse" / "assets.journal.json").exists()
