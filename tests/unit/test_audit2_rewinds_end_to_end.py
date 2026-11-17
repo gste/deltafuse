@@ -25,7 +25,7 @@ def _hooked(root, label: str) -> None:
 
 def _clean(root) -> None:
     code, payload = leash(root)
-    assert code == 0 and not payload.get("violations"), payload
+    assert code == 0 and not payload.get("violations"), payload.get("violations") or payload
 
 
 def _steps(root, dirty: list[str]) -> list[str]:
@@ -63,7 +63,7 @@ def test_a_task_reopened_after_the_implemented_gate_is_reworked_under_enforce(pr
     # Implement again: the product file the task owns is inside the envelope, not Verify's.
     put(root, "src/app.py", "GREETING = 'hello'\n")
     code, payload = leash(root)
-    assert code == 0 and not payload.get("violations"), payload
+    assert code == 0 and not payload.get("violations"), payload.get("violations") or payload
     for phase in ("green", "regression"):
         cli("evidence", change, "--phase", phase, "--task", "TASK-001", "--", *RUN)
     cli("state", change, "--task", "TASK-001", "--status", "implemented")
@@ -122,3 +122,24 @@ def test_product_code_written_while_the_specification_is_rejected_is_refused(pro
     put(root, "src/app.py", "BANNER = 'again'\n")
     code, payload = leash(root)
     assert code != 0 and any("src/app.py" in v for v in payload["violations"]), payload
+
+
+def test_a_rejection_not_committed_before_the_next_step_is_no_dead_end(product_at):
+    """Re-probe 2026-11-17: mid-Implement, Green and regression committed, the human rejects the
+    accepted specification and nothing is committed before Specify proposes again. Re-acceptance
+    was refused at the leash - the records `decide` had archived read as the Worker's deletions -
+    and no later commit or verdict got out; only closing the Change did."""
+    root, change = product_at("declared")
+    put(root, "src/app.py", "BANNER = 'hello'\n")
+    for phase in ("green", "regression"):
+        cli("evidence", change, "--phase", phase, "--task", "TASK-001", "--", *RUN)
+    _hooked(root, "green and regression recorded")
+    # Recorded again and not committed: what `decide` archives is not what the last commit holds.
+    cli("evidence", change, "--phase", "green", "--task", "TASK-001", "--", *RUN)
+    cli("decide", change, "--spec", "--status", "rejected")
+    cli("state", change, "--slice", "SLICE-01", "--status", "specified")
+    cli("state", change, "--change", "--status", "specification-proposed")
+    _clean(root)
+    code, out = cli("decide", change, "--spec", "--status", "accepted", check=False)
+    assert code == 0, out
+    _hooked(root, "rejected, proposed and accepted again in one commit")

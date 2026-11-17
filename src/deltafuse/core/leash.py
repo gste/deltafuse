@@ -432,6 +432,10 @@ def human_decision_judge(
     # Original path -> digests of its archived copies (df-leash #8: a digest that any archived
     # file had made any deleted file with those bytes the human's).
     archived: dict[str, set[str]] = {}
+    # Origins with an archived copy that is a record `deltafuse evidence` stamped: the Core wrote
+    # it at the origin and `decide` moved it, whatever the last commit holds there (a record
+    # taken again and not committed before the human's verdict was a dead end under enforce).
+    stamped: set[str] = set()
     restored: dict[str, str] = {}
     for change_id, change_dir in _change_dirs(root).items():
         reopened = change_dir / "reopened"
@@ -444,6 +448,8 @@ def human_decision_judge(
                 origin = archived_from(rel)
                 if origin is not None:
                     archived.setdefault(origin, set()).add(_eol_digest(path.read_bytes()))
+                    if origin not in stamped and _is_stamped_record(root, path):
+                        stamped.add(origin)
                 task_reopened = task_reopened or _REOPEN_ARCHIVE.match(rel) is not None
         if task_reopened:
             restored.update((declaring_snapshot(root, change_id) or {}).items())
@@ -459,11 +465,22 @@ def human_decision_judge(
                 before = _bytes_at(root, rel, head=rev)
                 if before is not None and _eol_digest(before) in archived.get(rel, set()):
                     return True
-            return False
+            return rel in stamped
         digest = hashlib.sha256(data).hexdigest()
         return digest in decided.get(rel, set()) or restored.get(rel) == digest
 
     return judge
+
+
+def _is_stamped_record(product_root: Path, path: Path) -> bool:
+    """The file is an evidence record carrying the Core's stamp for this product."""
+    from deltafuse.core.evidence import evidence_stamp_error
+
+    try:
+        record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return False
+    return isinstance(record, dict) and evidence_stamp_error(record, Path(product_root)) is None
 
 
 def archived_from(rel_path: str) -> str | None:
