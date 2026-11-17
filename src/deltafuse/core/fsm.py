@@ -710,6 +710,50 @@ _TASKS_IMPLEMENTED = frozenset({"implemented", "verified"})
 RED_TAKEN_STATUSES = frozenset({"declared", "implementing"}) | _TASKS_IMPLEMENTED
 
 
+def closed_task_errors(change_path: Path, repo_root: Path, change_id: str) -> list[str]:
+    """Why a `cancelled` or `superseded` task is not closed by the one who may close it (FL-3).
+
+    Every gate skips a closed task - no Red, no Green, no regression is asked of it - so the
+    status itself was the proof, and a status written by hand dropped the task: the Change
+    converged and archived without it. `cancelled` is the human's verdict, the latest
+    `decide --task` receipt of this Change for the task. `superseded` is the Core's write through
+    `deltafuse state`, given only while the task's Red is already-green and it changes no
+    requirement; both the receipt and that condition are asked again here.
+    """
+    from deltafuse.core.gate_receipts import task_verdict
+    from deltafuse.core.transitions import load_receipts, supersede_errors
+
+    tasks = _task_frontmatter_by_id(change_path)
+    if not any(meta.get("status") in _TASKS_CLOSED for meta in tasks.values()):
+        return []
+    moves: dict[str, Any] = {}
+    for row in load_receipts(repo_root, change_id):
+        if row.get("kind") == "artifact-status" and row.get("artifact") == "task":
+            moves[str(row.get("artifact_id"))] = row.get("to")
+    errors: list[str] = []
+    for task_id, meta in sorted(tasks.items()):
+        status = meta.get("status")
+        if status == "cancelled" and task_verdict(repo_root, change=change_id, task=task_id) != "cancelled":
+            errors.append(
+                f"task {task_id} is 'cancelled', but the human did not cancel it: no `deltafuse decide "
+                f"<change-dir> --task {task_id} --status cancelled` verdict is its latest. A status set by "
+                "hand drops what the task promised - restore it, or ask the human"
+            )
+        elif status == "superseded":
+            if moves.get(task_id) != "superseded":
+                errors.append(
+                    f"task {task_id} is 'superseded', but not by `deltafuse state <change-dir> --task "
+                    f"{task_id} --status superseded` (the Core's last write of it is "
+                    f"{moves.get(task_id)!r}). A status set by hand drops what the task promised - restore it"
+                )
+            else:
+                errors.extend(
+                    f"task {task_id} is 'superseded', which no longer holds: {why}"
+                    for why in supersede_errors(change_path, task_id, meta)
+                )
+    return errors
+
+
 def _tasks_behind_gate(
     change_path: Path, gate: str, reached: set[str], phases: tuple[str, ...]
 ) -> list[str]:
@@ -1652,6 +1696,8 @@ def _check_gate(
     route = loaded_route[0]
 
     errors.extend(_decision_errors(gate_lower, change_id, repo_root))
+    if gate_lower in {"decomposed", "declaring", "implemented", "converged"}:
+        errors.extend(f"Gate {gate_lower}: {e}" for e in closed_task_errors(change_path, repo_root, change_id))
 
     if gate_lower == "intake":
         if not req_file.is_file():

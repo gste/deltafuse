@@ -326,11 +326,10 @@ def has_click(
     return False
 
 
-def task_reopened(product_root: Path, *, change: str | None, task: str) -> bool:
-    """True when the human's latest verdict on this task is `reopened`.
+def task_verdict(product_root: Path, *, change: str | None, task: str) -> str | None:
+    """The human's latest verdict on this task (`cancelled`, `reopened`), or None.
 
-    A reopened task is declared again after its Change has left Declare; the Core lets
-    it, and only it, do that. The verdict counts only from an intact journal entry.
+    The verdict counts only from an intact journal entry of the task's own Change.
     """
     for entry in reversed(load_receipts(Path(product_root))):
         if entry.get("kind") != "task" or entry.get("id") != task:
@@ -339,5 +338,15 @@ def task_reopened(product_root: Path, *, change: str | None, task: str) -> bool:
             continue
         if entry.get("receipt_version") is not None and not _chain_intact(entry):
             continue
-        return entry.get("status") == "reopened"
-    return False
+        status = entry.get("status")
+        return status if isinstance(status, str) else None
+    return None
+
+
+def task_reopened(product_root: Path, *, change: str | None, task: str) -> bool:
+    """True when the human's latest verdict on this task is `reopened`.
+
+    A reopened task is declared again after its Change has left Declare; the Core lets
+    it, and only it, do that.
+    """
+    return task_verdict(product_root, change=change, task=task) == "reopened"

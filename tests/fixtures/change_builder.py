@@ -339,6 +339,51 @@ class MockChangeBuilder:
         meta, _ = parse_frontmatter((self.change_dir / "tasks" / f"{task_id}.md").read_text(encoding="utf-8"))
         return str(meta.get("status"))
 
+    def close_task(self, task_id: str, status: str) -> MockChangeBuilder:
+        """Close a task as the Core records it (audit 2026-11, FL-3): `cancelled` with the
+        human's `decide --task` verdict, `superseded` with the `deltafuse state` receipt over an
+        already-green Red on a task that changes no requirement. The fixture skips the status
+        table, never the record a gate asks for."""
+        from deltafuse.core import gate_receipts
+        from deltafuse.core.transitions import append_receipt
+
+        task_file = self.change_dir / "tasks" / f"{task_id}.md"
+        meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        before = meta.get("status")
+        meta["status"] = status
+        if status == "superseded":
+            meta["requirement_delta"] = "none"
+            self._write_evidence(
+                self.change_dir / "evidence" / "red" / f"{task_id}.yaml",
+                {
+                    "schema_version": 3,
+                    "change": self.change_id,
+                    "task": task_id,
+                    "phase": "red",
+                    "timestamp": "2026-09-05T12:00:00Z",
+                    "command": f"pytest tests/test_{task_id.lower()}.py",
+                    "exit_code": 0,
+                    "result": "already-green",
+                    "summary": "The oracle passes on unchanged code",
+                    "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+                    "spec_status": "unchanged",
+                },
+            )
+        task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+        if status == "cancelled":
+            gate_receipts.record_receipt(
+                self.root_dir, kind="task", status="cancelled",
+                rel_path=task_file.relative_to(self.root_dir).as_posix(),
+                artifact_id=task_id, change=self.change_id, artifact=task_file,
+            )
+        else:
+            append_receipt(
+                self.root_dir,
+                {"kind": "artifact-status", "change": self.change_id, "artifact": "task",
+                 "artifact_id": task_id, "from": before, "to": status},
+            )
+        return self
+
     def step_through_decompose(self) -> MockChangeBuilder:
         """Intake, Analyze, Specify and Decompose with their defaults: where most gate tests start."""
         return self.step_intake().step_analyze().step_specify().step_decompose()

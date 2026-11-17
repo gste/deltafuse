@@ -403,6 +403,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # fix them, and the run looped for twenty minutes.
     phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
 
+    if phase_tasks:
+        from deltafuse.core.fsm import closed_task_errors
+
+        hand_closed = closed_task_errors(change_path, product_root, change_id)
+        if hand_closed:
+            # FL-3: a task closed by hand is skipped by every step; say so before the gate does.
+            return _halt(change_id, rel, "; ".join(hand_closed))
+
     for tid, tstatus, tfile, meta in phase_tasks:
         if tstatus == "blocked":
             return _halt(

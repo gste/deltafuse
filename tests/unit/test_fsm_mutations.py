@@ -120,11 +120,8 @@ def test_mutation_t3_converged_accepts_cancelled_task(tmp_path: Path, repo_root:
         .step_implement()
         .step_verify()
     )
-    from deltafuse.core.frontmatter import parse_frontmatter
-    task_file = builder.change_dir / "tasks" / "TASK-002.md"
-    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    meta["status"] = "cancelled"
-    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    # Cancelled as the human cancels it: a status set by hand is no longer skipped (FL-3).
+    builder.close_task("TASK-002", "cancelled")
     assert check_gate(builder.change_dir, "converged") == []
 
 

@@ -960,14 +960,12 @@ def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_r
         .step_implement()
         .step_verify()
     )
-    task_file = builder.change_dir / "tasks" / "TASK-002.md"
-    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    meta["status"] = "cancelled"
-    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    # Closed as the Core records it - the human's cancel, the Core's supersede: a status set by
+    # hand is no longer skipped (audit 2026-11, FL-3).
+    builder.close_task("TASK-002", "cancelled")
     assert check_gate(builder.change_dir, "converged") == []
 
-    meta["status"] = "superseded"
-    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    builder.close_task("TASK-002", "superseded")
     assert check_gate(builder.change_dir, "converged") == []
 
 
@@ -1279,11 +1277,8 @@ def test_declaring_gate_needs_every_task_declared(tmp_path: Path, repo_root: Pat
 
 def test_declaring_gate_skips_cancelled_tasks(tmp_path: Path, repo_root: Path):
     builder = _two_tasks(tmp_path, repo_root, "CHG-704").step_declare("TASK-001")
-    task = builder.change_dir / "tasks" / "TASK-002.md"
-    task.write_text(
-        task.read_text(encoding="utf-8").replace("status: pending", "status: cancelled"),
-        encoding="utf-8",
-    )
+    # Cancelled as the human cancels it: a status set by hand is no longer skipped (FL-3).
+    builder.close_task("TASK-002", "cancelled")
     assert not any("TASK-002" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
