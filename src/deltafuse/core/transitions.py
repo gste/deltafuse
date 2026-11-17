@@ -25,6 +25,7 @@ from deltafuse.core.fsm import (
     can_transition,
     find_repo_root,
     frozen_oracle_errors,
+    product_pin_errors,
 )
 from deltafuse.core.gate_receipts import read_jsonl, task_reopened
 
@@ -231,6 +232,19 @@ def latest_transition_field(product_root: Path | str, change_id: str, gate: str,
     return None
 
 
+def intake_facts(product_root: Path | str, change_id: str) -> dict[str, Any]:
+    """What the Core recorded when the Change left `normalized`: `intent` and `spec_tree`.
+
+    Audit 2026-11 (FL-1): the gates read "is this a bugfix" and "did the specification change"
+    from here, not from change.yaml, which the Worker can rewrite. Empty when no transition of
+    this Change carries them.
+    """
+    for row in load_receipts(Path(product_root), change_id):
+        if row.get("kind") == "transition" and isinstance(row.get("spec_tree"), dict):
+            return {"intent": row.get("intent"), "spec_tree": dict(row["spec_tree"])}
+    return {}
+
+
 # The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
 # <change> --gap spec-gap|tasks-missing --status reopened`); the chain replays it as a rewind.
 GAP_REOPEN_KIND = "gap-reopen"
@@ -238,13 +252,52 @@ GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
 GAP_REOPEN_TO = "analyzing"
 
 
+# The human rejects a specification already accepted (`deltafuse decide <change> --spec --status
+# rejected` past `specified`): the Change returns to `analyzed` (owner decision R8, FL-6). The
+# receipt is a `gap-reopen` whose gap is `spec-rejected`, replayed as a rewind like the others.
+SPEC_REJECTED_GAP = "spec-rejected"
+SPEC_REJECT_TO = "analyzed"
+SPEC_REJECT_FROM = frozenset(
+    {"specified", "decomposed", "declaring", "declared", "implementing", "implemented", "verifying"}
+)
+# The same set as the chain replay sees it: in-flight statuses hold no receipt of their own.
+_SPEC_REJECT_CHAIN_FROM = frozenset({"specified", "decomposed", "declared", "implemented"})
+
+
+# The human reopens a task blocked after the `implemented` gate (FL-8): the task is declared
+# and implemented again, so the gate it had passed has to be passed again - the Change returns
+# to `declared`. The receipt is a Change status write of `decide`, replayed as a rewind.
+TASK_REOPEN_REASON = "task reopened"
+TASK_REOPEN_FROM = frozenset({"implemented", "verifying"})
+TASK_REOPEN_TO = "declared"
+
+
+def _is_task_reopen_rewind(row: dict[str, Any]) -> bool:
+    return (
+        row.get("kind") == "artifact-status"
+        and row.get("artifact") == "change"
+        and row.get("reason") == TASK_REOPEN_REASON
+    )
+
+
+def _rewind_target(row: dict[str, Any], current: str) -> str | None:
+    """Where a `gap-reopen` receipt legally takes the chain from `current`, or None."""
+    if row.get("gap") == SPEC_REJECTED_GAP:
+        return SPEC_REJECT_TO if current in _SPEC_REJECT_CHAIN_FROM and row.get("to") == SPEC_REJECT_TO else None
+    return GAP_REOPEN_TO if current in GAP_REOPEN_FROM and row.get("to") == GAP_REOPEN_TO else None
+
+
 def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> dict[str, Any] | None:
-    """The Change's latest gap reopen, unless a `until_gate` transition has followed it."""
+    """The Change's latest rewind (a reopened gap, a rejected accepted specification), unless a
+    `until_gate` transition has followed it. A rejection lands on `analyzed`, so for that gate it
+    is never open: Analyze has nothing to redo."""
     rows = load_receipts(product_root, change_id)
     for index in range(len(rows) - 1, -1, -1):
         if rows[index].get("kind") == GAP_REOPEN_KIND:
             later = rows[index + 1 :]
             if any(r.get("kind") == "transition" and r.get("gate") == until_gate for r in later):
+                return None
+            if rows[index].get("gap") == SPEC_REJECTED_GAP and until_gate == "analyzed":
                 return None
             return rows[index]
     return None
@@ -290,6 +343,24 @@ def terminal_status_errors(product_root: Path, change_path: Path) -> list[str]:
     ]
 
 
+# `deltafuse archive` records its own status write, so a package left in docs/changes/ with
+# `archived` can be told from a hand edit (FL-12) and the move finished (FL-15).
+ARCHIVED_STATUS = "archived"
+ARCHIVE_GATE = "archive"
+_STATUS_ROW_KINDS = frozenset({"transition", "unblock", GAP_REOPEN_KIND})
+
+
+def _moves_change_status(row: dict[str, Any]) -> bool:
+    """Whether a receipt records a write of the Change's own status."""
+    if row.get("kind") in _STATUS_ROW_KINDS:
+        return True
+    return row.get("kind") == "artifact-status" and row.get("artifact") == "change" and "field" not in row
+
+
+def _last_status_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next((row for row in reversed(rows) if _moves_change_status(row)), None)
+
+
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     """V3-FIX-009: fail-closed receipt chain validation.
 
@@ -309,10 +380,35 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
         return []
     if status in CLOSE_STATUSES:
         return terminal_status_errors(product_root, change_path)
+    if status == ARCHIVED_STATUS:
+        # FL-12: `archived` is written by `deltafuse archive` alone, a moment before it moves
+        # the package out of docs/changes/. Found there, it is that command interrupted - its
+        # receipt is the journal's last word on the Change - or a hand edit.
+        last = _last_status_row(load_receipts(product_root, change_id))
+        if last is not None and last.get("gate") == ARCHIVE_GATE and last.get("to") == ARCHIVED_STATUS:
+            return []
+        return [
+            f"status '{status}' was not written by `deltafuse archive`: a hand-set status is not "
+            "evidence - restore change.yaml to the status the journal ends at"
+        ]
+    if status == "blocked-on-decision":
+        # A Change waits here for the human's answer to a proposed Decision, and `decide`
+        # returns it to `analyzing`. FL-12: with no such Decision nothing ever unblocks it, and
+        # the status was simply ignored - the queue went on handing out work.
+        from deltafuse.core.integrity import list_proposed_decisions_for_change
+
+        if list_proposed_decisions_for_change(str(change_id), Path(product_root)):
+            return []
+        return [
+            f"status '{status}', but no proposed Decision is bound to this Change, so nothing can "
+            "unblock it: a hand-set status is not evidence - restore change.yaml to 'analyzing'"
+        ]
     if status not in VALID_CHAIN_STATUSES:
-        # Other statuses (archived, ...) are governed by their own contracts,
-        # not the forward transition chain.
-        return []
+        # FL-12: no Core command writes any other status. It read as "nothing to check".
+        return [
+            f"status '{status}' is not one the Core writes to a Change: a hand-set status is not "
+            "evidence - restore change.yaml to the status the journal ends at"
+        ]
 
     all_receipts = load_receipts(product_root, change_id)
     # Auxiliary Core receipts (decide unblock) confirm the status but are not
@@ -336,16 +432,30 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     # Replay: each receipt must apply a known gate from a status the chain
     # has actually reached (the bugfix path legally skips 'specified').
     current = INITIAL_STATUS
-    replay = [r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND)]
+    replay = [
+        r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
+    ]
     for i, row in enumerate(replay):
-        if row.get("kind") == GAP_REOPEN_KIND:
-            if current not in GAP_REOPEN_FROM or row.get("to") != GAP_REOPEN_TO:
+        if _is_task_reopen_rewind(row):
+            if current != "implemented" or row.get("to") != TASK_REOPEN_TO:
                 errors.append(
-                    f"gap reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; "
-                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' is a Core rewind"
+                    f"task reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; only "
+                    f"'implemented' -> '{TASK_REOPEN_TO}' is that rewind"
                 )
                 break
-            current = GAP_REOPEN_TO
+            current = TASK_REOPEN_TO
+            continue
+        if row.get("kind") == GAP_REOPEN_KIND:
+            target = _rewind_target(row, current)
+            if target is None:
+                errors.append(
+                    f"gap reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; "
+                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' (a reopened gap) and "
+                    f"{sorted(_SPEC_REJECT_CHAIN_FROM)} -> '{SPEC_REJECT_TO}' (a rejected "
+                    "specification) are Core rewinds"
+                )
+                break
+            current = target
             continue
         gate = row.get("gate")
         target = GATE_TARGETS.get(gate or "")
@@ -383,7 +493,9 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             f"chain, which ends at '{current}'"
         )
     status_receipts = [
-        r for r in all_receipts if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND)
+        r
+        for r in all_receipts
+        if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
     ]
     last = status_receipts[-1] if status_receipts else None
     if status in RECEIPTED_TARGETS and last is not None and last.get("to") not in (status, current):
@@ -405,10 +517,16 @@ def receipt_mismatch(product_root: Path, change_path: Path) -> str | None:
     return "; ".join(errors) if errors else None
 
 
-def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] | None:
+def resume_incomplete(product_root: Path, change_path: Path, gate: str | None = None) -> dict[str, Any] | None:
     """Finish a transition whose receipt was recorded but whose change.yaml
     write never landed (crash between validation and write). Returns the
-    resumed receipt entry, or None when there is nothing to resume."""
+    resumed receipt entry, or None when there is nothing to resume.
+
+    `gate` is the gate the caller asked for. FL-17: the pending write was finished whatever
+    gate was named, so with the status rewound by hand `advance --gate converged` exited 0
+    having applied `declaring`. A pending transition is finished only under its own name;
+    asked for another gate, the Core refuses and says which one is pending.
+    """
     data = _load_change_yaml(change_path)
     change_id = data.get("id") or change_path.name
     # Only a gate transition can be crash residue of `advance`. q0 run
@@ -417,16 +535,22 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
     # matching 'from' was read as an unfinished advance, the Change was
     # written 'implemented' with no gate, and advance crashed on the missing
     # 'gate' key - the Worker then chased the traceback's source path.
-    transitions = [
-        row for row in load_receipts(product_root, change_id) if row.get("kind") == "transition"
-    ]
-    last = transitions[-1] if transitions else None
-    if last is None:
+    # The journal's last word on the Change's status must be that transition: a later rewind
+    # (a reopened gap, a rejected specification, a reopened task) may land on its `from`.
+    last = _last_status_row(load_receipts(product_root, change_id))
+    if last is None or last.get("kind") != "transition":
         return None
     if data.get("status") == last.get("to"):
         return None
     if data.get("status") != last.get("from"):
         return None  # hand-edited status, not a crash residue
+    if gate is not None and last.get("gate") != gate:
+        raise TransitionError(
+            f"gate '{gate}' was not applied: change.yaml says '{data.get('status')}', but the journal's "
+            f"last transition is gate '{last.get('gate')}' ({last.get('from')} -> {last.get('to')}). "
+            "Either that advance was interrupted or the status was edited by hand; finish it with "
+            f"`deltafuse advance <change-dir> --gate {last.get('gate')}`, then go on"
+        )
     _write_change_status(change_path, data, last["to"])
     return last
 
@@ -469,11 +593,16 @@ def _record_trace_warnings(change_path: Path) -> None:
 
 
 def _change_dir(start: Path | str) -> tuple[Path, Path]:
-    """The resolved Change directory and its product root."""
+    """The resolved Change directory and its product root, on the Core the product pins."""
     change_path = Path(start).resolve()
     if not change_path.is_dir():
         raise TransitionError(f"Change directory not found: {change_path}")
-    return change_path, find_repo_root(change_path)
+    product_root = find_repo_root(change_path)
+    # FL-11, FW-10: `advance`, `state` and the intent write all start here.
+    pin = product_pin_errors(product_root)
+    if pin:
+        raise TransitionError("the product's lock does not match: " + "; ".join(pin), errors=pin)
+    return change_path, product_root
 
 
 def _advanced(entry: dict[str, Any], *, resumed: bool) -> dict[str, Any]:
@@ -507,7 +636,7 @@ def advance_change(
     with ProductMutationLock(product_root):
         # Crash residue from a previous advance: the receipt is authoritative,
         # so finishing the pending write completes the transition.
-        resumed = resume_incomplete(product_root, change_path)
+        resumed = resume_incomplete(product_root, change_path, gate)
         if resumed is not None:
             return _advanced(resumed, resumed=True)
 
@@ -560,6 +689,12 @@ def advance_change(
             "from": current,
             "to": target,
         }
+        if current == INITIAL_STATUS and not intake_facts(product_root, change_id):
+            # Intake's own facts, read by every later gate instead of change.yaml (FL-1).
+            from deltafuse.core.spec_acceptance import spec_tree
+
+            entry["intent"] = data.get("intent") if isinstance(data.get("intent"), str) else None
+            entry["spec_tree"] = spec_tree(product_root)
         if gate == "declaring":
             # The tasks' product files before Implement: a reopened task is declared again
             # against them (core/task_snapshot.py, ref-m04-363-2).
@@ -593,9 +728,12 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
     # `declared`, and green_attempt_error then says exactly what is missing (no Red, no Green
     # attempt) instead of a bare "cannot set status" (codebase audit 2026-10-22).
     "pending": {"declaring", "declared", "blocked", "cancelled", "superseded"},
-    "declaring": {"declared", "blocked", "superseded"},
+    # cancelled, from `declaring` and `implementing` too (FL-16): the already-green halt and the
+    # cancel hint send the human to `decide --task --status cancelled`, which exited 1 for a
+    # task the Worker had left in either. Only the human cancels (HUMAN_TASK_STATUSES).
+    "declaring": {"declared", "blocked", "cancelled", "superseded"},
     "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
-    "implementing": {"implemented", "blocked"},
+    "implementing": {"implemented", "blocked", "cancelled"},
     "implemented": {"verified", "blocked"},
     # Only the human leaves `blocked` (decide --task): cancelling drops the task,
     # reopening (`pending`) sends it back to Declare with its old evidence archived.
@@ -796,6 +934,53 @@ def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
         f"Gate {gate}: not this Change's turn - status is '{current}', and this gate "
         f"applies from {sorted(GATE_ALLOWED_FROM[gate])}"
     ]
+def set_change_intent(start: Path | str, intent: str) -> dict[str, Any]:
+    """Core-owned write of change.yaml `intent`, open only until Intake closes (FL-1).
+
+    The Artifact Writer no longer takes `intent`: a feature relabelled `bugfix` after Analyze
+    skipped the specification Human Gate. Intake classifies the request; the `intake` gate
+    records the answer in its receipt and every later gate reads it from there.
+    """
+    from deltafuse.core.schemas import SchemaRegistry
+
+    change_path, product_root = _change_dir(start)
+    allowed = (SchemaRegistry().get_schema("change").get("properties") or {}).get("intent", {}).get("enum") or []
+    if intent not in allowed:
+        raise TransitionError(f"intent must be one of {', '.join(map(str, allowed))}; got {intent!r}")
+    with ProductMutationLock(product_root):
+        data = _load_change_yaml(change_path)
+        current = data.get("intent")
+        if data.get("status") != INITIAL_STATUS or intake_facts(product_root, data.get("id") or change_path.name):
+            raise TransitionError(
+                f"intent is fixed when Intake closes (it is {current!r}, the Change is "
+                f"'{data.get('status')}'): the gates read it from the intake receipt. A Change opened "
+                "under the wrong intent is closed by the human (`deltafuse decide <change-dir> --close "
+                "--status rejected --note \"<why>\"`) and opened again"
+            )
+        if current == intent:
+            return {"ok": True, "artifact": "change", "field": "intent", "from": current, "to": intent,
+                    "receipt": None, "unchanged": True}
+        entry = append_receipt(
+            product_root,
+            {
+                "kind": "artifact-status",
+                "change": data.get("id") or change_path.name,
+                "artifact": "change",
+                "gate": "state",
+                "field": "intent",
+                "from": current,
+                "to": intent,
+            },
+        )
+        data["intent"] = intent
+        atomic_write(
+            change_path / "change.yaml",
+            yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8"),
+        )
+    return {"ok": True, "artifact": "change", "field": "intent", "from": current, "to": intent,
+            "receipt": entry["receipt"]}
+
+
 # Change-level in-flight statuses the Worker may request through the Core.
 CHANGE_INFLIGHT_STATUSES = {"specification-proposed"}
 

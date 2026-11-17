@@ -151,8 +151,8 @@ def test_bugfix_goes_from_analyzed_to_decomposed_through_the_core(tmp_path: Path
     spec-delta a bugfix does not write: every bugfix Change stopped at
     `advance --gate decomposed`."""
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = MockChangeBuilder(tmp_path, change_id="CHG-991", title="Bug").step_intake().step_analyze()
-    builder._update_change_yaml({"intent": "bugfix"})
+    # Intent is Intake's: the gates read it from the intake receipt (audit 2026-11, FL-1).
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-991", title="Bug").step_intake(intent="bugfix").step_analyze()
     assert advance_change(builder.change_dir, "analyzed")["to"] == "analyzed"
 
     selected = _next(tmp_path)
@@ -238,8 +238,8 @@ def test_a_feature_cannot_skip_the_spec_human_gate_to_decompose(tmp_path: Path, 
 
 def test_a_bugfix_that_changes_the_spec_goes_through_specify(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
-    builder = MockChangeBuilder(tmp_path, change_id="CHG-993", title="Bug").step_intake().step_analyze()
-    builder._update_change_yaml({"intent": "bugfix"})
+    # Intent is Intake's: the gates read it from the intake receipt (audit 2026-11, FL-1).
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-993", title="Bug").step_intake(intent="bugfix").step_analyze()
     assert advance_change(builder.change_dir, "analyzed")["to"] == "analyzed"
     (builder.change_dir / "spec-delta.md").write_text(_DELTA.format(cid="CHG-993"), encoding="utf-8")
     builder._core_advance = lambda gate: None

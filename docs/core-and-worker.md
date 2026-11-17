@@ -48,6 +48,7 @@ The Core is built against a Worker that errs, not one that attacks it. It refuse
 - Environment failures of a Red are recognised from pytest's report only; on the JVM a missing resource or `NoClassDefFoundError` reads as a behavioural failure.
 - Only a bare interpreter (`python <file>.py`, `python -c`) is refused as a report-less runner; `tox`, `npm test` and the like still run without a report. Without `workflow.test_commands`, "the whole suite" is judged heuristically.
 - Maven reports are read at the root and one module level deep.
+- Accepting a specification binds the text of the sections the spec delta and the slices cite, not the rest of `docs/spec/**`: a requirement nobody cited can still be edited after the verdict (the leash under an accepted baseline judges it). A Change that skipped Specify is compared with the whole tree as it was at its Intake.
 - A product installed from the wheel pins the digest of the bundled assets (`assets/manifest.json`), not of the Core's code; a source checkout pins both.
 
 The backstop for all of these is outside the Worker's reach: the CI leash job, the human's review of the diff, and host isolation of the Worker.

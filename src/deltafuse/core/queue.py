@@ -14,8 +14,12 @@ from deltafuse.core.config import config_section
 from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core.hasher import compute_product_baseline_revision
-from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
-from deltafuse.core.transitions import CLOSE_STATUSES, receipt_mismatch, red_result, supersede_errors
+from deltafuse.core.integrity import (
+    find_unrecorded_terminal_decisions_for_change,
+    find_unresolved_decisions_for_change,
+    list_proposed_decisions_for_change,
+)
+from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -327,6 +331,18 @@ def _halt(
     ]
 
 
+def _specification_moved(change_path: Path, product_root: Path, facts: dict[str, Any]) -> bool:
+    """Whether a bugfix must pass Specify after all: its spec-delta.md changes the specification,
+    or `docs/spec/**` is no longer what the intake receipt recorded (FL-1)."""
+    from deltafuse.core.fsm import _spec_delta_changes_spec
+    from deltafuse.core.spec_acceptance import spec_tree_changes
+
+    if _spec_delta_changes_spec(change_path / "spec-delta.md"):
+        return True
+    base = facts.get("spec_tree")
+    return not isinstance(base, dict) or bool(spec_tree_changes(base, product_root))
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data, problem = _read_change(change_path)
     if problem:
@@ -346,19 +362,39 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         return [], []
     rel = _rel(product_root, change_path)
     if status in TERMINAL_CHANGE:
-        # A terminal status the human did not record (`decide --close`) is not one: it halts
-        # instead of dropping the Change from the queue (df-gates #6).
-        hand_set = receipt_mismatch(product_root, change_path) if status in CLOSE_STATUSES else None
-        return _halt(change_id, rel, hand_set) if hand_set else ([], [])
+        # A terminal status nobody recorded is not one: it halts instead of dropping the Change
+        # from the queue - `decide --close` for the closed ones (df-gates #6), the receipt chain
+        # for `converged`, `deltafuse archive` for `archived` (FL-12).
+        hand_set = receipt_mismatch(product_root, change_path)
+        if hand_set:
+            return _halt(change_id, rel, hand_set)
+        if status == "archived":
+            return _halt(
+                change_id,
+                rel,
+                f"status 'archived', yet the package is still in {rel}: `deltafuse archive` was "
+                f"interrupted before it moved it. Run `deltafuse archive {rel}` again from the product root",
+            )
+        return [], []
     mismatch = receipt_mismatch(product_root, change_path)
     if mismatch:
         # DF3-004: change.yaml must agree with the last Core receipt; a
         # hand-edited status without a receipt halts the Change.
         return _halt(change_id, rel, mismatch)
-    intent = data.get("intent") if isinstance(data.get("intent"), str) else "unknown"
+    # Intent as the intake receipt recorded it, not as change.yaml reads now (FL-1).
+    from deltafuse.core.transitions import intake_facts
+
+    facts = intake_facts(product_root, change_id)
+    intent = facts.get("intent") if isinstance(facts.get("intent"), str) else data.get("intent")
+    intent = intent if isinstance(intent, str) else "unknown"
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
     if unresolved:
         return _halt(change_id, rel, "; ".join(unresolved), halt_kind="decision")
+    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, product_root)
+    if unrecorded:
+        # FL-5: a Decision written `accepted` by hand passed the queue at every status, and no
+        # gate after Specify read it.
+        return _halt(change_id, rel, "; ".join(unrecorded))
     if status == "specification-proposed":
         return _halt(
             change_id,
@@ -376,6 +412,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # `slice`, a bad `kind`) sent the Worker to declare, where it could not
     # fix them, and the run looped for twenty minutes.
     phase_tasks = [] if status in BEFORE_DECOMPOSED else tasks
+
+    if phase_tasks:
+        from deltafuse.core.fsm import closed_task_errors
+
+        hand_closed = closed_task_errors(change_path, product_root, change_id)
+        if hand_closed:
+            # FL-3: a task closed by hand is skipped by every step; say so before the gate does.
+            return _halt(change_id, rel, "; ".join(hand_closed))
 
     for tid, tstatus, tfile, meta in phase_tasks:
         if tstatus == "blocked":
@@ -460,6 +504,20 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # step. Reading task statuses alone sent the Worker to implement while the
     # declaring gate was still closed, and to verify with the Change at
     # 'decomposed' (q0 run 20260921T081038Z).
+    if tasks and status in DECLARE_PHASE | IMPLEMENT_PHASE and all(
+        s in {"cancelled", "superseded"} for _, s, *_ in tasks
+    ):
+        # FL-4, the no-op path: every Red was already-green (or the human cancelled the rest),
+        # so there is nothing to implement and no Green will ever close `implemented`. `next`
+        # answered "done" and the Change sat in `declared` for good.
+        return _halt(
+            change_id,
+            rel,
+            f"Change {change_id}: every task is closed ({', '.join(f'{tid} {s}' for tid, s, *_ in tasks)}), "
+            "so nothing is left to implement and the Change cannot converge. The human closes it: "
+            f"`deltafuse decide {rel} --close --status not-reproduced --note \"<the behaviour already "
+            'exists>"` - or `--status rejected`, or `--status superseded` naming the Change that did the work',
+        )
     if tasks and status in DECLARE_PHASE:
         ahead = [(tid, s) for tid, s, *_ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
         if ahead:
@@ -580,7 +638,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         ], []
 
     if status == "analyzed":
-        if intent == "bugfix":
+        if intent == "bugfix" and not _specification_moved(change_path, product_root, facts):
             return [
                 _item_for_step(
                     "decompose",
@@ -630,7 +688,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             )
         ], []
 
-    return [], []
+    # An active Change with no step is a halt, not "done" (S6: every stop names its way out).
+    return _halt(
+        change_id,
+        rel,
+        f"Change {change_id} is '{status}' and the Core finds no step for it: its tasks and its status "
+        "do not add up to one. Inspect it; the human can close it with `deltafuse decide "
+        f'{rel} --close --status rejected --note "<why>"`',
+    )
 
 
 DEFAULT_ADAPTER_ROOTS = (".agents/skills", ".cursor/skills", ".gemini/skills")
@@ -671,6 +736,18 @@ def build_work_queue(
 ) -> WorkQueue:
     product_root = load_product_root(start)
     queue = WorkQueue()
+    from deltafuse.core.fsm import product_pin_errors
+
+    pin = product_pin_errors(product_root)
+    if pin:
+        # FL-11, FW-10: no step is handed out on a Core the product does not pin.
+        queue.blocked.append(
+            WorkItem(
+                kind="blocked", step=None, skill=None, gate=None, change_id=None, path=None, task=None,
+                task_path=None, reason="the product's lock does not match: " + "; ".join(pin), halt_kind="blocked",
+            )
+        )
+        return queue
     if only_change is not None:
         change_path = Path(only_change).resolve()
         ready, blocked = _scan_change(product_root, change_path)

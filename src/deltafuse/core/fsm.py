@@ -61,26 +61,35 @@ VALID_CHANGE_STATUSES = {
     "not-reproduced",
 }
 
+# The human closes a Change that will not converge from any status before `converged`
+# (`deltafuse decide <change-dir> --close --status rejected|superseded`, owner decision R8):
+# a Change past Specify could be closed with no status at all, yet it blocked `init --force`.
+_HUMAN_CLOSE = {"rejected", "superseded"}
+
 ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
-    "normalized": {"analyzing", "rejected", "duplicate"},
-    "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
-    "blocked-on-decision": {"analyzing"},
+    "normalized": {"analyzing", "duplicate"} | _HUMAN_CLOSE,
+    "analyzing": {"blocked-on-decision", "analyzed", "duplicate", "not-reproduced"} | _HUMAN_CLOSE,
+    "blocked-on-decision": {"analyzing"} | _HUMAN_CLOSE,
     # decomposed: the bugfix path with the spec unchanged - the queue sends a
     # bugfix from analyzed to decompose, GATE_ALLOWED_FROM and the receipt
     # chain already allowed it, and the specified gate needs a spec-delta a
     # bugfix does not write. Without it every bugfix Change stopped at
     # `advance --gate decomposed` (found 2026-09-22 by a Core-only walk).
-    # rejected/duplicate/superseded: the human closes a Change whose analysis is
-    # done, typically after rejecting its specification (owner, 2026-11-16).
-    "analyzed": {"specification-proposed", "specified", "decomposed", "rejected", "duplicate", "superseded"},
-    "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
-    "specified": {"decomposed"},
-    "decomposed": {"declaring"},
-    "declaring": {"declared", "not-reproduced"},
-    "declared": {"implementing"},
-    "implementing": {"implemented"},
-    "implemented": {"verifying"},
-    "verifying": {"converged", "analyzing", "not-reproduced"},
+    # duplicate: the human closes a Change whose analysis is done (owner, 2026-11-16).
+    "analyzed": {"specification-proposed", "specified", "decomposed", "duplicate"} | _HUMAN_CLOSE,
+    "specification-proposed": {"specified", "analyzed"} | _HUMAN_CLOSE,  # analyzed: DF3-004 spec rejection loop
+    # analyzed, from `specified` on: the human rejects the specification already accepted
+    # (`decide --spec --status rejected`, owner decision R8).
+    "specified": {"decomposed", "analyzed"} | _HUMAN_CLOSE,
+    "decomposed": {"declaring", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "declaring": {"declared", "not-reproduced", "analyzed"} | _HUMAN_CLOSE,
+    # not-reproduced, through Implement: every task turned out closed - its Red already-green
+    # and superseded, or cancelled - so nothing is left to implement (the no-op path, FL-4).
+    "declared": {"implementing", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "implementing": {"implemented", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    # declared, from `implemented` on: the human reopens a task blocked after the gate (FL-8).
+    "implemented": {"verifying", "analyzed", "declared", "not-reproduced"} | _HUMAN_CLOSE,
+    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed", "declared"} | _HUMAN_CLOSE,
     "converged": {"archived"},
     "archived": set(),
     "rejected": set(),
@@ -115,6 +124,63 @@ def find_repo_root(start_path: Path) -> Path:
 
 
 CONTRACT_VERSION = 3
+
+
+def product_pin_errors(product_root: Path | str) -> list[str]:
+    """Why this Core may not move the product's Changes: it is not the Core the lock pins, or the
+    config asks for another framework than the lock holds (audit 2026-11, FL-11, FW-10).
+
+    docs/state-machine.md promised that a product whose config does not match its lock cannot
+    proceed through gates, and only `validate-layout` compared them. A Core whose identity
+    differs from the pin was refused by `artifact write` alone, so evidence, statuses and
+    transitions were recorded under another Core's rules. Gates, `state`, `evidence` and `next`
+    ask here. A directory with no lock is not judged: the queue and the Writer refuse it as
+    not a product.
+
+    The human's `decide` is left out on purpose: the upgrade guard asks for the active Changes
+    to be closed first, so closing one cannot wait for the upgrade.
+    """
+    root = Path(product_root)
+    lock_file = root / ".deltafuse" / "lock.yaml"
+    if not lock_file.is_file():
+        return []
+    from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
+    from deltafuse.core.assets import AssetError
+    from deltafuse.core.lock import workflow_alignment_errors
+
+    way_out = (
+        "run the Core this product pins, or upgrade the product - close its active Changes "
+        "(`deltafuse decide <change-dir> --close --status rejected|superseded --note \"<why>\"`), then "
+        "`deltafuse init <product-root> --force`"
+    )
+    errors: list[str] = []
+    try:
+        ArtifactRegistry(root).verify_product_lock(root)
+    except (ArtifactRegistryError, AssetError) as ex:
+        errors.append(f"{ex}: {way_out}")
+
+    def load(path: Path) -> dict[str, Any]:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    config, lock = load(root / ".deltafuse" / "config.yaml"), load(lock_file)
+    wanted = config.get("framework") if isinstance(config.get("framework"), dict) else {}
+    pinned = lock.get("framework") if isinstance(lock.get("framework"), dict) else {}
+    fix = "set .deltafuse/config.yaml back to what the lock holds, or upgrade the product as above"
+    if wanted.get("version") and pinned.get("version") and wanted["version"] != pinned["version"]:
+        errors.append(
+            f"config asks for framework version {wanted['version']}, the lock pins {pinned['version']}: {fix}"
+        )
+    source = wanted.get("source")
+    if source and pinned.get("source"):
+        asked = f"deltafuse://v{wanted.get('version')}" if source == "deltafuse" else source
+        if asked != pinned["source"]:
+            errors.append(f"config asks for framework source '{source}', the lock pins '{pinned['source']}': {fix}")
+    errors.extend(f"config and lock disagree: {e}" for e in workflow_alignment_errors(config, lock))
+    return errors
 
 
 def _contract_version_errors(change_path: Path) -> list[str]:
@@ -708,6 +774,50 @@ _TASKS_IMPLEMENTED = frozenset({"implemented", "verified"})
 RED_TAKEN_STATUSES = frozenset({"declared", "implementing"}) | _TASKS_IMPLEMENTED
 
 
+def closed_task_errors(change_path: Path, repo_root: Path, change_id: str) -> list[str]:
+    """Why a `cancelled` or `superseded` task is not closed by the one who may close it (FL-3).
+
+    Every gate skips a closed task - no Red, no Green, no regression is asked of it - so the
+    status itself was the proof, and a status written by hand dropped the task: the Change
+    converged and archived without it. `cancelled` is the human's verdict, the latest
+    `decide --task` receipt of this Change for the task. `superseded` is the Core's write through
+    `deltafuse state`, given only while the task's Red is already-green and it changes no
+    requirement; both the receipt and that condition are asked again here.
+    """
+    from deltafuse.core.gate_receipts import task_verdict
+    from deltafuse.core.transitions import load_receipts, supersede_errors
+
+    tasks = _task_frontmatter_by_id(change_path)
+    if not any(meta.get("status") in _TASKS_CLOSED for meta in tasks.values()):
+        return []
+    moves: dict[str, Any] = {}
+    for row in load_receipts(repo_root, change_id):
+        if row.get("kind") == "artifact-status" and row.get("artifact") == "task":
+            moves[str(row.get("artifact_id"))] = row.get("to")
+    errors: list[str] = []
+    for task_id, meta in sorted(tasks.items()):
+        status = meta.get("status")
+        if status == "cancelled" and task_verdict(repo_root, change=change_id, task=task_id) != "cancelled":
+            errors.append(
+                f"task {task_id} is 'cancelled', but the human did not cancel it: no `deltafuse decide "
+                f"<change-dir> --task {task_id} --status cancelled` verdict is its latest. A status set by "
+                "hand drops what the task promised - restore it, or ask the human"
+            )
+        elif status == "superseded":
+            if moves.get(task_id) != "superseded":
+                errors.append(
+                    f"task {task_id} is 'superseded', but not by `deltafuse state <change-dir> --task "
+                    f"{task_id} --status superseded` (the Core's last write of it is "
+                    f"{moves.get(task_id)!r}). A status set by hand drops what the task promised - restore it"
+                )
+            else:
+                errors.extend(
+                    f"task {task_id} is 'superseded', which no longer holds: {why}"
+                    for why in supersede_errors(change_path, task_id, meta)
+                )
+    return errors
+
+
 def _tasks_behind_gate(
     change_path: Path, gate: str, reached: set[str], phases: tuple[str, ...]
 ) -> list[str]:
@@ -754,18 +864,39 @@ _OUTCOME_LINE = re.compile(
 )
 
 
-def verification_gap(change_path: Path) -> str | None:
-    """The gap verification.md records (any outcome but `converged`), or None."""
+def _outcome_lines(text: str) -> list[str]:
+    """The value of every `Outcome:` line, as written (backticks stripped)."""
+    return [m.group("value").strip().strip("`").strip() for m in _OUTCOME_LINE.finditer(text)]
+
+
+def recorded_outcomes(change_path: Path) -> list[str]:
+    """Every outcome verification.md records, lower-cased, in file order; empty when unreadable.
+
+    FL-7: the first `Outcome:` line alone was read, so a file with `- Outcome: converged` under
+    one claim and `- Outcome: spec-gap ... Do not converge` as its overall verdict closed the
+    `converged` gate. All of them are read; the readers below agree on what several mean.
+    """
     try:
         text = (Path(change_path) / "verification.md").read_text(encoding="utf-8", errors="replace")
     except OSError:
+        return []
+    return [value.lower() for value in _outcome_lines(text)]
+
+
+def verification_verdict(change_path: Path) -> str | None:
+    """The one verdict verification.md stands for: the outcome every line agrees on, else the
+    first one that is not `converged` - a gap anywhere in the file is the file's verdict."""
+    outcomes = recorded_outcomes(change_path)
+    if not outcomes:
         return None
-    match = _OUTCOME_LINE.search(text)
-    if match is None:
-        return None
-    outcome = match.group("value").strip().strip("`").strip().lower()
-    if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
-        return outcome
+    return next((value for value in outcomes if value != "converged"), "converged")
+
+
+def verification_gap(change_path: Path) -> str | None:
+    """The gap verification.md records (any outcome but `converged`), or None."""
+    for outcome in recorded_outcomes(change_path):
+        if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
+            return outcome
     return None
 
 
@@ -782,24 +913,32 @@ def _verification_outcome_errors(ver_file: Path) -> list[str]:
         text = ver_file.read_text(encoding="utf-8", errors="replace")
     except OSError as ex:
         return [f"Gate converged: verification.md cannot be read: {ex}"]
-    match = _OUTCOME_LINE.search(text)
-    if match is None:
+    written = _outcome_lines(text)
+    if not written:
         return [
             "Gate converged: verification.md records no outcome; add a line "
             "`- Outcome: <verdict>` where <verdict> is exactly one of "
             + ", ".join(VERIFICATION_OUTCOMES)
         ]
-    raw = match.group("value").strip().strip("`").strip()
-    outcome = raw.lower()
-    if outcome not in VERIFICATION_OUTCOMES:
+    for raw in written:
+        if raw.lower() not in VERIFICATION_OUTCOMES:
+            return [
+                f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
+                + ", ".join(VERIFICATION_OUTCOMES)
+                + "; the template's placeholder line is not a verdict - replace it"
+            ]
+    outcomes = [raw.lower() for raw in written]
+    gaps = [value for value in outcomes if value != "converged"]
+    if gaps and len(set(outcomes)) > 1:
+        # FL-7: `converged` on an earlier line does not outvote a gap further down.
         return [
-            f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
-            + ", ".join(VERIFICATION_OUTCOMES)
-            + "; the template's placeholder line is not a verdict - replace it"
+            f"Gate converged: verification.md records several outcomes ({', '.join(dict.fromkeys(outcomes))}); "
+            f"the gap '{gaps[0]}' among them means Verify did not converge this Change. The file holds "
+            "exactly one verdict: fix what the gap names, then write the verification again"
         ]
-    if outcome != "converged":
+    if gaps:
         return [
-            f"Gate converged: verification.md records the gap '{outcome}', so Verify did not "
+            f"Gate converged: verification.md records the gap '{gaps[0]}', so Verify did not "
             "converge this Change; a gap stops here and is not repaired silently - fix what "
             "the gap names, then write the verification again"
         ]
@@ -1382,6 +1521,27 @@ def _spec_delta_status(spec_delta_file: Path) -> str | None:
     return raw if isinstance(raw, str) else None
 
 
+def _decision_errors(gate: str, change_id: str, repo_root: Path) -> list[str]:
+    """Every gate stands on an intact gate journal and on answered Decisions (FL-5).
+
+    These checks ran at `analyzed` and `specified` only, so a Decision bound to the Change that
+    appeared later - `proposed`, or written `accepted` by hand during Verify - stopped neither
+    `converged` nor `archive`.
+    """
+    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
+
+    errors = list(receipt_journal_errors(repo_root))
+    unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
+    if unresolved:
+        errors.append(
+            f"Gate {gate}: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+        )
+    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, repo_root)
+    if unrecorded:
+        errors.append(f"Gate {gate}: {'; '.join(unrecorded)}")
+    return errors
+
+
 def _human_gate_errors(
     *,
     gate: str,
@@ -1392,17 +1552,6 @@ def _human_gate_errors(
     require_spec_acceptance: bool = False,
 ) -> list[str]:
     errors: list[str] = []
-    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
-
-    errors.extend(receipt_journal_errors(repo_root))
-    unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
-    if unresolved:
-        errors.append(
-            f"Gate {gate}: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
-        )
-    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, repo_root)
-    if unrecorded:
-        errors.append(f"Gate {gate}: {'; '.join(unrecorded)}")
     if gate != "specified":
         return errors
     spec_status = _spec_delta_status(spec_delta_file)
@@ -1596,6 +1745,7 @@ def _check_gate(
     errors, loaded_route = _validate_package(change_path, registry)
 
     repo_root = find_repo_root(change_path)
+    errors.extend(product_pin_errors(repo_root))
 
     # V3-FIX-009: a gate may only be evaluated on top of an intact Core
     # receipt chain; hand-edited statuses halt before gate logic.
@@ -1624,12 +1774,24 @@ def _check_gate(
         change_status = assume_status
 
     gate_lower = gate.lower()
+    # Intent as Intake left it, from the Core's receipt (FL-1); change.yaml only when no
+    # transition recorded it.
+    from deltafuse.core.transitions import intake_facts
+
+    facts = intake_facts(repo_root, change_id)
+    errors.extend(_intake_intent_errors(gate_lower, intent, facts))
+    if isinstance(facts.get("intent"), str):
+        intent = facts["intent"]
     if loaded_route is None:
         # The package was refused before its route was read; the gates that use it read it.
         loaded_route = load_change_route(change_path)
         if gate_lower in {"declaring", "implemented", "converged"}:
             errors.extend(loaded_route[1])
     route = loaded_route[0]
+
+    errors.extend(_decision_errors(gate_lower, change_id, repo_root))
+    if gate_lower in {"decomposed", "declaring", "implemented", "converged"}:
+        errors.extend(f"Gate {gate_lower}: {e}" for e in closed_task_errors(change_path, repo_root, change_id))
 
     if gate_lower == "intake":
         if not req_file.is_file():
@@ -1657,16 +1819,6 @@ def _check_gate(
             )
         errors.extend(unrouted_name_family_errors(change_path, repo_root))
         errors.extend(_uncharacterized_draft_errors(change_path, repo_root))
-
-        errors.extend(
-            _human_gate_errors(
-                gate="analyzed",
-                change_id=change_id,
-                change_status=change_status,
-                repo_root=repo_root,
-                spec_delta_file=spec_delta_file,
-            )
-        )
 
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():
@@ -1702,8 +1854,7 @@ def _check_gate(
     elif gate_lower == "decomposed":
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
-        if change_status == "analyzed":
-            errors.extend(_spec_skip_errors(intent, spec_delta_file))
+        errors.extend(_specification_errors("decomposed", intent, change_id, repo_root, change_path, spec_delta_file))
 
         # DF3-006 / SEC-04: a task cannot widen its write envelope by
         # editing YAML; allowed_paths must stay inside slice target_paths.
@@ -1717,6 +1868,7 @@ def _check_gate(
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(_tasks_behind_gate(change_path, "declaring", RED_TAKEN_STATUSES, ("red",)))
+        errors.extend(_specification_errors("declaring", intent, change_id, repo_root, change_path, spec_delta_file))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "red", route=route))
 
     elif gate_lower == "implemented":
@@ -1742,6 +1894,7 @@ def _check_gate(
             errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
         else:
             errors.extend(behind)
+        errors.extend(_specification_errors("implemented", intent, change_id, repo_root, change_path, spec_delta_file))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "green", route=route))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "regression", route=route))
 
@@ -1805,7 +1958,7 @@ def _check_gate(
             errors.extend(
                 _validate_spec_delta_matches_disk(repo_root, ops, gate="converged")
             )
-        errors.extend(_spec_accepted_errors(intent, change_id, repo_root, spec_delta_file))
+        errors.extend(_specification_errors("converged", intent, change_id, repo_root, change_path, spec_delta_file))
 
     return errors
 
@@ -1818,57 +1971,131 @@ def _spec_delta_changes_spec(spec_delta_file: Path) -> bool:
     return bool(parse_errs) or any(ops.get(key) for key in ("added", "modified", "removed"))
 
 
-def _spec_skip_errors(intent: str | None, spec_delta_file: Path) -> list[str]:
-    """Why a Change at `analyzed` may not go straight to Decompose (df-gates #1).
-
-    `analyzed -> decomposed` is the bugfix path with the specification unchanged
-    (docs/state-machine.md). It was open to every Change, so a feature skipped the
-    specification Human Gate and converged with spec-delta.md still `proposed`.
-    """
-    propose = (
-        "propose spec-delta.md with `deltafuse state <change-dir> --change --status "
-        "specification-proposed` and wait for the human's `deltafuse decide <change-dir> --spec`"
-    )
-    if intent != "bugfix":
-        return [
-            f"Gate decomposed: a Change with intent '{intent or 'unknown'}' reaches Decompose only "
-            f"through the specification Human Gate: {propose}; only a bugfix with the spec "
-            "unchanged goes from analyzed to decomposed"
-        ]
-    if _spec_delta_changes_spec(spec_delta_file):
-        return [
-            "Gate decomposed: spec-delta.md changes the specification, so this bugfix goes through "
-            f"the specification Human Gate: {propose}; a bugfix skips Specify only with the spec unchanged"
-        ]
-    return []
+_PROPOSE = (
+    "propose spec-delta.md with `deltafuse state <change-dir> --change --status "
+    "specification-proposed` and wait for the human's `deltafuse decide <change-dir> --spec`"
+)
 
 
-def _spec_accepted_errors(
-    intent: str | None, change_id: str, repo_root: Path, spec_delta_file: Path
-) -> list[str]:
-    """`converged` (and so `archive`) needs the specification the human accepted (df-gates #1).
-
-    Every Change but a bugfix with the spec unchanged passes the specification Human Gate,
-    whose verdict is spec-delta.md `accepted` with a `decide --spec` receipt that still
-    matches its bytes.
-    """
-    if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
+def _intake_intent_errors(gate: str, intent: str | None, facts: dict[str, Any]) -> list[str]:
+    """change.yaml `intent` against the one the intake receipt recorded (FL-1)."""
+    recorded = facts.get("intent")
+    if not facts or recorded == intent:
         return []
-    if not spec_delta_file.is_file():
+    return [
+        f"Gate {gate}: change.yaml intent is '{intent}', but Intake closed with '{recorded}'; intent "
+        "is fixed at Intake and was edited since - restore it. The gates go by the recorded one"
+    ]
+
+
+def _unaccepted_spec_tree_errors(gate: str, facts: dict[str, Any], repo_root: Path) -> list[str]:
+    """A Change with no accepted specification may not have moved `docs/spec/**` (FL-1).
+
+    "The specification is unchanged" was the Worker's own label - `intent: bugfix` and no
+    spec-delta.md - so a feature relabelled through the Artifact Writer added its requirement to
+    the live specification and converged with no Human Gate. The Core compares the tree with the
+    one its intake receipt recorded.
+    """
+    from deltafuse.core.spec_acceptance import spec_tree_changes
+
+    base = facts.get("spec_tree")
+    if not isinstance(base, dict):
         return [
-            f"Gate converged: spec-delta.md is missing; a Change with intent '{intent or 'unknown'}' "
-            "converges only through the specification Human Gate"
+            f"Gate {gate}: the Core has no record of docs/spec/** at this Change's Intake (its first "
+            "transition was not applied by `deltafuse advance`), so it cannot show the specification "
+            f"is unchanged; this Change goes through the specification Human Gate: {_PROPOSE}"
         ]
+    changed = spec_tree_changes(base, repo_root)
+    if not changed:
+        return []
+    more = f" and {len(changed) - 5} more" if len(changed) > 5 else ""
+    return [
+        f"Gate {gate}: docs/spec/** changed since this Change's Intake - {', '.join(changed[:5])}{more} - "
+        "and no human accepted it. A Change skips Specify only with the specification untouched: "
+        f"restore those files, or {_PROPOSE} (from a later status the human sends it back with "
+        "`deltafuse decide <change-dir> --spec --status rejected`)"
+    ]
+
+
+def _accepted_text_errors(gate: str, repo_root: Path, delta_rel: str) -> list[str]:
+    """The text the human accepted is still the text on disk (owner decision R3, FL-13).
+
+    The acceptance signed spec-delta.md - anchors - so a requirement rewritten after the verdict
+    converged as accepted. The receipt now records a digest of every section the delta and the
+    slices cited; an edit of one makes every later gate refuse until the text is put back or
+    the human answers again.
+    """
+    from deltafuse.core.gate_receipts import latest_receipt
+    from deltafuse.core.spec_acceptance import changed_sections
+
+    receipt = latest_receipt(repo_root, rel_path=delta_rel) or {}
+    sections = receipt.get("spec_sections")
+    again = (
+        "the human sends the Change back with `deltafuse decide <change-dir> --spec --status "
+        "rejected`, the Worker proposes the specification as it now reads, and the human accepts it"
+    )
+    if not isinstance(sections, dict):
+        return [
+            f"Gate {gate}: the acceptance of spec-delta.md does not record the specification text it "
+            f"was given for, so it cannot be shown unchanged; {again}"
+        ]
+    moved = changed_sections(repo_root, sections)
+    if not moved:
+        return []
+    more = f" and {len(moved) - 5} more" if len(moved) > 5 else ""
+    return [
+        f"Gate {gate}: the specification text changed after the human accepted it - {', '.join(moved[:5])}"
+        f"{more}. The verdict was on that text: restore it, or {again}"
+    ]
+
+
+def _specification_errors(
+    gate: str,
+    intent: str | None,
+    change_id: str,
+    repo_root: Path,
+    change_path: Path,
+    spec_delta_file: Path,
+) -> list[str]:
+    """Every gate from `decomposed` on needs the specification the human accepted, or - for a
+    bugfix alone - a specification nobody touched (df-gates #1, FL-1).
+
+    The human's verdict is spec-delta.md `accepted` with a `decide --spec` receipt that is the
+    latest verdict on that file and still matches its bytes. Without it only a bugfix whose
+    spec-delta.md changes nothing goes on, and only while the Core's own diff of `docs/spec/**`
+    since Intake is empty.
+    """
     from deltafuse.core.gate_receipts import has_valid_receipt
+    from deltafuse.core.transitions import intake_facts
 
     status = _spec_delta_status(spec_delta_file)
-    rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
-    if status != "accepted" or not has_valid_receipt(
-        repo_root, kind="spec", status="accepted", artifact_id=change_id, rel_path=rel, artifact=spec_delta_file
-    ):
+    if spec_delta_file.is_file() and status == "accepted":
+        rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
+        if has_valid_receipt(
+            repo_root, kind="spec", status="accepted", artifact_id=change_id, rel_path=rel, artifact=spec_delta_file
+        ):
+            return _accepted_text_errors(gate, repo_root, rel)
+    skipping = gate == "decomposed"
+    if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
+        return _unaccepted_spec_tree_errors(gate, intake_facts(repo_root, change_id), repo_root)
+    if skipping and intent != "bugfix":
         return [
-            f"Gate converged: spec-delta.md is not accepted by the human (status {status!r}, or edited "
-            "since `deltafuse decide <change-dir> --spec --status accepted`); a Change converges only "
-            "on the specification the human accepted"
+            f"Gate decomposed: a Change with intent '{intent or 'unknown'}' reaches Decompose only "
+            f"through the specification Human Gate: {_PROPOSE}; only a bugfix with the spec "
+            "unchanged goes from analyzed to decomposed"
         ]
-    return []
+    if skipping:
+        return [
+            "Gate decomposed: spec-delta.md changes the specification, so this bugfix goes through "
+            f"the specification Human Gate: {_PROPOSE}; a bugfix skips Specify only with the spec unchanged"
+        ]
+    if not spec_delta_file.is_file():
+        return [
+            f"Gate {gate}: spec-delta.md is missing; a Change with intent '{intent or 'unknown'}' "
+            "goes on only through the specification Human Gate"
+        ]
+    return [
+        f"Gate {gate}: spec-delta.md is not accepted by the human (status {status!r}, or edited "
+        "since `deltafuse decide <change-dir> --spec --status accepted`, or a later verdict "
+        "replaced that one); a Change goes on only with the specification the human accepted"
+    ]

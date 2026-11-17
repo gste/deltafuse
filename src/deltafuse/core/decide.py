@@ -13,7 +13,7 @@ from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 
-from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
+from deltafuse.core.fsm import can_transition, check_gate, find_repo_root, verification_gap
 from deltafuse.core import gate_password, gate_receipts
 from deltafuse.core.gate_receipts import ReceiptError
 from deltafuse.core.integrity import list_proposed_decisions_for_change
@@ -26,9 +26,14 @@ from deltafuse.core.transitions import (
     GAP_REOPEN_KIND,
     GAP_REOPEN_TO,
     GATE_TARGETS,
+    SPEC_REJECT_FROM,
+    SPEC_REJECT_TO,
+    SPEC_REJECTED_GAP,
+    TASK_REOPEN_FROM,
+    TASK_REOPEN_REASON,
+    TASK_REOPEN_TO,
     TransitionError,
     _artifact_file,
-    _gate_reachable,
     advance_change,
     open_gap_reopen,
     record_change_status,
@@ -360,8 +365,28 @@ def reopen_task(
         _record_task_verdict(
             product_root, task_file, task_id, status="reopened", change=info["change"], human_check=human_check
         )
+        change_status = None
+        current = _load_yaml_mapping(change_dir / "change.yaml").get("status")
+        if current in TASK_REOPEN_FROM:
+            # FL-8: the task was blocked after the `implemented` gate. `next` sent it to Declare,
+            # and `state --status declared` refused it - a task may not run behind its Change
+            # either. The gate it passed has to be passed again with the new oracle, so the
+            # Change returns to `declared`; only cancelling had led out.
+            record_change_status(
+                change_dir,
+                status=TASK_REOPEN_TO,
+                kind="artifact-status",
+                gate="decide",
+                artifact="change",
+                reason=TASK_REOPEN_REASON,
+                task=task_id,
+            )
+            change_status = TASK_REOPEN_TO
     written = [rel, _rel(product_root, archive), *restored]
-    return _result("task", "reopened", human_check, {"task": task_id, "from": moved.get("from")}, written)
+    if change_status:
+        written.append(_rel(product_root, change_dir / "change.yaml"))
+    ids = {"task": task_id, "from": moved.get("from")}
+    return _result("task", "reopened", human_check, ids, written, change_status=change_status)
 
 
 # Gaps a human can send back today, and where to: spec-gap needs the slice bounds Analyze
@@ -407,83 +432,109 @@ def reopen_gap(
     human_check = _check_password(product_root, password_prompt)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     with ProductMutationLock(product_root):
-        archive = _new_archive(change_dir, "verify")
-        archived = _move_into(
-            archive,
-            [
-                (change_dir / "verification.md", "verification.md"),
-                (change_dir / "evidence" / "verification" / "run.yaml", "run.yaml"),
-            ],
-        )
-        # Green and regression predate the specification change Analyze and Specify will make,
-        # and every gate checks them against the current tree: they go with the verification,
-        # and the tasks are declared again - Implement re-records them on the code already there.
-        for phase in ("green", "regression"):
-            for record in sorted((change_dir / "evidence" / phase).glob("*.yaml")):
-                target = archive / "evidence" / phase / record.name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                record.replace(target)
-                archived.append(f"evidence/{phase}/{record.name}")
-
-        def core_rewrite(path: Path, fields: dict[str, Any], label: str) -> bool:
-            # The gate journal vouches for these bytes, so the leash does not read the
-            # Core's rewrite as a hand edit.
-            try:
-                text = path.read_text(encoding="utf-8")
-                meta, _ = parse_frontmatter(text)
-            except (OSError, FrontmatterParseError):
-                return False
-            if not isinstance(meta, dict) or all(meta.get(k) == v for k, v in fields.items()):
-                return False
-            atomic_replace(path, replace_frontmatter(text, fields).encode("utf-8"))
-            gate_receipts.record_receipt(
-                product_root,
-                kind="gap",
-                status="reopened",
-                rel_path=_rel(product_root, path),
-                artifact_id=f"{change_id}:{label}",
-                change=change_id,
-                artifact=path,
-                human_check=human_check,
-            )
-            return True
-
-        drafted: list[str] = []
-        for slice_file in sorted((change_dir / "slices").glob("*.md")):
-            if core_rewrite(slice_file, {"status": "draft"}, slice_file.stem):
-                drafted.append(_rel(product_root, slice_file))
-        for task_file in sorted((change_dir / "tasks").glob("*.md")):
-            try:
-                tmeta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-            except (OSError, FrontmatterParseError):
-                continue
-            if isinstance(tmeta, dict) and tmeta.get("status") in {"implemented", "verified"}:
-                if core_rewrite(task_file, {"status": "declared"}, task_file.stem):
-                    drafted.append(_rel(product_root, task_file))
-        delta = change_dir / "spec-delta.md"
-        if delta.is_file() and core_rewrite(delta, {"status": "proposed"}, "spec-delta"):
-            drafted.append(_rel(product_root, delta))
-        info = {
-            "change": change_id,
-            "gap": gap,
-            "reopened": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "from": current,
-            "archived": archived,
-            "drafted": drafted,
-            "note": note or None,
-        }
-        _write_reopen_info(archive, info)
-        record_change_status(
-            change_dir,
-            status=GAP_ROUTES[gap],
-            kind=GAP_REOPEN_KIND,
-            gate="decide",
-            gap=gap,
-            archive=_rel(product_root, archive),
+        archive, drafted = _rewind_to_specify(
+            change_dir, product_root, change_id, human_check=human_check, current=str(current), gap=gap,
+            note=note, to_status=GAP_ROUTES[gap], reset_delta=True,
         )
     written = [_rel(product_root, archive), *drafted, _rel(product_root, change_dir / "change.yaml")]
     ids = {"gap": gap, "from": current}
     return _result("gap", "reopened", human_check, ids, written, change_status=GAP_ROUTES[gap])
+
+
+def _rewind_to_specify(
+    change_dir: Path,
+    product_root: Path,
+    change_id: str,
+    *,
+    human_check: str,
+    current: str,
+    gap: str,
+    note: str | None,
+    to_status: str,
+    reset_delta: bool,
+) -> tuple[Path, list[str]]:
+    """Send a Change back before Specify: what a reopened gap and a rejected accepted
+    specification (owner decision R8, FL-6) share. The caller holds the mutation lock.
+
+    Archives verification.md, the verification run and every Green and regression record under
+    `reopened/verify.<n>/`, returns every slice to `draft` and every implemented task to
+    `declared`, and rewinds the Change with a `gap-reopen` receipt the chain replays.
+    """
+    archive = _new_archive(change_dir, "verify")
+    archived = _move_into(
+        archive,
+        [
+            (change_dir / "verification.md", "verification.md"),
+            (change_dir / "evidence" / "verification" / "run.yaml", "run.yaml"),
+        ],
+    )
+    # Green and regression predate the specification change Analyze and Specify will make,
+    # and every gate checks them against the current tree: they go with the verification,
+    # and the tasks are declared again - Implement re-records them on the code already there.
+    for phase in ("green", "regression"):
+        for record in sorted((change_dir / "evidence" / phase).glob("*.yaml")):
+            target = archive / "evidence" / phase / record.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            record.replace(target)
+            archived.append(f"evidence/{phase}/{record.name}")
+
+    def core_rewrite(path: Path, fields: dict[str, Any], label: str) -> bool:
+        # The gate journal vouches for these bytes, so the leash does not read the
+        # Core's rewrite as a hand edit.
+        try:
+            text = path.read_text(encoding="utf-8")
+            meta, _ = parse_frontmatter(text)
+        except (OSError, FrontmatterParseError):
+            return False
+        if not isinstance(meta, dict) or all(meta.get(k) == v for k, v in fields.items()):
+            return False
+        atomic_replace(path, replace_frontmatter(text, fields).encode("utf-8"))
+        gate_receipts.record_receipt(
+            product_root,
+            kind="gap",
+            status="reopened",
+            rel_path=_rel(product_root, path),
+            artifact_id=f"{change_id}:{label}",
+            change=change_id,
+            artifact=path,
+            human_check=human_check,
+        )
+        return True
+
+    drafted: list[str] = []
+    for slice_file in sorted((change_dir / "slices").glob("*.md")):
+        if core_rewrite(slice_file, {"status": "draft"}, slice_file.stem):
+            drafted.append(_rel(product_root, slice_file))
+    for task_file in sorted((change_dir / "tasks").glob("*.md")):
+        try:
+            tmeta, _ = parse_frontmatter(task_file.read_text(encoding="utf-8"))
+        except (OSError, FrontmatterParseError):
+            continue
+        if isinstance(tmeta, dict) and tmeta.get("status") in {"implemented", "verified"}:
+            if core_rewrite(task_file, {"status": "declared"}, task_file.stem):
+                drafted.append(_rel(product_root, task_file))
+    delta = change_dir / "spec-delta.md"
+    if reset_delta and delta.is_file() and core_rewrite(delta, {"status": "proposed"}, "spec-delta"):
+        drafted.append(_rel(product_root, delta))
+    info = {
+        "change": change_id,
+        "gap": gap,
+        "reopened": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "from": current,
+        "archived": archived,
+        "drafted": drafted,
+        "note": note or None,
+    }
+    _write_reopen_info(archive, info)
+    record_change_status(
+        change_dir,
+        status=to_status,
+        kind=GAP_REOPEN_KIND,
+        gate="decide",
+        gap=gap,
+        archive=_rel(product_root, archive),
+    )
+    return archive, drafted
 
 
 _CHANGE_REF = re.compile(r"\bCHG-[0-9]{3,}(?:-[a-z0-9-]+)?\b")
@@ -491,15 +542,11 @@ _NOT_REPRODUCED_RED = frozenset({"not-reproduced", "already-green"})
 
 
 def verification_outcome(change_dir: Path) -> str | None:
-    """The `- Outcome:` verdict verification.md records, lower-cased, or None."""
-    from deltafuse.core.fsm import _OUTCOME_LINE
+    """The verdict verification.md stands for, lower-cased, or None (fsm.verification_verdict:
+    with several `- Outcome:` lines, the first that is not `converged`)."""
+    from deltafuse.core.fsm import verification_verdict
 
-    try:
-        text = (Path(change_dir) / "verification.md").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-    match = _OUTCOME_LINE.search(text)
-    return match.group("value").strip().strip("`").strip().lower() if match else None
+    return verification_verdict(Path(change_dir))
 
 
 def _not_reproduced_proof(change_dir: Path, current: str) -> str | None:
@@ -508,7 +555,7 @@ def _not_reproduced_proof(change_dir: Path, current: str) -> str | None:
     From Analyze the human's note is the diagnosis; from Declare a Red record shows the oracle
     did not fail; from Verify verification.md records the verdict.
     """
-    if current in {"decomposed", "declaring"}:
+    if current in {"decomposed", "declaring", "declared", "implementing"}:
         for record in sorted((change_dir / "evidence" / "red").glob("*.yaml")):
             try:
                 data = yaml.safe_load(record.read_text(encoding="utf-8"))
@@ -547,8 +594,15 @@ def close_change(
     data = _load_yaml_mapping(change_file)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     current = str(data.get("status"))
-    if not _gate_reachable(current, status):
-        raise DecideError(f"a Change at '{current}' cannot become '{status}' (docs/state-machine.md)")
+    # Owner decision R8 (FL-10): `rejected` and `superseded` close a Change from any status
+    # before `converged` - the table says so for each. `_gate_reachable` would also step over an
+    # in-flight status, which is right for a gate and wrong here: it let nothing through past
+    # Specify, while that Change blocked `init --force`.
+    if not can_transition(current, status):
+        raise DecideError(
+            f"a Change at '{current}' cannot become '{status}' (docs/state-machine.md); `rejected` and "
+            "`superseded` close a Change from any status before `converged`"
+        )
     if status in {"duplicate", "superseded"}:
         others = [ref for ref in _CHANGE_REF.findall(note or "") if ref != change_id]
         if not others:
@@ -712,6 +766,13 @@ def apply_decision(
 
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
+            covers: dict[str, Any] | None = None
+            if status == "accepted":
+                # Owner decision R3 (FL-13): the verdict is on the text of the cited requirements,
+                # not only on the list of anchors in spec-delta.md.
+                from deltafuse.core.spec_acceptance import cited_spec_refs, section_digests
+
+                covers = {"spec_sections": section_digests(product_root, cited_spec_refs(change_dir))}
             _write_with_receipt(
                 product_root,
                 delta,
@@ -722,8 +783,20 @@ def apply_decision(
                 artifact_id=change_id or change_dir.name,
                 change=change_id,
                 human_check=human_check,
+                extra=covers,
             )
             change_status = None
+            current = str(_load_yaml_mapping(change_file).get("status"))
+            if status == "rejected" and current in SPEC_REJECT_FROM:
+                # Owner decision R8 (FL-6): the verdict was recorded and nothing else happened -
+                # the Change went on to Implement on a specification the human had rejected.
+                archive, drafted = _rewind_to_specify(
+                    change_dir, product_root, change_id or change_dir.name, human_check=human_check,
+                    current=current, gap=SPEC_REJECTED_GAP, note=None, to_status=SPEC_REJECT_TO,
+                    reset_delta=False,
+                )
+                change_status = SPEC_REJECT_TO
+                written += [_rel(product_root, archive), *drafted, _rel(product_root, change_file)]
             if status == "rejected" and proposed:
                 # The rejected proposal returns to analyzed with a receipt, like
                 # every other Core status write (roadmap item 1: it was a bare

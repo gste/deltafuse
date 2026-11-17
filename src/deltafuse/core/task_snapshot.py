@@ -76,12 +76,22 @@ def _tasks(change_path: Path) -> list[dict[str, Any]]:
 
 
 def record_declaring_snapshot(product_root: Path, change_path: Path, change_id: str) -> dict[str, str]:
-    """Copy every live task's product files; return {path: sha256 | 'absent'}."""
+    """Copy every live task's product files; return {path: sha256 | 'absent'}.
+
+    A path an earlier `declaring` gate of this Change already copied keeps that copy (FL-9). The
+    gate is passed again after a rewind - a reopened gap, a rejected specification - with the
+    tasks' code already written, and a fresh copy then recorded the implemented product as "the
+    product before Implement": reopening a task restored nothing.
+    """
     root = Path(product_root)
+    earlier = declaring_snapshot(root, change_id) or {}
     snapshot: dict[str, str] = {}
     for meta in _tasks(Path(change_path)):
         for rel in task_product_paths(meta):
             if rel in snapshot:
+                continue
+            if isinstance(earlier.get(rel), str):
+                snapshot[rel] = earlier[rel]
                 continue
             source = root / rel
             if not source.is_file():

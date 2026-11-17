@@ -421,7 +421,7 @@ def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-015", title="Bugfix no specify")
-        .step_intake()
+        .step_intake(intent="bugfix")  # only a bugfix skips Specify (audit 2026-11, FL-1)
         .step_analyze()
         .step_decompose()
         .step_declare()
@@ -663,9 +663,13 @@ def _write_ops_spec_delta(
     from deltafuse.core import gate_receipts
 
     root = change_dir.parent.parent.parent
+    # ... with the digests of the cited specification text, as R3 (FL-13) has it record them.
+    from deltafuse.core.spec_acceptance import cited_spec_refs, section_digests
+
     gate_receipts.record_receipt(
         root, kind="spec", status="accepted", rel_path=delta.relative_to(root).as_posix(),
         artifact_id=change_id, change=change_id, artifact=delta,
+        extra={"spec_sections": section_digests(root, cited_spec_refs(change_dir))},
     )
 
 
@@ -727,12 +731,12 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-021", title="Bugfix no specify")
-        .step_intake()
+        # The test is about the bugfix path, which the builder's default intent (feature) is
+        # not: a feature without spec-delta.md no longer converges (df-gates #1). Intent is
+        # Intake's - the gates read it from the intake receipt (audit 2026-11, FL-1).
+        .step_intake(intent="bugfix")
         .step_analyze()
     )
-    # The test is about the bugfix path, which the builder's default intent (feature) is not:
-    # a feature without spec-delta.md no longer converges (df-gates #1).
-    builder._update_change_yaml({"intent": "bugfix"})
     (
         builder.step_decompose()
         .step_declare()
@@ -956,14 +960,12 @@ def test_converged_accepts_cancelled_and_superseded_tasks(tmp_path: Path, repo_r
         .step_implement()
         .step_verify()
     )
-    task_file = builder.change_dir / "tasks" / "TASK-002.md"
-    meta, body = parse_frontmatter(task_file.read_text(encoding="utf-8"))
-    meta["status"] = "cancelled"
-    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    # Closed as the Core records it - the human's cancel, the Core's supersede: a status set by
+    # hand is no longer skipped (audit 2026-11, FL-3).
+    builder.close_task("TASK-002", "cancelled")
     assert check_gate(builder.change_dir, "converged") == []
 
-    meta["status"] = "superseded"
-    task_file.write_text(f"---\n{yaml.safe_dump(meta, sort_keys=False)}---\n{body}", encoding="utf-8")
+    builder.close_task("TASK-002", "superseded")
     assert check_gate(builder.change_dir, "converged") == []
 
 
@@ -1275,11 +1277,8 @@ def test_declaring_gate_needs_every_task_declared(tmp_path: Path, repo_root: Pat
 
 def test_declaring_gate_skips_cancelled_tasks(tmp_path: Path, repo_root: Path):
     builder = _two_tasks(tmp_path, repo_root, "CHG-704").step_declare("TASK-001")
-    task = builder.change_dir / "tasks" / "TASK-002.md"
-    task.write_text(
-        task.read_text(encoding="utf-8").replace("status: pending", "status: cancelled"),
-        encoding="utf-8",
-    )
+    # Cancelled as the human cancels it: a status set by hand is no longer skipped (FL-3).
+    builder.close_task("TASK-002", "cancelled")
     assert not any("TASK-002" in e for e in check_gate(builder.change_dir, "declaring"))
 
 

@@ -108,6 +108,22 @@ def _fail(start: Path, what: str, error: object, code: int, **event: object) -> 
     return code
 
 
+def _pin_refusal(change_dir: Path, cmd: str, **event: object) -> int | None:
+    """Exit code 2 and the reason when this Core is not the one the product pins, else None
+    (audit 2026-11, FL-11, FW-10). `advance`, `state` and `next` ask in the Core itself."""
+    from deltafuse.core.fsm import find_repo_root, product_pin_errors
+
+    try:
+        errors = product_pin_errors(find_repo_root(Path(change_dir).resolve()))
+    except OSError:
+        return None
+    if not errors:
+        return None
+    _journal(change_dir, cmd=cmd, ok=False, errors=errors, n_errors=len(errors), **event)
+    _print_errors(f"{cmd} refused: the product's lock does not match:", errors)
+    return 2
+
+
 def _print_errors(header: str, errors: list[str]) -> None:
     print(header, file=sys.stderr)
     for err in errors:
@@ -416,7 +432,11 @@ def _main(argv: list[str] | None = None) -> int:
     group.add_argument("--task", help="Task id like TASK-001")
     group.add_argument("--slice", dest="slice_id", help="Slice id like SLICE-01")
     group.add_argument("--change", action="store_true", help="Target the Change itself (in-flight status)")
-    state_parser.add_argument("--status", required=True, help="New status")
+    state_parser.add_argument("--status", default=None, help="New status")
+    state_parser.add_argument(
+        "--intent", default=None,
+        help="With --change, before Intake closes: feature, bugfix, refactor, maintenance, documentation or unknown",
+    )
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
     # new command (DF3-005 / C-03): deterministic Change scaffolding
@@ -661,16 +681,31 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "state":
         target = Path(args.change_path)
+        if (args.status is None) == (args.intent is None):
+            print("state failed: pass exactly one of --status or --intent", file=sys.stderr)
+            return 1
+        if args.intent is not None and not args.change:
+            print("state failed: --intent goes with --change", file=sys.stderr)
+            return 1
         try:
-            result = set_artifact_status(
-                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
-                change_status=args.change,
-            )
+            if args.intent is not None:
+                from deltafuse.core.transitions import set_change_intent
+
+                result = set_change_intent(target, args.intent)
+            else:
+                result = set_artifact_status(
+                    target, status=args.status, task_id=args.task, slice_id=args.slice_id,
+                    change_status=args.change,
+                )
         except TransitionError as te:
-            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
-        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status, intent=args.intent)
+        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0,
+                 **({"intent": args.intent} if args.intent is not None else {}))
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.intent is not None:
+            print(f"state: change intent {result['from']} -> {result['to']}"
+                  + (" (nothing written)" if result.get("unchanged") else f" (receipt {result['receipt'][:12]})"))
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
@@ -703,6 +738,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "evidence":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "evidence", phase=args.phase, task=args.task)
+        if refused is not None:
+            return refused
         try:
             outcome = run_evidence(
                 target, phase=args.phase, task=args.task, argv=evidence_argv,
@@ -733,6 +771,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "coverage":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "coverage")
+        if refused is not None:
+            return refused
         try:
             dest = write_coverage(target)
         except Exception as ex:
