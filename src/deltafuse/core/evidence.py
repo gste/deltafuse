@@ -406,9 +406,29 @@ def stamp_digest(payload: dict[str, Any], product_root: Path) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _as_yaml_reads_it(payload: dict[str, Any]) -> dict[str, Any]:
+    """*payload* as a reader of the written record gets it back.
+
+    Audit 2026-11-17 (FE-14): the stamp was computed over the payload in memory, and YAML does
+    not return every string as written - U+0085 (NEL) in a runner's output is a line break to it -
+    so the Core refused a record it had just stamped. The stamp is taken over the round-tripped
+    payload, whatever field the character is in and however the record is dumped afterwards.
+    """
+    current = payload
+    for _ in range(3):  # one pass settles it; a second confirms
+        try:
+            back = yaml.safe_load(yaml.safe_dump(current, sort_keys=False, allow_unicode=True))
+        except yaml.YAMLError:
+            return current
+        if not isinstance(back, dict) or back == current:
+            return current
+        current = back
+    return current
+
+
 def stamp_evidence(payload: dict[str, Any], product_root: Path) -> dict[str, Any]:
     """Return a copy of *payload* with the kernel evidence stamp."""
-    out = {key: value for key, value in payload.items() if key not in STAMP_KEYS}
+    out = _as_yaml_reads_it({key: value for key, value in payload.items() if key not in STAMP_KEYS})
     out["recorded_by"] = RECORDED_BY
     out["recorded_sha256"] = stamp_digest(out, product_root)
     return out
