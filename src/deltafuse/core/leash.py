@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+import fnmatch
 import hashlib
 import json
 import re
@@ -264,7 +265,27 @@ def _change_dir(product_root: Path, item: WorkItem) -> Path | None:
     return None
 
 
+_ANY_CHANGE = "docs/changes/*/"
+_CHANGE_HOMES = ("docs/changes/", "docs/archive/changes/")
+
+
+def _own_change(globs: list[str], item: WorkItem) -> list[str]:
+    """The globs with `docs/changes/*/` narrowed to the item's own Change directory (FW-11).
+
+    The phase contracts name "a Change" as `docs/changes/*/`; an envelope built from them covered
+    the same file of every other Change, a converged one included."""
+    home = posix_relpath(item.path).rstrip("/") if item.path else ""
+    if not home.startswith(_CHANGE_HOMES):
+        return globs
+    return [home + "/" + glob[len(_ANY_CHANGE):] if glob.startswith(_ANY_CHANGE) else glob for glob in globs]
+
+
 def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
+    """What the item's step may write, with the Change's own files named in its own directory."""
+    return _own_change(_envelope_write_globs(item, product_root), item)
+
+
+def _envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     step = item.step or ""
     if item.allowed_write:
         writes = list(item.allowed_write)
@@ -328,8 +349,30 @@ def build_envelope(item: WorkItem | None, product_root: Path) -> dict[str, Any] 
     }
 
 
+def _segments_match(path: list[str], glob: list[str]) -> bool:
+    if not glob:
+        return not path
+    if glob[0] == "**":
+        # A trailing `**` is everything below (at least one segment); elsewhere, any depth.
+        if len(glob) == 1:
+            return bool(path)
+        return any(_segments_match(path[skip:], glob[1:]) for skip in range(len(path) + 1))
+    return bool(path) and fnmatch.fnmatchcase(path[0], glob[0]) and _segments_match(path[1:], glob[1:])
+
+
 def path_in_envelope(rel_path: str, write_globs: list[str]) -> bool:
-    return matches_contract_globs(posix_relpath(rel_path), write_globs)
+    """A Change's own files are matched segment by segment: `*` stays inside one directory, `**`
+    crosses them (FW-11: fnmatch's `*` crosses `/`, so `docs/changes/*/request.md` covered
+    `docs/changes/CHG-702/deep/nested/request.md`). Product globs keep fnmatch, as tasks write them."""
+    rel = posix_relpath(rel_path)
+    for raw in write_globs:
+        glob = raw.replace("\\", "/")
+        if glob.startswith(_CHANGE_HOMES):
+            if _segments_match(rel.split("/"), glob.split("/")):
+                return True
+        elif matches_contract_globs(rel, [glob]):
+            return True
+    return False
 
 
 def is_exempt_path(rel_path: str) -> bool:
@@ -1073,11 +1116,16 @@ def collect_chain_envelopes(
     for change_id, count in reopens(at_base).items():
         reopened_since_base[change_id] = reopened_since_base.get(change_id, 0) - count
 
+    final_gate = STEP_CONTRACTS[STEP_ORDER[-1]]["gate"]
     envelopes: list[dict[str, Any]] = []
     for change_id, change_dir in _change_dirs(root).items():
         low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
         if reopened_since_base.get(change_id, 0) > 0:
             low = step_after("intake")  # the chain since base went back to Analyze and on from there
+        elif base_last.get(change_id) == final_gate:
+            # FW-11: converged at the base and not reopened since - no step is left to write for.
+            # (`step_after` of the last gate is the last step, so its envelope stayed open for good.)
+            continue
         if high < low:
             continue  # a rewound chain is receipt_chain_errors' business, not a wider fence
         rel_dir = change_dir.relative_to(root).as_posix()
@@ -1232,7 +1280,9 @@ def check_paths(
             # a reopened task is declared again past Declare; its Red is still the Core's
             errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
-        if is_change_artifact(raw) and env_list:
+        if is_change_artifact(raw):
+            # FW-11: whether or not a step is ready - a file of a Change no envelope covers was
+            # judged only while some envelope was open, so a converged Change's files were free.
             # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a
             # `.deltafuse/tmp/` inside the Change directory (224 refusals in two
             # runs); the exemption is for the one at the product root.
@@ -1244,6 +1294,8 @@ def check_paths(
             )
             errors.append(
                 f"leash: '{raw}' is outside the {step_label} write envelope{scratch}"
+                if env_list else
+                f"leash: '{raw}' is a Change file no open step may write{scratch}"
             )
     return errors
 
