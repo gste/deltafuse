@@ -311,9 +311,9 @@ The Verifier checks that:
 
 ### Archiving
 Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks the gate and writes the status in one call), then `deltafuse archive <change-dir>`. Archive applies only from status `converged`, which `advance` writes; `check-gate` is the read-only preview of the same check and moves nothing. Archiving:
-1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
-2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
-3. Updates `change.yaml` status to `archived`.
+1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>` in one rename: if the directory cannot be moved (it is in use), nothing is archived.
+2. Records the archive receipt and updates `change.yaml` status to `archived`.
+3. Moves the intake sources the Change names in `source.intake_refs` from `docs/intake/` to `docs/archive/intake/` - never over an existing entry, and not while another active Change cites the same source.
 4. Leaves the archived Change package as an immutable historical record.
 
 ---
