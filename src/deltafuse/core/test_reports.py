@@ -534,15 +534,26 @@ def _named_files(argv: list[str], repo_root: Path) -> list[str]:
 
 
 def task_test_ids(
-    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path
+    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path,
+    *, taken: dict[str, str] | None = None,
 ) -> tuple[list[str] | None, str]:
     """The report's tests that are the task's, and how they were named; (None, "") when nothing
-    names them - no declared test file and no test file or class selected on the command line."""
+    names them - no declared test file and no test file or class selected on the command line.
+
+    *taken* maps a test to the other task whose Red record already names it as failing. Those are
+    never this task's (audit 2026-11-17, FE-1): the changed paths the Core computes are the whole
+    dirty tree, and during Declare that tree holds every earlier task's still-failing test.
+    """
+    taken = taken or {}
+
+    def mine(ids: list[str]) -> list[str]:
+        return sorted(t for t in ids if t not in taken)
+
     family = report_family(report)
     declared = declared_test_files(changed_paths)
     if declared:
         return (
-            sorted(t for t in report.outcomes if test_in_files(t, declared, family)),
+            mine([t for t in report.outcomes if test_in_files(t, declared, family)]),
             f"the test files the task declared ({', '.join(declared[:5])})",
         )
     if family == "jvm":
@@ -550,14 +561,14 @@ def task_test_ids(
         if not patterns:
             return None, ""
         return (
-            sorted(t for t in report.outcomes if _jvm_selected(t, patterns)),
+            mine([t for t in report.outcomes if _jvm_selected(t, patterns)]),
             f"the test classes the command selects ({', '.join(patterns[:5])})",
         )
     files = _named_files(argv, repo_root)
     if not files:
         return None, ""
     return (
-        sorted(t for t in report.outcomes if test_in_files(t, files, family)),
+        mine([t for t in report.outcomes if test_in_files(t, files, family)]),
         f"the test files the command names ({', '.join(files[:5])})",
     )
 

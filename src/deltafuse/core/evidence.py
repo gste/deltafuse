@@ -588,6 +588,30 @@ def _refuse_red_over_a_siblings_oracle(change_path: Path, task: str, repo_root: 
             )
 
 
+def sibling_red_tests(change_path: Path, task: str) -> dict[str, str]:
+    """Test id -> the other task of this Change whose Red record names it as failing.
+
+    Audit 2026-11-17 (FE-1): a test another task's Red recorded is that task's test. Declare runs
+    for every task before Implement, so an earlier task's Red test is still failing, and still
+    uncommitted, when the next task takes its Red; read as the next task's own, it made that
+    Red authentic while the task's own test already passed. A cancelled task holds no test.
+    """
+    cancelled = {
+        str(meta.get("id") or tf.stem)
+        for tf, meta in _frontmatters(change_path / "tasks")
+        if meta.get("status") == "cancelled"
+    }
+    taken: dict[str, str] = {}
+    for record in sorted((change_path / "evidence" / "red").glob("*.yaml")):
+        sibling = record.stem
+        if sibling == task or sibling in cancelled:
+            continue
+        tests = _load_record(record).get("tests")
+        for name in (tests.get("failed") if isinstance(tests, dict) else None) or []:
+            taken.setdefault(str(name), sibling)
+    return taken
+
+
 def _refuse_green_for_a_closed_task(change_path: Path, task: str) -> None:
     """A superseded or cancelled task has no Green: it is not implemented.
 
@@ -697,8 +721,10 @@ def run_evidence(
     # Red is judged on the task's own tests, not on the whole report (`task_test_ids`).
     task_report = report
     red_why: str | None = None  # why the runner's report does not make this an authentic Red
+    taken: dict[str, str] = {}
     if phase == "red" and report is not None:
-        named, named_by = task_test_ids(report, rel_paths, argv, repo_root)
+        taken = sibling_red_tests(change_path, str(task))
+        named, named_by = task_test_ids(report, rel_paths, argv, repo_root, taken=taken)
         task_report = restricted(report, named or [])
         if named is None:
             category = UNNAMED_RED_CATEGORY
@@ -728,6 +754,19 @@ def run_evidence(
                 f"the run failed on other tests ({', '.join(others[:5])}), and a failure of a test "
                 "that is not the task's is not its Red"
             )
+            held = {t: taken[t] for t in others if t in taken}
+            if held:
+                owners = sorted(set(held.values()))
+                first = owners[0]
+                red_why += (
+                    f". {', '.join(list(held)[:5])} failed in {first}'s Red, so "
+                    + ("it is" if len(held) == 1 else "they are")
+                    + f" {first}'s Red test" + ("" if len(held) == 1 else "s")
+                    + f": write this task's own failing test. If the test is this task's and {first}'s "
+                    f"record took it by mistake, record {first}'s Red again naming only its own tests "
+                    f"(`deltafuse evidence <change-dir> --phase red --task {first} -- <command naming "
+                    f"{first}'s test file>`), then record this Red"
+                )
         else:
             red_why = f"{why}{_missing_import_hint(log)}"
             if category == AUTHENTIC_RED_CATEGORY:
