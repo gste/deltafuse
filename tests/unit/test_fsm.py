@@ -663,9 +663,13 @@ def _write_ops_spec_delta(
     from deltafuse.core import gate_receipts
 
     root = change_dir.parent.parent.parent
+    # ... with the digests of the cited specification text, as R3 (FL-13) has it record them.
+    from deltafuse.core.spec_acceptance import cited_spec_refs, section_digests
+
     gate_receipts.record_receipt(
         root, kind="spec", status="accepted", rel_path=delta.relative_to(root).as_posix(),
         artifact_id=change_id, change=change_id, artifact=delta,
+        extra={"spec_sections": section_digests(root, cited_spec_refs(change_dir))},
     )
 
 

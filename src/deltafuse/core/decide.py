@@ -712,6 +712,13 @@ def apply_decision(
 
             written = [_rel(product_root, delta)]
             change_id = _change_id_from_dir(change_dir)
+            covers: dict[str, Any] | None = None
+            if status == "accepted":
+                # Owner decision R3 (FL-13): the verdict is on the text of the cited requirements,
+                # not only on the list of anchors in spec-delta.md.
+                from deltafuse.core.spec_acceptance import cited_spec_refs, section_digests
+
+                covers = {"spec_sections": section_digests(product_root, cited_spec_refs(change_dir))}
             _write_with_receipt(
                 product_root,
                 delta,
@@ -722,6 +729,7 @@ def apply_decision(
                 artifact_id=change_id or change_dir.name,
                 change=change_id,
                 human_check=human_check,
+                extra=covers,
             )
             change_status = None
             if status == "rejected" and proposed:

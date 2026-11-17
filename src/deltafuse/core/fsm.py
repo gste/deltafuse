@@ -1873,6 +1873,38 @@ def _unaccepted_spec_tree_errors(gate: str, facts: dict[str, Any], repo_root: Pa
     ]
 
 
+def _accepted_text_errors(gate: str, repo_root: Path, delta_rel: str) -> list[str]:
+    """The text the human accepted is still the text on disk (owner decision R3, FL-13).
+
+    The acceptance signed spec-delta.md - anchors - so a requirement rewritten after the verdict
+    converged as accepted. The receipt now records a digest of every section the delta and the
+    slices cited; an edit of one makes every later gate refuse until the text is put back or
+    the human answers again.
+    """
+    from deltafuse.core.gate_receipts import latest_receipt
+    from deltafuse.core.spec_acceptance import changed_sections
+
+    receipt = latest_receipt(repo_root, rel_path=delta_rel) or {}
+    sections = receipt.get("spec_sections")
+    again = (
+        "the human sends the Change back with `deltafuse decide <change-dir> --spec --status "
+        "rejected`, the Worker proposes the specification as it now reads, and the human accepts it"
+    )
+    if not isinstance(sections, dict):
+        return [
+            f"Gate {gate}: the acceptance of spec-delta.md does not record the specification text it "
+            f"was given for, so it cannot be shown unchanged; {again}"
+        ]
+    moved = changed_sections(repo_root, sections)
+    if not moved:
+        return []
+    more = f" and {len(moved) - 5} more" if len(moved) > 5 else ""
+    return [
+        f"Gate {gate}: the specification text changed after the human accepted it - {', '.join(moved[:5])}"
+        f"{more}. The verdict was on that text: restore it, or {again}"
+    ]
+
+
 def _specification_errors(
     gate: str,
     intent: str | None,
@@ -1898,7 +1930,7 @@ def _specification_errors(
         if has_valid_receipt(
             repo_root, kind="spec", status="accepted", artifact_id=change_id, rel_path=rel, artifact=spec_delta_file
         ):
-            return []
+            return _accepted_text_errors(gate, repo_root, rel)
     skipping = gate == "decomposed"
     if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
         return _unaccepted_spec_tree_errors(gate, intake_facts(repo_root, change_id), repo_root)

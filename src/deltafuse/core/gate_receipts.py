@@ -138,11 +138,15 @@ def record_receipt(
     change: str | None,
     artifact: Path,
     human_check: str = "none",
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Append one versioned Human Gate receipt (Core only; never git push).
 
     `human_check` records how the Core knew a human answered: "password" when
     the Human Gate password was verified, "none" when the product has none.
+    `extra` is what else the verdict covers - `spec_sections`, the digests of the
+    specification text an acceptance was given for (FL-13) - under the chain hash
+    like every other field.
     """
     if kind not in _VERDICTS:
         raise ReceiptError(f"unknown gate receipt kind: {kind!r}")
@@ -171,6 +175,10 @@ def record_receipt(
         "nonce": secrets.token_hex(8),
         "prev_hash": prev_hash,
     }
+    for key, value in (extra or {}).items():
+        if key in entry or key in ("signature", "chain_hash", "guarantee"):
+            raise ReceiptError(f"receipt field {key!r} is the Core's own")
+        entry[key] = value
     entry["chain_hash"] = _chain_hash(entry)
     entry["guarantee"] = LOCAL_GUARANTEE
 
