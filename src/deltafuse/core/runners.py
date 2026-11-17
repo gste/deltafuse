@@ -204,11 +204,13 @@ def report_less_runner_error(argv: list[str], *, route: str, product_root: Path 
 
     if runner_family(argv):
         return None  # `python -m pytest`, `uv run pytest`, `mvn test`: the runner itself
-    if _canonical_head(argv[0]) != "python":
-        # Audit 2026-11-17 (FE-3): a command that runs pytest or Maven through something the
-        # Core does not read through (`pipx run pytest`, `bash -c "pytest"`) was a runner without
-        # a reader, accepted on its exit code alone - whatever tests it ran.
-        runner = names_a_readable_runner(argv)
+    # Audit 2026-11-17 (FE-3): a command that runs pytest or Maven through something the
+    # Core does not read through (`pipx run pytest`, `bash -c "pytest"`) was a runner without
+    # a reader, accepted on its exit code alone - whatever tests it ran. An interpreter is no
+    # exception (`python -c "...pytest.main..."`, `python run_pytest.py`): declared as the only
+    # entry of workflow.test_commands it read as a product with no reporting runner.
+    runner = names_a_readable_runner(argv[1:] if _canonical_head(argv[0]) == "python" else argv)
+    if _canonical_head(argv[0]) != "python" or runner is not None:
         if runner is None:
             return None  # `npm test`, `cargo test`: no report the Core reads, judged as before
         return (

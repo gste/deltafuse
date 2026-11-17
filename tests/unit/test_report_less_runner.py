@@ -72,3 +72,27 @@ def test_which_products_report_their_tests(tmp_path: Path):
         yaml.safe_dump({"workflow": {"test_commands": ["python scripts/check.py"]}}), encoding="utf-8"
     )
     assert product_test_runner(declared) == ""  # the product declares a script runner itself
+
+
+def test_an_interpreter_that_runs_pytest_is_refused_also_when_declared(tmp_path: Path):
+    """Audit 2026-11-17, FE-3 re-probe: `python -c "...pytest.main..."` as the only entry of
+    `workflow.test_commands` was a bare interpreter on a product that "declares no reporting
+    runner", so Green over another test and a `--deselect` regression were accepted on the exit
+    code. A command that names pytest is a way to run pytest the Core cannot read through,
+    whatever its head; so is a script named after it."""
+    (tmp_path / ".deltafuse").mkdir()
+    (tmp_path / ".deltafuse" / "config.yaml").write_text(
+        "workflow:\n  test_commands:\n    - python -c \"import sys,pytest; sys.exit(pytest.main(sys.argv[1:]))\"\n",
+        encoding="utf-8",
+    )
+    argv = ["python", "-c", "import sys,pytest; sys.exit(pytest.main(sys.argv[1:]))", "tests/test_x.py"]
+    error = report_less_runner_error(argv, route="code", product_root=tmp_path)
+    assert error and "cannot read through" in error and "pytest" in error
+    # the twin spelling, undeclared
+    assert report_less_runner_error(["python3", "-c", "import pytest; pytest.main()"], route="code", product_root=None)
+    # a script that names no runner, declared by the human, stays what it was: no report, exit code
+    (tmp_path / ".deltafuse" / "config.yaml").write_text(
+        "workflow:\n  test_commands:\n    - python check.py\n", encoding="utf-8")
+    assert report_less_runner_error(["python", "check.py"], route="code", product_root=tmp_path) is None
+    # and the readable forms are not caught by the word
+    assert report_less_runner_error(["python", "-m", "pytest", "tests"], route="code", product_root=tmp_path) is None
