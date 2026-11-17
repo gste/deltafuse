@@ -699,9 +699,12 @@ TASK_STATUS_TRANSITIONS: dict[str, set[str]] = {
     # `declared`, and green_attempt_error then says exactly what is missing (no Red, no Green
     # attempt) instead of a bare "cannot set status" (codebase audit 2026-10-22).
     "pending": {"declaring", "declared", "blocked", "cancelled", "superseded"},
-    "declaring": {"declared", "blocked", "superseded"},
+    # cancelled, from `declaring` and `implementing` too (FL-16): the already-green halt and the
+    # cancel hint send the human to `decide --task --status cancelled`, which exited 1 for a
+    # task the Worker had left in either. Only the human cancels (HUMAN_TASK_STATUSES).
+    "declaring": {"declared", "blocked", "cancelled", "superseded"},
     "declared": {"implementing", "implemented", "blocked", "cancelled", "superseded"},
-    "implementing": {"implemented", "blocked"},
+    "implementing": {"implemented", "blocked", "cancelled"},
     "implemented": {"verified", "blocked"},
     # Only the human leaves `blocked` (decide --task): cancelling drops the task,
     # reopening (`pending`) sends it back to Declare with its old evidence archived.
