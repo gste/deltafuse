@@ -3,7 +3,7 @@
   "files": {
     "__init__.py": "4d4b547752479fd066b8b102d682ba4a512f568cb319b869118d63e968dd1a44",
     "artifact-operations/capability.descriptor.yaml": "6a288ecae109583c7a8732cc148fa6052eab487aca63db65c0cbe93a8bce5219",
-    "artifact-operations/change.descriptor.yaml": "3ac6d6cf96991938988be981fbe01534cdecb15505ef7abed7b310b812df0e07",
+    "artifact-operations/change.descriptor.yaml": "2999126c3cf89081fd9d92bc6939810b8ad9734d283ecbf1e11fe15aedff52de",
     "artifact-operations/coverage.descriptor.yaml": "fe7bf9d54eb85820553b549786eca748a020092a0f9a4ddc69a37151519364c3",
     "artifact-operations/decision.descriptor.yaml": "4b331b7b24808387c836f7cd0006cfa8317380a0808cc00008833c7d57b633c7",
     "artifact-operations/evidence.descriptor.yaml": "0b6ae4998867a52c8fc6936eecbb5c07ddbd1ba35c715bccce4556e0b7fa0088",
@@ -29,7 +29,7 @@
     "skills/declare/SKILL.md": "119abcc58cce3721e183d8ac6ebd8bf5d3702c06e7a43dbe86ce3bc6d4fe909a",
     "skills/decompose/SKILL.md": "9ead5e637877c50907337625f053d81d329fb56f84924a6a32aeaa1293b7f157",
     "skills/implement/SKILL.md": "37689a7c5fd8d747472865705f7d56ac2441ef7406604b2b12a18260033afd87",
-    "skills/intake/SKILL.md": "8ab843b3b6384862c6d6d908dfe97de3eda82ab0d95fc1c149c93d5fad9b04c3",
+    "skills/intake/SKILL.md": "2127edcf29e0ab7a3032243c9a18f633b67dc573b50090be17813e2a6c155b9f",
     "skills/run/SKILL.md": "7f4cd5cd477059bdaf3104683e8285af9b3fd7310439f1e790d8d91a3a5e8f97",
     "skills/specify/SKILL.md": "041b5b4f2367a0ff14f302b71c8a757294dc181c73235532f7feb74b4d933d12",
     "skills/verify/SKILL.md": "6e547098e5cc3e60130e4b9ab5fa66cd7b286fbdd19821ecc56edd61412f0439",

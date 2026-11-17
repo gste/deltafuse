@@ -1624,6 +1624,14 @@ def _check_gate(
         change_status = assume_status
 
     gate_lower = gate.lower()
+    # Intent as Intake left it, from the Core's receipt (FL-1); change.yaml only when no
+    # transition recorded it.
+    from deltafuse.core.transitions import intake_facts
+
+    facts = intake_facts(repo_root, change_id)
+    errors.extend(_intake_intent_errors(gate_lower, intent, facts))
+    if isinstance(facts.get("intent"), str):
+        intent = facts["intent"]
     if loaded_route is None:
         # The package was refused before its route was read; the gates that use it read it.
         loaded_route = load_change_route(change_path)
@@ -1702,8 +1710,7 @@ def _check_gate(
     elif gate_lower == "decomposed":
         if not tasks_dir.is_dir() or not list(tasks_dir.glob("*.md")):
             errors.append("Gate decomposed: at least one task file in tasks/ is required")
-        if change_status == "analyzed":
-            errors.extend(_spec_skip_errors(intent, spec_delta_file))
+        errors.extend(_specification_errors("decomposed", intent, change_id, repo_root, change_path, spec_delta_file))
 
         # DF3-006 / SEC-04: a task cannot widen its write envelope by
         # editing YAML; allowed_paths must stay inside slice target_paths.
@@ -1717,6 +1724,7 @@ def _check_gate(
         if not red_dir.is_dir() or not list(red_dir.glob("*.yaml")):
             errors.append("Gate declaring: Red evidence in evidence/red/ is required")
         errors.extend(_tasks_behind_gate(change_path, "declaring", RED_TAKEN_STATUSES, ("red",)))
+        errors.extend(_specification_errors("declaring", intent, change_id, repo_root, change_path, spec_delta_file))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "red", route=route))
 
     elif gate_lower == "implemented":
@@ -1742,6 +1750,7 @@ def _check_gate(
             errors[:] = behind + [e for e in errors if ": stale evidence:" not in e]
         else:
             errors.extend(behind)
+        errors.extend(_specification_errors("implemented", intent, change_id, repo_root, change_path, spec_delta_file))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "green", route=route))
         errors.extend(_validate_evidence_changed_paths_contract(change_path, "regression", route=route))
 
@@ -1805,7 +1814,7 @@ def _check_gate(
             errors.extend(
                 _validate_spec_delta_matches_disk(repo_root, ops, gate="converged")
             )
-        errors.extend(_spec_accepted_errors(intent, change_id, repo_root, spec_delta_file))
+        errors.extend(_specification_errors("converged", intent, change_id, repo_root, change_path, spec_delta_file))
 
     return errors
 
@@ -1818,57 +1827,99 @@ def _spec_delta_changes_spec(spec_delta_file: Path) -> bool:
     return bool(parse_errs) or any(ops.get(key) for key in ("added", "modified", "removed"))
 
 
-def _spec_skip_errors(intent: str | None, spec_delta_file: Path) -> list[str]:
-    """Why a Change at `analyzed` may not go straight to Decompose (df-gates #1).
-
-    `analyzed -> decomposed` is the bugfix path with the specification unchanged
-    (docs/state-machine.md). It was open to every Change, so a feature skipped the
-    specification Human Gate and converged with spec-delta.md still `proposed`.
-    """
-    propose = (
-        "propose spec-delta.md with `deltafuse state <change-dir> --change --status "
-        "specification-proposed` and wait for the human's `deltafuse decide <change-dir> --spec`"
-    )
-    if intent != "bugfix":
-        return [
-            f"Gate decomposed: a Change with intent '{intent or 'unknown'}' reaches Decompose only "
-            f"through the specification Human Gate: {propose}; only a bugfix with the spec "
-            "unchanged goes from analyzed to decomposed"
-        ]
-    if _spec_delta_changes_spec(spec_delta_file):
-        return [
-            "Gate decomposed: spec-delta.md changes the specification, so this bugfix goes through "
-            f"the specification Human Gate: {propose}; a bugfix skips Specify only with the spec unchanged"
-        ]
-    return []
+_PROPOSE = (
+    "propose spec-delta.md with `deltafuse state <change-dir> --change --status "
+    "specification-proposed` and wait for the human's `deltafuse decide <change-dir> --spec`"
+)
 
 
-def _spec_accepted_errors(
-    intent: str | None, change_id: str, repo_root: Path, spec_delta_file: Path
-) -> list[str]:
-    """`converged` (and so `archive`) needs the specification the human accepted (df-gates #1).
-
-    Every Change but a bugfix with the spec unchanged passes the specification Human Gate,
-    whose verdict is spec-delta.md `accepted` with a `decide --spec` receipt that still
-    matches its bytes.
-    """
-    if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
+def _intake_intent_errors(gate: str, intent: str | None, facts: dict[str, Any]) -> list[str]:
+    """change.yaml `intent` against the one the intake receipt recorded (FL-1)."""
+    recorded = facts.get("intent")
+    if not facts or recorded == intent:
         return []
-    if not spec_delta_file.is_file():
+    return [
+        f"Gate {gate}: change.yaml intent is '{intent}', but Intake closed with '{recorded}'; intent "
+        "is fixed at Intake and was edited since - restore it. The gates go by the recorded one"
+    ]
+
+
+def _unaccepted_spec_tree_errors(gate: str, facts: dict[str, Any], repo_root: Path) -> list[str]:
+    """A Change with no accepted specification may not have moved `docs/spec/**` (FL-1).
+
+    "The specification is unchanged" was the Worker's own label - `intent: bugfix` and no
+    spec-delta.md - so a feature relabelled through the Artifact Writer added its requirement to
+    the live specification and converged with no Human Gate. The Core compares the tree with the
+    one its intake receipt recorded.
+    """
+    from deltafuse.core.spec_acceptance import spec_tree_changes
+
+    base = facts.get("spec_tree")
+    if not isinstance(base, dict):
         return [
-            f"Gate converged: spec-delta.md is missing; a Change with intent '{intent or 'unknown'}' "
-            "converges only through the specification Human Gate"
+            f"Gate {gate}: the Core has no record of docs/spec/** at this Change's Intake (its first "
+            "transition was not applied by `deltafuse advance`), so it cannot show the specification "
+            f"is unchanged; this Change goes through the specification Human Gate: {_PROPOSE}"
         ]
+    changed = spec_tree_changes(base, repo_root)
+    if not changed:
+        return []
+    more = f" and {len(changed) - 5} more" if len(changed) > 5 else ""
+    return [
+        f"Gate {gate}: docs/spec/** changed since this Change's Intake - {', '.join(changed[:5])}{more} - "
+        "and no human accepted it. A Change skips Specify only with the specification untouched: "
+        f"restore those files, or {_PROPOSE} (from a later status the human sends it back with "
+        "`deltafuse decide <change-dir> --spec --status rejected`)"
+    ]
+
+
+def _specification_errors(
+    gate: str,
+    intent: str | None,
+    change_id: str,
+    repo_root: Path,
+    change_path: Path,
+    spec_delta_file: Path,
+) -> list[str]:
+    """Every gate from `decomposed` on needs the specification the human accepted, or - for a
+    bugfix alone - a specification nobody touched (df-gates #1, FL-1).
+
+    The human's verdict is spec-delta.md `accepted` with a `decide --spec` receipt that is the
+    latest verdict on that file and still matches its bytes. Without it only a bugfix whose
+    spec-delta.md changes nothing goes on, and only while the Core's own diff of `docs/spec/**`
+    since Intake is empty.
+    """
     from deltafuse.core.gate_receipts import has_valid_receipt
+    from deltafuse.core.transitions import intake_facts
 
     status = _spec_delta_status(spec_delta_file)
-    rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
-    if status != "accepted" or not has_valid_receipt(
-        repo_root, kind="spec", status="accepted", artifact_id=change_id, rel_path=rel, artifact=spec_delta_file
-    ):
+    if spec_delta_file.is_file() and status == "accepted":
+        rel = spec_delta_file.resolve().relative_to(repo_root.resolve()).as_posix()
+        if has_valid_receipt(
+            repo_root, kind="spec", status="accepted", artifact_id=change_id, rel_path=rel, artifact=spec_delta_file
+        ):
+            return []
+    skipping = gate == "decomposed"
+    if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
+        return _unaccepted_spec_tree_errors(gate, intake_facts(repo_root, change_id), repo_root)
+    if skipping and intent != "bugfix":
         return [
-            f"Gate converged: spec-delta.md is not accepted by the human (status {status!r}, or edited "
-            "since `deltafuse decide <change-dir> --spec --status accepted`); a Change converges only "
-            "on the specification the human accepted"
+            f"Gate decomposed: a Change with intent '{intent or 'unknown'}' reaches Decompose only "
+            f"through the specification Human Gate: {_PROPOSE}; only a bugfix with the spec "
+            "unchanged goes from analyzed to decomposed"
         ]
-    return []
+    if skipping:
+        return [
+            "Gate decomposed: spec-delta.md changes the specification, so this bugfix goes through "
+            f"the specification Human Gate: {_PROPOSE}; a bugfix skips Specify only with the spec unchanged"
+        ]
+    if not spec_delta_file.is_file():
+        return [
+            f"Gate {gate}: spec-delta.md is missing; a Change with intent '{intent or 'unknown'}' "
+            "goes on only through the specification Human Gate"
+        ]
+    return [
+        f"Gate {gate}: spec-delta.md is not accepted by the human (status {status!r}, or edited "
+        "since `deltafuse decide <change-dir> --spec --status accepted`, or a later verdict "
+        "replaced that one); a Change goes on only with the specification the human accepted"
+    ]

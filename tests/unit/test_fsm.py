@@ -421,7 +421,7 @@ def test_targeting_from_analyzed_skips_specify(tmp_path: Path, repo_root: Path):
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-015", title="Bugfix no specify")
-        .step_intake()
+        .step_intake(intent="bugfix")  # only a bugfix skips Specify (audit 2026-11, FL-1)
         .step_analyze()
         .step_decompose()
         .step_declare()
@@ -727,12 +727,12 @@ def test_converged_without_spec_delta_skips_disk_check(tmp_path: Path, repo_root
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = (
         MockChangeBuilder(tmp_path, change_id="CHG-021", title="Bugfix no specify")
-        .step_intake()
+        # The test is about the bugfix path, which the builder's default intent (feature) is
+        # not: a feature without spec-delta.md no longer converges (df-gates #1). Intent is
+        # Intake's - the gates read it from the intake receipt (audit 2026-11, FL-1).
+        .step_intake(intent="bugfix")
         .step_analyze()
     )
-    # The test is about the bugfix path, which the builder's default intent (feature) is not:
-    # a feature without spec-delta.md no longer converges (df-gates #1).
-    builder._update_change_yaml({"intent": "bugfix"})
     (
         builder.step_decompose()
         .step_declare()

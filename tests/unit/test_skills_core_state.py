@@ -55,7 +55,7 @@ def test_single_step_skills_close_their_gate_with_one_advance() -> None:
 # Step 3 of the completion plan: exact Core-command contract per skill.
 SKILL_CORE_CONTRACT = {
     # skill: (gate stamped by exactly one advance, task/slice/state commands)
-    "intake": ("intake", 0),
+    "intake": ("intake", 1),  # the intent, which only the Core writes (audit 2026-11, FL-1)
     "analyze": ("analyzed", 0),
     "specify": ("specified", 2),  # slice state + Change in-flight state
     "decompose": ("decomposed", 0),

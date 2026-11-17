@@ -231,6 +231,19 @@ def latest_transition_field(product_root: Path | str, change_id: str, gate: str,
     return None
 
 
+def intake_facts(product_root: Path | str, change_id: str) -> dict[str, Any]:
+    """What the Core recorded when the Change left `normalized`: `intent` and `spec_tree`.
+
+    Audit 2026-11 (FL-1): the gates read "is this a bugfix" and "did the specification change"
+    from here, not from change.yaml, which the Worker can rewrite. Empty when no transition of
+    this Change carries them.
+    """
+    for row in load_receipts(Path(product_root), change_id):
+        if row.get("kind") == "transition" and isinstance(row.get("spec_tree"), dict):
+            return {"intent": row.get("intent"), "spec_tree": dict(row["spec_tree"])}
+    return {}
+
+
 # The human sends a Change whose Verify recorded a gap back to Analyze (`deltafuse decide
 # <change> --gap spec-gap|tasks-missing --status reopened`); the chain replays it as a rewind.
 GAP_REOPEN_KIND = "gap-reopen"
@@ -560,6 +573,12 @@ def advance_change(
             "from": current,
             "to": target,
         }
+        if current == INITIAL_STATUS and not intake_facts(product_root, change_id):
+            # Intake's own facts, read by every later gate instead of change.yaml (FL-1).
+            from deltafuse.core.spec_acceptance import spec_tree
+
+            entry["intent"] = data.get("intent") if isinstance(data.get("intent"), str) else None
+            entry["spec_tree"] = spec_tree(product_root)
         if gate == "declaring":
             # The tasks' product files before Implement: a reopened task is declared again
             # against them (core/task_snapshot.py, ref-m04-363-2).
@@ -796,6 +815,53 @@ def gate_order_errors(change_path: Path | str, gate: str) -> list[str]:
         f"Gate {gate}: not this Change's turn - status is '{current}', and this gate "
         f"applies from {sorted(GATE_ALLOWED_FROM[gate])}"
     ]
+def set_change_intent(start: Path | str, intent: str) -> dict[str, Any]:
+    """Core-owned write of change.yaml `intent`, open only until Intake closes (FL-1).
+
+    The Artifact Writer no longer takes `intent`: a feature relabelled `bugfix` after Analyze
+    skipped the specification Human Gate. Intake classifies the request; the `intake` gate
+    records the answer in its receipt and every later gate reads it from there.
+    """
+    from deltafuse.core.schemas import SchemaRegistry
+
+    change_path, product_root = _change_dir(start)
+    allowed = (SchemaRegistry().get_schema("change").get("properties") or {}).get("intent", {}).get("enum") or []
+    if intent not in allowed:
+        raise TransitionError(f"intent must be one of {', '.join(map(str, allowed))}; got {intent!r}")
+    with ProductMutationLock(product_root):
+        data = _load_change_yaml(change_path)
+        current = data.get("intent")
+        if data.get("status") != INITIAL_STATUS or intake_facts(product_root, data.get("id") or change_path.name):
+            raise TransitionError(
+                f"intent is fixed when Intake closes (it is {current!r}, the Change is "
+                f"'{data.get('status')}'): the gates read it from the intake receipt. A Change opened "
+                "under the wrong intent is closed by the human (`deltafuse decide <change-dir> --close "
+                "--status rejected --note \"<why>\"`) and opened again"
+            )
+        if current == intent:
+            return {"ok": True, "artifact": "change", "field": "intent", "from": current, "to": intent,
+                    "receipt": None, "unchanged": True}
+        entry = append_receipt(
+            product_root,
+            {
+                "kind": "artifact-status",
+                "change": data.get("id") or change_path.name,
+                "artifact": "change",
+                "gate": "state",
+                "field": "intent",
+                "from": current,
+                "to": intent,
+            },
+        )
+        data["intent"] = intent
+        atomic_write(
+            change_path / "change.yaml",
+            yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8"),
+        )
+    return {"ok": True, "artifact": "change", "field": "intent", "from": current, "to": intent,
+            "receipt": entry["receipt"]}
+
+
 # Change-level in-flight statuses the Worker may request through the Core.
 CHANGE_INFLIGHT_STATUSES = {"specification-proposed"}
 

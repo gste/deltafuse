@@ -117,6 +117,12 @@ class MockChangeBuilder:
             "to": GATE_TARGETS[gate],
             "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+        if current == "normalized":
+            # What `advance` records when a Change leaves `normalized` (audit 2026-11, FL-1).
+            from deltafuse.core.spec_acceptance import spec_tree
+
+            entry["intent"] = data.get("intent")
+            entry["spec_tree"] = spec_tree(self.root_dir)
         entry["receipt"] = _receipt(entry)
         path = transitions_path(self.root_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,7 +131,7 @@ class MockChangeBuilder:
         data["status"] = GATE_TARGETS[gate]
         cfile.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    def step_intake(self, claims: list[str] | None = None) -> MockChangeBuilder:
+    def step_intake(self, claims: list[str] | None = None, intent: str = "feature") -> MockChangeBuilder:
         if claims is None:
             claims = ["CR-001"]
         self.claims = list(claims)
@@ -149,7 +155,7 @@ class MockChangeBuilder:
                 "version": "2.0.0",
                 "content_hash": fw_hash,
             },
-            "intent": "feature",
+            "intent": intent,
             "risk": "low",
             "source": {"request": "request.md", "intake_refs": []},
             "deltas": [],

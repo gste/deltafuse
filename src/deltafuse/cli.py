@@ -416,7 +416,11 @@ def _main(argv: list[str] | None = None) -> int:
     group.add_argument("--task", help="Task id like TASK-001")
     group.add_argument("--slice", dest="slice_id", help="Slice id like SLICE-01")
     group.add_argument("--change", action="store_true", help="Target the Change itself (in-flight status)")
-    state_parser.add_argument("--status", required=True, help="New status")
+    state_parser.add_argument("--status", default=None, help="New status")
+    state_parser.add_argument(
+        "--intent", default=None,
+        help="With --change, before Intake closes: feature, bugfix, refactor, maintenance, documentation or unknown",
+    )
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
     # new command (DF3-005 / C-03): deterministic Change scaffolding
@@ -661,16 +665,31 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "state":
         target = Path(args.change_path)
+        if (args.status is None) == (args.intent is None):
+            print("state failed: pass exactly one of --status or --intent", file=sys.stderr)
+            return 1
+        if args.intent is not None and not args.change:
+            print("state failed: --intent goes with --change", file=sys.stderr)
+            return 1
         try:
-            result = set_artifact_status(
-                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
-                change_status=args.change,
-            )
+            if args.intent is not None:
+                from deltafuse.core.transitions import set_change_intent
+
+                result = set_change_intent(target, args.intent)
+            else:
+                result = set_artifact_status(
+                    target, status=args.status, task_id=args.task, slice_id=args.slice_id,
+                    change_status=args.change,
+                )
         except TransitionError as te:
-            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
-        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status, intent=args.intent)
+        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0,
+                 **({"intent": args.intent} if args.intent is not None else {}))
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.intent is not None:
+            print(f"state: change intent {result['from']} -> {result['to']}"
+                  + (" (nothing written)" if result.get("unchanged") else f" (receipt {result['receipt'][:12]})"))
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:

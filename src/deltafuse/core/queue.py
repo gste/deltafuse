@@ -327,6 +327,18 @@ def _halt(
     ]
 
 
+def _specification_moved(change_path: Path, product_root: Path, facts: dict[str, Any]) -> bool:
+    """Whether a bugfix must pass Specify after all: its spec-delta.md changes the specification,
+    or `docs/spec/**` is no longer what the intake receipt recorded (FL-1)."""
+    from deltafuse.core.fsm import _spec_delta_changes_spec
+    from deltafuse.core.spec_acceptance import spec_tree_changes
+
+    if _spec_delta_changes_spec(change_path / "spec-delta.md"):
+        return True
+    base = facts.get("spec_tree")
+    return not isinstance(base, dict) or bool(spec_tree_changes(base, product_root))
+
+
 def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem], list[WorkItem]]:
     data, problem = _read_change(change_path)
     if problem:
@@ -355,7 +367,12 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         # DF3-004: change.yaml must agree with the last Core receipt; a
         # hand-edited status without a receipt halts the Change.
         return _halt(change_id, rel, mismatch)
-    intent = data.get("intent") if isinstance(data.get("intent"), str) else "unknown"
+    # Intent as the intake receipt recorded it, not as change.yaml reads now (FL-1).
+    from deltafuse.core.transitions import intake_facts
+
+    facts = intake_facts(product_root, change_id)
+    intent = facts.get("intent") if isinstance(facts.get("intent"), str) else data.get("intent")
+    intent = intent if isinstance(intent, str) else "unknown"
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
     if unresolved:
         return _halt(change_id, rel, "; ".join(unresolved), halt_kind="decision")
@@ -580,7 +597,7 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         ], []
 
     if status == "analyzed":
-        if intent == "bugfix":
+        if intent == "bugfix" and not _specification_moved(change_path, product_root, facts):
             return [
                 _item_for_step(
                     "decompose",

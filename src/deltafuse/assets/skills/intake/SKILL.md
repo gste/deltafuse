@@ -31,6 +31,7 @@ Do not read `docs/spec/**`, Decisions, other Changes/tasks, tests, or product co
 
 1. Allocate a stable `CHG-NNN-<slug>` identifier without reusing archived IDs.
 2. Scaffold the Change with the Core: `deltafuse new . <change-id> --title "<short title>"` (add `--route docs` or `--route ops` when the request is not code). It writes `change.yaml` and a `request.md` stub; do not write `change.yaml` yourself.
+2a. The scaffold's `intent` is `feature`. If the request reports existing behaviour that contradicts what was already agreed - a defect - record `deltafuse state <change-dir> --change --intent bugfix` (also `refactor`, `maintenance`, `documentation`, `unknown`). Do it before closing Intake: the `intake` gate records the intent and it cannot be changed afterwards - not through `artifact write`, not by hand. A bugfix skips Specify only while `docs/spec/**` stays byte-for-byte as it was at Intake; the Core compares the tree itself.
 3. Write the prose of `request.md` below its frontmatter (keep the frontmatter as scaffolded): a concise summary, a Provenance section, and claim IDs `CR-001`, `CR-002`, … (three digits, not `CR-01`). `O1` / `E1` labels are allowed if that is how the claim was named.
 4. Label each claim as observation, expectation, constraint, or hypothesis. Preserve unknowns explicitly. If a label was used as the ID (`O1`, `E1`), keep that ID.
 5. Do not invent acceptance criteria, technical design, capability routing, or spec references.
