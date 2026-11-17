@@ -113,7 +113,8 @@
           "step": "analyze",
           "task": null,
           "task_path": null
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -265,7 +266,8 @@
           "step": "specify",
           "task": null,
           "task_path": null
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -314,7 +316,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -374,7 +377,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -482,7 +486,8 @@
           "step": "declare",
           "task": "TASK-001",
           "task_path": "docs/changes/CHG-308/tasks/TASK-001.md"
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -590,7 +595,8 @@
           "step": "declare",
           "task": "TASK-001",
           "task_path": "docs/changes/CHG-307/tasks/TASK-001.md"
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -639,7 +645,8 @@
           }
         ],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -688,7 +695,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -794,7 +802,8 @@
           "step": "verify",
           "task": null,
           "task_path": null
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -913,7 +922,8 @@
           "step": "analyze",
           "task": null,
           "task_path": null
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -962,7 +972,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -1022,7 +1033,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   },
@@ -1124,7 +1136,8 @@
           "step": "decompose",
           "task": null,
           "task_path": null
-        }
+        },
+        "warnings": []
       }
     }
   },
@@ -1151,7 +1164,8 @@
         },
         "ready": [],
         "schema_version": 1,
-        "selected": null
+        "selected": null,
+        "warnings": []
       }
     }
   }

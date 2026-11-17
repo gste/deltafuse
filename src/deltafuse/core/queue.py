@@ -907,6 +907,27 @@ def build_halt(
     }
 
 
+def product_warnings(product_root: Path | None) -> list[str]:
+    """What the human should know about the product although no step is refused for it (FW-13).
+
+    Today one thing: the leash is on and no pre-commit hook runs it in this clone - hooks are not
+    cloned, and `core.hooksPath` set after `init` moves git away from the installed one - so
+    commits go unjudged. `next` is the command run at every step; `leash` and `validate-layout`
+    say the same. Silent in CI (`CI` set): a checkout there has no hook and the leash job judges.
+    """
+    import os
+
+    if product_root is None or os.environ.get("CI"):
+        return []
+    from deltafuse.core.leash import hook_warning
+
+    try:
+        warning = hook_warning(product_root)
+    except OSError:  # an unreadable hook is not a reason to fail `next`
+        return []
+    return [warning] if warning is not None else []
+
+
 def queue_snapshot(
     queue: WorkQueue,
     *,
@@ -928,6 +949,7 @@ def queue_snapshot(
         "blocked": [item.as_dict() for item in queue.blocked],
         "halt": halt,
         "envelope": envelope,
+        "warnings": product_warnings(product_root),
     }
 
 

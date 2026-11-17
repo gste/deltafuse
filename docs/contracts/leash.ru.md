@@ -26,7 +26,7 @@
 
 **Первый коммит.** Hook пропускает коммит без родителя и коммит (диапазон), в базе которого нет `.deltafuse/lock.yaml` (установка DeltaFuse): его не с чем сравнить. Каждый следующий коммит судится.
 
-**Нет hook.** Hook не клонируется, а `core.hooksPath`, заданный после `init`, уводит git от установленного hook. `deltafuse leash` (`warnings` в JSON и stderr) и `validate-layout` (stderr, не ошибка) сообщают, что leash включён, а hook его не запускает; ставит его `deltafuse init`. В CI (задана `CI`) не сообщают.
+**Нет hook.** Hook не клонируется, а `core.hooksPath`, заданный после `init`, уводит git от установленного hook. `deltafuse leash` (`warnings` в JSON и stderr в обоих режимах), `deltafuse next` (`warnings` в снимке `--json`, stderr при `--human`) и `validate-layout` (stderr, не ошибка) сообщают, что leash включён, а hook его не запускает; ставит его `deltafuse init`. В CI (задана `CI`) не сообщают. Если diff не судится вовсе (первый коммит, база без DeltaFuse), в ответе есть `note`, а текстовый режим печатает `leash: not judged: <note>`.
 
 **Файлы под `.gitignore`.** Неотслеживаемые файлы, которые git игнорирует, судятся, если лежат в корне кода, а сам `.gitignore` судится как любой файл — правило игнорирования ничего не прячет. Каталог, игнорируемый целиком (`target/`, `node_modules/`), — вывод сборки и не перечисляется. Неигнорируемый вывод сборки — orphan: человек добавляет его в `.gitignore`.
 

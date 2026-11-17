@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import sys
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -58,7 +57,6 @@ def run_leash(
     files: Sequence[str] | None = None,
     staged: bool | None = None,
     since: str | None = None,
-    announce: bool = True,
 ) -> dict[str, Any]:
     """The leash payload for `target` (a product root, or one Change directory).
 
@@ -66,6 +64,9 @@ def run_leash(
     the working tree; it defaults to whether the pre-commit hook set INDEX_ENV.
     ``since`` (`advance`): judge the working tree and every commit after that one
     on this line, from that commit's config (see git_dirty_paths).
+
+    The payload is the whole answer and nothing is printed here: `warnings` (FW-13) and `note`
+    (why a diff was not judged) are for the caller to show - `deltafuse leash` prints them.
 
     Raises `LeashError` (git could not answer) or `QueueError` (the queue could
     not be built), as the command always did.
@@ -156,8 +157,6 @@ def run_leash(
     # FW-13: say that commits are not judged here. Not inside the hook (it is running), and not
     # in CI, where there is no hook to install and the leash job is the judge.
     warning = None if in_hook or os.environ.get("CI") else hook_warning(root, mode)
-    if warning is not None and announce:
-        print(f"deltafuse: warning: {warning}", file=sys.stderr)
     return {
         "ok": not errors,
         "skipped": envelope is None and not errors,
@@ -185,7 +184,7 @@ def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | 
         return None
     try:
         # df-leash #2: the whole step, its commits included - not only what is uncommitted.
-        payload = run_leash(change_path, staged=False, since=since, announce=False)
+        payload = run_leash(change_path, staged=False, since=since)
     except (LeashError, QueueError, OSError) as ex:
         return {"mode": mode, "checked": False, "reason": str(ex), "violations": []}
     return {"mode": mode, "checked": True, "violations": list(payload["violations"])}

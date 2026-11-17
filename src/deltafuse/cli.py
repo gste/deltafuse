@@ -24,6 +24,7 @@ from deltafuse.core.queue import (
     format_queue,
     intake_sources_pending,
     load_product_root,
+    product_warnings,
     queue_snapshot,
     select_next,
 )
@@ -830,6 +831,9 @@ def _main(argv: list[str] | None = None) -> int:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         elif args.human:
+            # FW-13: the human reading the guide is the one who can install the hook.
+            for warning in product_warnings(load_product_root(scope)):
+                print(f"deltafuse: warning: {warning}", file=sys.stderr)
             if selected is not None:
                 print(guide)
             else:
@@ -904,8 +908,15 @@ def _main(argv: list[str] | None = None) -> int:
             skipped = payload["skipped"]
             _journal(root, cmd="leash", ok=payload["ok"], errors=errors, n_errors=len(errors),
                      skipped=skipped)
+            # FW-13: the payload's warnings go to stderr in both modes, so `--json` stdout stays
+            # one document; the note says why nothing was judged, where the text mode used to
+            # answer "no write envelope" for the first commit and for a base without DeltaFuse.
+            for warning in payload.get("warnings") or []:
+                print(f"deltafuse: warning: {warning}", file=sys.stderr)
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
+            elif payload.get("note"):
+                print(f"leash: not judged: {payload['note']}")
             elif skipped:
                 print("leash: no write envelope (no ready Worker step)")
             elif errors:
