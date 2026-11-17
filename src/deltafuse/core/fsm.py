@@ -119,6 +119,63 @@ def find_repo_root(start_path: Path) -> Path:
 CONTRACT_VERSION = 3
 
 
+def product_pin_errors(product_root: Path | str) -> list[str]:
+    """Why this Core may not move the product's Changes: it is not the Core the lock pins, or the
+    config asks for another framework than the lock holds (audit 2026-11, FL-11, FW-10).
+
+    docs/state-machine.md promised that a product whose config does not match its lock cannot
+    proceed through gates, and only `validate-layout` compared them. A Core whose identity
+    differs from the pin was refused by `artifact write` alone, so evidence, statuses and
+    transitions were recorded under another Core's rules. Gates, `state`, `evidence` and `next`
+    ask here. A directory with no lock is not judged: the queue and the Writer refuse it as
+    not a product.
+
+    The human's `decide` is left out on purpose: the upgrade guard asks for the active Changes
+    to be closed first, so closing one cannot wait for the upgrade.
+    """
+    root = Path(product_root)
+    lock_file = root / ".deltafuse" / "lock.yaml"
+    if not lock_file.is_file():
+        return []
+    from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
+    from deltafuse.core.assets import AssetError
+    from deltafuse.core.lock import workflow_alignment_errors
+
+    way_out = (
+        "run the Core this product pins, or upgrade the product - close its active Changes "
+        "(`deltafuse decide <change-dir> --close --status rejected|superseded --note \"<why>\"`), then "
+        "`deltafuse init <product-root> --force`"
+    )
+    errors: list[str] = []
+    try:
+        ArtifactRegistry(root).verify_product_lock(root)
+    except (ArtifactRegistryError, AssetError) as ex:
+        errors.append(f"{ex}: {way_out}")
+
+    def load(path: Path) -> dict[str, Any]:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    config, lock = load(root / ".deltafuse" / "config.yaml"), load(lock_file)
+    wanted = config.get("framework") if isinstance(config.get("framework"), dict) else {}
+    pinned = lock.get("framework") if isinstance(lock.get("framework"), dict) else {}
+    fix = "set .deltafuse/config.yaml back to what the lock holds, or upgrade the product as above"
+    if wanted.get("version") and pinned.get("version") and wanted["version"] != pinned["version"]:
+        errors.append(
+            f"config asks for framework version {wanted['version']}, the lock pins {pinned['version']}: {fix}"
+        )
+    source = wanted.get("source")
+    if source and pinned.get("source"):
+        asked = f"deltafuse://v{wanted.get('version')}" if source == "deltafuse" else source
+        if asked != pinned["source"]:
+            errors.append(f"config asks for framework source '{source}', the lock pins '{pinned['source']}': {fix}")
+    errors.extend(f"config and lock disagree: {e}" for e in workflow_alignment_errors(config, lock))
+    return errors
+
+
 def _contract_version_errors(change_path: Path) -> list[str]:
     """DF3-008: unknown or partial versions stop with exact diagnostics.
 
@@ -1652,6 +1709,7 @@ def _check_gate(
     errors, loaded_route = _validate_package(change_path, registry)
 
     repo_root = find_repo_root(change_path)
+    errors.extend(product_pin_errors(repo_root))
 
     # V3-FIX-009: a gate may only be evaluated on top of an intact Core
     # receipt chain; hand-edited statuses halt before gate logic.

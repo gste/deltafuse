@@ -108,6 +108,22 @@ def _fail(start: Path, what: str, error: object, code: int, **event: object) -> 
     return code
 
 
+def _pin_refusal(change_dir: Path, cmd: str, **event: object) -> int | None:
+    """Exit code 2 and the reason when this Core is not the one the product pins, else None
+    (audit 2026-11, FL-11, FW-10). `advance`, `state` and `next` ask in the Core itself."""
+    from deltafuse.core.fsm import find_repo_root, product_pin_errors
+
+    try:
+        errors = product_pin_errors(find_repo_root(Path(change_dir).resolve()))
+    except OSError:
+        return None
+    if not errors:
+        return None
+    _journal(change_dir, cmd=cmd, ok=False, errors=errors, n_errors=len(errors), **event)
+    _print_errors(f"{cmd} refused: the product's lock does not match:", errors)
+    return 2
+
+
 def _print_errors(header: str, errors: list[str]) -> None:
     print(header, file=sys.stderr)
     for err in errors:
@@ -722,6 +738,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "evidence":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "evidence", phase=args.phase, task=args.task)
+        if refused is not None:
+            return refused
         try:
             outcome = run_evidence(
                 target, phase=args.phase, task=args.task, argv=evidence_argv,
@@ -752,6 +771,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "coverage":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "coverage")
+        if refused is not None:
+            return refused
         try:
             dest = write_coverage(target)
         except Exception as ex:

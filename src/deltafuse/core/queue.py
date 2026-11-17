@@ -715,6 +715,18 @@ def build_work_queue(
 ) -> WorkQueue:
     product_root = load_product_root(start)
     queue = WorkQueue()
+    from deltafuse.core.fsm import product_pin_errors
+
+    pin = product_pin_errors(product_root)
+    if pin:
+        # FL-11, FW-10: no step is handed out on a Core the product does not pin.
+        queue.blocked.append(
+            WorkItem(
+                kind="blocked", step=None, skill=None, gate=None, change_id=None, path=None, task=None,
+                task_path=None, reason="the product's lock does not match: " + "; ".join(pin), halt_kind="blocked",
+            )
+        )
+        return queue
     if only_change is not None:
         change_path = Path(only_change).resolve()
         ready, blocked = _scan_change(product_root, change_path)

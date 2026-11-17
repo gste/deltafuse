@@ -25,6 +25,7 @@ from deltafuse.core.fsm import (
     can_transition,
     find_repo_root,
     frozen_oracle_errors,
+    product_pin_errors,
 )
 from deltafuse.core.gate_receipts import read_jsonl, task_reopened
 
@@ -563,11 +564,16 @@ def _record_trace_warnings(change_path: Path) -> None:
 
 
 def _change_dir(start: Path | str) -> tuple[Path, Path]:
-    """The resolved Change directory and its product root."""
+    """The resolved Change directory and its product root, on the Core the product pins."""
     change_path = Path(start).resolve()
     if not change_path.is_dir():
         raise TransitionError(f"Change directory not found: {change_path}")
-    return change_path, find_repo_root(change_path)
+    product_root = find_repo_root(change_path)
+    # FL-11, FW-10: `advance`, `state` and the intent write all start here.
+    pin = product_pin_errors(product_root)
+    if pin:
+        raise TransitionError("the product's lock does not match: " + "; ".join(pin), errors=pin)
+    return change_path, product_root
 
 
 def _advanced(entry: dict[str, Any], *, resumed: bool) -> dict[str, Any]:
