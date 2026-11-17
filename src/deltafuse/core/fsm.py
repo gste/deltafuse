@@ -1789,6 +1789,8 @@ def _check_gate(
             # The scaffold `deltafuse new` writes has no claims: Intake closes on the normalized request,
             # not on the stub (a Worker that advanced while its write failed stamped the stub).
             errors.append("Gate intake: request.md has no claims (CR-001, ...); write the normalized request first")
+        if intent == "bugfix" and not facts:
+            errors.extend(_bugfix_intake_spec_errors(repo_root))
 
     elif gate_lower == "analyzed":
         if not req_file.is_file():
@@ -1974,6 +1976,37 @@ def _intake_intent_errors(gate: str, intent: str | None, facts: dict[str, Any]) 
     return [
         f"Gate {gate}: change.yaml intent is '{intent}', but Intake closed with '{recorded}'; intent "
         "is fixed at Intake and was edited since - restore it. The gates go by the recorded one"
+    ]
+
+
+def _bugfix_intake_spec_errors(repo_root: Path) -> list[str]:
+    """A bugfix is opened on the specification as committed (FL-1, re-probe 2026-11-17).
+
+    The intake receipt records `docs/spec/**` as the tree a Change that skips Specify must leave
+    untouched. Intake is a Worker step: a requirement written into the specification before
+    `advance --gate intake` became part of that record, and the Change converged with no Human
+    Gate. Where git can tell, an uncommitted specification change stops the intake of a bugfix.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all", "--", "docs/spec"],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+        )
+    except OSError:
+        return []
+    if proc.returncode != 0:
+        return []  # no git: nothing to compare with
+    dirty = sorted({line[3:].strip().strip('"') for line in proc.stdout.splitlines() if line.strip()})
+    if not dirty:
+        return []
+    more = f" and {len(dirty) - 5} more" if len(dirty) > 5 else ""
+    return [
+        f"Gate intake: docs/spec/** has uncommitted changes - {', '.join(dirty[:5])}{more} - and this "
+        "Change is a bugfix, which changes no specification and skips its Human Gate. Revert them, "
+        "or have the human commit them if they are not this Change's; a Change that changes the "
+        "specification takes another intent (`deltafuse state <change-dir> --change --intent feature`)"
     ]
 
 

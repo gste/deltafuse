@@ -401,7 +401,9 @@ _REOPEN_ARCHIVE = re.compile(r"^docs/changes/[^/]+/reopened/(?P<task>[^/]+)\.\d+
 
 # Gate-journal kinds of a human `decide` that rewrites Change files: a task cancelled or
 # reopened, a Verify gap reopened.
-_HUMAN_REWRITE_KINDS = frozenset({"task", "gap"})
+# "change": `decide --close`, which since R8 closes a Change from any status before converged -
+# also from one whose open step does not hold change.yaml (decomposed, declared).
+_HUMAN_REWRITE_KINDS = frozenset({"task", "gap", "change"})
 
 
 def human_decision_judge(
@@ -625,7 +627,10 @@ def _git(root: Path, *args: str, text: bool = True) -> subprocess.CompletedProce
 def _git_bytes(product_root: Path, ref: str, rel_path: str) -> bytes | None:
     """File bytes at a revision (or the index, INDEX); None when the file (or the revision) is absent."""
     spec = f":{rel_path}" if ref == INDEX else f"{ref}:{rel_path}"
-    proc = _git(product_root, "show", spec, text=False)
+    # `cat-file`, not `show`: `git show <rev>:<path>` first tries the argument as a file name, and
+    # on Windows without core.longpaths a long one dies with "Filename too long" - the file then
+    # read as absent, and an archived Change's record as a deletion (re-probe 2026-11-17).
+    proc = _git(product_root, "cat-file", "blob", spec, text=False)
     return proc.stdout if proc.returncode == 0 else None
 
 
@@ -1255,10 +1260,16 @@ def core_status_writes(
         rest_after = {k: v for k, v in after_meta.items() if k != "status"}
         if rest_before != rest_after:
             reasons.append("frontmatter changed beyond status")
-        if before_body.strip() != after_body.strip():
+        # Line endings are not content: the base is read as bytes of the blob, the working file
+        # as text, so a task committed with CRLF read as "body changed" after `deltafuse state`.
+        if _eol_text(before_body).strip() != _eol_text(after_body).strip():
             reasons.append("body changed")
         out[rel] = reasons
     return out
+
+
+def _eol_text(text: str) -> str:
+    return text.replace("\r\n", "\n")
 
 
 def _core_evidence(

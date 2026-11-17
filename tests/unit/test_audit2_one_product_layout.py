@@ -220,8 +220,6 @@ def test_an_honest_change_on_a_maven_product_passes_under_enforce(tmp_path: Path
     ignore = root / ".gitignore"
     ignore.write_text(ignore.read_text(encoding="utf-8") + "target/\n", encoding="utf-8", newline="\n")
     change = builder.change_dir
-    for path in change.rglob("*.md"):  # the mock builder writes text mode; the Writer writes LF
-        path.write_bytes(path.read_bytes().replace(bytes([13, 10]), bytes([10])))
     _git(root, "add", "-A")
     assert _git(root, "commit", "-q", "--no-verify", "-m", "decomposed").returncode == 0
     assert yaml.safe_load((change / "change.yaml").read_text(encoding="utf-8"))["status"] == "decomposed"
