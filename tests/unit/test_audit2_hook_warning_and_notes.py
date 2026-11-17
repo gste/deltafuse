@@ -138,3 +138,18 @@ def test_next_is_silent_in_ci_with_the_hook_and_with_the_leash_off(product_at, t
     monkeypatch.delenv("CI")
     set_workflow(clone, leash="off")
     assert json.loads(_run("next", clone, "--json")[1])["warnings"] == []
+
+
+def test_the_leash_payload_matches_its_contract(product_at, tmp_path, monkeypatch):
+    """docs/contracts/leash.schema.yaml `$defs.payload`: `warnings` always, `note` when not judged."""
+    import yaml
+    from jsonschema.validators import validator_for
+
+    monkeypatch.delenv("CI", raising=False)
+    schema = yaml.safe_load((REPO_ROOT / "docs" / "contracts" / "leash.schema.yaml").read_text(encoding="utf-8"))
+    validator = validator_for(schema)(schema).evolve(schema=schema["$defs"]["payload"])  # `$ref: "#"` is the envelope
+    root, _ = product_at("declared")
+    for target in (root, _clone(root, tmp_path)):
+        payload = json.loads(_run("leash", target, "--json")[1])
+        assert [e.message for e in validator.iter_errors(payload)] == [], payload
+        assert "note" not in payload and isinstance(payload["warnings"], list)
