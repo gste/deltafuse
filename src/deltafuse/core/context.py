@@ -350,6 +350,36 @@ def count_tokens(text: str) -> TokenCount:
     return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
 
 
+def read_text_for_count(path: Path) -> str:
+    """A file's text for counting, whatever its encoding.
+
+    Audit 2026-11-17 (FE-11): files were read as UTF-8 with `errors="ignore"`, so every byte
+    that is not valid UTF-8 was dropped before it was counted - a windows-1251 source file of
+    160 000 bytes read as 9 600 tokens. UTF-8 (with or without a BOM) and UTF-16 with a BOM are
+    decoded as what they are. Any other text is decoded byte for byte (latin-1), which never
+    fails and does not depend on the machine's locale: a letter of a single-byte code page
+    becomes one two-byte character, as it would be in UTF-8. A file with NUL bytes is binary,
+    not text a Worker reads, and keeps the old reading. Line endings count as one newline, as
+    they did (a CRLF checkout of a file has the same budget).
+    """
+    return _decode_for_count(path.read_bytes()).replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _decode_for_count(data: bytes) -> str:
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    if b"\x00" in data:
+        return data.decode("utf-8", errors="ignore")
+    return data.decode("latin-1")
+
+
 def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
     """Sum tokens over unique existing files and report how they were counted.
 
@@ -369,7 +399,7 @@ def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
             continue
         seen.add(resolved)
         try:
-            content = resolved.read_text(encoding="utf-8", errors="ignore")
+            content = read_text_for_count(resolved)
         except OSError:
             continue
         counted = count_tokens(content)
@@ -569,7 +599,7 @@ def anchored_sections(path: Path, anchors: set[str]) -> str | None:
     them over the budget however the task was split.
     """
     try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = read_text_for_count(path).splitlines()
     except OSError:
         return None
     first = next((i for i, line in enumerate(lines)
