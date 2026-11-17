@@ -50,12 +50,21 @@ jobs:
             BASE="${{ github.event.before }}"
             HEAD="${{ github.event.after }}"
           fi
-          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
-            python -m deltafuse leash .
-          else
-            git fetch --no-tags origin "$BASE" "$HEAD" || true
-            python -m deltafuse leash . --base "$BASE" --head "$HEAD"
+          [ -n "$HEAD" ] || HEAD="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "$BASE" "$HEAD" 2>/dev/null || true
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            # No usable base (the branch is new here, or history was rewritten). A clean checkout
+            # has no working-tree diff, so `deltafuse leash .` alone judged nothing and passed.
+            # Judge at least what the head commit itself changed, and say that this is all.
+            if git rev-parse -q --verify "$HEAD^" >/dev/null 2>&1; then
+              BASE="$(git rev-parse "$HEAD^")"
+              echo "::warning::DeltaFuse leash: no base commit for this push; only the head commit $HEAD is judged."
+            else
+              echo "DeltaFuse leash: $HEAD is the first commit of this history; there is nothing to judge it against."
+              exit 0
+            fi
           fi
+          python -m deltafuse leash . --base "$BASE" --head "$HEAD"
       - name: Product tests
         run: |
           if [ -d tests ]; then
