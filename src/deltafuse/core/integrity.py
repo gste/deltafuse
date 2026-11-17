@@ -437,7 +437,9 @@ def find_unrecorded_terminal_decisions_for_change(change_id: str, repo_root: Pat
             continue
         found.append(
             f"Decision '{dec_file.name}' is {status} without deltafuse decide, or was edited "
-            "after the human answered it"
+            "after the human answered it; a verdict is the human's - set the record back to "
+            f"`status: proposed` and the human answers it with `deltafuse decide . --decision {dec_id} "
+            "--status accepted|rejected`"
         )
     return found
 

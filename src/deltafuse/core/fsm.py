@@ -1384,6 +1384,27 @@ def _spec_delta_status(spec_delta_file: Path) -> str | None:
     return raw if isinstance(raw, str) else None
 
 
+def _decision_errors(gate: str, change_id: str, repo_root: Path) -> list[str]:
+    """Every gate stands on an intact gate journal and on answered Decisions (FL-5).
+
+    These checks ran at `analyzed` and `specified` only, so a Decision bound to the Change that
+    appeared later - `proposed`, or written `accepted` by hand during Verify - stopped neither
+    `converged` nor `archive`.
+    """
+    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
+
+    errors = list(receipt_journal_errors(repo_root))
+    unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
+    if unresolved:
+        errors.append(
+            f"Gate {gate}: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
+        )
+    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, repo_root)
+    if unrecorded:
+        errors.append(f"Gate {gate}: {'; '.join(unrecorded)}")
+    return errors
+
+
 def _human_gate_errors(
     *,
     gate: str,
@@ -1394,17 +1415,6 @@ def _human_gate_errors(
     require_spec_acceptance: bool = False,
 ) -> list[str]:
     errors: list[str] = []
-    from deltafuse.core.gate_receipts import journal_errors as receipt_journal_errors
-
-    errors.extend(receipt_journal_errors(repo_root))
-    unresolved = find_unresolved_decisions_for_change(change_id, repo_root)
-    if unresolved:
-        errors.append(
-            f"Gate {gate}: Change '{change_id}' is blocked-on-decision: {'; '.join(unresolved)}"
-        )
-    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, repo_root)
-    if unrecorded:
-        errors.append(f"Gate {gate}: {'; '.join(unrecorded)}")
     if gate != "specified":
         return errors
     spec_status = _spec_delta_status(spec_delta_file)
@@ -1641,6 +1651,8 @@ def _check_gate(
             errors.extend(loaded_route[1])
     route = loaded_route[0]
 
+    errors.extend(_decision_errors(gate_lower, change_id, repo_root))
+
     if gate_lower == "intake":
         if not req_file.is_file():
             errors.append("Gate intake: request.md is missing")
@@ -1667,16 +1679,6 @@ def _check_gate(
             )
         errors.extend(unrouted_name_family_errors(change_path, repo_root))
         errors.extend(_uncharacterized_draft_errors(change_path, repo_root))
-
-        errors.extend(
-            _human_gate_errors(
-                gate="analyzed",
-                change_id=change_id,
-                change_status=change_status,
-                repo_root=repo_root,
-                spec_delta_file=spec_delta_file,
-            )
-        )
 
     elif gate_lower == "specified":
         if not spec_delta_file.is_file():

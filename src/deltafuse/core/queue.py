@@ -14,7 +14,11 @@ from deltafuse.core.config import config_section
 from deltafuse.core.frontmatter import iter_frontmatter
 from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
 from deltafuse.core.hasher import compute_product_baseline_revision
-from deltafuse.core.integrity import find_unresolved_decisions_for_change, list_proposed_decisions_for_change
+from deltafuse.core.integrity import (
+    find_unrecorded_terminal_decisions_for_change,
+    find_unresolved_decisions_for_change,
+    list_proposed_decisions_for_change,
+)
 from deltafuse.core.transitions import CLOSE_STATUSES, receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
@@ -376,6 +380,11 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     unresolved = find_unresolved_decisions_for_change(change_id, product_root)
     if unresolved:
         return _halt(change_id, rel, "; ".join(unresolved), halt_kind="decision")
+    unrecorded = find_unrecorded_terminal_decisions_for_change(change_id, product_root)
+    if unrecorded:
+        # FL-5: a Decision written `accepted` by hand passed the queue at every status, and no
+        # gate after Specify read it.
+        return _halt(change_id, rel, "; ".join(unrecorded))
     if status == "specification-proposed":
         return _halt(
             change_id,
