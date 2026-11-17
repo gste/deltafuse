@@ -74,13 +74,15 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     # done, typically after rejecting its specification (owner, 2026-11-16).
     "analyzed": {"specification-proposed", "specified", "decomposed", "rejected", "duplicate", "superseded"},
     "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
-    "specified": {"decomposed"},
-    "decomposed": {"declaring"},
-    "declaring": {"declared", "not-reproduced"},
-    "declared": {"implementing"},
-    "implementing": {"implemented"},
-    "implemented": {"verifying"},
-    "verifying": {"converged", "analyzing", "not-reproduced"},
+    # analyzed, from `specified` on: the human rejects the specification already accepted
+    # (`decide --spec --status rejected`, owner decision R8).
+    "specified": {"decomposed", "analyzed"},
+    "decomposed": {"declaring", "analyzed"},
+    "declaring": {"declared", "not-reproduced", "analyzed"},
+    "declared": {"implementing", "analyzed"},
+    "implementing": {"implemented", "analyzed"},
+    "implemented": {"verifying", "analyzed"},
+    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed"},
     "converged": {"archived"},
     "archived": set(),
     "rejected": set(),

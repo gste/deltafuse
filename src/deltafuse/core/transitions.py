@@ -251,13 +251,36 @@ GAP_REOPEN_FROM = frozenset({"implemented", "verifying"})
 GAP_REOPEN_TO = "analyzing"
 
 
+# The human rejects a specification already accepted (`deltafuse decide <change> --spec --status
+# rejected` past `specified`): the Change returns to `analyzed` (owner decision R8, FL-6). The
+# receipt is a `gap-reopen` whose gap is `spec-rejected`, replayed as a rewind like the others.
+SPEC_REJECTED_GAP = "spec-rejected"
+SPEC_REJECT_TO = "analyzed"
+SPEC_REJECT_FROM = frozenset(
+    {"specified", "decomposed", "declaring", "declared", "implementing", "implemented", "verifying"}
+)
+# The same set as the chain replay sees it: in-flight statuses hold no receipt of their own.
+_SPEC_REJECT_CHAIN_FROM = frozenset({"specified", "decomposed", "declared", "implemented"})
+
+
+def _rewind_target(row: dict[str, Any], current: str) -> str | None:
+    """Where a `gap-reopen` receipt legally takes the chain from `current`, or None."""
+    if row.get("gap") == SPEC_REJECTED_GAP:
+        return SPEC_REJECT_TO if current in _SPEC_REJECT_CHAIN_FROM and row.get("to") == SPEC_REJECT_TO else None
+    return GAP_REOPEN_TO if current in GAP_REOPEN_FROM and row.get("to") == GAP_REOPEN_TO else None
+
+
 def open_gap_reopen(product_root: Path, change_id: str, *, until_gate: str) -> dict[str, Any] | None:
-    """The Change's latest gap reopen, unless a `until_gate` transition has followed it."""
+    """The Change's latest rewind (a reopened gap, a rejected accepted specification), unless a
+    `until_gate` transition has followed it. A rejection lands on `analyzed`, so for that gate it
+    is never open: Analyze has nothing to redo."""
     rows = load_receipts(product_root, change_id)
     for index in range(len(rows) - 1, -1, -1):
         if rows[index].get("kind") == GAP_REOPEN_KIND:
             later = rows[index + 1 :]
             if any(r.get("kind") == "transition" and r.get("gate") == until_gate for r in later):
+                return None
+            if rows[index].get("gap") == SPEC_REJECTED_GAP and until_gate == "analyzed":
                 return None
             return rows[index]
     return None
@@ -352,13 +375,16 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     replay = [r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND)]
     for i, row in enumerate(replay):
         if row.get("kind") == GAP_REOPEN_KIND:
-            if current not in GAP_REOPEN_FROM or row.get("to") != GAP_REOPEN_TO:
+            target = _rewind_target(row, current)
+            if target is None:
                 errors.append(
                     f"gap reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; "
-                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' is a Core rewind"
+                    f"only {sorted(GAP_REOPEN_FROM)} -> '{GAP_REOPEN_TO}' (a reopened gap) and "
+                    f"{sorted(_SPEC_REJECT_CHAIN_FROM)} -> '{SPEC_REJECT_TO}' (a rejected "
+                    "specification) are Core rewinds"
                 )
                 break
-            current = GAP_REOPEN_TO
+            current = target
             continue
         gate = row.get("gate")
         target = GATE_TARGETS.get(gate or "")
