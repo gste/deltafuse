@@ -9,7 +9,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $FrameworkRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
+# FW-5: against PowerShell's location, not the process directory. [IO.Path]::GetFullPath reads the
+# process directory, which Set-Location does not move: `cd product; init.ps1` installed into the
+# directory the shell was started in (2026-11-16: into the framework checkout itself).
+$TargetRoot = [System.IO.Path]::GetFullPath(
+    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($TargetDir))
 $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
 $SchemaVersion = 3
 
@@ -347,6 +351,32 @@ content_hash: sha256:$ContentHash
     return $actualMode
 }
 
+# FW-2 (owner's decision R4), as src/deltafuse/core/leash.py repository_layout_error: a product
+# below the root of a git repository is refused before anything is written - the hook and the
+# leash read paths from the repository root, so nothing there would be judged.
+$probe = $TargetRoot
+while ($probe -and -not (Test-Path -LiteralPath $probe -PathType Container)) { $probe = Split-Path -Parent $probe }
+if ($probe -and (Get-Command git -ErrorAction SilentlyContinue)) {
+    $prefix = $null
+    $inRepository = $false
+    Push-Location -LiteralPath $probe
+    try {
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $prefix = (& git rev-parse --show-prefix 2>$null | Out-String).Trim()
+        $inRepository = ($LASTEXITCODE -eq 0)
+        $top = if ($inRepository) { (& git rev-parse --show-toplevel 2>$null | Out-String).Trim() } else { "" }
+        $ErrorActionPreference = $previousPreference
+    }
+    finally {
+        Pop-Location
+        $global:LASTEXITCODE = 0  # git's "not a repository" is an answer here, not this script's exit code
+    }
+    if ($inRepository -and ($prefix -or ($probe -ne $TargetRoot))) {
+        throw "$TargetRoot is a subdirectory of the git repository at $top. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item."
+    }
+}
+
 Write-Host "Installing DeltaFuse $FrameworkVersion into $TargetRoot..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
@@ -362,16 +392,16 @@ $gitignoreContent = ""
 if (Test-Path -LiteralPath $gitignorePath) {
     $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw
 }
-$newEntries = $gitignoreEntries | ForEach-Object {
-    if (-not $gitignoreContent -match [regex]::Escape($_)) {
-        "$_`n"
-    } else {
-        ""
-    }
-}
-if ($newEntries) {
-    $updatedContent = $gitignoreContent.TrimEnd() + $newEntries
-    Set-Content -LiteralPath $gitignorePath -Value $updatedContent -Encoding utf8 -NoNewline
+if ($null -eq $gitignoreContent) { $gitignoreContent = "" }
+# FW-19: each entry on a line of its own, after the last line of what is there (the entries were
+# glued onto it, and `-not $x -match` tested the wrong thing); no BOM, which would make the
+# first line match nothing.
+$newEntries = @($gitignoreEntries | Where-Object { -not $gitignoreContent.Contains($_) })
+if ($newEntries.Count -gt 0) {
+    $kept = $gitignoreContent.TrimEnd()
+    if ($kept) { $kept += "`n" }
+    $updatedContent = $kept + ($newEntries -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($gitignorePath, $updatedContent, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Updated host .gitignore with DeltaFuse entries" -ForegroundColor DarkYellow
 }
 
@@ -474,7 +504,7 @@ if (Test-Path -LiteralPath $configPath) {
 }
 
 $autoAccept = "false"
-$leashMode = "off"
+$leashMode = "enforce"  # a missing key is enforce for every reader (FW-6)
 if (Test-Path -LiteralPath $configPath) {
     $cfgText = Get-Content -LiteralPath $configPath -Raw
     if ($cfgText -match '(?m)^\s+auto_accept_decisions:\s+(true|false)\s*$') {

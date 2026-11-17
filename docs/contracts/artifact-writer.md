@@ -77,13 +77,20 @@ Operation descriptors reside in `process/artifact-operations/*.descriptor.yaml` 
 | `task` | `create`, `update` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
 | `slice` | `create`, `update` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
 | `spec-delta` | `create`, `update` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
-| `routing` | `create`, `update` | `claims` | `change` |
-| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
+| `routing` | `create`, `update` | `route`, `claims` | `change` |
+| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary`, `route` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
 | `decision` | `create`, `update` (only while `proposed`) | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
 | `evidence` | None (`deltafuse evidence` writes it) | None | All fields (kernel stamped) |
 | `coverage` | None (`deltafuse coverage` writes it) | None | `change`, `claims` |
 | `capability` | None | None | `schema_version`, `domains`, `policies` |
 | `lock` | None | None | `schema_version`, `framework` |
+
+Rules that hold for every operation:
+
+- **A kind writes its own file.** `task`: `tasks/TASK-*.md`; `slice`: `slices/SLICE-*.md`; `spec-delta`: `spec-delta.md`; `routing`: `routing.yaml`; `change`: `change.yaml` (all inside the Change); `decision`: `docs/decisions/DEC-*.md`. Any other `target` is refused (`kind_target_mismatch`): `--kind routing` cannot write `coverage.yaml`.
+- **An identity has one file.** Creating an identity that already has a file (the target, or `<ID>-<slug>.md` beside it) is refused with `already_exists` before a transaction is opened.
+- **A task's title** is the heading of its body (`# TASK-001: <title>`); `set /title` rewrites that heading.
+- **A task's paths.** `allowed_paths` and `forbidden_paths` are plain product paths: relative to the product root, `/`, no `..`, `.` or empty segment. They, and the set of tasks, are fixed when Decompose closes: once the Change's receipts are past the `decomposed` gate the Writer refuses a new task and any change of these two fields, also for a task still `pending`.
 
 ---
 

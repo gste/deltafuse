@@ -218,6 +218,18 @@ def write_artifact(
             f"{path.as_posix()} does not exist; creating it needs 'identity'",
             code="target_not_found",
         )
+    if kind != "decision":
+        from deltafuse.core.artifacts import existing_identity_file
+
+        # FW-14: `identity: TASK-001` with `target: tasks/TASK-001-banner.md` while TASK-001.md
+        # exists - the target was missing, so this went on to create TASK-001 a second time.
+        taken = existing_identity_file(service._resolve_target_path(kind, identity), kind, identity)
+        if taken is not None:
+            raise ArtifactServiceError(
+                f"{identity} already exists as {taken.name}, and 'target' names another file "
+                f"({path.name}). Name the artifact by 'identity' alone, or by that file",
+                code="already_exists", path=str(taken),
+            )
     payload = dict(fields)
     if kind == "task" and "context_budget" not in payload:
         payload["context_budget"] = _product_budget(root)

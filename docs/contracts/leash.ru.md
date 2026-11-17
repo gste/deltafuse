@@ -6,9 +6,31 @@
 
 **Канон продюсера.** `deltafuse leash`, hook или хост пинят ту же схему. Не схема продукта; installer не копирует `docs/contracts/**`.
 
-Продюсер: `deltafuse next --json`. Проверка: `deltafuse leash`. `envelope` — объект по схеме или JSON `null`. `null` — нет готового шага воркера. Код/ops/deploy в таком diff — orphan, `leash` падает. `docs/spec/**` — orphan только после `project.baseline: accepted`. `docs/intake/**` и `AGENTS.md` не orphan.
+Продюсер: `deltafuse next --json`. Проверка: `deltafuse leash`. `envelope` — объект по схеме или JSON `null`. `null` — нет готового шага воркера. Любой путь в diff, который не исключён и не покрыт envelope, — orphan, `leash` падает (и при пустом envelope, и при открытом). `docs/spec/**` — orphan только после `project.baseline: accepted`.
 
-Intake `write` не содержит `src/**`. Declare/Implement оставляют evidence и `tests/**`, код сужается до `allowed_paths`. Свежий `init` пишет `workflow.leash: advisory`. `off` — без hook, `advance` не проверяет. `advisory` — те же нарушения, exit 0; `deltafuse advance` сам запускает ту же проверку до записи квитанции и сообщает нарушения, не отказывая. `enforce` — `advance` отказывает в переходе, пока путь вне envelope. Продукт без git или без коммита проверить нельзя: `advance` пишет `checked: false` с причиной и не блокирует. `enforce`/`advisory` ставят локальный `pre-commit` на `deltafuse leash` в каталог hook самого git (`core.hooksPath`, если он указывает внутрь репозитория или его git-каталога; для общего каталога hook вне репозитория — сообщение, как вызвать `.deltafuse/hooks/pre-commit`). Hook не делает `git push`.
+**Что судится и что исключено.** Судится каждый путь, а не только `src/**`, `tests/**` и ops/deploy: `pom.xml`, `conftest.py`, `README.md`, `CHANGELOG.md`, `.gitignore`, workflow CI — файлы продукта. Change пишет файл вне корней по умолчанию, только если человек назвал его в `workflow.code_roots` (глоб или файл, например `pom.xml`), а задача — в `allowed_paths`; иначе его коммитит человек (`git commit --no-verify`), а диапазон всё равно судит CI. Исключены только: `.deltafuse/**` (у журналов, lock и config свои проверки), `docs/intake/**`, `AGENTS.md`, `docs/archive/**` (архив закрытых Change и источники intake, которые туда переносит Intake), `docs/spec/**` при `project.baseline: draft` и кэши интерпретатора там, где кэш действительно лежит. `README.md` по имени и `CHANGELOG.md` больше не исключены.
+
+**Пути.** Одна нормальная форма: относительно корня продукта, `/`, без сегментов `.`, `..` и пустых, без диска. `--file` разрешает то, что набрано (абсолютный путь внутри продукта, `..`), и отказывает пути, выходящему из продукта. `allowed_paths` и `forbidden_paths` задачи уже должны быть в этой форме: гейт `decomposed` и Writer отказывают всему остальному.
+
+**Границы Change.** Envelope называет каталог своего Change (`docs/changes/<dir>/...`), а не `docs/changes/*/`. В этих глобах `*` — один сегмент пути, `**` — любая глубина. Change, сошедшийся к базе и не переоткрытый после неё, не открывает envelope; файл Change, не покрытый ни одним envelope, — нарушение независимо от того, готов ли другой шаг.
+
+**Задачи.** Задача открывает envelope Declare/Implement только такой, какой её оставил Decompose: её файл должен быть в коммите, записавшем последнюю квитанцию `decomposed` этого Change, а `allowed_paths` не шире, чем в нём. Пока эта квитанция не закоммичена, leash датировать задачу не может; Writer отказывает новой задаче и новым `allowed_paths`/`forbidden_paths` любой задачи, как только по квитанциям Decompose закрыт.
+
+**Архив Change.** `deltafuse archive` переносит Change в `docs/archive/changes/`. Change, заархивированный в судимом diff, учитывается как активный: его квитанции и задачи из архива дают те же envelope. Отсутствующий файл Change — перенос, а не удаление, если этот Change заархивирован в судимом дереве и файл есть в архиве.
+
+**Раскладка репозитория.** Корень продукта — корень его git-репозитория (или git нет). В подкаталоге репозитория `deltafuse init` и `deltafuse leash` отказывают, `advance` пишет `checked: false` с причиной. Монорепозиторий — пункт roadmap.
+
+**Закреплённое ядро.** Hook и `deltafuse leash` (в любом режиме) отказывают с кодом `2`, если работающее ядро — не то, что закреплено в `.deltafuse/lock.yaml`, или config требует другой framework, чем lock: diff не судится по правилам другого ядра.
+
+**Откаты.** Квитанция, возвращающая Change назад, — граница шага, как гейт: переоткрытый gap (назад в Analyze), отклонение принятой спецификации (`gap-reopen` с gap `spec-rejected`, назад в `analyzed`), переоткрытие задачи после гейта `implemented` (`artifact-status` самого Change с причиной `task reopened`, назад в `declared`). Цепочка продолжается с шага после неё, а `advance` судит шаг от коммита перед тем, который её записал.
+
+**Первый коммит.** Hook пропускает коммит без родителя и коммит (диапазон), в базе которого нет `.deltafuse/lock.yaml` (установка DeltaFuse): его не с чем сравнить. Каждый следующий коммит судится.
+
+**Нет hook.** Hook не клонируется, а `core.hooksPath`, заданный после `init`, уводит git от установленного hook. `deltafuse leash` (`warnings` в JSON и stderr) и `validate-layout` (stderr, не ошибка) сообщают, что leash включён, а hook его не запускает; ставит его `deltafuse init`. В CI (задана `CI`) не сообщают.
+
+**Файлы под `.gitignore`.** Неотслеживаемые файлы, которые git игнорирует, судятся, если лежат в корне кода, а сам `.gitignore` судится как любой файл — правило игнорирования ничего не прячет. Каталог, игнорируемый целиком (`target/`, `node_modules/`), — вывод сборки и не перечисляется. Неигнорируемый вывод сборки — orphan: человек добавляет его в `.gitignore`.
+
+Intake `write` не содержит `src/**`. Declare/Implement оставляют evidence и `tests/**`, код сужается до `allowed_paths`. Свежий `init` пишет `workflow.leash: advisory`. Отсутствующий ключ или значение, не являющееся режимом, — `enforce` для всех (leash, проверка hook, `advance`, установщики). `off` — без hook, `advance` не проверяет. `advisory` — те же нарушения, exit 0; `deltafuse advance` сам запускает ту же проверку до записи квитанции и сообщает нарушения, не отказывая. `enforce` — `advance` отказывает в переходе, пока путь вне envelope. Продукт без git или без коммита проверить нельзя: `advance` пишет `checked: false` с причиной и не блокирует. `enforce`/`advisory` ставят локальный `pre-commit` на `deltafuse leash` в каталог hook самого git (`core.hooksPath`, если он указывает внутрь репозитория или его git-каталога; для общего каталога hook вне репозитория — сообщение, как вызвать `.deltafuse/hooks/pre-commit`). Hook не делает `git push`.
 
 **Режим и корни вердикта.** Diff судится режимом и корнями кода из `.deltafuse/config.yaml` базы; более строгий режим в судимом или рабочем дереве действует сразу. Коммит, ослабляющий `workflow.leash` или меняющий `workflow.code_roots`, сам вне любого envelope: это настройки человека, их коммитят отдельно. Внутри шага `advance` держит режим, с которым шаг начался.
 
@@ -28,9 +50,9 @@ Intake `write` не содержит `src/**`. Declare/Implement оставля�
 
 **Корни кода.** `src/**` и `tests/**` выше означают корни кода продукта: `workflow.code_roots` из `.deltafuse/config.yaml`, если задан (например `[svc/src/**]`), иначе эти два. Hook и `deltafuse leash` судят «бесхозную» правку продукта и envelope Declare/Implement по тем же корням, что `deltafuse next` кладёт в `envelope.read` и `envelope.write`.
 
-**Кэши интерпретатора.** `*.pyc`, `__pycache__/**` и `.pytest_cache/**` исключены: их пишет запуск Red- и Green-тестов, и воркер не может этого избежать.
+**Кэши интерпретатора.** Исключены только там, где кэш лежит: `__pycache__/<имя>.pyc` и собственные файлы pytest в `.pytest_cache/` (`README.md`, `.gitignore`, `CACHEDIR.TAG`, `v/**`): их пишет запуск Red- и Green-тестов, и воркер не может этого избежать. Любой другой файл в этих каталогах и `*.pyc` в другом месте судятся.
 
-**`forbidden_paths` задачи.** На Declare и Implement `forbidden_paths` задачи сужают только её тестовую и продуктовую область. Собственные файлы Change (`docs/changes/*/evidence/**`, `coverage.yaml`, `change.yaml`) остаются в envelope: туда пишет `deltafuse evidence`, и задача, запретившая `docs/**`, не должна превращать это в нарушение.
+**`forbidden_paths` задачи.** На Declare и Implement `forbidden_paths` задачи сужают только её тестовую и продуктовую область. Собственные файлы Change (его `evidence/**`, `coverage.yaml`, `change.yaml`) остаются в envelope: туда пишет `deltafuse evidence`, и задача, запретившая `docs/**`, не должна превращать это в нарушение.
 
 ## Хост обязан
 

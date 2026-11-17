@@ -94,14 +94,17 @@ def test_a_reopened_task_is_judged_as_the_humans_write_before_a_commit(tmp_path:
 def test_a_hand_edit_after_the_decision_or_a_deletion_without_an_archive_is_still_refused(
     tmp_path: Path, repo_root: Path
 ):
-    builder = _gap_found(tmp_path, repo_root)
-    _enforce(tmp_path)
-    _git_commit_all(tmp_path)
+    # Audit 2026-11-17 (FW-2, R4): two sibling products. The second used to be installed inside
+    # the first one's repository - a product in a subdirectory, which `init` now refuses.
+    first = tmp_path / "first"
+    builder = _gap_found(first, repo_root)
+    _enforce(first)
+    _git_commit_all(first)
     (builder.change_dir / "evidence" / "green" / "TASK-001.yaml").unlink()  # nobody decided this
-    violations = leash_at_advance(builder.change_dir, tmp_path)["violations"]
+    violations = leash_at_advance(builder.change_dir, first)["violations"]
     assert any("evidence/green/TASK-001.yaml" in v for v in violations), violations
 
-    _git_commit_all(tmp_path)
+    _git_commit_all(first)
     builder = _gap_found(tmp_path / "second", repo_root)
     root = tmp_path / "second"
     _enforce(root)

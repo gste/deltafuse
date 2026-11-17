@@ -14,6 +14,17 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# FW-2 (owner's decision R4), as src/deltafuse/core/leash.py repository_layout_error: a product
+# below the root of a git repository is refused before anything is written - the hook and the
+# leash read paths from the repository root, so nothing there would be judged.
+probe="$TARGET_DIR"
+while [ ! -d "$probe" ]; do probe="$(dirname "$probe")"; done
+if prefix="$(cd "$probe" && git rev-parse --show-prefix 2>/dev/null)"; then
+  if [ -n "$prefix" ] || [ ! -d "$TARGET_DIR" ]; then
+    printf '%s is a subdirectory of the git repository at %s. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item.\n' "$TARGET_DIR" "$(cd "$probe" && git rev-parse --show-toplevel 2>/dev/null)" >&2
+    exit 1
+  fi
+fi
 TARGET_ROOT="$(mkdir -p "$TARGET_DIR" && cd "$TARGET_DIR" && pwd)"
 FRAMEWORK_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
 SCHEMA_VERSION=3
@@ -338,13 +349,16 @@ GITIGNORE_ENTRIES=(
     ".cursor/skills/"
     ".gemini/skills/"
 )
-if [ -f "$GITIGNORE" ]; then
-    for entry in "${GITIGNORE_ENTRIES[@]}"; do
-        if ! grep -F -q "$entry" "$GITIGNORE"; then
-            echo "$entry" >> "$GITIGNORE"
+# FW-19: also when the product has no .gitignore yet (the other installers write one), and on a
+# line of its own when the last line has no newline.
+for entry in "${GITIGNORE_ENTRIES[@]}"; do
+    if [ ! -f "$GITIGNORE" ] || ! grep -F -q "$entry" "$GITIGNORE"; then
+        if [ -s "$GITIGNORE" ] && [ -n "$(tail -c 1 "$GITIGNORE")" ]; then
+            echo >> "$GITIGNORE"
         fi
-    done
-fi
+        echo "$entry" >> "$GITIGNORE"
+    fi
+done
 
 LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 
@@ -475,7 +489,7 @@ if [ -f "$config_file" ] && { [ "$update_ver" -eq 1 ] || [ "$update_src" -eq 1 ]
 fi
 
 auto_accept="false"
-leash_mode="off"
+leash_mode="enforce"  # a missing key is enforce for every reader (FW-6)
 if [ -f "$config_file" ]; then
   extracted_auto="$(awk '
     /^workflow:[[:space:]]*$/ { in_wf=1; next }

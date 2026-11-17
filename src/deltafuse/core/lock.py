@@ -88,6 +88,61 @@ def format_lock_yaml(
     )
 
 
+def product_pin_errors(product_root: Any) -> list[str]:
+    """Why this Core may not judge or move the product: it is not the Core the lock pins, or the
+    config asks for another framework than the lock holds (audit 2026-11-17, FW-10, FL-11).
+
+    A Core whose identity differs from the pin was refused by `artifact write` alone; the
+    pre-commit hook and `deltafuse leash` judged the product by another Core's rules. The same
+    check as df-lifecycle's `fsm.product_pin_errors` (gates, `state`, `evidence`, `next`), kept
+    here so that the leash and the gates read one answer. A directory with no lock is not judged.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(product_root)
+    lock_file = root / ".deltafuse" / "lock.yaml"
+    if not lock_file.is_file():
+        return []
+    from deltafuse.core.artifact_registry import ArtifactRegistry, ArtifactRegistryError
+    from deltafuse.core.assets import AssetError
+
+    way_out = (
+        "run the Core this product pins, or upgrade the product - close its active Changes "
+        "(`deltafuse decide <change-dir> --close --status rejected|superseded --note \"<why>\"`), then "
+        "`deltafuse init <product-root> --force`"
+    )
+    errors: list[str] = []
+    try:
+        ArtifactRegistry(root).verify_product_lock(root)
+    except (ArtifactRegistryError, AssetError) as ex:
+        errors.append(f"{ex}: {way_out}")
+
+    def load(path: Path) -> dict[str, Any]:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    config, lock = load(root / ".deltafuse" / "config.yaml"), load(lock_file)
+    wanted = config.get("framework") if isinstance(config.get("framework"), dict) else {}
+    pinned = lock.get("framework") if isinstance(lock.get("framework"), dict) else {}
+    fix = "set .deltafuse/config.yaml back to what the lock holds, or upgrade the product as above"
+    if wanted.get("version") and pinned.get("version") and wanted["version"] != pinned["version"]:
+        errors.append(
+            f"config asks for framework version {wanted['version']}, the lock pins {pinned['version']}: {fix}"
+        )
+    source = wanted.get("source")
+    if source and pinned.get("source"):
+        asked = f"deltafuse://v{wanted.get('version')}" if source == "deltafuse" else source
+        if asked != pinned["source"]:
+            errors.append(f"config asks for framework source '{source}', the lock pins '{pinned['source']}': {fix}")
+    errors.extend(f"config and lock disagree: {e}" for e in workflow_alignment_errors(config, lock))
+    return errors
+
+
 def workflow_alignment_errors(config: dict[str, Any] | None, lock: dict[str, Any] | None) -> list[str]:
     """Layout errors for invalid or mismatched workflow profiles."""
     errors: list[str] = []

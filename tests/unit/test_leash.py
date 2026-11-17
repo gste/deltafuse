@@ -568,8 +568,10 @@ def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_r
     assert ret == 0
     write = data["envelope"]["write"]
     assert data["envelope"]["step"] == "declare"
-    assert "docs/changes/*/evidence/red/**" in write
-    assert "docs/changes/*/change.yaml" in write
+    # FW-11 (audit 2026-11-17): the envelope names the Change's own directory, not `docs/changes/*/`.
+    home = builder.change_dir.relative_to(tmp_path).as_posix()
+    assert f"{home}/evidence/red/**" in write
+    assert f"{home}/change.yaml" in write
     assert "src/secret.py" not in write
 
 

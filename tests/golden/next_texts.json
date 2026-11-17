@@ -51,7 +51,7 @@
           "step": "analyze",
           "task": null,
           "write": [
-            "docs/changes/*/change.yaml"
+            "docs/changes/CHG-302/change.yaml"
           ]
         },
         "halt": null,
@@ -181,9 +181,9 @@
           "step": "specify",
           "task": null,
           "write": [
-            "docs/changes/*/spec-delta.md",
-            "docs/changes/*/change.yaml",
-            "docs/changes/*/slices/**",
+            "docs/changes/CHG-303/spec-delta.md",
+            "docs/changes/CHG-303/change.yaml",
+            "docs/changes/CHG-303/slices/**",
             "docs/spec/_capabilities.yaml",
             "docs/spec/core.md"
           ]
@@ -430,9 +430,9 @@
           "step": "declare",
           "task": "TASK-001",
           "write": [
-            "docs/changes/*/evidence/red/**",
-            "docs/changes/*/coverage.yaml",
-            "docs/changes/*/change.yaml",
+            "docs/changes/CHG-308/evidence/red/**",
+            "docs/changes/CHG-308/coverage.yaml",
+            "docs/changes/CHG-308/change.yaml",
             "tests/**",
             "src/core.py"
           ]
@@ -538,9 +538,9 @@
           "step": "declare",
           "task": "TASK-001",
           "write": [
-            "docs/changes/*/evidence/red/**",
-            "docs/changes/*/coverage.yaml",
-            "docs/changes/*/change.yaml",
+            "docs/changes/CHG-307/evidence/red/**",
+            "docs/changes/CHG-307/coverage.yaml",
+            "docs/changes/CHG-307/change.yaml",
             "tests/**",
             "src/core.py"
           ]
@@ -742,11 +742,11 @@
           "step": "verify",
           "task": null,
           "write": [
-            "docs/changes/*/verification.md",
-            "docs/changes/*/evidence/verification/**",
-            "docs/changes/*/coverage.yaml",
-            "docs/changes/*/change.yaml",
-            "docs/changes/*/tasks/*"
+            "docs/changes/CHG-309/verification.md",
+            "docs/changes/CHG-309/evidence/verification/**",
+            "docs/changes/CHG-309/coverage.yaml",
+            "docs/changes/CHG-309/change.yaml",
+            "docs/changes/CHG-309/tasks/*"
           ]
         },
         "halt": null,
@@ -848,8 +848,8 @@
           "step": "analyze",
           "task": null,
           "write": [
-            "docs/changes/*/routing.yaml",
-            "docs/changes/*/change.yaml"
+            "docs/changes/CHG-301/routing.yaml",
+            "docs/changes/CHG-301/change.yaml"
           ]
         },
         "halt": null,
@@ -1074,9 +1074,9 @@
           "step": "decompose",
           "task": null,
           "write": [
-            "docs/changes/*/tasks/**",
-            "docs/changes/*/coverage.yaml",
-            "docs/changes/*/change.yaml"
+            "docs/changes/CHG-306/tasks/**",
+            "docs/changes/CHG-306/coverage.yaml",
+            "docs/changes/CHG-306/change.yaml"
           ]
         },
         "halt": null,
