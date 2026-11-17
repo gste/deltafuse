@@ -236,6 +236,34 @@ def journal_errors(product_root: Path) -> list[str]:
     return errors
 
 
+def latest_receipt(
+    product_root: Path,
+    *,
+    rel_path: str | None = None,
+    kind: str | None = None,
+    artifact_id: str | None = None,
+) -> dict[str, Any] | None:
+    """The newest intact receipt about one artifact: by its path, whatever the kind of verdict,
+    or - when no path is given - by kind and id.
+
+    Audit 2026-11 (FL-2): a verdict stands until a later one replaces it. A gap reopen (kind
+    `gap`) or a rejection written after an acceptance is the last word on that file, even when
+    the file's bytes are put back to what the acceptance signed.
+    """
+    want_rel = rel_path.replace("\\", "/") if rel_path else None
+    for entry in reversed(load_receipts(Path(product_root))):
+        version = entry.get("receipt_version")
+        if version is not None and (version != RECEIPT_VERSION or not _chain_intact(entry)):
+            continue
+        if want_rel is not None:
+            if entry.get("path") != want_rel:
+                continue
+        elif (kind and entry.get("kind") != kind) or (artifact_id and entry.get("id") != artifact_id):
+            continue
+        return entry
+    return None
+
+
 def has_valid_receipt(
     product_root: Path,
     *,
@@ -245,38 +273,24 @@ def has_valid_receipt(
     rel_path: str | None = None,
     artifact: Path | None = None,
 ) -> bool:
-    """True when a receipt for this click still matches the artifact bytes.
+    """True when this click is the latest verdict on the artifact and still matches its bytes.
 
     A receipt whose artifact changed after the click is stale and no longer
-    counts (DF3-007 item 5). Chain integrity is verified per entry.
+    counts (DF3-007 item 5). Chain integrity is verified per entry. An older
+    receipt never counts once a later one about the same file exists (FL-2).
     """
-    root = Path(product_root)
-    want_rel = rel_path.replace("\\", "/") if rel_path else None
+    entry = latest_receipt(product_root, rel_path=rel_path, kind=kind, artifact_id=artifact_id)
+    if entry is None or entry.get("kind") != kind or entry.get("status") != status:
+        return False
+    if artifact_id and entry.get("id") != artifact_id:
+        return False
     # `decide` writes LF; a checkout under core.autocrlf gives back the same text with CRLF,
     # which is still the bytes the human answered.
-    current_digests: set[str] | None = None
-    if artifact is not None and Path(artifact).is_file():
+    if artifact is not None and Path(artifact).is_file() and entry.get("receipt_version") is not None:
         data = Path(artifact).read_bytes()
-        current_digests = {_digest(data), _digest(data.replace(b"\r\n", b"\n"))}
-    for entry in reversed(load_receipts(root)):
-        if entry.get("kind") != kind or entry.get("status") != status:
-            continue
-        if artifact_id and entry.get("id") != artifact_id:
-            continue
-        if want_rel and entry.get("path") != want_rel:
-            continue
-        version = entry.get("receipt_version")
-        if version is not None:
-            if version != RECEIPT_VERSION or not _chain_intact(entry):
-                continue
-        if (
-            current_digests is not None
-            and version is not None
-            and entry.get("artifact_sha256") not in current_digests
-        ):
-            continue  # stale: artifact changed after the click
-        return True
-    return False
+        if entry.get("artifact_sha256") not in {_digest(data), _digest(data.replace(b"\r\n", b"\n"))}:
+            return False  # stale: artifact changed after the click
+    return True
 
 
 def has_click(
