@@ -349,13 +349,16 @@ GITIGNORE_ENTRIES=(
     ".cursor/skills/"
     ".gemini/skills/"
 )
-if [ -f "$GITIGNORE" ]; then
-    for entry in "${GITIGNORE_ENTRIES[@]}"; do
-        if ! grep -F -q "$entry" "$GITIGNORE"; then
-            echo "$entry" >> "$GITIGNORE"
+# FW-19: also when the product has no .gitignore yet (the other installers write one), and on a
+# line of its own when the last line has no newline.
+for entry in "${GITIGNORE_ENTRIES[@]}"; do
+    if [ ! -f "$GITIGNORE" ] || ! grep -F -q "$entry" "$GITIGNORE"; then
+        if [ -s "$GITIGNORE" ] && [ -n "$(tail -c 1 "$GITIGNORE")" ]; then
+            echo >> "$GITIGNORE"
         fi
-    done
-fi
+        echo "$entry" >> "$GITIGNORE"
+    fi
+done
 
 LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 

@@ -302,9 +302,9 @@ def install(
     gitignore_content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.is_file() else ""
     new_entries = [entry for entry in gitignore_entries if entry not in gitignore_content]
     if new_entries:
+        kept = gitignore_content.rstrip()
         gitignore_path.write_text(
-            gitignore_content.rstrip() + "\n" + "\n".join(new_entries) + "\n",
-            encoding="utf-8",
+            (kept + "\n" if kept else "") + "\n".join(new_entries) + "\n", encoding="utf-8", newline="\n"
         )
 
     config_path = target_root / ".deltafuse" / "config.yaml"

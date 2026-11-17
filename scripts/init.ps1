@@ -9,7 +9,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $FrameworkRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$TargetRoot = [System.IO.Path]::GetFullPath($TargetDir)
+# FW-5: against PowerShell's location, not the process directory. [IO.Path]::GetFullPath reads the
+# process directory, which Set-Location does not move: `cd product; init.ps1` installed into the
+# directory the shell was started in (2026-11-16: into the framework checkout itself).
+$TargetRoot = [System.IO.Path]::GetFullPath(
+    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($TargetDir))
 $FrameworkVersion = (Get-Content -LiteralPath (Join-Path $FrameworkRoot "VERSION") -Raw).Trim()
 $SchemaVersion = 3
 
@@ -366,6 +370,7 @@ if ($probe -and (Get-Command git -ErrorAction SilentlyContinue)) {
     }
     finally {
         Pop-Location
+        $global:LASTEXITCODE = 0  # git's "not a repository" is an answer here, not this script's exit code
     }
     if ($inRepository -and ($prefix -or ($probe -ne $TargetRoot))) {
         throw "$TargetRoot is a subdirectory of the git repository at $top. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item."
@@ -387,16 +392,16 @@ $gitignoreContent = ""
 if (Test-Path -LiteralPath $gitignorePath) {
     $gitignoreContent = Get-Content -LiteralPath $gitignorePath -Raw
 }
-$newEntries = $gitignoreEntries | ForEach-Object {
-    if (-not $gitignoreContent -match [regex]::Escape($_)) {
-        "$_`n"
-    } else {
-        ""
-    }
-}
-if ($newEntries) {
-    $updatedContent = $gitignoreContent.TrimEnd() + $newEntries
-    Set-Content -LiteralPath $gitignorePath -Value $updatedContent -Encoding utf8 -NoNewline
+if ($null -eq $gitignoreContent) { $gitignoreContent = "" }
+# FW-19: each entry on a line of its own, after the last line of what is there (the entries were
+# glued onto it, and `-not $x -match` tested the wrong thing); no BOM, which would make the
+# first line match nothing.
+$newEntries = @($gitignoreEntries | Where-Object { -not $gitignoreContent.Contains($_) })
+if ($newEntries.Count -gt 0) {
+    $kept = $gitignoreContent.TrimEnd()
+    if ($kept) { $kept += "`n" }
+    $updatedContent = $kept + ($newEntries -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($gitignorePath, $updatedContent, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Updated host .gitignore with DeltaFuse entries" -ForegroundColor DarkYellow
 }
 
