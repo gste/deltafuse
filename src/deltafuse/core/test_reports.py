@@ -75,18 +75,89 @@ def runner_head(program: object) -> str:
     return _strip_runner_suffix(Path(str(program).replace("\\", "/")).name).lower()
 
 
+_PYTHON_HEAD = re.compile(r"^(?:python|pypy)\d*(?:\.\d+)*$")
+# Interpreter options that take their value as the next argument (`python -X utf8 -m pytest`).
+_PYTHON_VALUE_OPTIONS = frozenset({"-X", "-W"})
+# Launchers that run a command in the project's environment: `uv run pytest`, `poetry run pytest`.
+ENV_WRAPPERS: dict[str, str] = {"uv": "run", "poetry": "run", "pipenv": "run", "pdm": "run", "hatch": "run", "rye": "run"}
+_WRAPPER_VALUE_OPTIONS = frozenset({
+    "--with", "--with-requirements", "--with-editable", "--python", "-p", "--project", "--directory", "-C",
+    "--extra", "--group", "--only-group", "--no-group", "--package", "--env-file", "--env", "-e",
+    "--index", "--default-index", "--index-url", "--extra-index-url", "--find-links", "--cache-dir",
+})
+
+
+def is_python(program: object) -> bool:
+    """A Python interpreter, however it is called: `python`, `python3`, `python3.12`, `pypy3`, `py`."""
+    head = runner_head(program)
+    return head == "py" or bool(_PYTHON_HEAD.match(head))
+
+
+def pytest_args_start(argv: list[str]) -> int | None:
+    """The index of pytest's first own argument; None when the command is not pytest.
+
+    Audit 2026-11-17 (FE-3): pytest was recognised as `pytest ...` or `python -m pytest ...` and
+    nothing else, so `python -X utf8 -m pytest` and `uv run pytest` - the commands a product
+    declares in `workflow.test_commands` - were runners without a reader: no report was asked for
+    or read, and Green was no longer tied to the Red it answers. The command is read once, here:
+    environment launchers (`uv run`, `poetry run`, ...) and the interpreter's own options are
+    skipped, and everything after `pytest` is pytest's.
+    """
+    args = [str(a) for a in argv]
+    i, n = 0, len(args)
+    for _ in range(4):  # a launcher, then an interpreter, then pytest
+        if i >= n:
+            return None
+        head = runner_head(args[i])
+        if head in PYTEST_RUNNERS:
+            return i + 1
+        if is_python(head):
+            j = i + 1
+            while j < n:
+                arg = args[j]
+                if arg == "-m":
+                    return j + 2 if j + 1 < n and args[j + 1] in PYTEST_RUNNERS else None
+                if arg in _PYTHON_VALUE_OPTIONS:
+                    j += 2
+                elif arg.startswith("-") and arg != "-c":
+                    j += 1
+                else:
+                    return None  # a script or `-c`: not pytest
+            return None
+        if ENV_WRAPPERS.get(head) and i + 1 < n and args[i + 1] == ENV_WRAPPERS[head]:
+            j = i + 2
+            while j < n and args[j].startswith("-"):
+                if args[j] == "--":
+                    j += 1
+                    break
+                j += 2 if args[j] in _WRAPPER_VALUE_OPTIONS else 1
+            i = j
+            continue
+        return None
+    return None
+
+
 def runner_family(argv: list[str]) -> str:
     """`pytest`, `jvm`, or `` when the Core has no reader for this runner."""
     if not argv:
         return ""
-    head = runner_head(argv[0])
-    if head in PYTEST_RUNNERS:
-        return "pytest"
-    if head in JVM_RUNNERS:
+    if runner_head(argv[0]) in JVM_RUNNERS:
         return "jvm"
-    if head in {"python", "python3"} and "pytest" in argv[1:3]:
+    if pytest_args_start(argv) is not None:
         return "pytest"
     return ""
+
+
+_READABLE_RUNNER_WORD = re.compile(r"(?<![\w.-])(?:pytest|py\.test|mvn|mvnw|gradle|gradlew)(?![\w-])")
+
+
+def names_a_readable_runner(argv: list[str]) -> str | None:
+    """The runner (`pytest`, `mvn`, ...) a command mentions somewhere in its arguments, if any."""
+    for arg in argv:
+        found = _READABLE_RUNNER_WORD.search(str(arg).replace("\\", "/"))
+        if found:
+            return found.group(0)
+    return None
 
 
 def wants_junit_flag(argv: list[str]) -> bool:
@@ -400,9 +471,9 @@ _PYTEST_VALUE_OPTIONS = frozenset({
 
 def pytest_positionals(argv: list[str], repo_root: Path) -> list[str]:
     """The test paths and node ids a pytest command names (existing paths only), POSIX form."""
-    if runner_family(argv) != "pytest":
+    start = pytest_args_start(argv)
+    if start is None:
         return []
-    start = 1 if runner_head(argv[0]) in PYTEST_RUNNERS else argv.index("pytest") + 1
     out: list[str] = []
     rest = iter(argv[start:])
     for arg in rest:
@@ -544,14 +615,15 @@ def _configured_commands(repo_root: Path) -> list[list[str]]:
 
 
 def _normalized(argv: list[str]) -> list[str]:
-    """argv with the runner as its bare name (`.venv/Scripts/pytest.exe` -> `pytest`) and a
-    `python -m pytest` read as `pytest`, so a declared command matches however it is spelled."""
+    """argv with the runner as its bare name (`.venv/Scripts/pytest.exe` -> `pytest`) and any
+    spelling of pytest (`python -X utf8 -m pytest`, `uv run pytest`) read as `pytest`, so a
+    declared command matches however it is spelled."""
     if not argv:
         return []
-    head = runner_head(argv[0])
-    if head in {"python", "python3"} and argv[1:3] == ["-m", "pytest"]:
-        return ["pytest", *[str(a) for a in argv[3:]]]
-    return [head, *[str(a) for a in argv[1:]]]
+    start = pytest_args_start(argv)
+    if start is not None:
+        return ["pytest", *[str(a) for a in argv[start:]]]
+    return [runner_head(argv[0]), *[str(a) for a in argv[1:]]]
 
 
 def _selecting_options(argv: list[str]) -> list[str]:

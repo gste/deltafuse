@@ -407,15 +407,14 @@ def isolation_plan(argv: list[str], recorded: dict[str, Any], red_failed: Iterab
     is not an existing path is an option's value and stays. None when the
     runner is not pytest or nothing is frozen.
     """
-    from deltafuse.core.test_reports import PYTEST_RUNNERS, runner_family, runner_head
+    from deltafuse.core.test_reports import pytest_args_start
 
     expected = frozen_test_ids(recorded, red_failed)
-    if not expected or runner_family(argv) != "pytest":
+    # One reading of the command with runner_family (`pytest_args_start`): `pytest.cmd`,
+    # `python -X utf8 -m pytest` and `uv run pytest` are pytest there and here.
+    split = pytest_args_start(argv)
+    if not expected or split is None:
         return None
-    # One reading of the runner's name with runner_family: `pytest.cmd` is pytest there, and
-    # stripping only `.exe` here sent it to `argv.index("pytest")`, which raised.
-    head = runner_head(argv[0])
-    split = 1 if head in PYTEST_RUNNERS else argv.index("pytest") + 1
     kept: list[str] = []
     rest = iter(argv[split:])
     for arg in rest:
