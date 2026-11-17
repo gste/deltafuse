@@ -1253,12 +1253,19 @@ def _validate_evidence_changed_paths_contract(
             # (2026-10-05): TASK-002's stub src/ratelimit/policy.py failed the gate for
             # TASK-001 and TASK-003, and no retaken Red could drop it.
             allowed_globs += sibling_declared
-        for msg in validate_paths_against_globs(
-            rel_paths,
-            allowed_globs,
-            label=f"Gate {gate} {evidence_phase} changed_paths of {ev_file.name}",
-        ):
-            errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
+        layout = product_layout(product_root_of(change_path))
+        for rel in rel_paths:
+            for msg in validate_paths_against_globs(
+                [rel],
+                allowed_globs,
+                label=f"Gate {gate} {evidence_phase} changed_paths of {ev_file.name}",
+            ):
+                if route == "code" and not layout.is_guarded(rel):
+                    # Since R5 a dirty `README.md`, a build file or un-ignored build output is
+                    # in the Core-computed set: say what it is, not what Red may write.
+                    errors.append(msg + _OUTSIDE_CODE_ROOTS_HINT.format(roots=", ".join(layout.code_roots)))
+                else:
+                    errors.append(msg + (_RED_WRITES_HINT if evidence_phase == "red" else ""))
         if route in {"docs", "ops"}:
             for rel in rel_paths:
                 if is_product_code_path(rel, product_root_of(change_path)):
@@ -1334,6 +1341,11 @@ def _validate_spec_delta_matches_disk(
     return errors
 
 
+_OUTSIDE_CODE_ROOTS_HINT = (
+    " (it lies outside the product's code roots ({roots}): if it is not this task's work, commit "
+    "or revert it; a Change writes it only when the human names it in `workflow.code_roots`; "
+    "build output and caches belong in .gitignore)"
+)
 _RED_WRITES_HINT = (
     " (Red writes tests, plus only the product paths this task's allowed_paths declares - a "
     "compiled-language stub; the rest of the product code is written in Implement, after Red "

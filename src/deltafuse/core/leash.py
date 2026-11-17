@@ -16,7 +16,6 @@ import yaml
 
 from deltafuse.core.context import (
     DEFAULT_CHANGE_ROUTE,
-    DEFAULT_CODE_WRITE_GLOBS,
     PHASE_CONTRACTS,
     code_write_globs,
     configured_code_roots,
@@ -29,6 +28,8 @@ from deltafuse.core.context import (
     posix_relpath,
 )
 from deltafuse.core.config import config_section
+from deltafuse.core import product_layout as product_layout_module
+from deltafuse.core.product_layout import CHANGE_HOMES, product_layout
 from deltafuse.core.layout import PathRefused, product_path_error, product_relpath
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
@@ -56,34 +57,10 @@ export DELTAFUSE_LEASH_INDEX
 exec "$py" -m deltafuse leash "$root"
 """
 
-CODE_WRITE_GLOBS = (
-    "src/**",
-    "tests/**",
-    "deploy/**",
-    "docs/ops/**",
-    "ops/**",
-)
 SPEC_WRITE_GLOBS = ("docs/spec/**",)
-# What the leash does not judge - the whole list (audit 2026-11-17, owner's decision R5: every
-# other path is the product's, `pom.xml`, `conftest.py`, `README.md`, `CHANGELOG.md`, `.gitignore`
-# and the CI workflow included). Exact, case-sensitive names; `.deltafuse/lock.yaml` and
-# `config.yaml` fall under `.deltafuse/**` and have their own guards.
-EXEMPT_EXACT = frozenset({"AGENTS.md"})
-EXEMPT_GLOBS = (
-    ".git/**",
-    ".deltafuse/**",
-    "docs/intake/**",
-    # The Core's archive of closed Changes, and the intake sources Intake moves aside.
-    "docs/archive/**",
-)
-# Interpreter caches: running the Red/Green tests writes them, and the Worker cannot avoid it
-# (q0 run 20260921T111852Z: declare refused over src/ratelimit/__pycache__/*.pyc). Only where a
-# cache really lies (FW-17: any file under a `__pycache__/` or `.pytest_cache/` directory, and any
-# `*.pyc`, was exempt - `src/__pycache__/payload.py`): a compiled module directly in
-# `__pycache__/`, and pytest's own files in `.pytest_cache/`.
-_CACHE_FILE = re.compile(
-    r"^(?:.+/)?(?:__pycache__/[^/]+\.pyc|\.pytest_cache/(?:README\.md|\.gitignore|CACHEDIR\.TAG|v/.+))$"
-)
+# Where the product's code is, what the leash guards and what it does not judge (owner's decision
+# R5) are the product's layout: core/product_layout.py, one definition for the leash, the Red
+# freeze, stale evidence and the context budget (audit 2026-11-17, S2).
 CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 # DF3-007: Core journals change only through the deltafuse CLI. The journals a
 # lifecycle step legitimately appends to are verified; the trust roots never
@@ -293,7 +270,7 @@ def _change_dir(product_root: Path, item: WorkItem) -> Path | None:
 
 
 _ANY_CHANGE = "docs/changes/*/"
-_CHANGE_HOMES = ("docs/changes/", "docs/archive/changes/")
+_CHANGE_HOMES = CHANGE_HOMES
 
 
 def _own_change(globs: list[str], item: WorkItem) -> list[str]:
@@ -337,15 +314,26 @@ def _envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         # as a test that ran and failed for exactly that reason). Only the
         # task's own product paths qualify, and never `docs/changes/**` - that is
         # where the declaration bounding them lives.
+        # Which globs are the Change's own files and which are test roots is the layout's to
+        # say (S2): the spelling `tests` was the test side, so under `svc/tests/**` Declare
+        # could write no test its task had not listed.
+        layout = product_layout(product_root)
+
+        def change_glob(glob: str) -> bool:
+            return glob.replace("\\", "/").startswith("docs/changes")
+
+        def test_glob(glob: str) -> bool:
+            return not change_glob(glob) and layout.is_test_root(glob)
+
         product_phase = list(phase)
         if step == "declare":
             product_phase = [
                 glob
                 for glob in phase_write_globs("implement", route, product_root)
-                if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
+                if not change_glob(glob) and not test_glob(glob)
             ]
-        change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
-        test_side = [glob for glob in phase if glob.replace("\\", "/").startswith("tests")]
+        change_side = [glob for glob in phase if change_glob(glob)]
+        test_side = [glob for glob in phase if test_glob(glob)]
         product_side = [path for path in allowed_paths if matches_contract_globs(path, product_phase)]
         # A task's forbidden_paths bound its product and test scope. They never
         # remove the Change's own files: evidence is written by `deltafuse
@@ -403,15 +391,8 @@ def path_in_envelope(rel_path: str, write_globs: list[str]) -> bool:
 
 
 def is_exempt_path(rel_path: str) -> bool:
-    """A path the leash does not judge: EXEMPT_EXACT, EXEMPT_GLOBS, or a real cache file."""
-    rel = posix_relpath(rel_path)
-    if ".." in rel.split("/"):
-        return False
-    if rel in EXEMPT_EXACT:
-        return True
-    if matches_contract_globs(rel, EXEMPT_GLOBS):
-        return True
-    return _CACHE_FILE.match(rel) is not None
+    """A path the leash does not judge (R5): the layout's exempt list, nothing else."""
+    return product_layout_module.is_exempt_path(rel_path)
 
 
 REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
@@ -592,18 +573,16 @@ def _task_reopened_in(product_root: Path, rel: str, task: str) -> bool:
 
 
 def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:
-    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files.
-
-    Without code roots this is CODE_WRITE_GLOBS, in its order."""
-    ops = tuple(g for g in CODE_WRITE_GLOBS if g not in DEFAULT_CODE_WRITE_GLOBS)
-    return code_write_globs(product_root) + ops
+    """Product code the leash guards: the layout's code roots (`workflow.code_roots`, else
+    `src/**` and `tests/**`) plus the ops roots."""
+    return product_layout(product_root).guarded_globs()
 
 
 def is_product_path(
     rel_path: str, *, baseline: str = "draft", product_root: Path | None = None
 ) -> bool:
     rel = posix_relpath(rel_path)
-    if matches_contract_globs(rel, code_and_ops_globs(product_root)):
+    if product_layout(product_root).is_guarded(rel):
         return True
     if baseline == "accepted" and matches_contract_globs(rel, SPEC_WRITE_GLOBS):
         return True
@@ -1562,7 +1541,7 @@ def ignored_product_files(product_root: Path) -> list[str]:
     is judged.
     """
     root = Path(product_root)
-    globs = code_and_ops_globs(root)
+    layout = product_layout(root)
     listing = ["ls-files", "--others", "--ignored", "--exclude-standard"]
     out: list[str] = []
     for name in _git_names(root, *listing, "--directory", what="list ignored files"):
@@ -1574,7 +1553,7 @@ def ignored_product_files(product_root: Path) -> list[str]:
             continue  # the directory itself is ignored
         # Named as one entry only because every file in it is ignored, each by its own rule.
         out += _git_names(root, *listing, "--", folder, what="list ignored files")
-    return [name for name in _unique(out) if matches_contract_globs(name, globs)]
+    return [name for name in _unique(out) if layout.is_guarded(name)]
 
 
 def git_dirty_paths(

@@ -126,3 +126,20 @@ def test_under_routing_names_the_owner_of_a_direct_file_but_not_of_a_subdirector
     record = under_routing(root, root / CHANGE)
     assert record["unrouted"] == {"app.core": ["pkg/util.py"]}
     assert record["unowned"] == ["pkg/other/x.py"]
+
+
+def test_caches_and_build_output_are_not_code_the_change_touched(tmp_path: Path):
+    """Audit 2026-11-17 (S2, after R5): the leash no longer exempts a stray `*.pyc`, a file under
+    `__pycache__/` or build output, and this record took its exclusions from the leash - so they
+    were listed as code no capability owns. What is not product content is the layout's to say."""
+    root = _product(tmp_path, {"app.limits": ["src/limits"]}, {"app.limits": []})
+    (root / "pom.xml").write_text("<project/>\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "build file")
+    for rel in ("src/limits/core.py", "src/limits/stray.pyc", "src/limits/__pycache__/notes.txt",
+                "target/classes/demo/Calc.class", "node_modules/lib/index.js", "lib/tool.py", "pom.xml"):
+        _touch(root, rel)
+    record = under_routing(root, root / CHANGE)
+    # The build file and code outside every capability are the Change's and stay listed.
+    assert record["unowned"] == ["lib/tool.py", "pom.xml"]
+    assert record["unrouted"] == {}

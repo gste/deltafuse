@@ -23,7 +23,7 @@ from typing import Any
 import yaml
 
 from deltafuse.core.context import posix_relpath
-from deltafuse.core.leash import is_exempt_path
+from deltafuse.core.product_layout import product_layout
 
 
 DIRECT_SUFFIX = "/*"
@@ -139,11 +139,16 @@ def change_code_paths(product_root: Path, change_path: Path) -> list[str] | None
         return None
     untracked = _git(root, "ls-files", "--others", "--exclude-standard")
     paths = set((diff.stdout or "").splitlines()) | set((untracked.stdout or "").splitlines())
-    # Not CODE_WRITE_GLOBS: a service repository keeps code in
+    # Not the code roots: a service repository keeps code in
     # `document-service/...` (bench case J03), outside `src/**`.
+    # What is not product content at all - caches, build output, a stray `*.pyc` - is the layout's
+    # to say (audit 2026-11-17, S2): the leash judges those since R5, so its exemptions no longer
+    # keep them out of this record.
+    layout = product_layout(root)
     return sorted(
         p for p in (posix_relpath(x) for x in paths if x.strip())
-        if not is_exempt_path(p)
+        if not layout.is_exempt(p)
+        and not layout.is_excluded(p)
         and not p.startswith(("tests/", "docs/", "."))
     )
 

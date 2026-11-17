@@ -16,7 +16,15 @@ this a test", "is this a cache or a build product" asks here.
   roots: a failing test is frozen wherever it lives.
 * **exclusions** - version control, the Core's own directory, interpreter and tool caches,
   virtual environments, and a build directory beside the build file that fills it (`target/`
-  beside `pom.xml`, `build/` beside a Gradle build file).
+  beside `pom.xml`, `build/` beside a Gradle build file). They are left out of the hashed tree,
+  the Red freeze and the context budget.
+* **guarded paths** - the code roots and the ops roots (`deploy/**`, `docs/ops/**`, `ops/**`):
+  what the write leash calls product code. A code root may be one file (`pom.xml`).
+* **exempt paths** - what the write leash does not judge, the whole list (owner's decision R5):
+  `.git/**`, `.deltafuse/**`, `docs/intake/**`, `docs/archive/**`, `AGENTS.md`, and a cache file
+  where a cache really lies. It is narrower than the exclusions on purpose: a file the hash
+  leaves out (`target/`, `node_modules/`, a stray `*.pyc`, anything under `__pycache__/`) is
+  still a write somebody made, and the leash judges it.
 
 Content hashes are taken over line-ending-normalised bytes (`content_sha256`): git with
 `core.autocrlf` rewrites a text file's line endings on checkout without changing its content.
@@ -27,6 +35,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -36,7 +45,32 @@ import yaml
 from deltafuse.core.config import config_section
 
 DEFAULT_CODE_ROOTS = ("src/**", "tests/**")
+# Deploy and operations files: product paths for the leash whatever the code roots are.
+OPS_ROOTS = ("deploy/**", "docs/ops/**", "ops/**")
 SPEC_ROOT = "docs/spec"
+# A Change's own files, active or archived.
+CHANGE_HOMES = ("docs/changes/", "docs/archive/changes/")
+
+# What the leash does not judge - the whole list (audit 2026-11-17, owner's decision R5: every
+# other path is the product's, `pom.xml`, `conftest.py`, `README.md`, `CHANGELOG.md`, `.gitignore`
+# and the CI workflow included). Exact, case-sensitive names; `.deltafuse/lock.yaml` and
+# `config.yaml` fall under `.deltafuse/**` and have their own guards in the leash.
+EXEMPT_EXACT = frozenset({"AGENTS.md"})
+EXEMPT_GLOBS = (
+    ".git/**",
+    ".deltafuse/**",
+    "docs/intake/**",
+    # The Core's archive of closed Changes, and the intake sources Intake moves aside.
+    "docs/archive/**",
+)
+# Interpreter caches: running the Red/Green tests writes them, and the Worker cannot avoid it
+# (q0 run 20260921T111852Z: declare refused over src/ratelimit/__pycache__/*.pyc). Only where a
+# cache really lies (FW-17: any file under a `__pycache__/` or `.pytest_cache/` directory, and any
+# `*.pyc`, was exempt - `src/__pycache__/payload.py`): a compiled module directly in
+# `__pycache__/`, and pytest's own files in `.pytest_cache/`.
+_CACHE_FILE = re.compile(
+    r"^(?:.+/)?(?:__pycache__/[^/]+\.pyc|\.pytest_cache/(?:README\.md|\.gitignore|CACHEDIR\.TAG|v/.+))$"
+)
 
 # Directories that are never product content, wherever they are.
 EXCLUDED_DIRS = frozenset({
@@ -73,6 +107,28 @@ def posix_relpath(path: str) -> str:
     while rel.startswith("./"):
         rel = rel[2:]
     return rel.lstrip("/")
+
+
+def is_exempt_path(rel_path: str) -> bool:
+    """A path the leash does not judge: EXEMPT_EXACT, EXEMPT_GLOBS, or a real cache file."""
+    rel = posix_relpath(str(rel_path).replace("\\", "/"))
+    if ".." in rel.split("/"):
+        return False
+    if rel in EXEMPT_EXACT:
+        return True
+    if any(fnmatch.fnmatch(rel, glob) for glob in EXEMPT_GLOBS):
+        return True
+    return _CACHE_FILE.match(rel) is not None
+
+
+def glob_literal_dirs(glob: str) -> list[str]:
+    """The directories a glob names before its first wildcard: `svc/tests/**` -> [svc, tests]."""
+    literal: list[str] = []
+    for part in posix_relpath(glob.replace("\\", "/")).split("/"):
+        if any(ch in part for ch in "*?["):
+            break
+        literal.append(part)
+    return literal
 
 
 def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | None:
@@ -161,6 +217,25 @@ class ProductLayout:
             return False
         return any(fnmatch.fnmatch(rel, root.replace("\\", "/")) for root in self.code_roots)
 
+    def is_exempt(self, rel: str) -> bool:
+        """Not judged by the write leash (R5). Narrower than `is_excluded`: see the module text."""
+        return is_exempt_path(rel)
+
+    def guarded_globs(self) -> tuple[str, ...]:
+        """Product code as the leash guards it: the code roots, then the ops roots."""
+        return tuple(dict.fromkeys(self.code_roots + OPS_ROOTS))
+
+    def is_guarded(self, rel: str) -> bool:
+        """Under a code root or an ops root. Exclusions do not apply: a file the hash leaves out
+        is still a write (FW-17: `src/__pycache__/payload.py`)."""
+        rel = posix_relpath(str(rel).replace("\\", "/"))
+        return bool(rel) and any(fnmatch.fnmatch(rel, glob.replace("\\", "/")) for glob in self.guarded_globs())
+
+    def is_test_root(self, glob: str) -> bool:
+        """A glob whose own directories are on the test side: `tests/**`, `svc/tests/**`,
+        `app/src/test/**`. A root that holds code and tests alike (`src/**`) is not one."""
+        return _in_test_directory(glob_literal_dirs(glob))
+
     def is_test(self, rel: str) -> bool:
         """On the test side: a test, or what tests are made of (a conftest, a fixture, test data)."""
         rel = posix_relpath(str(rel).replace("\\", "/"))
@@ -217,11 +292,7 @@ class ProductLayout:
         """Existing files a glob of the product lists (`fnmatch`, as the write contracts match),
         not excluded, POSIX, sorted. The walk starts at the pattern's literal directories."""
         pattern = posix_relpath(pattern.replace("\\", "/"))
-        literal: list[str] = []
-        for part in pattern.split("/"):
-            if any(ch in part for ch in "*?["):
-                break
-            literal.append(part)
+        literal = glob_literal_dirs(pattern)
         return sorted(rel for rel in self.walk("/".join(literal)) if rel == pattern or fnmatch.fnmatch(rel, pattern))
 
     def code_files(self) -> list[str]:
