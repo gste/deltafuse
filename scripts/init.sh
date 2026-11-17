@@ -475,7 +475,7 @@ if [ -f "$config_file" ] && { [ "$update_ver" -eq 1 ] || [ "$update_src" -eq 1 ]
 fi
 
 auto_accept="false"
-leash_mode="off"
+leash_mode="enforce"  # a missing key is enforce for every reader (FW-6)
 if [ -f "$config_file" ]; then
   extracted_auto="$(awk '
     /^workflow:[[:space:]]*$/ { in_wf=1; next }

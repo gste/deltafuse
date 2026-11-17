@@ -474,7 +474,7 @@ if (Test-Path -LiteralPath $configPath) {
 }
 
 $autoAccept = "false"
-$leashMode = "off"
+$leashMode = "enforce"  # a missing key is enforce for every reader (FW-6)
 if (Test-Path -LiteralPath $configPath) {
     $cfgText = Get-Content -LiteralPath $configPath -Raw
     if ($cfgText -match '(?m)^\s+auto_accept_decisions:\s+(true|false)\s*$') {

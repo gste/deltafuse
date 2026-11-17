@@ -123,13 +123,16 @@ def _unique(items: list[str]) -> list[str]:
     return out
 
 
-def load_leash_mode(product_root: Path, *, missing: str = DEFAULT_LEASH_MODE) -> str:
-    """CLI default when the key is absent is enforce. Hook install uses missing='off'."""
-    raw = config_section(product_root, "workflow").get("leash")
-    if raw is None:
-        return missing
-    mode = normalize_leash_mode(raw)
-    return mode if mode is not None else missing
+def leash_mode_of(raw: Any) -> str:
+    """The mode a `workflow.leash` value means. A missing key, or a value that is no mode, is
+    `enforce` - for every reader (FW-6: the guard and the leash command read missing as `enforce`,
+    `advance` and the installer as `off`, so a commit that deleted the key relaxed nothing in the
+    guard's eyes and switched the check at `advance` off)."""
+    return normalize_leash_mode(raw) or DEFAULT_LEASH_MODE
+
+
+def load_leash_mode(product_root: Path) -> str:
+    return leash_mode_of(config_section(product_root, "workflow").get("leash"))
 
 
 CONFIG_REL = ".deltafuse/config.yaml"
@@ -153,7 +156,7 @@ def config_at(product_root: Path, rev: str | None) -> dict[str, Any] | None:
 def _guarded_workflow(data: dict[str, Any]) -> tuple[str, tuple[str, ...] | None]:
     """(leash mode, code roots) of a config mapping, normalized the way the Core reads them."""
     workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
-    mode = normalize_leash_mode(workflow.get("leash")) or DEFAULT_LEASH_MODE
+    mode = leash_mode_of(workflow.get("leash"))
     roots = workflow.get("code_roots")
     clean = (
         tuple(dict.fromkeys(posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()))
@@ -162,9 +165,7 @@ def _guarded_workflow(data: dict[str, Any]) -> tuple[str, tuple[str, ...] | None
     return mode, clean or None
 
 
-def verdict_leash_mode(
-    product_root: Path, *, base: str | None, head: str | None, missing: str = DEFAULT_LEASH_MODE
-) -> str:
+def verdict_leash_mode(product_root: Path, *, base: str | None, head: str | None) -> str:
     """The mode a diff is judged in: its base's, or a stricter one the judged tree or the working
     tree sets (df-leash #3: a tree that relaxes the mode is not judged in the mode it sets itself;
     the human who turns `enforce` on has it at once)."""
@@ -174,10 +175,9 @@ def verdict_leash_mode(
         if data is None:
             continue
         workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
-        raw = workflow.get("leash")
-        modes.append(missing if raw is None else (normalize_leash_mode(raw) or missing))
+        modes.append(leash_mode_of(workflow.get("leash")))
     if not modes:
-        return load_leash_mode(product_root, missing=missing)
+        return load_leash_mode(product_root)
     return max(modes, key=lambda mode: _LEASH_STRENGTH.get(mode, 0))
 
 

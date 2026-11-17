@@ -138,7 +138,7 @@ def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | 
         since = step_base(product_root, change_path)
     except OSError:  # no git at all: run_leash says so below
         since = None
-    mode = verdict_leash_mode(product_root, base=since or "HEAD", head=None, missing="off")
+    mode = verdict_leash_mode(product_root, base=since or "HEAD", head=None)
     if mode == "off":
         return None
     try:

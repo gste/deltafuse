@@ -431,7 +431,7 @@ def install(
         # The lock written above named the link source; the fallback copies, so re-pin it.
         write_lock(effective_source)
 
-    sync_leash_hook(target_root, load_leash_mode(target_root, missing="off"))
+    sync_leash_hook(target_root, load_leash_mode(target_root))
 
     return InstallResult(
         target_dir=target_root,
