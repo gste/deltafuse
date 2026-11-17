@@ -152,9 +152,12 @@ def test_a_pending_task_still_takes_new_allowed_paths(tmp_path: Path, repo_root:
     from deltafuse.core.artifact_write import write_artifact
     from deltafuse.core.frontmatter import parse_frontmatter
 
-    from tests.unit.test_artifact_writer_guards import TASK
+    from tests.unit.test_artifact_writer_guards import TASK, _specified
 
-    root, builder = _declared(tmp_path, repo_root)
+    # Audit 2026-11-17 (FW-3): in Decompose, where tasks are written. This test wrote TASK-003 into
+    # a Change past the `declaring` gate; a task or its paths added there opened a write envelope
+    # the decomposed gate never checked, and the Writer refuses both now.
+    builder = _specified(tmp_path, repo_root)
     write_artifact(builder.change_dir, "task", identity="TASK-003", fields=dict(TASK), body="P\n")
     write_artifact(builder.change_dir, "task", identity="TASK-003", fields={"allowed_paths": ["src/other.py", "src/more.py"]})
     meta, _ = parse_frontmatter((builder.change_dir / "tasks" / "TASK-003.md").read_text(encoding="utf-8"))

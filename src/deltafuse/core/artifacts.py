@@ -56,6 +56,21 @@ def _check_task_paths(metadata: dict[str, Any]) -> None:
                 )
 
 
+def late_task_error(product_root: Path, change_id: str) -> str | None:
+    """FW-3: tasks are written in Decompose. Once the receipts say that step is closed a new task
+    is not part of the plan the gate checked - and its `allowed_paths` opened a write envelope."""
+    from deltafuse.core.leash import decompose_closed
+
+    gate = decompose_closed(product_root, change_id)
+    if gate is None:
+        return None
+    return (
+        f"{change_id} is past Decompose (its last gate is '{gate}'): the tasks are the ones the "
+        "decomposed gate checked, and a task added now opens no write envelope. If the plan lacks "
+        "a task, stop and report it; the human returns the Change upstream"
+    )
+
+
 class ArtifactServiceError(Exception):
     """Raised when artifact service operations fail."""
 
@@ -392,6 +407,9 @@ class ArtifactService:
         payload_copy = dict(semantic_payload)
 
         if kind == "task":
+            late = late_task_error(self.product_root, change_id)
+            if late is not None:
+                raise ArtifactServiceError(late, code="policy_denied", path=str(target_path))
             raw_slice = payload_copy.pop("slice", None)
             if not raw_slice and self.auth_context and self.auth_context.work_item:
                 if re.match(r"^SLICE-[0-9]{2,}", str(self.auth_context.work_item)):
@@ -547,7 +565,14 @@ class ArtifactService:
         existing_meta = parse_res.metadata
         existing_body = parse_res.raw_body
 
-        if kind == "task" and existing_meta.get("status") not in (None, "pending"):
+        closed_gate = None
+        if kind == "task" and existing_meta.get("status") in (None, "pending"):
+            # FW-3: a task still pending in a Change whose Decompose is closed (a second task
+            # waiting its turn) is just as fixed - its paths were what the decomposed gate checked.
+            from deltafuse.core.leash import decompose_closed
+
+            closed_gate = decompose_closed(self.product_root, str(existing_meta.get("change") or ""))
+        if kind == "task" and (existing_meta.get("status") not in (None, "pending") or closed_gate):
             # Audit 2026-11-16 (df-leash #9): a task's paths bound its own write envelope; once it
             # is past Decompose (declaring and on) the Worker widened them through the Writer.
             pointers = [item.get("path") for item in (patch.get("set") or []) if isinstance(item, dict)]
@@ -555,8 +580,9 @@ class ArtifactService:
             for field in FROZEN_TASK_FIELDS:
                 if any(isinstance(p, str) and (p == f"/{field}" or p.startswith(f"/{field}/")) for p in pointers):
                     raise ArtifactServiceError(
-                        f"{existing_meta.get('id', 'the task')} is '{existing_meta.get('status')}': its "
-                        f"{field} were fixed when it was declared and bound its write envelope. If they "
+                        f"{existing_meta.get('id', 'the task')} is '{existing_meta.get('status')}'"
+                        + (f" and its Change is past Decompose (last gate '{closed_gate}')" if closed_gate else "")
+                        + f": its {field} were fixed when Decompose closed and bound its write envelope. If they "
                         "are wrong, stop and return the task upstream; the human reopens it",
                         code="policy_denied",
                         path=f"/{field}",

@@ -236,17 +236,35 @@ def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], lis
         declared = _git_show(product_root, ENVELOPE_BASE.get(), posix_relpath(item.task_path))
     except OSError:  # no git at all: there is no declared copy to read
         declared = None
+    fixed: list[str] = []
     if declared is not None:
         try:
             base_meta, _ = parse_frontmatter(declared)
         except Exception:
             base_meta = {}
         if isinstance(base_meta, dict) and base_meta.get("status") not in (None, "pending"):
-            base_allowed = {row for row in (base_meta.get("allowed_paths") or []) if isinstance(row, str)}
-            allowed = [row for row in allowed if row in base_allowed]
-            forbidden = _unique(forbidden + [
-                row for row in (base_meta.get("forbidden_paths") or []) if isinstance(row, str)
-            ])
+            fixed.append(declared)
+    # FW-3: and the paths Decompose left it with, whatever its status - a task still pending in a
+    # Change past Decompose took new paths from its working file.
+    if item.change_id:
+        try:
+            _, at_decompose = task_at_decompose(product_root, item.change_id, item.task_path)
+        except OSError:
+            at_decompose = None
+        if at_decompose is not None:
+            fixed.append(at_decompose)
+    for text in fixed:
+        try:
+            base_meta, _ = parse_frontmatter(text)
+        except Exception:
+            continue
+        if not isinstance(base_meta, dict):
+            continue
+        base_allowed = {row for row in (base_meta.get("allowed_paths") or []) if isinstance(row, str)}
+        allowed = [row for row in allowed if row in base_allowed]
+        forbidden = _unique(forbidden + [
+            row for row in (base_meta.get("forbidden_paths") or []) if isinstance(row, str)
+        ])
     return allowed, forbidden
 
 
@@ -719,12 +737,123 @@ def hand_written_errors(
     ]
 
 
-def collect_ready_envelopes(queue: Any, product_root: Path, halt: Any) -> list[dict[str, Any]]:
+_GATE_STEP = {spec["gate"]: step for step, spec in STEP_CONTRACTS.items()}
+_DECOMPOSE = STEP_ORDER.index("decompose")
+_TASK_STEPS = frozenset({"declare", "implement"})
+
+
+def _last_gates(lines: list[str]) -> dict[str, str]:
+    """Change id -> the last gate its receipts closed (`intake` after a `decide --gap`)."""
+    out: dict[str, str] = {}
+    for entry in _json_rows(lines):
+        if not isinstance(entry.get("change"), str):
+            continue
+        if entry.get("kind") == "transition" and entry.get("gate") in _GATE_STEP:
+            out[entry["change"]] = entry["gate"]
+        elif entry.get("kind") == "gap-reopen":
+            # `decide --gap` rewinds the Change to Analyze: the chain goes on from the step after
+            # intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside
+            # the Specify envelope, the chain since base having gone backwards).
+            out[entry["change"]] = "intake"
+    return out
+
+
+def _step_after(gate: str | None) -> int:
+    if gate is None:
+        return 0
+    return min(STEP_ORDER.index(_GATE_STEP[gate]) + 1, len(STEP_ORDER) - 1)
+
+
+def decompose_closed(product_root: Path, change_id: str) -> str | None:
+    """The last gate of a Change whose Decompose is closed, by its receipts; None while it is open."""
+    journal = Path(product_root) / ".deltafuse" / "transitions.jsonl"
+    try:
+        lines = journal.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    gate = _last_gates(lines).get(change_id)
+    return gate if _step_after(gate) > _DECOMPOSE else None
+
+
+def _dir_of_change_at(product_root: Path, commit: str, change_id: str, live_dir: str) -> str | None:
+    """`docs/changes/<dir>` of a Change in a commit: its present directory, or (archived since) the
+    one whose change.yaml holds its id."""
+    if live_dir.startswith("docs/changes/") and _git_bytes(product_root, commit, f"{live_dir}/change.yaml") is not None:
+        return live_dir
+    try:
+        folders = _git_names(product_root, "ls-tree", "--name-only", commit, "docs/changes/", what="list Changes")
+    except LeashError:
+        return None
+    for line in folders:
+        folder = line.rstrip("/")
+        data = _git_bytes(product_root, commit, f"{folder}/change.yaml")
+        if data is None:
+            continue
+        try:
+            meta = yaml.safe_load(data.decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError):
+            continue
+        if isinstance(meta, dict) and str(meta.get("id") or folder.rsplit("/", 1)[-1]) == change_id:
+            return folder
+    return None
+
+
+def task_declared_in_time(
+    product_root: Path, change_id: str, task_rel: str, *, head: str | None = None
+) -> bool:
+    """Whether a task existed when its Change's Decompose closed (FW-3)."""
+    known, text = task_at_decompose(product_root, change_id, task_rel, head=head)
+    return not known or text is not None
+
+
+def task_at_decompose(
+    product_root: Path, change_id: str, task_rel: str, *, head: str | None = None
+) -> tuple[bool, str | None]:
+    """(known, the task file as Decompose left it): what a task's envelope is read from (FW-3).
+
+    In Implement a Worker added TASK-002 with `allowed_paths: [src/**]`; its file being changed,
+    the chain opened that envelope and every product file was writable under the hook, the leash
+    and `advance`. A task opens an envelope only when its file is in the commit that recorded the
+    Change's latest `decomposed` receipt - a fact of the journal and of git, not of the task file.
+    While that receipt is not committed yet the leash cannot tell (`known` is False) and lets the
+    task through: the Writer refuses a new task, or new paths, once the receipts say Decompose is
+    closed, and a task file written by hand is refused as such.
+    """
+    root = Path(product_root)
+    rev = None if head in (None, INDEX) else head
+    journal = _bytes_at(root, ".deltafuse/transitions.jsonl", head=head) or b""
+    lines = journal.decode("utf-8", errors="replace").splitlines()
+    if _step_after(_last_gates(lines).get(change_id)) <= _DECOMPOSE:
+        return False, None  # Decompose is open: tasks are being written now
+    digest = None
+    for entry in _json_rows(lines):
+        if (entry.get("change") == change_id and entry.get("kind") == "transition"
+                and entry.get("gate") == "decomposed" and isinstance(entry.get("receipt"), str)):
+            digest = entry["receipt"]
+    if digest is None:
+        return False, None  # no decomposed receipt to date it by: receipt_chain_errors' business
+    found = _git(root, "log", "--reverse", "--format=%H", "-S", digest, rev or "HEAD", "--",
+                 ".deltafuse/transitions.jsonl")
+    commit = next((line.strip() for line in (found.stdout or "").splitlines() if line.strip()), None)
+    if found.returncode != 0 or commit is None:
+        return False, None  # the receipt is not committed yet
+    rel = posix_relpath(task_rel)
+    home, _, name = rel.rpartition("/tasks/")
+    then = _dir_of_change_at(root, commit, change_id, home)
+    return True, (None if then is None else _git_show(root, commit, f"{then}/tasks/{name}"))
+
+
+def collect_ready_envelopes(
+    queue: Any, product_root: Path, halt: Any, *, head: str | None = None
+) -> list[dict[str, Any]]:
     """Envelopes of ready Worker steps. Empty when through-mode is halted."""
     if halt is not None:
         return []
     out: list[dict[str, Any]] = []
     for item in getattr(queue, "ready", []) or []:
+        if (item.step in _TASK_STEPS and item.task_path and item.change_id
+                and not task_declared_in_time(product_root, item.change_id, item.task_path, head=head)):
+            continue  # FW-3: a task added after Decompose closed opens nothing
         env = build_envelope(item, product_root)
         if env:
             out.append(env)
@@ -1079,26 +1208,7 @@ def collect_chain_envelopes(
     transition - so a task the Worker never touched adds no paths.
     """
     root = Path(product_root)
-    gate_step = {spec["gate"]: step for step, spec in STEP_CONTRACTS.items()}
-
-    def last_gates(lines: list[str]) -> dict[str, str]:
-        out: dict[str, str] = {}
-        for entry in _json_rows(lines):
-            if not isinstance(entry.get("change"), str):
-                continue
-            if entry.get("kind") == "transition" and entry.get("gate") in gate_step:
-                out[entry["change"]] = entry["gate"]
-            elif entry.get("kind") == "gap-reopen":
-                # `decide --gap` rewinds the Change to Analyze: the chain goes on from the step after
-                # intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside
-                # the Specify envelope, the chain since base having gone backwards).
-                out[entry["change"]] = "intake"
-        return out
-
-    def step_after(gate: str | None) -> int:
-        if gate is None:
-            return 0
-        return min(STEP_ORDER.index(gate_step[gate]) + 1, len(STEP_ORDER) - 1)
+    last_gates, step_after = _last_gates, _step_after
 
     rel = ".deltafuse/transitions.jsonl"
     at_base, now = _journal_lines(root, rel, base=base, head=head)
@@ -1150,7 +1260,9 @@ def collect_chain_envelopes(
                         )
                         for phase in phases
                     )
-                    if task_rel in changed or wrote_evidence:
+                    if (task_rel in changed or wrote_evidence) and task_declared_in_time(
+                        root, change_id, task_rel, head=head
+                    ):
                         items.append(
                             _item_for_step(
                                 step, change_id=change_id, path=rel_dir, task=task_id,

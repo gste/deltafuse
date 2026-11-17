@@ -98,7 +98,7 @@ def run_leash(
             # steps already worked since the base, so a finished step's writes
             # are not judged against the step after it. A halt stops new work,
             # not the record of work done, so the chain applies either way.
-            covering = collect_ready_envelopes(queue, root, halt) + collect_chain_envelopes(
+            covering = collect_ready_envelopes(queue, root, halt, head=head) + collect_chain_envelopes(
                 root, base=base, dirty=dirty, head=head
             )
             errors = check_paths(
