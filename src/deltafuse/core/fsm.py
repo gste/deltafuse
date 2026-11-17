@@ -1487,7 +1487,26 @@ def coverage_claim_errors(
                 "implements or tests it; Decompose gives that slice a task (a `tasks-missing` gap)"
             )
         evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
-        required = ("green", "regression") if route == "code" else ("green",)
+        required: tuple[str, ...] = ("green", "regression") if route == "code" else ("green",)
+        if own and all(tasks[t].get("status") == "superseded" for t in own):
+            # Audit 2026-11-17 (FE-7): every task of the claim found its requirement already met
+            # (an `already-green` Red) and was superseded. A superseded task has no Green - the
+            # Core refuses one - so asking this claim for a green and a regression mapping left
+            # the Change with no way to converge. Its proof is that Red: the tests in it passed
+            # on the unchanged product, and the verification run must pass them again
+            # (`change_test_ids`).
+            required = ()
+            unproven = [
+                t for t in own
+                if _load_record(change_path / "evidence" / "red" / f"{t}.yaml").get("result") != "already-green"
+            ]
+            if unproven:
+                errors.append(
+                    f"Gate converged: claim '{cid}' rests on superseded task(s) {', '.join(unproven)} with no "
+                    "`already-green` Red record: a task is superseded when its Red shows the requirement is "
+                    "already met, and that record is the claim's proof. Record the task's Red "
+                    "(`deltafuse evidence <change-dir> --phase red --task <id> -- <command>`), or reopen the task"
+                )
         missing = [phase for phase in required if not evidence.get(phase)]
         if missing:
             errors.append(
