@@ -1039,6 +1039,80 @@ def _change_dirs(product_root: Path) -> dict[str, Path]:
     return out
 
 
+ARCHIVE_HOME = "docs/archive/changes"
+
+
+def _archived_in_diff(product_root: Path, changed: set[str]) -> dict[str, Path]:
+    """Change id -> archive directory, for every Change the judged diff archives (FW-4, R6).
+
+    `deltafuse archive` moves a Change to docs/archive/changes/<date>-<id>/. A range that holds
+    the Change's work and that move - a whole Change in one pull request - found no Change under
+    docs/changes/, so nothing covered the product files it wrote. Its receipts are still in the
+    journal and its tasks in the archive: they count as an active Change's do."""
+    out: dict[str, Path] = {}
+    homes = {"/".join(path.split("/")[:4]) for path in changed if path.startswith(ARCHIVE_HOME + "/")}
+    for home in sorted(homes):
+        change_yaml = product_root / home / "change.yaml"
+        try:
+            data = yaml.safe_load(change_yaml.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if isinstance(data, dict) and isinstance(data.get("id"), str):
+            out.setdefault(data["id"], change_yaml.parent)
+    return out
+
+
+def archive_move_judge(product_root: Path, *, base: str | None, head: str | None) -> Callable[[str], bool]:
+    """Whether a missing file of a Change was moved by `deltafuse archive`, not deleted.
+
+    True for `docs/changes/<dir>/<file>` absent from the judged tree when the Change that held it
+    at the base is archived there (same id, status `archived`) and the archive holds `<file>`."""
+    root = Path(product_root)
+    archives: dict[str, str] | None = None
+
+    def archive_homes() -> dict[str, str]:
+        nonlocal archives
+        if archives is None:
+            archives = {}
+            if head is None:
+                names = [p.relative_to(root).as_posix() for p in (root / ARCHIVE_HOME).glob("*/change.yaml")]
+            else:
+                listing = ("ls-files", "--", ARCHIVE_HOME) if head == INDEX else (
+                    "ls-tree", "-r", "--name-only", head, "--", ARCHIVE_HOME)
+                try:
+                    names = _git_names(root, *listing, what="list archived Changes")
+                except LeashError:
+                    names = []
+            for name in names:
+                parts = name.split("/")
+                if len(parts) != 5 or parts[4] != "change.yaml":
+                    continue
+                try:
+                    data = yaml.safe_load((_bytes_at(root, name, head=head) or b"").decode("utf-8"))
+                except (UnicodeDecodeError, yaml.YAMLError):
+                    continue
+                if isinstance(data, dict) and data.get("status") == "archived" and isinstance(data.get("id"), str):
+                    archives.setdefault(data["id"], "/".join(parts[:4]))
+        return archives
+
+    def judge(raw: str) -> bool:
+        parts = posix_relpath(raw).split("/")
+        if len(parts) < 4 or parts[:2] != ["docs", "changes"]:
+            return False
+        if _bytes_at(root, "/".join(parts), head=head) is not None:
+            return False  # still there: not a move
+        before = _bytes_at(root, "/".join(parts[:3]) + "/change.yaml", head=base or "HEAD")
+        try:
+            data = yaml.safe_load((before or b"").decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError):
+            return False
+        change_id = data.get("id") if isinstance(data, dict) else None
+        home = archive_homes().get(change_id) if isinstance(change_id, str) else None
+        return home is not None and _bytes_at(root, home + "/" + "/".join(parts[3:]), head=head) is not None
+
+    return judge
+
+
 def core_journal_errors(
     product_root: Path,
     name: str,
@@ -1237,7 +1311,9 @@ def collect_chain_envelopes(
 
     final_gate = STEP_CONTRACTS[STEP_ORDER[-1]]["gate"]
     envelopes: list[dict[str, Any]] = []
-    for change_id, change_dir in _change_dirs(root).items():
+    # R6: a Change archived in this diff counts like a live one (a live one of that id wins).
+    judged = {**_archived_in_diff(root, changed), **_change_dirs(root)}
+    for change_id, change_dir in judged.items():
         low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
         if reopened_since_base.get(change_id, 0) > 0:
             low = step_after("intake")  # the chain since base went back to Analyze and on from there
@@ -1329,6 +1405,7 @@ def check_paths(
     )
     vouched = vouched_digests(product_root, head=head) if product_root is not None else {}
     human = human_decision_judge(product_root, base=base, head=head) if product_root is not None else None
+    archived = archive_move_judge(product_root, base=base, head=head) if product_root is not None else None
     for raw in _unique(rel_paths):
         # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
         # whole, so checking it second would make the Core-owned guard dead code.
@@ -1364,6 +1441,8 @@ def check_paths(
             continue
         if human is not None and human(raw):
             continue  # written by the human's `deltafuse decide`, as its receipt or archive shows
+        if archived is not None and archived(raw):
+            continue  # moved by `deltafuse archive`: the file is in the Change's archive
         if _covered_by(raw, env_list) is not None:
             if product_root is not None:
                 errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
@@ -1586,7 +1665,9 @@ def _git_names(root: Path, *args: str, what: str) -> list[str]:
     Cyrillic file in src/ was never judged. `-z` prints names raw; git writes them in UTF-8.
     """
     proc = subprocess.run(
-        ["git", "-c", "core.quotePath=false", *args, "-z"], cwd=root, capture_output=True, check=False
+        # `-z` right after the subcommand: after a `--` it would be read as a path.
+        ["git", "-c", "core.quotePath=false", args[0], "-z", *args[1:]], cwd=root, capture_output=True,
+        check=False,
     )
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace").strip()
