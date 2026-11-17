@@ -766,10 +766,6 @@ def _last_gates(lines: list[str]) -> dict[str, str]:
     return out
 
 
-SPEC_REJECTED_GAP = "spec-rejected"
-TASK_REOPEN_REASON = "task reopened"
-
-
 def rewind_gate(entry: dict[str, Any]) -> str | None:
     """The gate a rewind receipt takes its Change back to, or None for any other receipt.
 
@@ -780,11 +776,15 @@ def rewind_gate(entry: dict[str, Any]) -> str | None:
       back to `analyzed` - Specify proposes again.
     - `artifact-status` of the Change with reason "task reopened" (a task reopened after the
       `implemented` gate): back to `declared`, the state the `declaring` gate leaves.
+
+    The receipts are the ones `decide` writes; what marks them is defined once, in
+    core/transitions.py, where the receipt chain replays the same rewinds.
     """
-    if entry.get("kind") == "gap-reopen":
+    from deltafuse.core.transitions import GAP_REOPEN_KIND, SPEC_REJECTED_GAP, is_task_reopen_rewind
+
+    if entry.get("kind") == GAP_REOPEN_KIND:
         return "analyzed" if entry.get("gap") == SPEC_REJECTED_GAP else "intake"
-    if (entry.get("kind") == "artifact-status" and entry.get("artifact") == "change"
-            and entry.get("reason") == TASK_REOPEN_REASON):
+    if is_task_reopen_rewind(entry):
         return "declaring"
     return None
 
@@ -1232,7 +1232,11 @@ def core_status_writes(
         return {}  # core_journal_errors reports the rewrite; nothing is vouched for
     dirs = _change_dirs(root)
     moves: dict[str, list[dict[str, Any]]] = {}
+    rewound: set[str] = set()  # Changes a rewind took back since the base, as the rows go by
+    reset: set[str] = set()  # files whose first status write since the base follows such a rewind
     for entry in _json_rows(new[len(old):]):
+        if entry.get("kind") == "gap-reopen":
+            rewound.add(str(entry.get("change")))
         if entry.get("kind") != "artifact-status":
             continue
         folder = {"task": "tasks", "slice": "slices"}.get(str(entry.get("artifact")))
@@ -1248,6 +1252,8 @@ def core_status_writes(
             recorded = posix_relpath(recorded)
             if recorded.startswith(home + "/") and "/" not in recorded[len(home) + 1:]:
                 rel = recorded
+        if rel not in moves and str(entry.get("change")) in rewound:
+            reset.add(rel)
         moves.setdefault(rel, []).append(entry)
 
     out: dict[str, list[str]] = {}
@@ -1259,7 +1265,10 @@ def core_status_writes(
         except Exception as ex:
             out[rel] = [f"cannot compare with the base: {ex}"]
             continue
-        if before_meta.get("status") != entries[0].get("from"):
+        # A rewind (`decide --gap`, a rejected accepted specification) puts slices back to `draft`
+        # and implemented tasks back to `declared` under its own receipt, not an `artifact-status` one; with
+        # the step's base before the rewind, the status there is the one the rewind took away.
+        if rel not in reset and before_meta.get("status") != entries[0].get("from"):
             reasons.append(f"status at the base is not the receipt's '{entries[0].get('from')}'")
         if after_meta.get("status") != entries[-1].get("to"):
             reasons.append(f"status is not the receipt's '{entries[-1].get('to')}'")

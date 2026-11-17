@@ -272,7 +272,7 @@ TASK_REOPEN_FROM = frozenset({"implemented", "verifying"})
 TASK_REOPEN_TO = "declared"
 
 
-def _is_task_reopen_rewind(row: dict[str, Any]) -> bool:
+def is_task_reopen_rewind(row: dict[str, Any]) -> bool:
     return (
         row.get("kind") == "artifact-status"
         and row.get("artifact") == "change"
@@ -433,10 +433,10 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     # has actually reached (the bugfix path legally skips 'specified').
     current = INITIAL_STATUS
     replay = [
-        r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
+        r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND) or is_task_reopen_rewind(r)
     ]
     for i, row in enumerate(replay):
-        if _is_task_reopen_rewind(row):
+        if is_task_reopen_rewind(row):
             if current != "implemented" or row.get("to") != TASK_REOPEN_TO:
                 errors.append(
                     f"task reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; only "
@@ -495,7 +495,7 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     status_receipts = [
         r
         for r in all_receipts
-        if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
+        if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND) or is_task_reopen_rewind(r)
     ]
     last = status_receipts[-1] if status_receipts else None
     if status in RECEIPTED_TARGETS and last is not None and last.get("to") not in (status, current):
