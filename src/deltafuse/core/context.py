@@ -15,6 +15,12 @@ from typing import Any, Iterable, Sequence
 import yaml
 from deltafuse.core.config import config_section
 from deltafuse.core.integrity import path_is_inside_repo
+from deltafuse.core.product_layout import (  # noqa: F401 - re-exported: callers import them from here
+    DEFAULT_CODE_ROOTS,
+    configured_code_roots,
+    posix_relpath,
+    product_layout,
+)
 
 
 class ContextLinterError(Exception):
@@ -126,7 +132,7 @@ CHANGE_ROUTES = frozenset({"code", "docs", "ops"})
 DEFAULT_CHANGE_ROUTE = "code"
 # Where a `code`-route Change keeps its code and tests when the product does not say
 # (`workflow.code_roots` in .deltafuse/config.yaml). See code_write_globs.
-DEFAULT_CODE_WRITE_GLOBS = ("src/**", "tests/**")
+DEFAULT_CODE_WRITE_GLOBS = DEFAULT_CODE_ROOTS
 # Phases whose contracts name the code roots; the others work on docs/ only.
 _CODE_ROOT_PHASES = frozenset({"declare", "implement", "verify"})
 _ROUTE_TARGET_EVIDENCE = [
@@ -194,17 +200,6 @@ def product_root_of(path: Path | str) -> Path | None:
         if (candidate / ".deltafuse").is_dir():
             return candidate
     return None
-
-
-def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | None:
-    """`workflow.code_roots` from the product's config, or None when it sets none."""
-    if product_root is None:
-        return None
-    roots = config_section(product_root, "workflow", tolerate=(OSError, yaml.YAMLError)).get("code_roots")
-    if not isinstance(roots, list):
-        return None
-    clean = [posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()]
-    return tuple(dict.fromkeys(clean)) or None
 
 
 def code_write_globs(product_root: Path | str | None = None) -> tuple[str, ...]:
@@ -498,19 +493,6 @@ def _budget_errors(
 DEFAULT_TASK_BUDGET = {"max_tokens": 64000, "max_files": 24}
 
 
-def posix_relpath(path: str) -> str:
-    """Repo-relative POSIX form: drop leading './' and '/' only.
-
-    `str.lstrip("./")` strips a character set, not a prefix: it turned
-    '.deltafuse/x' into 'deltafuse/x', so no dot-directory ever matched a glob
-    such as '.deltafuse/**'.
-    """
-    rel = Path(path).as_posix()
-    while rel.startswith("./"):
-        rel = rel[2:]
-    return rel.lstrip("/")
-
-
 def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:
     """True if *rel_path* matches any PHASE_CONTRACTS glob (fnmatch, POSIX slashes)."""
     rel = posix_relpath(rel_path)
@@ -622,29 +604,13 @@ def product_task_budget(repo_root: Path) -> dict[str, int]:
     return budget
 
 
-_GLOB_SKIP_DIRS = frozenset({".git", ".deltafuse", "__pycache__", "node_modules", ".venv", "venv", "target", "build"})
-
-
 def _glob_files(root: Path, pattern: str) -> list[str]:
     """Existing files under *root* an allowed_paths glob lists (`path_is_listed`), POSIX, sorted.
-    The walk starts at the pattern's literal directory prefix."""
-    pattern = posix_relpath(pattern)
-    literal = []
-    for part in pattern.split("/"):
-        if any(ch in part for ch in "*?["):
-            break
-        literal.append(part)
-    base = root.joinpath(*literal) if literal else root
-    if base.is_file():
-        return [posix_relpath(base.relative_to(root).as_posix())]
-    out: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = [d for d in dirnames if d not in _GLOB_SKIP_DIRS]
-        for name in filenames:
-            rel = Path(dirpath, name).relative_to(root).as_posix()
-            if path_is_listed(rel, [pattern]):
-                out.append(rel)
-    return sorted(out)
+
+    What is a file of the product and what is a cache or a build product is the layout's to say
+    (core/product_layout.py): the budget skipped every directory named `build` or `target`, so a
+    package of that name counted nothing (audit 2026-11-17, S2)."""
+    return product_layout(root).glob(pattern)
 
 
 def validate_task_context_budget(

@@ -1,30 +1,30 @@
 """Content hash calculation for DeltaFuse framework distribution."""
 
 from __future__ import annotations
-import fnmatch
 import hashlib
 from pathlib import Path
 from typing import Iterable
 
+from deltafuse.core.product_layout import content_sha256, normalize_line_endings, product_layout
 
-# Test roots whose files are the declared oracle. `tests/**` is the framework's
-# own Declare write scope; `src/test/**` is the Maven/Gradle layout the JVM
-# report reader supports (test_reports.py, bench case J01-cooldown-java).
-ORACLE_GLOBS = ("tests/**", "*/tests/**", "src/test/**", "*/src/test/**")
+__all__ = [
+    "compute_file_sha256",
+    "compute_framework_content_hash",
+    "compute_product_baseline_revision",
+    "compute_red_oracle_digest",
+    "normalize_line_endings",
+    "oracle_paths",
+]
 
 
-def oracle_paths(changed_paths: Iterable[str]) -> list[str]:
-    """The declared test files among a Red record's changed_paths, sorted."""
-    out: set[str] = set()
-    for raw in changed_paths:
-        if not isinstance(raw, str):
-            continue
-        rel = raw.replace("\\", "/").lstrip("/")
-        if not rel:
-            continue
-        if any(fnmatch.fnmatch(rel, pattern) for pattern in ORACLE_GLOBS):
-            out.add(rel)
-    return sorted(out)
+def oracle_paths(changed_paths: Iterable[str], repo_root: Path | str | None = None) -> list[str]:
+    """The files on the test side among a Red record's changed_paths, sorted.
+
+    What a test file is comes from the product's layout (core/product_layout.py), not from a list
+    of directories kept here: until 3.3.14 only `tests/**` and `src/test/**` counted, so a product
+    with `workflow.code_roots: [app/**, test/**]` froze no oracle at all (audit 2026-11-17, FE-2).
+    """
+    return product_layout(repo_root).test_side(changed_paths)
 
 
 def compute_red_oracle_digest(repo_root: Path | str, changed_paths: Iterable[str]) -> str | None:
@@ -36,14 +36,15 @@ def compute_red_oracle_digest(repo_root: Path | str, changed_paths: Iterable[str
     let a Worker rewrite the assertion during Implement and still record an
     authentic Green over an untouched product. None when no test file is listed,
     so there is no oracle of Declare's own to freeze. A file deleted before Green
-    hashes as absent, so deleting the oracle reads as a change too.
+    hashes as absent, so deleting the oracle reads as a change too. The hash is of
+    the content, not of the line endings a checkout gave it (FE-10).
     """
     root = Path(repo_root)
     records: list[str] = []
-    for rel in oracle_paths(changed_paths):
+    for rel in oracle_paths(changed_paths, root):
         path = root / rel
         try:
-            digest = compute_file_sha256(path) if path.is_file() else ""
+            digest = content_sha256(path) if path.is_file() else ""
         except OSError:
             digest = ""
         records.append(f"{rel.lower()}:{digest}")
@@ -60,19 +61,6 @@ def compute_file_sha256(path: Path) -> str:
         while chunk := f.read(65536):
             hasher.update(chunk)
     return hasher.hexdigest().lower()
-
-
-def normalize_line_endings(data: bytes) -> bytes:
-    """CRLF -> LF for text; bytes with a NUL are binary and stay untouched.
-
-    The rule scripts/sync_assets.py copies assets by (QF-024). A framework
-    identity is a content identity: git with core.autocrlf rewrites a file's
-    line endings on checkout without changing its content, and a pin taken
-    from CRLF bytes stopped matching once the same file came back LF.
-    """
-    if b"\x00" in data:
-        return data
-    return data.replace(b"\r\n", b"\n")
 
 
 def compute_framework_content_hash(framework_root: Path | str | None = None) -> str:
@@ -123,28 +111,26 @@ def compute_framework_content_hash(framework_root: Path | str | None = None) -> 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
 
 
-_SKIP_PARTS = {"__pycache__", ".pytest_cache"}
-
-
 def compute_product_baseline_revision(repo_root: Path | str) -> str:
-    """SHA-256 of docs/spec/** and src/**. Used as evidence base_revision (F-006 / RM-006).
+    """SHA-256 of the live specification and of every file under the product's code roots.
+    Used as evidence base_revision (F-006 / RM-006).
 
     Content hash, not git HEAD and not a timestamp: a merged spec/code tree must
-    invalidate Green recorded against the previous tree.
+    invalidate Green recorded against the previous tree. The tree is the layout's
+    (core/product_layout.py): `docs/spec/**` and `workflow.code_roots` (else `src/**` and
+    `tests/**`), without caches and build products. Until 3.3.14 it was `docs/spec/**` and a
+    literal `src/**`, so the evidence of a product with its code elsewhere never went stale
+    (audit 2026-11-17, FE-4); and it was taken over raw bytes, so a checkout that rewrote line
+    endings moved it (FE-10).
     """
     root = Path(repo_root).resolve()
+    layout = product_layout(root)
     records: list[str] = []
-    for root_name in ("docs/spec", "src"):
-        tree = root / Path(root_name)
-        if not tree.is_dir():
+    for rel in sorted(set(layout.spec_files()) | set(layout.code_files())):
+        try:
+            records.append(f"{rel.lower()}:{content_sha256(root / rel)}")
+        except OSError:
             continue
-        for file_path in tree.rglob("*"):
-            if not file_path.is_file():
-                continue
-            if any(part in _SKIP_PARTS for part in file_path.parts):
-                continue
-            rel_path = file_path.relative_to(root).as_posix().lower()
-            records.append(f"{rel_path}:{compute_file_sha256(file_path)}")
     records.sort()
     payload = "\n".join(records) + "\n"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()

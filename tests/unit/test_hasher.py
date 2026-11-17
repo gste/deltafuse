@@ -87,7 +87,11 @@ def test_product_baseline_revision_ignores_timestamp_and_tracks_spec_src(tmp_pat
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_core.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
-    assert compute_product_baseline_revision(tmp_path) == h1
+    # Audit 2026-11-17 (FE-4): the tree is the product's code roots, and `tests/**` is one of the
+    # defaults - a test changed after the run moves the tree like any other file of the product.
+    with_tests = compute_product_baseline_revision(tmp_path)
+    assert with_tests != h1
+    h1 = with_tests
 
     (spec / "core.md").write_text("# Spec\n## REQ-01\nChanged.\n", encoding="utf-8")
     h2 = compute_product_baseline_revision(tmp_path)

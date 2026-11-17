@@ -154,7 +154,7 @@ deltafuse/
   - **Q-005 / Q-006**: `route: code|docs|ops` (нет поля = `code`). docs/ops: `allowed_paths` вне src/tests, Verify без product pytest; Implement для `code` не ослабляется. Hidden code suite не применяется к docs/ops.
   - **AB-02 / AB-05 / analyzed**: skill не требует единственный `SLICE-01`; неизвестные ключи верхнего уровня `routing.yaml` (в т.ч. `schema_version`) не валят `analyzed`. Два slice-файла не заменяют live spec (F-010).
   - **AB-04 / analyzed**: `analysis.md` необязателен; гейт `analyzed` = routing+slices+coverage.
-  - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + `src/**`, отвергаются (stale evidence).
+  - **F-006 / implemented, converged**: Green/regression/verification с `base_revision`, не совпадающим с хешем `docs/spec/**` + корней кода продукта (`workflow.code_roots`, иначе `src/**` и `tests/**`; одна раскладка - `core/product_layout.py`; переводы строк не учитываются), отвергаются (stale evidence).
   - **LS-006 / declaring, implemented, converged**: schema-valid evidence без штампа ядра (`recorded_by` + hash прогона) не закрывает гейт; `deltafuse evidence` штампует файл. syntax-error по-прежнему не authentic Red.
   - **LS-007 / host**: контракт leash Host MUST режет write-tools по `envelope.write`; generated Intake skill не учит писать `src/**`. Fuse-map UI и кнопки Cursor вне `src/deltafuse/**`.
   - **Q-008 / converged**: `spec-delta.md` `added`/`modified` должны существовать в `docs/spec/**`; `removed` не должны. Пакет без `spec-delta.md` (S04) не требует сверки. Архив не merge SSOT.
