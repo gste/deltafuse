@@ -79,3 +79,14 @@ def test_the_human_can_still_close_a_change_before_upgrading(tmp_path: Path, rep
     _lock_pins_another_hash(tmp_path)
     closed = apply_decision(builder.change_dir, status="rejected", close=True, note="closed before the upgrade")
     assert closed["change_status"] == "rejected"
+
+
+def test_there_is_one_pin_check(tmp_path: Path, repo_root: Path, monkeypatch):
+    """The gates' name for the check answers with the leash's: `lock.product_pin_errors`."""
+    from deltafuse.core import fsm, lock
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    _lock_pins_another_hash(tmp_path)
+    assert fsm.product_pin_errors(tmp_path) == lock.product_pin_errors(tmp_path) != []
+    monkeypatch.setattr(lock, "product_pin_errors", lambda root: ["the one check"])
+    assert fsm.product_pin_errors(tmp_path) == ["the one check"]
