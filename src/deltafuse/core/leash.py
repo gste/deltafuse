@@ -64,23 +64,26 @@ CODE_WRITE_GLOBS = (
     "ops/**",
 )
 SPEC_WRITE_GLOBS = ("docs/spec/**",)
-# Exact, case-sensitive names; `.deltafuse/lock.yaml` and `config.yaml` fall under `.deltafuse/**`.
-EXEMPT_EXACT = frozenset({"AGENTS.md", "CHANGELOG.md"})
+# What the leash does not judge - the whole list (audit 2026-11-17, owner's decision R5: every
+# other path is the product's, `pom.xml`, `conftest.py`, `README.md`, `CHANGELOG.md`, `.gitignore`
+# and the CI workflow included). Exact, case-sensitive names; `.deltafuse/lock.yaml` and
+# `config.yaml` fall under `.deltafuse/**` and have their own guards.
+EXEMPT_EXACT = frozenset({"AGENTS.md"})
 EXEMPT_GLOBS = (
     ".git/**",
     ".deltafuse/**",
     "docs/intake/**",
+    # The Core's archive of closed Changes, and the intake sources Intake moves aside.
     "docs/archive/**",
-    # Interpreter caches: running the Red/Green tests writes them, and the
-    # Worker cannot avoid it (q0 run 20260921T111852Z: declare refused over
-    # src/ratelimit/__pycache__/*.pyc). fnmatch `*` crosses `/`.
-    "*.pyc",
-    "__pycache__/*",
-    "*/__pycache__/*",
-    ".pytest_cache/*",
-    "*/.pytest_cache/*",
 )
-EXEMPT_NAMES = frozenset({"README.md", "README.ru.md"})
+# Interpreter caches: running the Red/Green tests writes them, and the Worker cannot avoid it
+# (q0 run 20260921T111852Z: declare refused over src/ratelimit/__pycache__/*.pyc). Only where a
+# cache really lies (FW-17: any file under a `__pycache__/` or `.pytest_cache/` directory, and any
+# `*.pyc`, was exempt - `src/__pycache__/payload.py`): a compiled module directly in
+# `__pycache__/`, and pytest's own files in `.pytest_cache/`.
+_CACHE_FILE = re.compile(
+    r"^(?:.+/)?(?:__pycache__/[^/]+\.pyc|\.pytest_cache/(?:README\.md|\.gitignore|CACHEDIR\.TAG|v/.+))$"
+)
 CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 # DF3-007: Core journals change only through the deltafuse CLI. The journals a
 # lifecycle step legitimately appends to are verified; the trust roots never
@@ -103,6 +106,12 @@ CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this prod
 # back to Analyze (transitions.GAP_REOPEN_KIND; 3.3.8 wrote it and left it out here).
 CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft", "gap-reopen"})
 
+
+
+OUTSIDE_CODE_ROOTS = (
+    " (it lies outside the product's code roots: a Change writes it only when the human names it in "
+    "`workflow.code_roots`; build output and caches belong in .gitignore)"
+)
 
 
 class LeashError(Exception):
@@ -394,15 +403,15 @@ def path_in_envelope(rel_path: str, write_globs: list[str]) -> bool:
 
 
 def is_exempt_path(rel_path: str) -> bool:
+    """A path the leash does not judge: EXEMPT_EXACT, EXEMPT_GLOBS, or a real cache file."""
     rel = posix_relpath(rel_path)
+    if ".." in rel.split("/"):
+        return False
     if rel in EXEMPT_EXACT:
-        return True
-    name = rel.rsplit("/", 1)[-1]
-    if name in EXEMPT_NAMES:
         return True
     if matches_contract_globs(rel, EXEMPT_GLOBS):
         return True
-    return False
+    return _CACHE_FILE.match(rel) is not None
 
 
 REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
@@ -1409,8 +1418,49 @@ def check_paths(
                 if env_list else
                 f"leash: '{raw}' is a Change file no open step may write{scratch}"
             )
+            continue
+        if matches_contract_globs(raw, SPEC_WRITE_GLOBS):
+            continue  # `project.baseline: draft` - Bootstrap writes the specification freely
+        if product_root is not None and structural_kind(raw) == "decision" and (
+            _bytes_at(Path(product_root), posix_relpath(raw), head=head) is not None
+        ):
+            # FW-20: a Decision lies in no step's envelope and is not product code, so the
+            # hand-written check - made only for a covered path - never ran for it.
+            errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
+            continue
+        # R5 (FW-7): judged like product code - it was not judged at all.
+        errors.append(
+            (f"leash: '{raw}' is outside the {step_label} write envelope" if env_list
+             else f"leash: '{raw}' is not covered by any Change")
+            + OUTSIDE_CODE_ROOTS
+        )
     return errors
 
+
+
+def ignored_product_files(product_root: Path) -> list[str]:
+    """Untracked files git ignores that lie in the product's code roots (FW-18).
+
+    The leash listed untracked files with `--exclude-standard`, so `src/hidden.py` named by a
+    `.gitignore` line was invisible to the leash, to `advance` and to CI. A directory git ignores
+    as a whole (`target/`, `node_modules/`, an ignored `__pycache__/`) is build output and is not
+    listed: that is thousands of files the human told git to leave alone, and `.gitignore` itself
+    is judged.
+    """
+    root = Path(product_root)
+    globs = code_and_ops_globs(root)
+    listing = ["ls-files", "--others", "--ignored", "--exclude-standard"]
+    out: list[str] = []
+    for name in _git_names(root, *listing, "--directory", what="list ignored files"):
+        if not name.endswith("/"):
+            out.append(name)
+            continue
+        folder = name.rstrip("/")
+        if _git(root, "check-ignore", "-q", "--", folder).returncode == 0:
+            continue  # the directory itself is ignored
+        # Named as one entry only because every file in it is ignored, each by its own rule.
+        out += _git_names(root, *listing, "--", folder, what="list ignored files")
+    return [name for name in _unique(out) if matches_contract_globs(name, globs)]
 
 
 def git_dirty_paths(
@@ -1419,6 +1469,7 @@ def git_dirty_paths(
     base: str | None = None,
     head: str | None = None,
     since: str | None = None,
+    ignored: bool = False,
 ) -> list[str]:
     """Changed paths as repo-relative posix names.
 
@@ -1431,6 +1482,8 @@ def git_dirty_paths(
     judge the committed range. Untracked files remain a separate always-on check.
     ``head=INDEX`` (the pre-commit hook): the staged changes against HEAD, which is
     what the commit records; untracked and unstaged files are not in it.
+    ``ignored`` (the leash; not the evidence record of what a step changed): also the untracked
+    files git ignores inside the code roots - see ignored_product_files.
     """
     root = product_root.resolve()
     probe = _git(root, "rev-parse", "--show-toplevel")
@@ -1476,8 +1529,9 @@ def git_dirty_paths(
                 what="read a commit of the step",
             )
     untracked = _git_names(root, "ls-files", "--others", "--exclude-standard", what="list untracked files")
+    hidden = ignored_product_files(root) if ignored else []
     # _unique normalizes slashes and drops blank lines.
-    return _unique(tracked + committed + untracked)
+    return _unique(tracked + committed + untracked + hidden)
 
 
 def step_base(product_root: Path, change_dir: Path) -> str | None:

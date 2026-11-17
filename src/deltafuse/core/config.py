@@ -187,12 +187,22 @@ def validate_config(product_root: Path | str) -> list[str]:
                     errors.append("config.yaml: workflow.test_commands must be a list of non-empty strings")
             code_roots = workflow.get("code_roots")
             if code_roots is not None:
-                if not isinstance(code_roots, list) or not all(
-                    isinstance(r, str) and ("*" in r or r.endswith("/") or "/" in r)
-                    for r in code_roots
-                ):
+                # A file at the product root is a code root too (`pom.xml`): the leash judges every
+                # path (audit 2026-11-17, R5), and this is how a Change comes to write one.
+                from deltafuse.core.layout import product_path_error
+
+                def is_root(r: Any) -> bool:
+                    if not isinstance(r, str) or product_path_error(r.rstrip("/")) is not None:
+                        return False
+                    if "*" in r or "/" in r:
+                        return True
+                    # A bare name is one file (`pom.xml`); a bare directory (`src`) matches nothing.
+                    return (root / r).is_file() or ("." in r and not (root / r).is_dir())
+
+                if not isinstance(code_roots, list) or not all(is_root(r) for r in code_roots):
                     errors.append(
-                        "config.yaml: workflow.code_roots must be a list of glob paths like 'src/**'"
+                        "config.yaml: workflow.code_roots must be a list of globs like 'src/**' or "
+                        "files like 'pom.xml' (relative to the product root, no '..')"
                     )
     errors.extend(_catalog_schema_errors(root))
     errors.extend(validate_active_code_roots(root))

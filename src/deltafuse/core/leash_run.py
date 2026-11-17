@@ -70,7 +70,7 @@ def run_leash(
     root = load_product_root(target if only is None else only)
     if since and not files:
         head = None
-        dirty = git_dirty_paths(root, since=since)
+        dirty = git_dirty_paths(root, since=since, ignored=True)
         base = since
     elif files:
         # FW-1: an absolute path, or one with `..`, matched no glob and so was never product code.
@@ -79,7 +79,7 @@ def run_leash(
         except PathRefused as ex:
             raise LeashError(f"--file: {ex}") from None
     else:
-        dirty = git_dirty_paths(root, base=base, head=head)
+        dirty = git_dirty_paths(root, base=base, head=head, ignored=True)
     if base and not files and not since:
         # The range is base...head: journals and records are compared with where head branched.
         base = merge_base(root, base, head)
