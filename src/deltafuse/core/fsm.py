@@ -864,18 +864,39 @@ _OUTCOME_LINE = re.compile(
 )
 
 
-def verification_gap(change_path: Path) -> str | None:
-    """The gap verification.md records (any outcome but `converged`), or None."""
+def _outcome_lines(text: str) -> list[str]:
+    """The value of every `Outcome:` line, as written (backticks stripped)."""
+    return [m.group("value").strip().strip("`").strip() for m in _OUTCOME_LINE.finditer(text)]
+
+
+def recorded_outcomes(change_path: Path) -> list[str]:
+    """Every outcome verification.md records, lower-cased, in file order; empty when unreadable.
+
+    FL-7: the first `Outcome:` line alone was read, so a file with `- Outcome: converged` under
+    one claim and `- Outcome: spec-gap ... Do not converge` as its overall verdict closed the
+    `converged` gate. All of them are read; the readers below agree on what several mean.
+    """
     try:
         text = (Path(change_path) / "verification.md").read_text(encoding="utf-8", errors="replace")
     except OSError:
+        return []
+    return [value.lower() for value in _outcome_lines(text)]
+
+
+def verification_verdict(change_path: Path) -> str | None:
+    """The one verdict verification.md stands for: the outcome every line agrees on, else the
+    first one that is not `converged` - a gap anywhere in the file is the file's verdict."""
+    outcomes = recorded_outcomes(change_path)
+    if not outcomes:
         return None
-    match = _OUTCOME_LINE.search(text)
-    if match is None:
-        return None
-    outcome = match.group("value").strip().strip("`").strip().lower()
-    if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
-        return outcome
+    return next((value for value in outcomes if value != "converged"), "converged")
+
+
+def verification_gap(change_path: Path) -> str | None:
+    """The gap verification.md records (any outcome but `converged`), or None."""
+    for outcome in recorded_outcomes(change_path):
+        if outcome in VERIFICATION_OUTCOMES and outcome not in {"converged", "not-reproduced"}:
+            return outcome
     return None
 
 
@@ -892,24 +913,32 @@ def _verification_outcome_errors(ver_file: Path) -> list[str]:
         text = ver_file.read_text(encoding="utf-8", errors="replace")
     except OSError as ex:
         return [f"Gate converged: verification.md cannot be read: {ex}"]
-    match = _OUTCOME_LINE.search(text)
-    if match is None:
+    written = _outcome_lines(text)
+    if not written:
         return [
             "Gate converged: verification.md records no outcome; add a line "
             "`- Outcome: <verdict>` where <verdict> is exactly one of "
             + ", ".join(VERIFICATION_OUTCOMES)
         ]
-    raw = match.group("value").strip().strip("`").strip()
-    outcome = raw.lower()
-    if outcome not in VERIFICATION_OUTCOMES:
+    for raw in written:
+        if raw.lower() not in VERIFICATION_OUTCOMES:
+            return [
+                f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
+                + ", ".join(VERIFICATION_OUTCOMES)
+                + "; the template's placeholder line is not a verdict - replace it"
+            ]
+    outcomes = [raw.lower() for raw in written]
+    gaps = [value for value in outcomes if value != "converged"]
+    if gaps and len(set(outcomes)) > 1:
+        # FL-7: `converged` on an earlier line does not outvote a gap further down.
         return [
-            f"Gate converged: verification.md outcome {raw[:80]!r} is not one of "
-            + ", ".join(VERIFICATION_OUTCOMES)
-            + "; the template's placeholder line is not a verdict - replace it"
+            f"Gate converged: verification.md records several outcomes ({', '.join(dict.fromkeys(outcomes))}); "
+            f"the gap '{gaps[0]}' among them means Verify did not converge this Change. The file holds "
+            "exactly one verdict: fix what the gap names, then write the verification again"
         ]
-    if outcome != "converged":
+    if gaps:
         return [
-            f"Gate converged: verification.md records the gap '{outcome}', so Verify did not "
+            f"Gate converged: verification.md records the gap '{gaps[0]}', so Verify did not "
             "converge this Change; a gap stops here and is not repaired silently - fix what "
             "the gap names, then write the verification again"
         ]

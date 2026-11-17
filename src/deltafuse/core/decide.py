@@ -542,15 +542,11 @@ _NOT_REPRODUCED_RED = frozenset({"not-reproduced", "already-green"})
 
 
 def verification_outcome(change_dir: Path) -> str | None:
-    """The `- Outcome:` verdict verification.md records, lower-cased, or None."""
-    from deltafuse.core.fsm import _OUTCOME_LINE
+    """The verdict verification.md stands for, lower-cased, or None (fsm.verification_verdict:
+    with several `- Outcome:` lines, the first that is not `converged`)."""
+    from deltafuse.core.fsm import verification_verdict
 
-    try:
-        text = (Path(change_dir) / "verification.md").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-    match = _OUTCOME_LINE.search(text)
-    return match.group("value").strip().strip("`").strip().lower() if match else None
+    return verification_verdict(Path(change_dir))
 
 
 def _not_reproduced_proof(change_dir: Path, current: str) -> str | None:
