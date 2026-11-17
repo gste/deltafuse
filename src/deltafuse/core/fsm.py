@@ -87,8 +87,9 @@ ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
     # and superseded, or cancelled - so nothing is left to implement (the no-op path, FL-4).
     "declared": {"implementing", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
     "implementing": {"implemented", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
-    "implemented": {"verifying", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
-    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed"} | _HUMAN_CLOSE,
+    # declared, from `implemented` on: the human reopens a task blocked after the gate (FL-8).
+    "implemented": {"verifying", "analyzed", "declared", "not-reproduced"} | _HUMAN_CLOSE,
+    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed", "declared"} | _HUMAN_CLOSE,
     "converged": {"archived"},
     "archived": set(),
     "rejected": set(),

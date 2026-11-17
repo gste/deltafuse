@@ -29,6 +29,9 @@ from deltafuse.core.transitions import (
     SPEC_REJECT_FROM,
     SPEC_REJECT_TO,
     SPEC_REJECTED_GAP,
+    TASK_REOPEN_FROM,
+    TASK_REOPEN_REASON,
+    TASK_REOPEN_TO,
     TransitionError,
     _artifact_file,
     advance_change,
@@ -362,8 +365,28 @@ def reopen_task(
         _record_task_verdict(
             product_root, task_file, task_id, status="reopened", change=info["change"], human_check=human_check
         )
+        change_status = None
+        current = _load_yaml_mapping(change_dir / "change.yaml").get("status")
+        if current in TASK_REOPEN_FROM:
+            # FL-8: the task was blocked after the `implemented` gate. `next` sent it to Declare,
+            # and `state --status declared` refused it - a task may not run behind its Change
+            # either. The gate it passed has to be passed again with the new oracle, so the
+            # Change returns to `declared`; only cancelling had led out.
+            record_change_status(
+                change_dir,
+                status=TASK_REOPEN_TO,
+                kind="artifact-status",
+                gate="decide",
+                artifact="change",
+                reason=TASK_REOPEN_REASON,
+                task=task_id,
+            )
+            change_status = TASK_REOPEN_TO
     written = [rel, _rel(product_root, archive), *restored]
-    return _result("task", "reopened", human_check, {"task": task_id, "from": moved.get("from")}, written)
+    if change_status:
+        written.append(_rel(product_root, change_dir / "change.yaml"))
+    ids = {"task": task_id, "from": moved.get("from")}
+    return _result("task", "reopened", human_check, ids, written, change_status=change_status)
 
 
 # Gaps a human can send back today, and where to: spec-gap needs the slice bounds Analyze

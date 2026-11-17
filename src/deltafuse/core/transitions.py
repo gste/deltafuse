@@ -264,6 +264,22 @@ SPEC_REJECT_FROM = frozenset(
 _SPEC_REJECT_CHAIN_FROM = frozenset({"specified", "decomposed", "declared", "implemented"})
 
 
+# The human reopens a task blocked after the `implemented` gate (FL-8): the task is declared
+# and implemented again, so the gate it had passed has to be passed again - the Change returns
+# to `declared`. The receipt is a Change status write of `decide`, replayed as a rewind.
+TASK_REOPEN_REASON = "task reopened"
+TASK_REOPEN_FROM = frozenset({"implemented", "verifying"})
+TASK_REOPEN_TO = "declared"
+
+
+def _is_task_reopen_rewind(row: dict[str, Any]) -> bool:
+    return (
+        row.get("kind") == "artifact-status"
+        and row.get("artifact") == "change"
+        and row.get("reason") == TASK_REOPEN_REASON
+    )
+
+
 def _rewind_target(row: dict[str, Any], current: str) -> str | None:
     """Where a `gap-reopen` receipt legally takes the chain from `current`, or None."""
     if row.get("gap") == SPEC_REJECTED_GAP:
@@ -416,8 +432,19 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     # Replay: each receipt must apply a known gate from a status the chain
     # has actually reached (the bugfix path legally skips 'specified').
     current = INITIAL_STATUS
-    replay = [r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND)]
+    replay = [
+        r for r in all_receipts if r.get("kind") in ("transition", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
+    ]
     for i, row in enumerate(replay):
+        if _is_task_reopen_rewind(row):
+            if current != "implemented" or row.get("to") != TASK_REOPEN_TO:
+                errors.append(
+                    f"task reopen at step {i + 1} rewinds from '{current}' to '{row.get('to')}'; only "
+                    f"'implemented' -> '{TASK_REOPEN_TO}' is that rewind"
+                )
+                break
+            current = TASK_REOPEN_TO
+            continue
         if row.get("kind") == GAP_REOPEN_KIND:
             target = _rewind_target(row, current)
             if target is None:
@@ -466,7 +493,9 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
             f"chain, which ends at '{current}'"
         )
     status_receipts = [
-        r for r in all_receipts if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND)
+        r
+        for r in all_receipts
+        if r.get("kind") in ("transition", "unblock", GAP_REOPEN_KIND) or _is_task_reopen_rewind(r)
     ]
     last = status_receipts[-1] if status_receipts else None
     if status in RECEIPTED_TARGETS and last is not None and last.get("to") not in (status, current):
