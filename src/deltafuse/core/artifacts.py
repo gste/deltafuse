@@ -42,6 +42,20 @@ from deltafuse.core.artifact_transactions import (
 FROZEN_TASK_FIELDS = ("allowed_paths", "forbidden_paths")
 
 
+def _check_task_paths(metadata: dict[str, Any]) -> None:
+    """FW-8: a task's paths are plain product paths - the one form the leash and the gate read."""
+    from deltafuse.core.layout import product_path_error
+
+    for field in FROZEN_TASK_FIELDS:
+        for raw in metadata.get(field) or []:
+            problem = product_path_error(raw)
+            if problem is not None:
+                raise ArtifactServiceError(
+                    f"{field}: {problem}. Name each path relative to the product root, with '/' "
+                    "and without '..'", code="policy_denied", path=f"/{field}",
+                )
+
+
 class ArtifactServiceError(Exception):
     """Raised when artifact service operations fail."""
 
@@ -430,6 +444,8 @@ class ArtifactService:
 
         if kind not in ("task", "slice", "decision"):
             metadata.pop("id", None)
+        if kind == "task":
+            _check_task_paths(metadata)
 
         self._require_valid(
             self.registry.validate_storage_schema(kind, metadata),
@@ -558,6 +574,8 @@ class ArtifactService:
         updated_meta = patch_outcome.updated_metadata
         body_text = patch_outcome.updated_body
 
+        if kind == "task":
+            _check_task_paths(updated_meta)
         if kind == "task" and "title" in updated_meta:
             title_text = updated_meta.pop("title")
             body_text = f"# {updated_meta.get('id', 'TASK')}: {title_text}\n\n" + re.sub(r"^# [^\n]*\n*", "", body_text)

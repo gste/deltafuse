@@ -28,6 +28,7 @@ from deltafuse.core.context import (
     posix_relpath,
 )
 from deltafuse.core.config import config_section
+from deltafuse.core.layout import PathRefused, product_path_error, product_relpath
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.queue import WorkItem, _item_for_step, _load_tasks
@@ -223,7 +224,9 @@ def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], lis
         meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
     except Exception:
         return [], []
-    allowed = [row for row in (meta.get("allowed_paths") or []) if isinstance(row, str)]
+    # FW-8: a path that is not a plain product path (`src/../.deltafuse/x`) opens nothing.
+    allowed = [row for row in (meta.get("allowed_paths") or [])
+               if isinstance(row, str) and product_path_error(row) is None]
     forbidden = [row for row in (meta.get("forbidden_paths") or []) if isinstance(row, str)]
     # df-leash #9: a task declared at the base keeps the paths it was declared with - the working
     # file only narrows them. (The Writer refuses to change them past `pending`; a hand edit of
@@ -746,8 +749,17 @@ def task_envelope_errors(change_path: Path) -> list[str]:
         tid = str(meta.get("id") or tf.stem)
         sid = str(meta.get("slice") or "")
         bounds = slice_bounds.get(sid) or default_bounds
+        for field in ("allowed_paths", "forbidden_paths"):
+            for raw in meta.get(field) or []:
+                problem = product_path_error(raw)
+                if problem is not None:
+                    # FW-8: `src/../.deltafuse/gate-password.yaml` begins with `src/` and was
+                    # taken as a path under `src/**`.
+                    errors.append(f"Task {tid}: {field} {problem}")
         for raw in meta.get("allowed_paths") or []:
             task_glob = str(raw)
+            if product_path_error(raw) is not None:
+                continue
             if not any(_glob_covers(task_glob, g) for g in bounds):
                 # The bound, not a field name: slices carry no target_paths in
                 # the schema, so "escapes target_paths" named nothing the

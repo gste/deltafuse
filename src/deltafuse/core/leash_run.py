@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from deltafuse.core.config import config_as_of
+from deltafuse.core.layout import PathRefused, product_relpath
 from deltafuse.core.leash import (
     CONFIG_REL,
     ENVELOPE_BASE,
@@ -71,8 +72,14 @@ def run_leash(
         head = None
         dirty = git_dirty_paths(root, since=since)
         base = since
+    elif files:
+        # FW-1: an absolute path, or one with `..`, matched no glob and so was never product code.
+        try:
+            dirty = list(dict.fromkeys(product_relpath(raw, root, resolve=True) for raw in files))
+        except PathRefused as ex:
+            raise LeashError(f"--file: {ex}") from None
     else:
-        dirty = list(files) if files else git_dirty_paths(root, base=base, head=head)
+        dirty = git_dirty_paths(root, base=base, head=head)
     if base and not files and not since:
         # The range is base...head: journals and records are compared with where head branched.
         base = merge_base(root, base, head)

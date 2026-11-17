@@ -23,6 +23,81 @@ CANONICAL_SKILL_NAMES = [
 LEGACY_FORBIDDEN_PATHS = ["docs/process", "docs/init", "docs/todo"]
 
 
+class PathRefused(ValueError):
+    """A path that does not name a place inside the product."""
+
+
+_DRIVE = re.compile(r"^[A-Za-z]:")
+
+
+def product_relpath(raw: Any, product_root: Path | str | None = None, *, resolve: bool = False) -> str:
+    """The one normal form of a product path: relative to the product root, POSIX slashes, no
+    empty, `.` or `..` segment, no drive.
+
+    Audit 2026-11-17 (FW-1, FW-8): `deltafuse leash --file`, a task's `allowed_paths` and the
+    Writer each read a path their own way. An absolute path or one with `..` matched no glob in
+    the leash (so it was "not product code") and matched `src/**` at the decomposed gate (so
+    `src/../.deltafuse/gate-password.yaml` was a path the task may write).
+
+    Strict (the default; what a stored path must already be): an absolute path, a `..` segment or a
+    path that is not written in its normal form is refused. ``resolve`` (what a human or a tool
+    types: `leash --file`): `.`, `//` and `..` are resolved, an absolute path inside
+    ``product_root`` is made relative, and a path that leaves the product is refused.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        raise PathRefused(f"{raw!r} is not a path")
+    text = raw.strip().replace("\\", "/")
+    absolute = text.startswith("/") or _DRIVE.match(text) is not None
+    if absolute:
+        if not resolve or product_root is None:
+            raise PathRefused(f"'{raw}' is an absolute path; name it relative to the product root")
+        root = Path(product_root).resolve()
+        try:
+            text = Path(text).resolve().relative_to(root).as_posix()
+        except ValueError:
+            raise PathRefused(f"'{raw}' is outside the product ({root})") from None
+    parts: list[str] = []
+    for part in text.split("/"):
+        if part in ("", "."):
+            if not resolve:
+                raise PathRefused(f"'{raw}' is not in normal form (an empty or '.' segment)")
+            continue
+        if part == "..":
+            if not resolve:
+                raise PathRefused(f"'{raw}' holds '..'; name the path itself, relative to the product root")
+            if not parts:
+                raise PathRefused(f"'{raw}' is outside the product")
+            parts.pop()
+            continue
+        parts.append(part)
+    if not parts:
+        raise PathRefused(f"'{raw}' names the product root, not a path in it")
+    rel = "/".join(parts)
+    if _DRIVE.match(rel):
+        raise PathRefused(f"'{raw}' names a drive")
+    if resolve and product_root is not None:
+        # The name as the file system has it (a case-insensitive disk takes `SRC/app.py`); a link
+        # that leads out of the product is outside it.
+        root = Path(product_root).resolve()
+        if (root / rel).exists():
+            try:
+                rel = (root / rel).resolve().relative_to(root).as_posix()
+            except ValueError:
+                raise PathRefused(f"'{raw}' is outside the product ({root})") from None
+    return rel
+
+
+def product_path_error(raw: Any) -> str | None:
+    """Why a stored path (a task's `allowed_paths`, a Writer target) is not a product path, or None."""
+    try:
+        normal = product_relpath(raw)
+    except PathRefused as ex:
+        return str(ex)
+    if normal != raw:
+        return f"'{raw}' is not in normal form; write it as '{normal}'"
+    return None
+
+
 def validate_product_layout(product_dir: Path | str) -> list[str]:
     """
     Validates a product repository layout against DeltaFuse 2.0 layout standards.
