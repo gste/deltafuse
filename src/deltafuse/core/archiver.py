@@ -107,10 +107,23 @@ def archive_change(
             "Overwriting historical archive records is strictly prohibited."
         )
 
-    # Update status to archived
-    from deltafuse.core.transitions import _write_change_status
+    # Update status to archived: receipt first, like every Core status write, so a package
+    # found in docs/changes/ with `archived` can be told from a hand edit (FL-12).
+    from deltafuse.core.transitions import ARCHIVE_GATE, ARCHIVED_STATUS, _write_change_status, append_receipt
 
-    _write_change_status(cpath, change_data, "archived")  # atomic, like every status write
+    append_receipt(
+        _find_repo_root(cpath),
+        {
+            "kind": "artifact-status",
+            "change": cid,
+            "artifact": "change",
+            "gate": ARCHIVE_GATE,
+            "from": current_status,
+            "to": ARCHIVED_STATUS,
+            "archive": dest_dir.relative_to(Path(repo_root)).as_posix(),
+        },
+    )
+    _write_change_status(cpath, change_data, ARCHIVED_STATUS)  # atomic, like every status write
 
     # Move directory safely
     shutil.move(str(cpath), str(dest_dir))

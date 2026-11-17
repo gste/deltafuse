@@ -19,7 +19,7 @@ from deltafuse.core.integrity import (
     find_unresolved_decisions_for_change,
     list_proposed_decisions_for_change,
 )
-from deltafuse.core.transitions import CLOSE_STATUSES, receipt_mismatch, red_result, supersede_errors
+from deltafuse.core.transitions import receipt_mismatch, red_result, supersede_errors
 from deltafuse.core.context import PHASE_CONTRACTS, phase_allowed_paths, posix_relpath
 from deltafuse.core.steps import STEP_CONTRACTS
 
@@ -362,10 +362,20 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
         return [], []
     rel = _rel(product_root, change_path)
     if status in TERMINAL_CHANGE:
-        # A terminal status the human did not record (`decide --close`) is not one: it halts
-        # instead of dropping the Change from the queue (df-gates #6).
-        hand_set = receipt_mismatch(product_root, change_path) if status in CLOSE_STATUSES else None
-        return _halt(change_id, rel, hand_set) if hand_set else ([], [])
+        # A terminal status nobody recorded is not one: it halts instead of dropping the Change
+        # from the queue - `decide --close` for the closed ones (df-gates #6), the receipt chain
+        # for `converged`, `deltafuse archive` for `archived` (FL-12).
+        hand_set = receipt_mismatch(product_root, change_path)
+        if hand_set:
+            return _halt(change_id, rel, hand_set)
+        if status == "archived":
+            return _halt(
+                change_id,
+                rel,
+                f"status 'archived', yet the package is still in {rel}: `deltafuse archive` was "
+                f"interrupted before it moved it. Run `deltafuse archive {rel}` again from the product root",
+            )
+        return [], []
     mismatch = receipt_mismatch(product_root, change_path)
     if mismatch:
         # DF3-004: change.yaml must agree with the last Core receipt; a

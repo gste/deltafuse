@@ -326,6 +326,24 @@ def terminal_status_errors(product_root: Path, change_path: Path) -> list[str]:
     ]
 
 
+# `deltafuse archive` records its own status write, so a package left in docs/changes/ with
+# `archived` can be told from a hand edit (FL-12) and the move finished (FL-15).
+ARCHIVED_STATUS = "archived"
+ARCHIVE_GATE = "archive"
+_STATUS_ROW_KINDS = frozenset({"transition", "unblock", GAP_REOPEN_KIND})
+
+
+def _moves_change_status(row: dict[str, Any]) -> bool:
+    """Whether a receipt records a write of the Change's own status."""
+    if row.get("kind") in _STATUS_ROW_KINDS:
+        return True
+    return row.get("kind") == "artifact-status" and row.get("artifact") == "change" and "field" not in row
+
+
+def _last_status_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next((row for row in reversed(rows) if _moves_change_status(row)), None)
+
+
 def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
     """V3-FIX-009: fail-closed receipt chain validation.
 
@@ -345,10 +363,35 @@ def receipt_chain_errors(product_root: Path, change_path: Path) -> list[str]:
         return []
     if status in CLOSE_STATUSES:
         return terminal_status_errors(product_root, change_path)
+    if status == ARCHIVED_STATUS:
+        # FL-12: `archived` is written by `deltafuse archive` alone, a moment before it moves
+        # the package out of docs/changes/. Found there, it is that command interrupted - its
+        # receipt is the journal's last word on the Change - or a hand edit.
+        last = _last_status_row(load_receipts(product_root, change_id))
+        if last is not None and last.get("gate") == ARCHIVE_GATE and last.get("to") == ARCHIVED_STATUS:
+            return []
+        return [
+            f"status '{status}' was not written by `deltafuse archive`: a hand-set status is not "
+            "evidence - restore change.yaml to the status the journal ends at"
+        ]
+    if status == "blocked-on-decision":
+        # A Change waits here for the human's answer to a proposed Decision, and `decide`
+        # returns it to `analyzing`. FL-12: with no such Decision nothing ever unblocks it, and
+        # the status was simply ignored - the queue went on handing out work.
+        from deltafuse.core.integrity import list_proposed_decisions_for_change
+
+        if list_proposed_decisions_for_change(str(change_id), Path(product_root)):
+            return []
+        return [
+            f"status '{status}', but no proposed Decision is bound to this Change, so nothing can "
+            "unblock it: a hand-set status is not evidence - restore change.yaml to 'analyzing'"
+        ]
     if status not in VALID_CHAIN_STATUSES:
-        # Other statuses (archived, ...) are governed by their own contracts,
-        # not the forward transition chain.
-        return []
+        # FL-12: no Core command writes any other status. It read as "nothing to check".
+        return [
+            f"status '{status}' is not one the Core writes to a Change: a hand-set status is not "
+            "evidence - restore change.yaml to the status the journal ends at"
+        ]
 
     all_receipts = load_receipts(product_root, change_id)
     # Auxiliary Core receipts (decide unblock) confirm the status but are not
@@ -444,10 +487,16 @@ def receipt_mismatch(product_root: Path, change_path: Path) -> str | None:
     return "; ".join(errors) if errors else None
 
 
-def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] | None:
+def resume_incomplete(product_root: Path, change_path: Path, gate: str | None = None) -> dict[str, Any] | None:
     """Finish a transition whose receipt was recorded but whose change.yaml
     write never landed (crash between validation and write). Returns the
-    resumed receipt entry, or None when there is nothing to resume."""
+    resumed receipt entry, or None when there is nothing to resume.
+
+    `gate` is the gate the caller asked for. FL-17: the pending write was finished whatever
+    gate was named, so with the status rewound by hand `advance --gate converged` exited 0
+    having applied `declaring`. A pending transition is finished only under its own name;
+    asked for another gate, the Core refuses and says which one is pending.
+    """
     data = _load_change_yaml(change_path)
     change_id = data.get("id") or change_path.name
     # Only a gate transition can be crash residue of `advance`. q0 run
@@ -456,16 +505,22 @@ def resume_incomplete(product_root: Path, change_path: Path) -> dict[str, Any] |
     # matching 'from' was read as an unfinished advance, the Change was
     # written 'implemented' with no gate, and advance crashed on the missing
     # 'gate' key - the Worker then chased the traceback's source path.
-    transitions = [
-        row for row in load_receipts(product_root, change_id) if row.get("kind") == "transition"
-    ]
-    last = transitions[-1] if transitions else None
-    if last is None:
+    # The journal's last word on the Change's status must be that transition: a later rewind
+    # (a reopened gap, a rejected specification, a reopened task) may land on its `from`.
+    last = _last_status_row(load_receipts(product_root, change_id))
+    if last is None or last.get("kind") != "transition":
         return None
     if data.get("status") == last.get("to"):
         return None
     if data.get("status") != last.get("from"):
         return None  # hand-edited status, not a crash residue
+    if gate is not None and last.get("gate") != gate:
+        raise TransitionError(
+            f"gate '{gate}' was not applied: change.yaml says '{data.get('status')}', but the journal's "
+            f"last transition is gate '{last.get('gate')}' ({last.get('from')} -> {last.get('to')}). "
+            "Either that advance was interrupted or the status was edited by hand; finish it with "
+            f"`deltafuse advance <change-dir> --gate {last.get('gate')}`, then go on"
+        )
     _write_change_status(change_path, data, last["to"])
     return last
 
@@ -546,7 +601,7 @@ def advance_change(
     with ProductMutationLock(product_root):
         # Crash residue from a previous advance: the receipt is authoritative,
         # so finishing the pending write completes the transition.
-        resumed = resume_incomplete(product_root, change_path)
+        resumed = resume_incomplete(product_root, change_path, gate)
         if resumed is not None:
             return _advanced(resumed, resumed=True)
 
