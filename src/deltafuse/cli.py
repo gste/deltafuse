@@ -717,6 +717,10 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "new":
         from deltafuse.core.scaffold import ScaffoldError, scaffold_change
 
+        # FW-10: a Change is not opened under a Core the product does not pin.
+        refused = _pin_refusal(Path(args.product_path), "new", change=args.change_id)
+        if refused is not None:
+            return refused
         try:
             change_dir = scaffold_change(
                 Path(args.product_path), args.change_id, route=args.route, title=args.title
@@ -734,6 +738,14 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
+        # FW-10: "is valid" under a Core the lock does not pin was the one answer left.
+        from deltafuse.core.lock import product_pin_errors
+
+        try:
+            pin = product_pin_errors(target.resolve())
+        except OSError:
+            pin = []
+        errors += [f"this Core is not the one the product pins: {e}" for e in pin if not any(e in known for known in errors)]
         valid = f"DeltaFuse product layout at {target} is valid."
         return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 

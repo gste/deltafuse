@@ -90,3 +90,18 @@ def test_there_is_one_pin_check(tmp_path: Path, repo_root: Path, monkeypatch):
     assert fsm.product_pin_errors(tmp_path) == lock.product_pin_errors(tmp_path) != []
     monkeypatch.setattr(lock, "product_pin_errors", lambda root: ["the one check"])
     assert fsm.product_pin_errors(tmp_path) == ["the one check"]
+
+
+def test_validate_layout_and_new_ask_the_pin_too(tmp_path: Path, repo_root: Path, capsys):
+    """FW-10 re-probe on the merged tree: under a Core the lock does not pin, `validate-layout`
+    still answered "is valid" (the finding named it) and `new` opened a Change."""
+    install(target_dir=tmp_path, framework_root=repo_root)
+    assert main(["validate-layout", str(tmp_path)]) == 0
+    assert main(["new", str(tmp_path), "CHG-771", "--title", "Before"]) == 0
+    _lock_pins_another_version(tmp_path)  # config and lock agree with each other, not with this Core
+    capsys.readouterr()
+    assert main(["validate-layout", str(tmp_path)]) != 0
+    assert "pin" in "".join(capsys.readouterr())
+    assert main(["new", str(tmp_path), "CHG-772", "--title", "After"]) != 0
+    assert "pin" in "".join(capsys.readouterr())
+    assert not (tmp_path / "docs" / "changes" / "CHG-772").exists()
