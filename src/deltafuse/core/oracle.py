@@ -22,7 +22,8 @@ import hashlib
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
-from deltafuse.core.hasher import compute_file_sha256, oracle_paths
+from deltafuse.core.hasher import oracle_paths
+from deltafuse.core.product_layout import content_sha256, posix_relpath
 
 FORMAT_VERSION = 2
 CONFIG_FILES = ("pytest.ini", ".pytest.ini", "pytest.toml", ".pytest.toml", "pyproject.toml", "tox.ini", "setup.cfg")
@@ -208,7 +209,8 @@ def _file_digest(root: Path, rel: str, form: str) -> str | None:
         units = _module_units(root, rel)
         return "unparseable" if units is None else _sha("\n".join(u[1] for u in units))
     try:
-        return "sha256:" + compute_file_sha256(path)
+        # The content, not the line endings a checkout gave it (audit 2026-11-17, FE-10).
+        return "sha256:" + content_sha256(path)
     except OSError:
         return None
 
@@ -248,10 +250,16 @@ def _config_digest(root: Path, test_files: list[str]) -> str:
     return _sha("\n".join(sorted(lines)) + "\n")
 
 
-def freeze_red_oracle(repo_root: Path | str, changed_paths: Iterable[str], failed: Iterable[str]) -> dict[str, Any] | None:
-    """The `red_oracle_tests` a Red record carries. None when Red declared no test file."""
+def freeze_red_oracle(repo_root: Path | str, changed_paths: Iterable[str], failed: Iterable[str],
+                      *, test_files: Iterable[str] = ()) -> dict[str, Any] | None:
+    """The `red_oracle_tests` a Red record carries. None when Red declared no test file.
+
+    Frozen are the changed paths the product's layout puts on the test side, and *test_files*:
+    the files the failed tests live in, whatever they are called and wherever they are.
+    """
     root = Path(repo_root)
-    paths = oracle_paths(changed_paths)
+    paths = sorted(set(oracle_paths(changed_paths, root))
+                   | {posix_relpath(str(p).replace("\\", "/")) for p in test_files if str(p).strip()})
     if not paths:
         return None
     parsed = {rel: u for rel in paths if rel.endswith(".py") and (u := _module_units(root, rel)) is not None}
@@ -399,15 +407,14 @@ def isolation_plan(argv: list[str], recorded: dict[str, Any], red_failed: Iterab
     is not an existing path is an option's value and stays. None when the
     runner is not pytest or nothing is frozen.
     """
-    from deltafuse.core.test_reports import PYTEST_RUNNERS, runner_family, runner_head
+    from deltafuse.core.test_reports import pytest_args_start
 
     expected = frozen_test_ids(recorded, red_failed)
-    if not expected or runner_family(argv) != "pytest":
+    # One reading of the command with runner_family (`pytest_args_start`): `pytest.cmd`,
+    # `python -X utf8 -m pytest` and `uv run pytest` are pytest there and here.
+    split = pytest_args_start(argv)
+    if not expected or split is None:
         return None
-    # One reading of the runner's name with runner_family: `pytest.cmd` is pytest there, and
-    # stripping only `.exe` here sent it to `argv.index("pytest")`, which raised.
-    head = runner_head(argv[0])
-    split = 1 if head in PYTEST_RUNNERS else argv.index("pytest") + 1
     kept: list[str] = []
     rest = iter(argv[split:])
     for arg in rest:

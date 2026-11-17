@@ -21,6 +21,7 @@ from deltafuse.core.context import (
 )
 from deltafuse.core.graph import topological_sort, DependencyCycleError
 from deltafuse.core.hasher import compute_product_baseline_revision
+from deltafuse.core.product_layout import product_layout
 from deltafuse.core.analyze import uncovered_primary_capabilities, unrouted_name_family_errors
 from deltafuse.core.specify import spec_delta_outside_slice_files
 from deltafuse.core.integrity import (
@@ -598,7 +599,7 @@ def _validate_package(
                     if not recorded:
                         errors.append(
                             f"{rel_ev}: missing base_revision; Green/regression/verification "
-                            "must stamp the docs/spec/** and src/** content hash"
+                            f"must stamp the content hash of {product_layout(repo_root).describe()}"
                         )
                     elif recorded != current:
                         rerun = (
@@ -608,8 +609,8 @@ def _validate_package(
                         )
                         errors.append(
                             f"{rel_ev}: stale evidence: base_revision '{recorded}' does not "
-                            f"match current docs/spec/** and src/** tree '{current}'; a later "
-                            f"change moved the tree - re-run it on the current tree: {rerun}"
+                            f"match the current tree '{current}' of {product_layout(repo_root).describe()}; "
+                            f"a later change moved the tree - re-run it on the current tree: {rerun}"
                         )
             except Exception as ex:
                 errors.append(f"{rel_ev} parsing error: {ex}")
@@ -973,7 +974,7 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
             return []
         if compute_red_oracle_digest(repo_root, paths) == recorded:
             return []
-        frozen = oracle_paths(paths)
+        frozen = oracle_paths(paths, repo_root)
         what = f"{', '.join(frozen) or 'the declared test files'} changed after Declare"
     return [
         f"the frozen Red oracle behind {label} no longer matches what Red recorded - "
@@ -1635,7 +1636,26 @@ def coverage_claim_errors(
                 "implements or tests it; Decompose gives that slice a task (a `tasks-missing` gap)"
             )
         evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
-        required = ("green", "regression") if route == "code" else ("green",)
+        required: tuple[str, ...] = ("green", "regression") if route == "code" else ("green",)
+        if own and all(tasks[t].get("status") == "superseded" for t in own):
+            # Audit 2026-11-17 (FE-7): every task of the claim found its requirement already met
+            # (an `already-green` Red) and was superseded. A superseded task has no Green - the
+            # Core refuses one - so asking this claim for a green and a regression mapping left
+            # the Change with no way to converge. Its proof is that Red: the tests in it passed
+            # on the unchanged product, and the verification run must pass them again
+            # (`change_test_ids`).
+            required = ()
+            unproven = [
+                t for t in own
+                if _load_record(change_path / "evidence" / "red" / f"{t}.yaml").get("result") != "already-green"
+            ]
+            if unproven:
+                errors.append(
+                    f"Gate converged: claim '{cid}' rests on superseded task(s) {', '.join(unproven)} with no "
+                    "`already-green` Red record: a task is superseded when its Red shows the requirement is "
+                    "already met, and that record is the claim's proof. Record the task's Red "
+                    "(`deltafuse evidence <change-dir> --phase red --task <id> -- <command>`), or reopen the task"
+                )
         missing = [phase for phase in required if not evidence.get(phase)]
         if missing:
             errors.append(

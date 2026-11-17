@@ -54,7 +54,7 @@ properties:
   base_revision:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
-    description: Content hash of docs/spec/** and src/** when the evidence was recorded.
+    description: Content hash of docs/spec/** and the product code roots (workflow.code_roots, else src/** and tests/**) when the evidence was recorded; line endings do not count.
   red_oracle:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'

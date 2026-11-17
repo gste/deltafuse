@@ -94,3 +94,79 @@ def test_the_analyzed_gate_refuses_it(tmp_path: Path, repo_root: Path):
     )
     errors = check_gate(builder.change_dir, "analyzed")
     assert any("adds the name `ratelimit.penalty_started`" in e for e in errors), errors
+
+
+# --- Audit 2026-11-17 (FE-6), owner decision R7 ------------------------------------------------------
+#
+# The family was the first dotted segment of any name, and a member was any text starting with it.
+# On a JVM product every spec names classes by package, so `ru.` was one family shared by all of
+# them: a claim naming a new package had to be primary in every capability, and `analyzed` could
+# not close. A family is for event and key names of the form `family.member`; package and property
+# prefixes are not families.
+
+JVM_SPECS = {
+    "system.core": {"docs/spec/core.md": "# Core\n## REQ-01\n`ru.bank.core.rates` holds the rate tables.\n"},
+    "system.account": {"docs/spec/account.md": "# account\n`ru.bank.account.service.MainService` SHALL answer.\n"},
+    "system.debitcard": {"docs/spec/debitcard.md": "# debitcard\n`ru.bank.debitcard.service.MainService` SHALL answer.\n"},
+}
+
+
+def _one_claim(text: str, primary: str = "system.core") -> list[str]:
+    claims = {"CR-001": {"summary": "s", "primary_capability": primary}}
+    return claims, claim_texts(f"- **CR-001** (expectation): {text}\n", claims)
+
+
+def test_a_new_package_is_not_a_member_of_a_family_of_every_spec():
+    claims, texts = _one_claim("add the package `ru.bank.core.limits` with a daily limit calculator")
+    assert new_name_family_errors(claims, texts, JVM_SPECS) == []
+
+
+def test_package_and_property_prefixes_are_not_families_in_their_short_forms_either():
+    """The bypass: the same prefixes with two segments, where the form alone does not tell."""
+    specs = {
+        "system.core": {"docs/spec/core.md": "# Core\n"},
+        "system.other": {"docs/spec/other.md": (
+            "# other\n`ru.bank` is the root package; `com.acme` the vendor's; `org.slf4j` logs;\n"
+            "`spring.profiles` and `java.time` are used; `ru.bank.core.rates` and `ratelimit.rejected.total` too.\n"
+        )},
+    }
+    for name in ("ru.limits", "com.partner", "org.junit", "spring.datasource", "java.util", "ratelimit.penalty_started"):
+        claims, texts = _one_claim(f"use `{name}` here")
+        assert new_name_family_errors(claims, texts, specs) == [], name
+
+
+def test_a_name_longer_than_family_member_is_a_path_not_a_member():
+    claims, texts = _one_claim("emit `ratelimit.penalty.started` and read `auth.tokens.ttl`", primary="security.ratelimit")
+    assert new_name_family_errors(claims, texts, SPECS) == []
+
+
+def test_a_member_is_a_whole_name_of_the_spec_not_the_start_of_a_longer_one():
+    specs = {
+        "security.ratelimit": {"docs/spec/security/ratelimit.md": "# ratelimit\n"},
+        "monitoring.audit": {"docs/spec/monitoring/audit.md": "# audit\nThe class `ratelimit.rejected.Handler` and ratelimit.unquoted exist.\n"},
+    }
+    claims, texts = _one_claim("event `ratelimit.penalty_started`", primary="security.ratelimit")
+    assert new_name_family_errors(claims, texts, specs) == []
+
+
+def test_the_analyzed_gate_closes_on_a_jvm_product_whose_specs_name_packages(tmp_path: Path, repo_root: Path):
+    import yaml
+
+    from deltafuse.core.fsm import check_gate
+    from deltafuse.core.installer import install
+    from tests.fixtures.change_builder import MockChangeBuilder
+
+    install(target_dir=tmp_path, framework_root=repo_root)
+    builder = MockChangeBuilder(tmp_path, change_id="CHG-920", title="New package")
+    spec = tmp_path / "docs" / "spec"
+    catalog = yaml.safe_load((spec / "_capabilities.yaml").read_text(encoding="utf-8"))
+    for name in ("account", "debitcard"):
+        catalog["domains"]["system"]["capabilities"][name] = {"summary": name, "spec": [f"docs/spec/{name}.md"]}
+        (spec / f"{name}.md").write_text(JVM_SPECS[f"system.{name}"][f"docs/spec/{name}.md"], encoding="utf-8")
+    (spec / "_capabilities.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8")
+    (spec / "core.md").write_text(JVM_SPECS["system.core"]["docs/spec/core.md"], encoding="utf-8")
+    builder.step_intake(["CR-001"])
+    (builder.change_dir / "request.md").write_text(
+        "# Request\n- CR-001: add the package `ru.bank.core.limits` with a daily limit calculator\n", encoding="utf-8")
+    builder.step_analyze()
+    assert [e for e in check_gate(builder.change_dir, "analyzed") if "family" in e] == []
