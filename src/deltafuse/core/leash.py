@@ -1675,6 +1675,60 @@ def _git_names(root: Path, *args: str, what: str) -> list[str]:
     return [name for name in proc.stdout.decode("utf-8", errors="surrogateescape").split("\0") if name]
 
 
+SUBDIRECTORY = (
+    "{root} is a subdirectory of the git repository at {top}. DeltaFuse supports a product only at "
+    "the root of its repository (or with no git): the pre-commit hook and the leash read paths "
+    "from the repository root, so nothing in a subdirectory would be judged. Give the product its "
+    "own repository (a submodule works); a monorepo layout is a roadmap item"
+)
+
+
+def repository_layout_error(product_root: Path | str) -> str | None:
+    """Why git cannot judge this product, or None (FW-2, owner's decision R4).
+
+    A product one level below its repository root was installed without a word: the hook was not
+    installed (`.git` is not there), and the leash compared repository-relative names
+    (`svc/src/app.py`) with product-relative globs (`src/**`), so no edit was ever judged."""
+    root = Path(product_root).resolve()
+    probe = root
+    while not probe.is_dir() and probe != probe.parent:
+        probe = probe.parent
+    prefix = _git(probe, "rev-parse", "--show-prefix")
+    if prefix.returncode != 0:
+        return None  # no git, or not in a work tree
+    if not (prefix.stdout or "").strip() and probe == root:
+        return None  # the repository root itself
+    top = _git(probe, "rev-parse", "--show-toplevel")
+    return SUBDIRECTORY.format(root=root, top=(top.stdout or "").strip() or "above it")
+
+
+def hook_warning(product_root: Path | str, mode: str | None = None) -> str | None:
+    """Why commits here are not judged although the leash is on, or None (FW-13).
+
+    Hooks are not cloned, and `core.hooksPath` set after `init` moves git away from the hook that
+    was installed. Either way every commit went unjudged and no command said so."""
+    root = Path(product_root)
+    mode = mode or load_leash_mode(root)
+    if mode == "off" or not (root / ".git").exists():
+        return None
+    hooks = _git_hooks_dir(root, announce=False)
+    hook = hooks / "pre-commit" if hooks is not None else None
+    if hook is not None and hook.is_file():
+        text = hook.read_text(encoding="utf-8", errors="replace")
+        if HOOK_MARKER in text or ".deltafuse/hooks/pre-commit" in text:
+            return None
+    where = f"{hook} does not run the leash" if hook is not None else "core.hooksPath points outside this repository"
+    return (
+        f"workflow.leash is '{mode}', but the leash pre-commit hook is not active in this clone "
+        f"({where}): commits are not judged here. Run `deltafuse init <product-root>` to install it "
+        "(hooks are not cloned), or call .deltafuse/hooks/pre-commit from the hook git does run"
+    )
+
+
+def has_commit(product_root: Path) -> bool:
+    return _git(Path(product_root), "rev-parse", "--verify", "--quiet", "HEAD").returncode == 0
+
+
 def _chmod_exec(path: Path) -> None:
     try:
         path.chmod(path.stat().st_mode | 0o111)

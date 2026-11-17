@@ -17,7 +17,7 @@ from deltafuse.core.adapters import (
 )
 from deltafuse.core.assets import manifest_identity_digest, resolve_assets, source_assets_root
 from deltafuse.core.hasher import compute_framework_content_hash
-from deltafuse.core.leash import load_leash_mode, sync_leash_hook
+from deltafuse.core.leash import load_leash_mode, repository_layout_error, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
 
 
@@ -230,6 +230,9 @@ def install(
     if agents_md is not None and agents_md not in {"prompt", "bridge", "preserve", "replace"}:
         raise InstallationError("Invalid --agents-md value; expected prompt, bridge, preserve, or replace.")
     target_root = Path(target_dir).resolve()
+    layout_error = repository_layout_error(target_root)
+    if layout_error is not None:
+        raise InstallationError(layout_error)  # FW-2, before anything is written
     target_root.mkdir(parents=True, exist_ok=True)
 
     bundle_assets: Path | None

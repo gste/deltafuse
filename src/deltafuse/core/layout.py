@@ -207,6 +207,21 @@ def validate_product_layout(product_dir: Path | str) -> list[str]:
         if (root / forbidden).exists():
             errors.append(f"Legacy product path must be migrated: {forbidden}")
 
+    # FW-13 / FW-2: how the product sits in git. A missing hook is a warning, not an error - a CI
+    # checkout never has one.
+    import os
+    import sys
+
+    from deltafuse.core.leash import hook_warning, repository_layout_error
+
+    layout_error = repository_layout_error(root)
+    if layout_error is not None:
+        errors.append(layout_error)
+    elif config_file.is_file() and not os.environ.get("CI"):
+        warning = hook_warning(root)
+        if warning is not None:
+            print(f"deltafuse: warning: {warning}", file=sys.stderr)
+
     # 4. Validate generated skills for each configured adapter root
     for rel_adapter in adapter_roots:
         errors.extend(

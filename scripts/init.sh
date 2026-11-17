@@ -14,6 +14,17 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# FW-2 (owner's decision R4), as src/deltafuse/core/leash.py repository_layout_error: a product
+# below the root of a git repository is refused before anything is written - the hook and the
+# leash read paths from the repository root, so nothing there would be judged.
+probe="$TARGET_DIR"
+while [ ! -d "$probe" ]; do probe="$(dirname "$probe")"; done
+if prefix="$(cd "$probe" && git rev-parse --show-prefix 2>/dev/null)"; then
+  if [ -n "$prefix" ] || [ ! -d "$TARGET_DIR" ]; then
+    printf '%s is a subdirectory of the git repository at %s. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item.\n' "$TARGET_DIR" "$(cd "$probe" && git rev-parse --show-toplevel 2>/dev/null)" >&2
+    exit 1
+  fi
+fi
 TARGET_ROOT="$(mkdir -p "$TARGET_DIR" && cd "$TARGET_DIR" && pwd)"
 FRAMEWORK_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
 SCHEMA_VERSION=3

@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sys
 from pathlib import Path
 from typing import Any, Sequence
 
 from deltafuse.core.config import config_as_of
 from deltafuse.core.layout import PathRefused, product_relpath
 from deltafuse.core.leash import (
+    LOCK_REL,
+    _bytes_at,
     CONFIG_REL,
     ENVELOPE_BASE,
     INDEX,
@@ -28,8 +31,12 @@ from deltafuse.core.leash import (
     config_at,
     config_guard_errors,
     git_dirty_paths,
+    has_commit,
+    hook_warning,
     load_baseline,
+    load_leash_mode,
     merge_base,
+    repository_layout_error,
     step_base,
     verdict_leash_mode,
 )
@@ -50,6 +57,7 @@ def run_leash(
     files: Sequence[str] | None = None,
     staged: bool | None = None,
     since: str | None = None,
+    announce: bool = True,
 ) -> dict[str, Any]:
     """The leash payload for `target` (a product root, or one Change directory).
 
@@ -68,6 +76,19 @@ def run_leash(
     target = Path(target)
     only = target.resolve() if (target.resolve() / "change.yaml").is_file() else None
     root = load_product_root(target if only is None else only)
+    layout_error = repository_layout_error(root)
+    if layout_error is not None:
+        raise LeashError(layout_error)  # FW-2
+    in_hook = bool(staged)
+    if in_hook and not base and not files and not has_commit(root):
+        # FW-15: the first commit has nothing to be judged against, and it is the commit
+        # `deltafuse leash` asks for ("make an initial commit of the installed scaffold");
+        # under enforce the hook refused it. Every later commit is judged against its parent.
+        return {
+            "ok": True, "skipped": True, "mode": load_leash_mode(root), "envelope": None, "paths": [],
+            "violations": [], "warnings": [],
+            "note": "first commit of this repository: nothing to judge it against",
+        }
     if since and not files:
         head = None
         dirty = git_dirty_paths(root, since=since, ignored=True)
@@ -83,6 +104,16 @@ def run_leash(
     if base and not files and not since:
         # The range is base...head: journals and records are compared with where head branched.
         base = merge_base(root, base, head)
+    if has_commit(root) and _bytes_at(root, LOCK_REL, head=base or "HEAD") is None:
+        # The commit (or range) that installs DeltaFuse: its base is a repository without it, so
+        # there is no baseline for the scaffold `init` wrote - README templates, CHANGELOG.md,
+        # the CI workflow, .gitignore - which the leash now judges like any file (R5). Removing
+        # the pin later is refused by the lock guard, so a judged tree cannot get back here.
+        return {
+            "ok": True, "skipped": True, "mode": load_leash_mode(root), "envelope": None, "paths": dirty,
+            "violations": [], "warnings": [],
+            "note": "DeltaFuse is not installed at the base of this diff: nothing to judge it against",
+        }
     # df-leash #3: the tree is judged with its base's config - the mode and the code roots it
     # may not change for itself. No config at the base (no commit yet): the working tree's.
     base_config = config_at(root, base or "HEAD")
@@ -117,6 +148,11 @@ def run_leash(
         # `advance` judges the step in its starting mode and flags only an uncommitted one.
         guard_base = "HEAD" if since else (base or "HEAD")
         errors = config_guard_errors(root, base=guard_base, head=head) + errors
+    # FW-13: say that commits are not judged here. Not inside the hook (it is running), and not
+    # in CI, where there is no hook to install and the leash job is the judge.
+    warning = None if in_hook or os.environ.get("CI") else hook_warning(root, mode)
+    if warning is not None and announce:
+        print(f"deltafuse: warning: {warning}", file=sys.stderr)
     return {
         "ok": not errors,
         "skipped": envelope is None and not errors,
@@ -124,6 +160,7 @@ def run_leash(
         "envelope": envelope,
         "paths": dirty,
         "violations": errors,
+        "warnings": [warning] if warning is not None else [],
     }
 
 
@@ -143,7 +180,7 @@ def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | 
         return None
     try:
         # df-leash #2: the whole step, its commits included - not only what is uncommitted.
-        payload = run_leash(change_path, staged=False, since=since)
+        payload = run_leash(change_path, staged=False, since=since, announce=False)
     except (LeashError, QueueError, OSError) as ex:
         return {"mode": mode, "checked": False, "reason": str(ex), "violations": []}
     return {"mode": mode, "checked": True, "violations": list(payload["violations"])}

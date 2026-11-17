@@ -347,6 +347,31 @@ content_hash: sha256:$ContentHash
     return $actualMode
 }
 
+# FW-2 (owner's decision R4), as src/deltafuse/core/leash.py repository_layout_error: a product
+# below the root of a git repository is refused before anything is written - the hook and the
+# leash read paths from the repository root, so nothing there would be judged.
+$probe = $TargetRoot
+while ($probe -and -not (Test-Path -LiteralPath $probe -PathType Container)) { $probe = Split-Path -Parent $probe }
+if ($probe -and (Get-Command git -ErrorAction SilentlyContinue)) {
+    $prefix = $null
+    $inRepository = $false
+    Push-Location -LiteralPath $probe
+    try {
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $prefix = (& git rev-parse --show-prefix 2>$null | Out-String).Trim()
+        $inRepository = ($LASTEXITCODE -eq 0)
+        $top = if ($inRepository) { (& git rev-parse --show-toplevel 2>$null | Out-String).Trim() } else { "" }
+        $ErrorActionPreference = $previousPreference
+    }
+    finally {
+        Pop-Location
+    }
+    if ($inRepository -and ($prefix -or ($probe -ne $TargetRoot))) {
+        throw "$TargetRoot is a subdirectory of the git repository at $top. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item."
+    }
+}
+
 Write-Host "Installing DeltaFuse $FrameworkVersion into $TargetRoot..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
