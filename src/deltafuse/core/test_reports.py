@@ -36,14 +36,32 @@ PASSED = "passed"
 
 PYTEST_RUNNERS = frozenset({"pytest", "py.test"})
 JVM_RUNNERS = frozenset({"mvn", "mvnw", "gradle", "gradlew"})
-# Where Surefire, Failsafe and Gradle leave their XML without being asked.
-JVM_REPORT_GLOBS = (
-    "target/surefire-reports/TEST-*.xml",
-    "target/failsafe-reports/TEST-*.xml",
-    "build/test-results/*/TEST-*.xml",
-    "*/target/surefire-reports/TEST-*.xml",
-    "*/build/test-results/*/TEST-*.xml",
-)
+# Where Surefire, Failsafe and Gradle leave their XML without being asked, inside a module's
+# build directory: `target/surefire-reports`, `target/failsafe-reports`, `build/test-results/<task>`.
+JVM_REPORT_DIRS = {"target": ("surefire-reports", "failsafe-reports"), "build": ("test-results/*",)}
+
+
+def jvm_report_files(repo_root: Path) -> list[Path]:
+    """Every `TEST-*.xml` a Maven or Gradle build left in a module of the product, sorted.
+
+    Audit 2026-11-17 (FE-9): the reports were looked for with five fixed globs - the root module
+    and modules one directory down, Failsafe in the root only - so an integration test of a module
+    was never read, and a module two directories deep (`services/calc`) reported no test at all.
+    The tree is walked instead: every `target/` and `build/` directory of the product, at any
+    depth, caches and dependency folders aside. A build directory is not walked into further.
+    """
+    import os
+
+    from deltafuse.core.product_layout import EXCLUDED_DIRS
+
+    found: list[Path] = []
+    for dirpath, dirnames, _filenames in os.walk(repo_root):
+        here = Path(dirpath)
+        for build_dir in [d for d in dirnames if d in JVM_REPORT_DIRS]:
+            for pattern in JVM_REPORT_DIRS[build_dir]:
+                found += (here / build_dir).glob(f"{pattern}/TEST-*.xml")
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDED_DIRS and d not in JVM_REPORT_DIRS)
+    return sorted(found)
 
 
 @dataclass
@@ -377,20 +395,19 @@ def read_report(
         outcomes: dict[str, str] = {}
         found = False
         class_names = JvmClassNames(repo_root)
-        for pattern in JVM_REPORT_GLOBS:
-            for path in sorted(repo_root.glob(pattern)):
-                try:
-                    if newer_than is not None and path.stat().st_mtime < newer_than:
-                        continue
-                except OSError:
+        for path in jvm_report_files(repo_root):
+            try:
+                if newer_than is not None and path.stat().st_mtime < newer_than:
                     continue
-                found = True
-                # Surefire and Gradle call any non-assertion exception an
-                # `<error>`, but the test did run: a stub that throws is the
-                # normal shape of a Java red.
-                prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
-                for name, got in read_junit_xml(path, error_means=FAILED, class_names=class_names).items():
-                    merge_outcome(outcomes, prefix + name, got)
+            except OSError:
+                continue
+            found = True
+            # Surefire and Gradle call any non-assertion exception an
+            # `<error>`, but the test did run: a stub that throws is the
+            # normal shape of a Java red.
+            prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
+            for name, got in read_junit_xml(path, error_means=FAILED, class_names=class_names).items():
+                merge_outcome(outcomes, prefix + name, got)
         return TestReport("surefire", outcomes) if found else None
     return None
 
