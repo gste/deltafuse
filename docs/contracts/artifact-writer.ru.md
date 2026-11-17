@@ -85,6 +85,13 @@ patch:
 | `capability` | Нет | Нет | `schema_version`, `domains`, `policies` |
 | `lock` | Нет | Нет | `schema_version`, `framework` |
 
+Правила для любой операции:
+
+- **Вид пишет свой файл.** `task`: `tasks/TASK-*.md`; `slice`: `slices/SLICE-*.md`; `spec-delta`: `spec-delta.md`; `routing`: `routing.yaml`; `change`: `change.yaml` (всё внутри Change); `decision`: `docs/decisions/DEC-*.md`. Любой другой `target` отвергается (`kind_target_mismatch`): `--kind routing` не может записать `coverage.yaml`.
+- **У идентичности один файл.** Создание идентичности, у которой уже есть файл (сама цель или `<ID>-<slug>.md` рядом), отвергается с `already_exists` до открытия транзакции.
+- **Заголовок задачи** — заголовок её тела (`# TASK-001: <title>`); `set /title` переписывает его.
+- **Пути задачи.** `allowed_paths` и `forbidden_paths` — обычные пути продукта: относительно корня продукта, `/`, без сегментов `..`, `.` и пустых. Они и сам набор задач фиксируются, когда закрывается Decompose: как только квитанции Change прошли гейт `decomposed`, Writer отказывает новой задаче и любому изменению этих двух полей, в том числе у задачи в статусе `pending`.
+
 ---
 
 ## 5. Долговечные квитанции
