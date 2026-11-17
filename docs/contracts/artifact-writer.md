@@ -77,8 +77,8 @@ Operation descriptors reside in `process/artifact-operations/*.descriptor.yaml` 
 | `task` | `create`, `update` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
 | `slice` | `create`, `update` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
 | `spec-delta` | `create`, `update` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
-| `routing` | `create`, `update` | `claims` | `change` |
-| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
+| `routing` | `create`, `update` | `route`, `claims` | `change` |
+| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary`, `route` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
 | `decision` | `create`, `update` (only while `proposed`) | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
 | `evidence` | None (`deltafuse evidence` writes it) | None | All fields (kernel stamped) |
 | `coverage` | None (`deltafuse coverage` writes it) | None | `change`, `claims` |

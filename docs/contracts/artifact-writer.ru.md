@@ -77,8 +77,8 @@ patch:
 | `task` | `create`, `update` | `title`, `kind`, `depends_on`, `requirement_delta`, `spec_refs`, `design_ref`, `allowed_paths`, `forbidden_paths`, `context_budget` | `id`, `change`, `slice`, `status` |
 | `slice` | `create`, `update` | `title`, `primary_capability`, `related_capabilities`, `policies`, `spec_refs`, `claims`, `depends_on`, `context_budget` | `id`, `change`, `status` |
 | `spec-delta` | `create`, `update` | `slices`, `added`, `modified`, `removed` | `change`, `status` |
-| `routing` | `create`, `update` | `claims` | `change` |
-| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
+| `routing` | `create`, `update` | `route`, `claims` | `change` |
+| `change` | `update` | `title`, `intent`, `risk`, `source/request`, `source/intake_refs`, `analysis/summary`, `route` | `schema_version`, `id`, `status`, `framework`, `analysis/routing`, `deltas`, `slices`, `decisions`, `tasks`, `verification` |
 | `decision` | `create`, `update` (только пока `proposed`) | `title`, `kind`, `owner`, `date`, `affects`, `supersedes`, `superseded_by` | `id`, `change`, `status` |
 | `evidence` | Нет (пишет `deltafuse evidence`) | Нет | Все поля (штампуются ядром) |
 | `coverage` | Нет (пишет `deltafuse coverage`) | Нет | `change`, `claims` |
