@@ -13,7 +13,7 @@ from deltafuse.core.artifact_lock import ProductMutationLock
 from deltafuse.core.artifact_storage import atomic_create, atomic_replace
 from deltafuse.core.frontmatter import FrontmatterParseError, parse_frontmatter, replace_frontmatter
 
-from deltafuse.core.fsm import check_gate, find_repo_root, verification_gap
+from deltafuse.core.fsm import can_transition, check_gate, find_repo_root, verification_gap
 from deltafuse.core import gate_password, gate_receipts
 from deltafuse.core.gate_receipts import ReceiptError
 from deltafuse.core.integrity import list_proposed_decisions_for_change
@@ -31,7 +31,6 @@ from deltafuse.core.transitions import (
     SPEC_REJECTED_GAP,
     TransitionError,
     _artifact_file,
-    _gate_reachable,
     advance_change,
     open_gap_reopen,
     record_change_status,
@@ -537,7 +536,7 @@ def _not_reproduced_proof(change_dir: Path, current: str) -> str | None:
     From Analyze the human's note is the diagnosis; from Declare a Red record shows the oracle
     did not fail; from Verify verification.md records the verdict.
     """
-    if current in {"decomposed", "declaring"}:
+    if current in {"decomposed", "declaring", "declared", "implementing"}:
         for record in sorted((change_dir / "evidence" / "red").glob("*.yaml")):
             try:
                 data = yaml.safe_load(record.read_text(encoding="utf-8"))
@@ -576,8 +575,15 @@ def close_change(
     data = _load_yaml_mapping(change_file)
     change_id = _change_id_from_dir(change_dir) or change_dir.name
     current = str(data.get("status"))
-    if not _gate_reachable(current, status):
-        raise DecideError(f"a Change at '{current}' cannot become '{status}' (docs/state-machine.md)")
+    # Owner decision R8 (FL-10): `rejected` and `superseded` close a Change from any status
+    # before `converged` - the table says so for each. `_gate_reachable` would also step over an
+    # in-flight status, which is right for a gate and wrong here: it let nothing through past
+    # Specify, while that Change blocked `init --force`.
+    if not can_transition(current, status):
+        raise DecideError(
+            f"a Change at '{current}' cannot become '{status}' (docs/state-machine.md); `rejected` and "
+            "`superseded` close a Change from any status before `converged`"
+        )
     if status in {"duplicate", "superseded"}:
         others = [ref for ref in _CHANGE_REF.findall(note or "") if ref != change_id]
         if not others:

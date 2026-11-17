@@ -504,6 +504,20 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
     # step. Reading task statuses alone sent the Worker to implement while the
     # declaring gate was still closed, and to verify with the Change at
     # 'decomposed' (q0 run 20260921T081038Z).
+    if tasks and status in DECLARE_PHASE | IMPLEMENT_PHASE and all(
+        s in {"cancelled", "superseded"} for _, s, *_ in tasks
+    ):
+        # FL-4, the no-op path: every Red was already-green (or the human cancelled the rest),
+        # so there is nothing to implement and no Green will ever close `implemented`. `next`
+        # answered "done" and the Change sat in `declared` for good.
+        return _halt(
+            change_id,
+            rel,
+            f"Change {change_id}: every task is closed ({', '.join(f'{tid} {s}' for tid, s, *_ in tasks)}), "
+            "so nothing is left to implement and the Change cannot converge. The human closes it: "
+            f"`deltafuse decide {rel} --close --status not-reproduced --note \"<the behaviour already "
+            'exists>"` - or `--status rejected`, or `--status superseded` naming the Change that did the work',
+        )
     if tasks and status in DECLARE_PHASE:
         ahead = [(tid, s) for tid, s, *_ in tasks if s in TASK_DONE - {"cancelled", "superseded"}]
         if ahead:
@@ -674,7 +688,14 @@ def _scan_change(product_root: Path, change_path: Path) -> tuple[list[WorkItem],
             )
         ], []
 
-    return [], []
+    # An active Change with no step is a halt, not "done" (S6: every stop names its way out).
+    return _halt(
+        change_id,
+        rel,
+        f"Change {change_id} is '{status}' and the Core finds no step for it: its tasks and its status "
+        "do not add up to one. Inspect it; the human can close it with `deltafuse decide "
+        f'{rel} --close --status rejected --note "<why>"`',
+    )
 
 
 DEFAULT_ADAPTER_ROOTS = (".agents/skills", ".cursor/skills", ".gemini/skills")

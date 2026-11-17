@@ -61,28 +61,34 @@ VALID_CHANGE_STATUSES = {
     "not-reproduced",
 }
 
+# The human closes a Change that will not converge from any status before `converged`
+# (`deltafuse decide <change-dir> --close --status rejected|superseded`, owner decision R8):
+# a Change past Specify could be closed with no status at all, yet it blocked `init --force`.
+_HUMAN_CLOSE = {"rejected", "superseded"}
+
 ALLOWED_CHANGE_TRANSITIONS: dict[str, set[str]] = {
-    "normalized": {"analyzing", "rejected", "duplicate"},
-    "analyzing": {"blocked-on-decision", "analyzed", "rejected", "duplicate", "superseded", "not-reproduced"},
-    "blocked-on-decision": {"analyzing"},
+    "normalized": {"analyzing", "duplicate"} | _HUMAN_CLOSE,
+    "analyzing": {"blocked-on-decision", "analyzed", "duplicate", "not-reproduced"} | _HUMAN_CLOSE,
+    "blocked-on-decision": {"analyzing"} | _HUMAN_CLOSE,
     # decomposed: the bugfix path with the spec unchanged - the queue sends a
     # bugfix from analyzed to decompose, GATE_ALLOWED_FROM and the receipt
     # chain already allowed it, and the specified gate needs a spec-delta a
     # bugfix does not write. Without it every bugfix Change stopped at
     # `advance --gate decomposed` (found 2026-09-22 by a Core-only walk).
-    # rejected/duplicate/superseded: the human closes a Change whose analysis is
-    # done, typically after rejecting its specification (owner, 2026-11-16).
-    "analyzed": {"specification-proposed", "specified", "decomposed", "rejected", "duplicate", "superseded"},
-    "specification-proposed": {"specified", "analyzed"},  # analyzed: DF3-004 spec rejection loop
+    # duplicate: the human closes a Change whose analysis is done (owner, 2026-11-16).
+    "analyzed": {"specification-proposed", "specified", "decomposed", "duplicate"} | _HUMAN_CLOSE,
+    "specification-proposed": {"specified", "analyzed"} | _HUMAN_CLOSE,  # analyzed: DF3-004 spec rejection loop
     # analyzed, from `specified` on: the human rejects the specification already accepted
     # (`decide --spec --status rejected`, owner decision R8).
-    "specified": {"decomposed", "analyzed"},
-    "decomposed": {"declaring", "analyzed"},
-    "declaring": {"declared", "not-reproduced", "analyzed"},
-    "declared": {"implementing", "analyzed"},
-    "implementing": {"implemented", "analyzed"},
-    "implemented": {"verifying", "analyzed"},
-    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed"},
+    "specified": {"decomposed", "analyzed"} | _HUMAN_CLOSE,
+    "decomposed": {"declaring", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "declaring": {"declared", "not-reproduced", "analyzed"} | _HUMAN_CLOSE,
+    # not-reproduced, through Implement: every task turned out closed - its Red already-green
+    # and superseded, or cancelled - so nothing is left to implement (the no-op path, FL-4).
+    "declared": {"implementing", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "implementing": {"implemented", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "implemented": {"verifying", "analyzed", "not-reproduced"} | _HUMAN_CLOSE,
+    "verifying": {"converged", "analyzing", "not-reproduced", "analyzed"} | _HUMAN_CLOSE,
     "converged": {"archived"},
     "archived": set(),
     "rejected": set(),

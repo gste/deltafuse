@@ -279,9 +279,11 @@ def install(
             if active:
                 raise InstallationError(
                     "Fail-closed upgrade: framework pin differs while active Changes "
-                    f"exist ({', '.join(sorted(active))}). Close or migrate the Changes "
-                    "and re-run their evidence cycle before upgrading; evidence stamps "
-                    "are never re-signed."
+                    f"exist ({', '.join(sorted(active))}). Converge and archive each with the "
+                    "Core the product pins, or have the human close it - `deltafuse decide "
+                    "<change-dir> --close --status rejected|superseded --note \"<why>\"` works "
+                    "from any status before `converged` - then upgrade; evidence stamps are "
+                    "never re-signed."
                 )
 
     # Create target directories
