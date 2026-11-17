@@ -167,36 +167,69 @@ def wants_junit_flag(argv: list[str]) -> bool:
     )
 
 
-def _case_id(case: ET.Element) -> str:
-    classname = (case.get("classname") or "").strip()
+def _case_id(case: ET.Element, classname: str | None = None) -> str:
+    classname = (case.get("classname") or "").strip() if classname is None else classname
     name = (case.get("name") or "").strip()
     return f"{classname}::{name}" if classname else name
 
 
-def read_junit_xml(path: Path, *, error_means: str) -> dict[str, str]:
-    """One JUnit XML file as neutral outcomes. `error_means` is the ecosystem's."""
+# FAILED over NOT_RUN over PASSED over SKIPPED: when two reported cases are one test id, the
+# worse outcome is the test's (two display-named `@Nested` classes with a method of one name).
+_OUTCOME_RANK = {FAILED: 3, NOT_RUN: 2, PASSED: 1, SKIPPED: 0}
+
+
+def merge_outcome(outcomes: dict[str, str], name: str, got: str) -> None:
+    """Record *got* for *name* unless a worse outcome of the same test is already there."""
+    if name not in outcomes or _OUTCOME_RANK[got] > _OUTCOME_RANK[outcomes[name]]:
+        outcomes[name] = got
+
+
+def _cases_with_suites(root: ET.Element) -> list[tuple[ET.Element, str]]:
+    """Every `<testcase>` with the `name` of the `<testsuite>` it stands in (`` when in none)."""
+    out: list[tuple[ET.Element, str]] = []
+    seen: set[int] = set()
+    for suite in root.iter("testsuite"):
+        for case in suite.findall("testcase"):
+            seen.add(id(case))
+            out.append((case, (suite.get("name") or "").strip()))
+    out += [(case, "") for case in root.iter("testcase") if id(case) not in seen]
+    return out
+
+
+def read_junit_xml(path: Path, *, error_means: str, class_names=None) -> dict[str, str]:
+    """One JUnit XML file as neutral outcomes. `error_means` is the ecosystem's.
+
+    *class_names*, for a JVM report, turns (suite name, the case's `classname`) into the class the
+    test id carries (`JvmClassNames`): Surefire writes a JUnit 5 display name there.
+    """
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError):
         return {}
     outcomes: dict[str, str] = {}
-    for case in root.iter("testcase"):
-        name = _case_id(case)
+    for case, suite in _cases_with_suites(root):
+        classname = None
+        if class_names is not None:
+            classname = class_names((case.get("classname") or "").strip(), suite, path)
+        name = _case_id(case, classname)
         if not name:
             continue
         if case.find("skipped") is not None:
-            outcomes[name] = SKIPPED
+            got = SKIPPED
         elif case.find("failure") is not None or case.find("error") is not None:
             if error_means == FAILED and _class_level(case):
                 # Audit 2026-11-16 (df-evidence #8): a throwing `@BeforeAll` (JUnit 4:
                 # `initializationError`) is reported against the class, not a method. Read as a
                 # failed test `demo.CalcTest::`, it was accepted as Red and no Green could ever
                 # pass a test of that name. The class's tests never ran.
-                outcomes[name] = NOT_RUN
+                got = NOT_RUN
+                if classname is not None:
+                    name = f"{classname}::"  # the class, also when the report shows its display name
             else:
-                outcomes[name] = FAILED if case.find("failure") is not None else error_means
+                got = FAILED if case.find("failure") is not None else error_means
         else:
-            outcomes[name] = PASSED
+            got = PASSED
+        merge_outcome(outcomes, name, got)
     return outcomes
 
 
@@ -220,6 +253,80 @@ def read_junit_failures(path: Path) -> dict[str, tuple[str, str]]:
         name = _case_id(case)
         if name and failure is not None:
             found[name] = ((failure.get("message") or "").strip(), failure.text or "")
+    return found
+
+
+_JVM_BINARY_NAME = re.compile(r"^[^\W\d][\w$]*(?:\.[^\W\d][\w$]*)*$")
+_JVM_PACKAGE = re.compile(r"(?m)^\s*package\s+([\w.]+)")
+_JVM_TYPE = re.compile(r"\b(?:class|interface|object|enum|record)\s+([^\W\d]\w*)")
+JVM_BUILD_FILES = ("pom.xml", "build.gradle", "build.gradle.kts")
+
+
+def jvm_source_classes(path: Path) -> tuple[str, set[str]]:
+    """(package, the names of the types declared in it) of a JVM source file; the file's own
+    name is always one of them. ("", {stem}) when the file cannot be read."""
+    names = {path.name.rsplit(".", 1)[0]}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "", names
+    package = _JVM_PACKAGE.search(text)
+    names.update(_JVM_TYPE.findall(text))
+    return (package.group(1) if package else ""), names
+
+
+class JvmClassNames:
+    """The class a Surefire or Gradle `<testcase>` belongs to.
+
+    Audit 2026-11-17 (FE-5): the id was `classname::name` as written, and with a JUnit 5
+    `@DisplayName` on the class Surefire writes the display name into `classname`
+    (`Calculator works::adds`). The class is the `<testsuite name>` - one report file per
+    top-level class. A `classname` is kept when it is that class or one nested in it
+    (`demo.CalcTest$Inner`), or when a source file of the module declares a class of that name
+    (a JUnit 4 suite reports other classes' tests); anything else is a display name.
+    """
+
+    def __init__(self, repo_root: Path):
+        self.repo_root = repo_root
+        self._known: dict[tuple[Path, str], bool] = {}
+
+    def __call__(self, classname: str, suite: str, report: Path) -> str:
+        if not suite or classname == suite or classname.startswith(suite + "$"):
+            return classname
+        if _JVM_BINARY_NAME.match(classname) and self._declared(_report_module_dir(report), classname):
+            return classname
+        return suite
+
+    def _declared(self, module: Path, classname: str) -> bool:
+        key = (module, classname)
+        if key not in self._known:
+            top = classname.split("$", 1)[0]
+            package, _, simple = top.rpartition(".")
+            self._known[key] = any(
+                jvm_source_classes(path)[0] == package
+                for path in _jvm_sources_named(module, simple)
+            )
+        return self._known[key]
+
+
+def _report_module_dir(report: Path) -> Path:
+    """The module a report file belongs to: the directory holding its `target/` or `build/`."""
+    for parent in report.parents:
+        if parent.name in {"target", "build"}:
+            return parent.parent
+    return report.parent
+
+
+def _jvm_sources_named(module: Path, simple: str) -> list[Path]:
+    """Source files `<simple>.<java|kt|...>` under *module*, build products and caches aside."""
+    import os
+
+    from deltafuse.core.product_layout import EXCLUDED_DIRS
+
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(module):
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS and d not in {"target", "build"}]
+        found += [Path(dirpath, f"{simple}{suffix}") for suffix in JVM_TEST_SUFFIXES if f"{simple}{suffix}" in filenames]
     return found
 
 
@@ -269,6 +376,7 @@ def read_report(
     if family == "jvm":
         outcomes: dict[str, str] = {}
         found = False
+        class_names = JvmClassNames(repo_root)
         for pattern in JVM_REPORT_GLOBS:
             for path in sorted(repo_root.glob(pattern)):
                 try:
@@ -281,9 +389,8 @@ def read_report(
                 # `<error>`, but the test did run: a stub that throws is the
                 # normal shape of a Java red.
                 prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
-                outcomes.update(
-                    (prefix + name, got) for name, got in read_junit_xml(path, error_means=FAILED).items()
-                )
+                for name, got in read_junit_xml(path, error_means=FAILED, class_names=class_names).items():
+                    merge_outcome(outcomes, prefix + name, got)
         return TestReport("surefire", outcomes) if found else None
     return None
 
@@ -402,12 +509,12 @@ _JVM_TEST_ROOT = re.compile(r"(?:^|/)src/test/[^/]+/")
 
 
 def is_test_file(rel: str) -> bool:
-    """A file a runner reads tests from: `test_*.py` / `*_test.py`, or JVM test source."""
-    rel = rel.replace("\\", "/")
-    name = rel.rsplit("/", 1)[-1]
-    if name.endswith(".py"):
-        return name.startswith("test_") or name.endswith("_test.py")
-    return name.endswith(JVM_TEST_SUFFIXES) and bool(_JVM_TEST_ROOT.search(rel))
+    """A file a runner reads tests from, as the product's layout names one
+    (core/product_layout.py): `test_*.py` / `*_test.py` anywhere, a JVM source file named as a
+    test (`CalcTest.java`, `CalcIT.kt`) or lying in a test directory (`src/test/**`)."""
+    from deltafuse.core.product_layout import ProductLayout
+
+    return ProductLayout(root=None).is_test_source(rel)
 
 
 def declared_test_files(changed_paths: list[str]) -> list[str]:
@@ -430,13 +537,36 @@ def _pytest_id_in(test_id: str, rel: str) -> bool:
     return any(cparts[:k] == mparts[-k:] for k in range(len(mparts), 0, -1))
 
 
-def _jvm_class_of(rel: str) -> tuple[str, str]:
-    """(module prefix, fully qualified class) of a JVM test source under `src/test/<lang>/`."""
+def _jvm_module_of(rel: str, repo_root: Path | None) -> str:
+    """The module prefix of a JVM source file: by its path when it follows the standard layout
+    (`<module>/src/test/...`), else the nearest directory above it with a build file."""
+    rel = rel.replace("\\", "/")
+    if _JVM_TEST_ROOT.search(rel) or repo_root is None:
+        return jvm_module_prefix(rel)
+    parts = rel.split("/")[:-1]
+    for depth in range(len(parts), 0, -1):
+        if any((repo_root.joinpath(*parts[:depth]) / name).is_file() for name in JVM_BUILD_FILES):
+            return "/".join(parts[:depth]) + "/"
+    return ""
+
+
+def _jvm_classes_of(rel: str, repo_root: Path | None = None) -> tuple[str, set[str]]:
+    """(module prefix, the fully qualified classes) of a JVM test source file.
+
+    The package is the one the file declares, and a Kotlin file may declare several classes
+    under any file name; only when the file cannot be read is the class derived from its path
+    under `src/test/<lang>/` (audit 2026-11-17, FE-5: a path was the only reading).
+    """
     rel = rel.replace("\\", "/")
     stem = rel.rsplit(".", 1)[0]
+    path = repo_root / rel if repo_root is not None else None
+    if path is not None and path.is_file():
+        package, names = jvm_source_classes(path)
+        dot = package + "." if package else ""
+        return _jvm_module_of(rel, repo_root), {dot + name for name in names}
     match = _JVM_TEST_ROOT.search(rel)
     start = match.end() if match else len(stem) - len(stem.rsplit("/", 1)[-1])
-    return jvm_module_prefix(rel), stem[start:].replace("/", ".")
+    return jvm_module_prefix(rel), {stem[start:].replace("/", ".")}
 
 
 def _jvm_id_class(test_id: str) -> tuple[str, str]:
@@ -446,16 +576,18 @@ def _jvm_id_class(test_id: str) -> tuple[str, str]:
     return (prefix + "/" if prefix else ""), classname.split("$", 1)[0]
 
 
-def _jvm_id_in(test_id: str, rel: str) -> bool:
+def _jvm_id_in(test_id: str, rel: str, repo_root: Path | None = None) -> bool:
     if not rel.endswith(JVM_TEST_SUFFIXES):
         return False
-    return _jvm_class_of(rel) == _jvm_id_class(test_id)
+    module, classes = _jvm_classes_of(rel, repo_root)
+    id_module, id_class = _jvm_id_class(test_id)
+    return module == id_module and id_class in classes
 
 
-def test_in_files(test_id: str, files: list[str], family: str) -> bool:
+def test_in_files(test_id: str, files: list[str], family: str, repo_root: Path | None = None) -> bool:
     """True when *test_id*, as *family*'s report spells it, is a test of one of *files*."""
     if family == "jvm":
-        return any(_jvm_id_in(test_id, rel) for rel in files)
+        return any(_jvm_id_in(test_id, rel, repo_root) for rel in files)
     return any(_pytest_id_in(test_id, rel) for rel in files)
 
 
@@ -553,7 +685,7 @@ def task_test_ids(
     declared = declared_test_files(changed_paths)
     if declared:
         return (
-            mine([t for t in report.outcomes if test_in_files(t, declared, family)]),
+            mine([t for t in report.outcomes if test_in_files(t, declared, family, repo_root)]),
             f"the test files the task declared ({', '.join(declared[:5])})",
         )
     if family == "jvm":
@@ -568,7 +700,7 @@ def task_test_ids(
     if not files:
         return None, ""
     return (
-        mine([t for t in report.outcomes if test_in_files(t, files, family)]),
+        mine([t for t in report.outcomes if test_in_files(t, files, family, repo_root)]),
         f"the test files the command names ({', '.join(files[:5])})",
     )
 
@@ -595,10 +727,10 @@ def task_test_files(
         return _named_files(argv, repo_root)
     named, _ = task_test_ids(report, changed_paths, argv, repo_root)
     found: set[str] = set()
-    for test_id in named or []:
-        prefix, cls = _jvm_id_class(test_id)
-        for path in repo_root.glob(f"{prefix}src/test/*/{cls.replace('.', '/')}.*"):
-            if path.suffix in JVM_TEST_SUFFIXES:
+    for prefix, cls in {_jvm_id_class(test_id) for test_id in named or []}:
+        package, _, simple = cls.rpartition(".")
+        for path in _jvm_sources_named(repo_root / prefix if prefix else repo_root, simple):
+            if jvm_source_classes(path)[0] == package:
                 found.add(path.relative_to(repo_root).as_posix())
     return sorted(found)
 

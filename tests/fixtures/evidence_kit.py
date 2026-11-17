@@ -8,10 +8,13 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
+import time
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deltafuse.core.installer import install
@@ -137,3 +140,33 @@ def maven_module(root: Path, rel: str = "", *, artifact: str = "demo", parent: s
     write(base / "pom.xml", pom(artifact, parent=parent, parent_rel=parent_rel, failsafe=failsafe))
     write(base / "src/main/java/demo/Calc.java", CALC_DONE if done else CALC_STUB)
     write(base / f"src/test/java/demo/{test_class}.java", CALC_TEST.format(name=test_class))
+
+
+@pytest.fixture
+def maven_turn():
+    """One Maven build at a time, also across pytest-xdist workers: the builds share the local
+    repository and the machine. A lock directory in the temp folder; a lock older than 20 minutes
+    is a crashed run's and is taken over."""
+    lock = Path(tempfile.gettempdir()) / "deltafuse-tests-maven.lock"
+    deadline = time.time() + 1800
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 1200:
+                    lock.rmdir()
+                    continue
+            except OSError:
+                pass
+            if time.time() > deadline:
+                raise
+            time.sleep(0.5)
+    try:
+        yield
+    finally:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass

@@ -18,6 +18,7 @@ from deltafuse.core.transitions import set_artifact_status
 from tests.fixtures.evidence_kit import (
     CALC_DONE,
     MAVEN_TIMEOUT,
+    maven_turn,  # noqa: F401 - a fixture
     maven_module,
     mvn_available,
     pom,
@@ -124,7 +125,7 @@ def test_the_declared_command_is_the_suite_as_written_and_the_refusal_says_how_t
 
 
 @pytest.mark.skipif(not mvn_available(), reason="needs Maven (offline) on PATH")
-def test_a_regression_over_one_module_of_two_is_not_the_suite(tmp_path: Path, repo_root: Path):
+def test_a_regression_over_one_module_of_two_is_not_the_suite(tmp_path: Path, repo_root: Path, maven_turn):
     """The reproduction on real Maven: `-f b/pom.xml` appended to the declared command builds
     module b only, while Implement broke module a."""
     write(tmp_path / "pom.xml", pom("root", packaging="pom", modules=("a", "b")))
