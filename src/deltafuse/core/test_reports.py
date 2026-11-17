@@ -599,12 +599,197 @@ def task_test_files(
 # the session's exit status to 0, or Maven's `-fn`, recorded "passed" over failing tests; a
 # command narrowed to the task's own test file converged a Change that broke the rest of the suite.
 
-# Options that run part of the suite: pytest's selection and Maven/Gradle's test and module filters.
-_PYTEST_SELECTING = ("-k", "-m", "--deselect", "--ignore", "--ignore-glob", "--lf", "--last-failed",
-                     "--sw", "--stepwise", "--sw-skip", "--stepwise-skip")
-_JVM_SELECTING = ("-Dtest=", "-Dit.test=", "-Dgroups=", "-DexcludedGroups=", "-Dsurefire.includesFile=",
-                  "-Dsurefire.excludesFile=", "-Dtest.single=", "--tests", "-pl", "--projects", "-rf",
-                  "--resume-from", "-x", "--exclude-task")
+# Audit 2026-11-17 (FE-8): the first form of this check refused the options known to select tests
+# (`-k`, `--deselect`, `-Dtest=`, `-pl`, ...), so every option it did not know narrowed the suite
+# unseen: Maven `-f b/pom.xml`, `-D test=`, `-Dsurefire.excludes`, `-DskipITs`, `-P`; pytest
+# `--pyargs`, `-o testpaths=`, `-c`. It is the other way round now: what may be added to the suite
+# command is what is listed here as leaving the suite whole, and anything else is refused. A
+# product whose whole suite needs another option declares the command in `workflow.test_commands`.
+
+# pytest: options without a value.
+_PYTEST_HARMLESS_FLAGS = frozenset({
+    "--exitfirst", "--showlocals", "--no-showlocals", "--no-header", "--no-summary", "--strict-markers",
+    "--strict-config", "--strict", "--verbose", "--quiet", "--disable-warnings", "--disable-pytest-warnings",
+    "--cache-clear", "--ff", "--failed-first", "--nf", "--new-first", "--full-trace", "--no-cov",
+    "--cov-append", "--cov-branch", "--no-cov-on-fail", "--forked",
+})
+# pytest: options with a value (`--tb short`, `--tb=short`).
+_PYTEST_HARMLESS_VALUES = frozenset({
+    "--tb", "--durations", "--durations-min", "--maxfail", "--basetemp", "--junitxml", "--junit-xml",
+    "--junit-prefix", "--color", "--code-highlight", "--capture", "--show-capture", "--import-mode",
+    "--pythonwarnings", "--log-level", "--log-cli-level", "--log-file", "--log-file-level", "--log-format",
+    "--log-date-format", "--cov", "--cov-report", "--cov-config", "--cov-fail-under", "--cov-context",
+    "--timeout", "--timeout-method", "--dist", "--numprocesses", "--maxprocesses", "--maxschedchunk",
+    "--verbosity", "--randomly-seed", "--reruns-delay",
+})
+_PYTEST_HARMLESS_SHORT_FLAGS = frozenset("qvsxl")
+_PYTEST_HARMLESS_SHORT_VALUES = frozenset({"-W", "-n", "-r"})  # `-r` takes its letters attached: -ra
+# `-o key=value`: only settings that change how the run is shown or logged.
+_PYTEST_HARMLESS_INI = frozenset({
+    "log_cli", "log_level", "log_cli_level", "log_format", "log_date_format", "log_file", "log_file_level",
+    "console_output_style", "cache_dir", "faulthandler_timeout", "junit_logging", "junit_log_passing_tests",
+    "junit_duration_report", "junit_suite_name", "tmp_path_retention_count", "tmp_path_retention_policy",
+    "verbosity_assertions", "truncation_limit_lines", "truncation_limit_chars",
+})
+
+# Maven: the lifecycle phases; a `plugin:goal` or an execution id runs part of the build.
+_MAVEN_PHASES = frozenset({
+    "clean", "validate", "initialize", "generate-sources", "process-sources", "generate-resources",
+    "process-resources", "compile", "process-classes", "generate-test-sources", "process-test-sources",
+    "generate-test-resources", "process-test-resources", "test-compile", "process-test-classes", "test",
+    "prepare-package", "package", "pre-integration-test", "integration-test", "post-integration-test",
+    "verify", "install",
+})
+_MAVEN_HARMLESS_FLAGS = frozenset({
+    "-o", "--offline", "-B", "--batch-mode", "-q", "--quiet", "-e", "--errors", "-X", "--debug", "--verbose",
+    "-U", "--update-snapshots", "-V", "--show-version", "-ntp", "--no-transfer-progress", "-fae",
+    "--fail-at-end", "-ff", "--fail-fast", "-fn", "--fail-never", "-C", "--strict-checksums", "-c",
+    "--lax-checksums", "-nsu", "--no-snapshot-updates", "-up", "--update-plugins", "--no-plugin-updates",
+})
+_MAVEN_HARMLESS_VALUES = frozenset({
+    "-T", "--threads", "-s", "--settings", "-gs", "--global-settings", "-t", "--toolchains",
+    "-gt", "--global-toolchains", "-l", "--log-file", "--color", "-b", "--builder",
+})
+# `-Dname[=value]`: properties that do not choose which modules or tests run.
+_MAVEN_HARMLESS_PROPERTIES = frozenset({
+    "maven.repo.local", "style.color", "file.encoding", "project.build.sourceEncoding",
+    "project.reporting.outputEncoding", "maven.test.failure.ignore", "testFailureIgnore", "trimStackTrace",
+    "surefire.failIfNoSpecifiedTests", "failIfNoSpecifiedTests", "failIfNoTests", "surefire.failIfNoTests",
+    "surefire.printSummary", "surefire.useFile", "surefire.reportFormat", "java.io.tmpdir", "user.timezone",
+    "user.language", "user.country", "maven.javadoc.skip", "checkstyle.skip", "spotbugs.skip", "pmd.skip",
+    "jacoco.skip", "enforcer.skip", "gpg.skip", "maven.source.skip", "license.skip", "spotless.check.skip",
+})
+_MAVEN_HARMLESS_PROPERTY_PREFIXES = ("maven.wagon.", "aether.", "jansi.", "org.slf4j.simpleLogger.", "http.", "https.")
+
+# Gradle: the tasks that run every project's tests, and what builds them.
+_GRADLE_TASKS = frozenset({"test", "check", "build", "clean", "cleanTest", "assemble", "classes", "testClasses"})
+_GRADLE_HARMLESS_FLAGS = frozenset({
+    "--no-daemon", "--daemon", "--offline", "--info", "-i", "--debug", "-d", "--quiet", "-q", "--warn", "-w",
+    "--stacktrace", "-s", "--full-stacktrace", "-S", "--rerun", "--rerun-tasks", "--no-build-cache",
+    "--build-cache", "--continue", "--parallel", "--no-parallel", "--no-configuration-cache",
+    "--configuration-cache", "--no-watch-fs", "--watch-fs", "--refresh-dependencies", "--no-scan",
+})
+_GRADLE_HARMLESS_VALUES = frozenset({
+    "--console", "--max-workers", "--warning-mode", "--priority", "-g", "--gradle-user-home",
+    "--project-cache-dir", "--no-problems-report",
+})
+_GRADLE_HARMLESS_PROPERTY_PREFIXES = ("org.gradle.", "file.encoding", "user.timezone", "user.language", "user.country")
+
+
+def _pytest_additions(args: list[str]) -> tuple[list[str], list[str]]:
+    """(additions not known to leave the suite whole, test paths) among pytest's arguments."""
+    unknown: list[str] = []
+    positionals: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if arg == "--":
+            positionals += args[i:]
+            break
+        if not arg.startswith("-") or arg == "-":
+            positionals.append(arg)
+            continue
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if name in {"--override-ini"}:
+                value, used = (value, 0) if eq else (nxt or "", 1)
+                i += used
+                if value.split("=", 1)[0].strip().lower() not in _PYTEST_HARMLESS_INI:
+                    unknown.append(f"{name} {value}".strip())
+            elif name in _PYTEST_HARMLESS_VALUES and (eq or name not in _PYTEST_HARMLESS_FLAGS):
+                if not eq:
+                    i += 1
+            elif name in _PYTEST_HARMLESS_FLAGS and not eq:
+                pass
+            else:
+                unknown.append(arg)
+            continue
+        # short options: `-q`, `-qx`, `-vv`, `-ra`, `-n 4`, `-n4`, `-W error`, `-p no:x`, `-o k=v`
+        short, attached = arg[:2], arg[2:]
+        if short in {"-p", "-o"}:
+            value = attached or (nxt or "")
+            if not attached:
+                i += 1
+            ok = value.startswith("no:") if short == "-p" else (
+                value.split("=", 1)[0].strip().lower() in _PYTEST_HARMLESS_INI)
+            if not ok:
+                unknown.append(f"{short} {value}".strip())
+        elif short in _PYTEST_HARMLESS_SHORT_VALUES:
+            if not attached and short != "-r":
+                i += 1
+        elif set(arg[1:]) <= _PYTEST_HARMLESS_SHORT_FLAGS:
+            pass
+        else:
+            unknown.append(arg if attached or nxt is None or nxt.startswith("-") else f"{arg} {nxt}")
+    return unknown, positionals
+
+
+def _maven_additions(args: list[str]) -> list[str]:
+    unknown: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if not arg.startswith("-"):
+            if arg not in _MAVEN_PHASES:
+                unknown.append(arg)
+            continue
+        if arg.startswith("-D") or arg == "--define" or arg.startswith("--define="):
+            if arg in {"-D", "--define"}:
+                prop, i = (nxt or ""), i + 1
+            else:
+                prop = arg[2:] if arg.startswith("-D") else arg.split("=", 1)[1]
+            key = prop.split("=", 1)[0]
+            if key not in _MAVEN_HARMLESS_PROPERTIES and not key.startswith(_MAVEN_HARMLESS_PROPERTY_PREFIXES):
+                unknown.append(f"-D{prop}")
+            continue
+        name, eq, _value = arg.partition("=")
+        if arg in _MAVEN_HARMLESS_FLAGS:
+            continue
+        if name in _MAVEN_HARMLESS_VALUES:
+            if not eq:
+                i += 1
+            continue
+        if arg.startswith("-T") and arg[2:3].isdigit():
+            continue  # -T4, -T1C
+        with_value = nxt is not None and not nxt.startswith("-") and nxt not in _MAVEN_PHASES and not eq
+        unknown.append(f"{arg} {nxt}" if with_value else arg)
+        if with_value:
+            i += 1
+    return unknown
+
+
+def _gradle_additions(args: list[str]) -> list[str]:
+    unknown: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if not arg.startswith("-"):
+            if arg not in _GRADLE_TASKS:
+                unknown.append(arg)
+            continue
+        if arg.startswith("-D") and arg[2:].split("=", 1)[0].startswith(_GRADLE_HARMLESS_PROPERTY_PREFIXES):
+            continue
+        name, eq, _value = arg.partition("=")
+        if arg in _GRADLE_HARMLESS_FLAGS:
+            continue
+        if name in _GRADLE_HARMLESS_VALUES:
+            if not eq:
+                i += 1
+            continue
+        with_value = nxt is not None and not nxt.startswith("-") and nxt not in _GRADLE_TASKS and not eq \
+            and not arg.startswith(("-D", "-P"))
+        unknown.append(f"{arg} {nxt}" if with_value else arg)
+        if with_value:
+            i += 1
+    return unknown
+
+
 _SUITE_SKIP_DIRS = frozenset({"node_modules", "__pycache__", "site-packages", "venv", "build", "dist", "target"})
 
 
@@ -624,21 +809,6 @@ def _normalized(argv: list[str]) -> list[str]:
     if start is not None:
         return ["pytest", *[str(a) for a in argv[start:]]]
     return [runner_head(argv[0]), *[str(a) for a in argv[1:]]]
-
-
-def _selecting_options(argv: list[str]) -> list[str]:
-    family = runner_family(argv)
-    out: list[str] = []
-    for arg in argv[1:]:
-        arg = str(arg)
-        if family == "pytest":
-            if any(arg == opt or arg.startswith(opt + "=") or (len(opt) == 2 and arg.startswith(opt) and len(arg) > 2)
-                   for opt in _PYTEST_SELECTING):
-                out.append(arg)
-        elif family == "jvm":
-            if any(arg == opt or arg.startswith(opt if opt.endswith("=") else opt + "=") for opt in _JVM_SELECTING):
-                out.append(arg)
-    return out
 
 
 def _pytest_testpaths(repo_root: Path) -> list[str] | None:
@@ -690,12 +860,12 @@ def _pytest_test_files(repo_root: Path, scope: list[str]) -> list[str]:
 
 
 def suite_subset(command: object, repo_root: Path) -> str | None:
-    """Why *command* runs only part of the product's suite; None when it runs the whole of it.
+    """Why *command* may run only part of the product's suite; None when it runs the whole of it.
 
-    A command the product declares in `workflow.test_commands` is the whole suite as written;
-    anything added to it that selects tests narrows it. Without a declaration, a test-selecting
-    option narrows the suite, and so does a pytest path that leaves test files out (a file or
-    node id, or a directory with test files outside it).
+    A command the product declares in `workflow.test_commands` is the whole suite as written.
+    What is added to it - or, without a declaration, everything after the runner - must be known
+    to leave the suite whole (the lists above): an output or logging option, a lifecycle phase,
+    a pytest directory that leaves no test file out. Anything else is refused, known or not.
     """
     argv = _command_argv(command)
     family = runner_family(argv)
@@ -705,20 +875,35 @@ def suite_subset(command: object, repo_root: Path) -> str | None:
     declared = [_normalized(entry) for entry in _configured_commands(repo_root)]
     if norm in declared:
         return None
-    base = next((d for d in declared if norm[: len(d)] == d), None)
+    base = max((d for d in declared if norm[: len(d)] == d), key=len, default=None)
     extra = norm[len(base):] if base is not None else norm[1:]
-    selecting = _selecting_options([norm[0], *extra])
-    if selecting:
-        return f"it selects part of the suite ({' '.join(selecting[:3])})"
-    if family != "pytest":
-        return None
-    positionals = pytest_positionals(["pytest", *extra], repo_root)
+    how = (
+        "declare the command with it in workflow.test_commands if that is the product's whole suite"
+    )
+    positionals: list[str] = []
+    if family == "pytest":
+        unknown, positionals = _pytest_additions(extra)
+    elif runner_head(norm[0]) in {"gradle", "gradlew"}:
+        unknown = _gradle_additions(extra)
+    else:
+        unknown = _maven_additions(extra)
+    if unknown:
+        shown = ", ".join(f"`{u}`" for u in unknown[:3])
+        return (
+            f"it adds {shown} to the suite command, and that is not known to leave the suite whole "
+            f"(it selects part of the suite, or the Core cannot tell that it does not); {how}"
+        )
     if not positionals:
         return None
-    named = [p for p in positionals if "::" in p or (repo_root / p).is_file()]
+    posix = [p.replace("\\", "/") for p in positionals]
+    named = [p for p in posix if "::" in p or (repo_root / p).is_file()]
     if named:
         return f"it names single test files or tests ({', '.join(named[:3])}), not the suite"
-    dirs = [p.rstrip("/").removeprefix("./") for p in positionals]
+    # A path that is not there selects nothing pytest would run (it exits 4 on one), and a
+    # record whose tree lost a directory since is stale on its own account.
+    dirs = [p.rstrip("/").removeprefix("./") for p in posix if (repo_root / p).exists()]
+    if not dirs:
+        return None
     if any(d in {".", ""} for d in dirs):
         return None
     scope = _pytest_testpaths(repo_root) or ["."]
