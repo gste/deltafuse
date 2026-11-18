@@ -97,7 +97,7 @@ deltafuse coverage <change-dir>
 
 ## Specify по одному срезу
 
-После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: `deltafuse advance <change-dir> --gate specified`. Не закрывайте гейт Change на середине набора.
+После Analyze `deltafuse next --step specify` называет один неспецифицированный срез. Пишите только его `spec_refs`. Не загружайте всё дерево `docs/spec/**`. Когда все срезы `specified`, `specify_pass` = `close`: предложите спецификацию командой `deltafuse state <change-dir> --change --status specification-proposed`, затем запустите `deltafuse next`. Не предлагайте на середине набора. Гейт `specified` принадлежит человеку: его вердикт применяет гейт, поэтому Worker в Specify никогда не запускает `advance`.
 
 ## Следующая работа
 

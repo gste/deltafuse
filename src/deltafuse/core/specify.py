@@ -124,7 +124,10 @@ def next_specify_pass(
         )
     return PassCursor(
         pass_name="close",
-        reason="All slices specified; propose the specification, then advance --gate specified",
+        reason=(
+            "All slices specified; propose the specification with `deltafuse state <change-dir> --change "
+            "--status specification-proposed`, then run `deltafuse next`: the human decides it"
+        ),
         allowed_read=list(_CLOSE_READ),
         allowed_write=list(_CLOSE_WRITE),
     )

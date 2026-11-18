@@ -1082,6 +1082,13 @@ def format_human_guide(item: WorkItem, product_root: Path | None = None) -> str:
         lines.append(
             f"Do not run `advance --gate {gate_name}` yet. Write only this pass, then `deltafuse next`."
         )
+    elif item.specify_pass == "close":
+        # The specified gate is the human's (A-11, B-7): their verdict applies it, so the
+        # Worker proposes and goes back to `next`, which shows the halt.
+        lines.append(
+            f"Propose: `deltafuse state {item.path or '<change-dir>'} --change --status "
+            "specification-proposed`. The human decides the specification; do not run `advance` here."
+        )
     elif item.gate:
         close = f"`deltafuse advance {item.path or '<change-dir>'} --gate {item.gate}`"
         if item.task and item.step in {"declare", "implement"}:

@@ -658,9 +658,16 @@ def advance_change(
         if errors:
             raise TransitionError(f"gate '{gate}' failed: {'; '.join(errors)}", errors=errors)
         if current not in allowed_from:
+            # A-11/B-7: the human's verdict applies `specified` (decide), so a Worker that ran
+            # this gate afterwards was told only the allowed statuses; say where to go instead.
+            already = (
+                f"; the Change is already '{current}' - run `deltafuse next` for the next step"
+                if current == target
+                else ""
+            )
             raise TransitionError(
                 f"cannot apply gate '{gate}' from status '{current}'; "
-                f"allowed: {sorted(allowed_from)}"
+                f"allowed: {sorted(allowed_from)}{already}"
             )
         if target != current and not _gate_reachable(current, target):
             raise TransitionError(

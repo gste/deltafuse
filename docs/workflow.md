@@ -128,7 +128,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
-3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close`: `deltafuse advance <change-dir> --gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close`: `deltafuse state <change-dir> --change --status specification-proposed` and `deltafuse next` - the human's verdict applies the `specified` gate. Added/modified `spec-delta` paths must stay inside those slice files.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate

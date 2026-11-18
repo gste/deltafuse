@@ -97,7 +97,7 @@ Then `deltafuse advance <change-dir> --gate analyzed`. Re-running keeps existing
 
 ## Specify one slice
 
-After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: `deltafuse advance <change-dir> --gate specified`. Do not close the Change gate mid-set.
+After Analyze, `deltafuse next --step specify` names one unspecified slice. Write only that slice's `spec_refs`. Do not load the whole `docs/spec/**` tree. When every slice is `specified`, `specify_pass` is `close`: propose the specification with `deltafuse state <change-dir> --change --status specification-proposed`, then run `deltafuse next`. Do not propose mid-set. The `specified` gate is the human's: their verdict applies it, so the Worker never runs `advance` in Specify.
 
 ## Next work
 

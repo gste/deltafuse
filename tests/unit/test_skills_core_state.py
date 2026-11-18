@@ -40,7 +40,6 @@ def test_single_step_skills_close_their_gate_with_one_advance() -> None:
     gates = {
         "intake": "intake",
         "analyze": "analyzed",
-        "specify": "specified",
         "decompose": "decomposed",
         "declare": "declaring",
         "implement": "implemented",
@@ -50,6 +49,11 @@ def test_single_step_skills_close_their_gate_with_one_advance() -> None:
         assert f"deltafuse advance <change-dir> --gate {gate}`" in text, skill
         assert "Halt if it exits non-zero" in text, skill
         assert "deltafuse check-gate" not in text, f"{skill}: a second call for the same decision"
+    # Audit 3 (A-11, B-7): `specified` is the human's gate - decide applies it - so Specify
+    # proposes and runs `next`; an `advance --gate specified` there always failed.
+    text = (SKILLS_DIR / "specify" / "SKILL.md").read_text(encoding="utf-8")
+    assert "deltafuse advance" not in text
+    assert "deltafuse next" in text
 
 
 # Step 3 of the completion plan: exact Core-command contract per skill.
@@ -57,7 +61,9 @@ SKILL_CORE_CONTRACT = {
     # skill: (gate stamped by exactly one advance, task/slice/state commands)
     "intake": ("intake", 1),  # the intent, which only the Core writes (audit 2026-11, FL-1)
     "analyze": ("analyzed", 0),
-    "specify": ("specified", 2),  # slice state + Change in-flight state
+    # slice state + Change in-flight state; no advance: the human's verdict applies `specified`
+    # (audit 3, A-11/B-7)
+    "specify": (None, 2),
     "decompose": ("decomposed", 0),
     "declare": ("declaring", 2),  # task -> declared; an already-green task -> superseded
     "implement": ("implemented", 2),  # task -> implemented; a wrong declared oracle -> blocked
@@ -73,11 +79,14 @@ def test_skill_core_command_contract(repo_root: Path):
         advances = [m.start() for m in re.finditer(r"deltafuse advance <change-dir> --gate (\S+)", text)]
         gates = [text[m.start():].split("--gate ", 1)[1].split("`")[0].split(" ")[0] for m in
                  re.finditer(r"deltafuse advance <change-dir> --gate", text)]
-        assert len(advances) == 1, f"{skill}: expected exactly one advance, got {gates}"
-        assert gates[0].rstrip("`.,") == gate, f"{skill}: wrong gate {gates[0]}"
         states = re.findall(r"deltafuse state <change-dir>", text)
         assert len(states) == state_calls, f"{skill}: expected {state_calls} state calls, got {len(states)}"
         assert "deltafuse check-gate" not in text, f"{skill}: advance already checks the gate"
+        if gate is None:
+            assert advances == [] and "deltafuse advance" not in text, f"{skill}: the human applies its gate"
+            continue
+        assert len(advances) == 1, f"{skill}: expected exactly one advance, got {gates}"
+        assert gates[0].rstrip("`.,") == gate, f"{skill}: wrong gate {gates[0]}"
         # run-mode duplication: a through-mode skill may not repeat single-step gates
         assert text.count("deltafuse advance") == 1, skill
 
@@ -154,5 +163,7 @@ def test_specify_propose_retry_stops_at_a_human_gate_refusal() -> None:
     rule = [line for line in text.splitlines() if "fix the listed errors" in line]
     assert rule, "specify: propose step no longer tells the Worker what a refusal means"
     assert "blocked-on-decision" in rule[0]
-    assert "status: draft" in rule[0]
+    # Audit 3 (A-4, A-11): the draft capability is no longer named here - proposing never refused
+    # it (`human=False`), the Worker no longer runs the `specified` gate, and the human's
+    # acceptance makes the draft active.
     assert re.search(r"\bstop\b", rule[0], re.IGNORECASE)

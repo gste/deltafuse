@@ -1540,10 +1540,12 @@ def _human_gate_errors(
             errors.append(
                 f"Gate specified: spec-delta.md is {spec_status} without deltafuse decide"
             )
+    # Worker-facing (A-11, B-7): these say the human decides and point to `next`; they never
+    # print the decide command, which a Worker could run itself when no password is set.
     if change_status == "specified" and spec_status != "accepted":
         errors.append(
-            "Gate specified: specified requires spec-delta.md accepted via "
-            f"deltafuse decide (got {spec_status!r})"
+            "Gate specified: specified requires the human's accepted verdict on spec-delta.md "
+            f"(got {spec_status!r}); it waits for the human (Human Gate) - run `deltafuse next`"
         )
     # The proposed path to 'specified' is the Human Gate itself: leaving
     # specification-proposed needs the human's accepted verdict. Without this a
@@ -1557,8 +1559,9 @@ def _human_gate_errors(
         and spec_status != "accepted"
     ):
         errors.append(
-            "Gate specified: leaving specification-proposed needs spec-delta.md "
-            f"accepted via deltafuse decide (Human Gate); got {spec_status!r}"
+            "Gate specified: leaving specification-proposed needs the human's accepted verdict on "
+            f"spec-delta.md (got {spec_status!r}); it waits for the human (Human Gate), whose verdict "
+            "applies this gate - the Worker does not run it: run `deltafuse next`"
         )
     return errors
 
