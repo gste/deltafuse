@@ -397,6 +397,8 @@ New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 $gitignorePath = Join-Path $TargetRoot ".gitignore"
 $gitignoreEntries = @(
     ".deltafuse/hooks/",
+    ".deltafuse/tmp/",
+    ".deltafuse/journal/",
     ".agents/skills/",
     ".cursor/skills/",
     ".gemini/skills/"

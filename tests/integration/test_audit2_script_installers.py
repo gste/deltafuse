@@ -16,7 +16,8 @@ import pytest
 
 from tests.fixtures.leash_walk import REPO_ROOT, env
 
-ENTRIES = [".deltafuse/hooks/", ".agents/skills/", ".cursor/skills/", ".gemini/skills/"]
+# B-12 (audit 3): the per-clone bookkeeping is ignored too.
+ENTRIES = [".deltafuse/hooks/", ".deltafuse/tmp/", ".deltafuse/journal/", ".agents/skills/", ".cursor/skills/", ".gemini/skills/"]
 PWSH = shutil.which("pwsh") or shutil.which("powershell")
 BASH = shutil.which("bash")
 

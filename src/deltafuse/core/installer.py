@@ -297,6 +297,10 @@ def install(
     gitignore_path = target_root / ".gitignore"
     gitignore_entries = [
         ".deltafuse/hooks/",
+        # Per-clone bookkeeping (audit 3, B-12): Writer inputs and runner reports, and the Writer's
+        # crash-recovery journal. Receipts and the journals the leash reads stay tracked.
+        ".deltafuse/tmp/",
+        ".deltafuse/journal/",
         ".agents/skills/",
         ".cursor/skills/",
         ".gemini/skills/",

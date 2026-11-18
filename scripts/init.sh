@@ -359,6 +359,8 @@ FRAMEWORK_HASH="$(framework_hash)"
 GITIGNORE="$TARGET_ROOT/.gitignore"
 GITIGNORE_ENTRIES=(
     ".deltafuse/hooks/"
+    ".deltafuse/tmp/"
+    ".deltafuse/journal/"
     ".agents/skills/"
     ".cursor/skills/"
     ".gemini/skills/"
