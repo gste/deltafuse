@@ -837,15 +837,17 @@ def _main(argv: list[str] | None = None) -> int:
             if selected is not None
             else format_human_blocked_queue(queue)
         )
+        if not args.json:
+            # FW-13, O7: every text mode says what the --json snapshot carries in `warnings` - a
+            # missing hook, a converged Change that is not archived - on stderr.
+            for warning in product_warnings(load_product_root(scope)):
+                print(f"deltafuse: warning: {warning}", file=sys.stderr)
         if args.json:
             payload = queue_snapshot(queue, selected=selected, product_root=load_product_root(scope))
             if args.human:
                 payload["guide"] = guide
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         elif args.human:
-            # FW-13: the human reading the guide is the one who can install the hook.
-            for warning in product_warnings(load_product_root(scope)):
-                print(f"deltafuse: warning: {warning}", file=sys.stderr)
             if selected is not None:
                 print(guide)
             else:

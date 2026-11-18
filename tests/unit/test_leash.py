@@ -635,10 +635,11 @@ def test_leash_in_a_repo_with_no_commits_names_the_missing_commit(
     assert "ambiguous argument" not in str(exc_info.value)
     assert "no commit" in str(exc_info.value)
 
-    assert main(["leash", str(tmp_path)]) == 2
-    _, err = capsys.readouterr()
-    assert "ambiguous argument" not in err
-    assert "git commit" in err
+    # Since 3.3.14 (O7) the command answers "not judged", exit 0, and still names the commit.
+    assert main(["leash", str(tmp_path)]) == 0
+    out, err = capsys.readouterr()
+    assert "ambiguous argument" not in out + err
+    assert "not judged" in out and "git commit" in out
 
     # An initial commit is the whole fix: the same command then judges the diff.
     _git_init_commit(tmp_path)

@@ -921,15 +921,39 @@ def product_warnings(product_root: Path | None) -> list[str]:
     """
     import os
 
-    if product_root is None or os.environ.get("CI"):
+    if product_root is None:
         return []
+    found = _unarchived_warnings(product_root)
+    if os.environ.get("CI"):
+        return found
     from deltafuse.core.leash import hook_warning
 
     try:
         warning = hook_warning(product_root)
     except OSError:  # an unreadable hook is not a reason to fail `next`
-        return []
-    return [warning] if warning is not None else []
+        return found
+    return found + ([warning] if warning is not None else [])
+
+
+def _unarchived_warnings(product_root: Path) -> list[str]:
+    """A converged Change still in docs/changes/ (O7): no step is left but its archive, which
+    `next` did not name - the queue dropped it and said only "No ready work"."""
+    out: list[str] = []
+    root = changes_dir(product_root)
+    if not root.is_dir():
+        return out
+    for change_file in sorted(root.glob("*/change.yaml")):
+        try:
+            data = yaml.safe_load(change_file.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001 - an unreadable package is reported by the queue
+            continue
+        if isinstance(data, dict) and data.get("status") == "converged":
+            rel = _rel(product_root, change_file.parent)
+            out.append(
+                f"{data.get('id') or change_file.parent.name} converged and is not archived: "
+                f"`deltafuse archive {rel}` (the verify skill's last step)"
+            )
+    return out
 
 
 def queue_snapshot(

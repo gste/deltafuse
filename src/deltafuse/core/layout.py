@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 import yaml
@@ -46,6 +47,10 @@ def product_relpath(raw: Any, product_root: Path | str | None = None, *, resolve
     """
     if not isinstance(raw, str) or not raw.strip():
         raise PathRefused(f"{raw!r} is not a path")
+    if any(unicodedata.category(ch) == "Cc" for ch in raw):
+        # O7: the Writer stored `allowed_paths` with an escape sequence or a tab in them; no
+        # product file is named so, and in a message it rewrites the terminal.
+        raise PathRefused(f"{raw!r} holds a control character; name the path in plain characters")
     text = raw.strip().replace("\\", "/")
     absolute = text.startswith("/") or _DRIVE.match(text) is not None
     if absolute:

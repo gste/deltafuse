@@ -22,7 +22,7 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.context import posix_relpath
+from deltafuse.core.context import path_is_listed, posix_relpath
 from deltafuse.core.product_layout import product_layout
 
 
@@ -153,6 +153,18 @@ def change_code_paths(product_root: Path, change_path: Path) -> list[str] | None
     )
 
 
+def _declared_paths(change_path: Path) -> list[str]:
+    """The allowed_paths of the Change's tasks that are not cancelled."""
+    from deltafuse.core.frontmatter import iter_frontmatter
+
+    out: list[str] = []
+    for _, meta in iter_frontmatter(change_path / "tasks"):
+        if meta.get("status") == "cancelled" or not isinstance(meta.get("allowed_paths"), list):
+            continue
+        out.extend(p for p in meta["allowed_paths"] if isinstance(p, str))
+    return out
+
+
 def under_routing(product_root: Path | str, change_path: Path | str) -> dict[str, Any]:
     """The ownership record of a Change: what its code entered and what routing named."""
     root = Path(product_root)
@@ -167,10 +179,15 @@ def under_routing(product_root: Path | str, change_path: Path | str) -> dict[str
         )
         return record
     routed = routed_capabilities(change_path)
+    declared = _declared_paths(Path(change_path))
     covered_owner_counts: list[int] = []
     for path in paths:
         found = owners(path, roots)
-        if not found:
+        if not found and declared and path_is_listed(path, declared):
+            # O7: a root file a live task of this Change declares (`pom.xml`) is that task's, not
+            # a catalog gap.
+            record.setdefault("declared", []).append(path)
+        elif not found:
             record["unowned"].append(path)
         elif found & routed:
             covered_owner_counts.append(len(found))

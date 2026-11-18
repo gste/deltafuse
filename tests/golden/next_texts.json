@@ -1165,7 +1165,9 @@
         "ready": [],
         "schema_version": 1,
         "selected": null,
-        "warnings": []
+        "warnings": [
+          "CHG-310 converged and is not archived: `deltafuse archive docs/changes/CHG-310` (the verify skill's last step)"
+        ]
       }
     }
   }

@@ -154,7 +154,8 @@ def test_the_commit_that_installs_deltafuse_into_an_existing_repository_passes(t
 def test_the_leash_command_still_asks_for_the_first_commit(tmp_path):
     root = _fresh_enforce_product(tmp_path)
     code, out = cli("leash", root, check=False)
-    assert code == 2 and "initial commit" in out, out
+    # Since 3.3.14 (O7): "not judged", exit 0 - and it still asks for the initial commit.
+    assert code == 0 and "not judged" in out and "initial commit" in out, out
 
 
 # --- FW-13 ------------------------------------------------------------------------------

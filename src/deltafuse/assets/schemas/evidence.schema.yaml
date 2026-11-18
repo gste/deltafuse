@@ -48,6 +48,7 @@ properties:
     properties:
       unrouted: {type: object}
       unowned: {type: array, items: {type: string}}
+      declared: {type: array, items: {type: string}, description: Paths no capability owns that a live task of the Change lists in allowed_paths.}
       resolution: {type: [number, 'null']}
       measurable: {type: boolean}
       reason: {type: string}

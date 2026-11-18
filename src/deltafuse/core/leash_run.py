@@ -95,6 +95,15 @@ def run_leash(
             "violations": [], "warnings": [],
             "note": "first commit of this repository: nothing to judge it against",
         }
+    if not in_hook and not base and not files and not since and _repository_without_commit(root):
+        # O7: the same state from the command line exited 2 ("needs one commit"); there is nothing
+        # to judge, and the answer says what is missing.
+        return {
+            "ok": True, "skipped": True, "mode": load_leash_mode(root), "envelope": None, "paths": [],
+            "violations": [], "warnings": [],
+            "note": "this repository has no commit yet, so there is nothing to judge a diff against; "
+                    "make an initial commit of the installed scaffold (`git add -A` and `git commit`)",
+        }
     if since and not files:
         head = None
         dirty = git_dirty_paths(root, since=since, ignored=True)
@@ -168,6 +177,13 @@ def run_leash(
     }
 
 
+def _repository_without_commit(root: Path) -> bool:
+    """A git repository whose HEAD is unborn (no git at all is LeashError's to say)."""
+    from deltafuse.core.leash import _git
+
+    return _git(Path(root), "rev-parse", "--git-dir").returncode == 0 and not has_commit(Path(root))
+
+
 def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | None:
     """What `advance` records about the write envelope; None when the leash is off.
 
@@ -182,6 +198,10 @@ def leash_at_advance(change_path: Path, product_root: Path) -> dict[str, Any] | 
     mode = verdict_leash_mode(product_root, base=since or "HEAD", head=None)
     if mode == "off":
         return None
+    if _repository_without_commit(product_root):
+        # Not judged is not clean: advance records that it could not check.
+        return {"mode": mode, "checked": False, "violations": [],
+                "reason": "this repository has no commit yet, so there is nothing to judge the step against"}
     try:
         # df-leash #2: the whole step, its commits included - not only what is uncommitted.
         payload = run_leash(change_path, staged=False, since=since)
