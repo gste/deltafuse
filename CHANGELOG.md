@@ -41,7 +41,7 @@ does not stop is listed in [core-and-worker.md](docs/core-and-worker.md#what-the
   `next` halts with the close command when every task of a Change is closed or an active Change has no step, instead
   of reporting nothing to do.
 - **Specify ends by proposing the specification and running `deltafuse next`.** The human's verdict applies the
-  `specified` gate; the gate's errors no longer print a `decide` command a Worker could run and point to `next`.
+  `specified` gate; the gate's errors point to `next` and no longer print a `decide` command a Worker could run.
   Accepting the specification also makes active the draft capabilities the Change routes into, with a Core receipt.
 - **What the whole suite is stays the human's setting.** Regression and verification accept only additions known to
   keep the suite whole (output, logging, parallelism, offline, lifecycle phases); any other option is refused by
