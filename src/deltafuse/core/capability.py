@@ -132,3 +132,46 @@ def propose_capability(
     )
     atomic_replace(path, rendered)
     return {"capability": name, "status": DRAFT, "spec": spec_rel, "path": CATALOG_REL}
+
+
+ACTIVE = "active"
+ACTIVATE_KIND = "capability-active"
+
+
+def activate_capabilities(product_root: Path | str, names: list[str], *, change: str | None) -> list[str]:
+    """Make the drafts among `names` active: the human accepted the specification that needs them.
+
+    Audit 3 (A-4): `decide --spec --status accepted` on a Change routed into a draft printed
+    "gate failed: still a draft" beside "spec accepted" and exited 1, and no command made the
+    draft active - only a hand edit of the catalog. The acceptance is the human's answer to the
+    draft too (the `specified` gate checks exactly these capabilities), so the Core writes it,
+    with a receipt that vouches for the bytes as `propose_capability` does. The caller holds the
+    product mutation lock. Returns the names it activated.
+    """
+    root = Path(product_root)
+    drafts = draft_capabilities(root, names)
+    if not drafts:
+        return []
+    path = catalog_path(root)
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as ex:
+        raise CapabilityError(f"{CATALOG_REL} cannot be read: {ex}") from ex
+    for name in drafts:
+        entry = lookup_capability(data, name)
+        if isinstance(entry, dict):
+            entry["status"] = ACTIVE
+    rendered = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")
+    append_receipt(
+        root,
+        {
+            "kind": ACTIVATE_KIND,
+            "path": CATALOG_REL,
+            "change": change,
+            "capabilities": drafts,
+            "status": ACTIVE,
+            "sha256": hashlib.sha256(rendered).hexdigest(),
+        },
+    )
+    atomic_replace(path, rendered)
+    return drafts

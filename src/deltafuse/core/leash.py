@@ -81,7 +81,11 @@ CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this prod
 # `capability-draft`: `deltafuse capability propose` adding a draft to the
 # catalog in Analyze (q8 decision). `gap-reopen`: `decide --gap` sending a Change
 # back to Analyze (transitions.GAP_REOPEN_KIND; 3.3.8 wrote it and left it out here).
-CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft", "gap-reopen"})
+# `capability-active`: `decide --spec --status accepted` making the drafts the accepted
+# specification routes into active (audit 3, A-4).
+CORE_RECEIPT_KINDS = frozenset(
+    {"transition", "unblock", "artifact-status", "capability-draft", "capability-active", "gap-reopen"}
+)
 
 
 

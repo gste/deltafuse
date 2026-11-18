@@ -785,6 +785,19 @@ def apply_decision(
                 human_check=human_check,
                 extra=covers,
             )
+            if status == "accepted" and proposed:
+                # A-4: the acceptance answers the drafts this Change routes into as well - the
+                # `specified` gate checks exactly those - so the Core makes them active here.
+                from deltafuse.core.analyze import routing_primary_capabilities
+                from deltafuse.core.capability import CATALOG_REL, CapabilityError, activate_capabilities
+
+                try:
+                    if activate_capabilities(
+                        product_root, routing_primary_capabilities(change_dir), change=change_id
+                    ):
+                        written.append(CATALOG_REL)
+                except CapabilityError as ex:
+                    raise DecideError(f"spec accepted, but the capability catalog was not updated: {ex}") from ex
             change_status = None
             current = str(_load_yaml_mapping(change_file).get("status"))
             if status == "rejected" and current in SPEC_REJECT_FROM:
