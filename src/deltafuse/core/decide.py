@@ -710,12 +710,12 @@ def apply_decision(
         if status == "reopened":
             return reopen_task(Path(start).resolve(), task, note=note, password_prompt=password_prompt)
         if note is not None:
-            raise DecideError("--note goes only with --status reopened")
+            raise DecideError("--note goes only with --status reopened (--task or --gap) or with --close")
         if status != "cancelled":
             raise DecideError(f"--task takes only --status cancelled or reopened, got {status!r}")
         return cancel_task(Path(start).resolve(), task, password_prompt=password_prompt)
     if note is not None:
-        raise DecideError("--note goes only with --task and --status reopened")
+        raise DecideError("--note goes only with --status reopened (--task or --gap) or with --close")
     if status not in DECIDE_STATUSES:
         raise DecideError(f"status must be accepted or rejected, got {status!r}")
     if bool(decision) == bool(spec):

@@ -95,7 +95,7 @@ If context exceeds budget, split by connected capability components and outcomes
 
 ## Gate
 
-Exit only when all claims are routed, every routing primary capability has a slice, every slice has a typed delta, blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
+Exit only when all claims are routed, every routing primary capability has a slice, every slice has a typed delta (a reading, not a file: no command writes one - the slice, later `spec-delta.md` and each task's `requirement_delta` carry it), blocking Decisions are terminal, accepted choices are represented in deltas, and reconciliation creates no new blocking question.
 
 Write `routing.yaml`, `slices/**` and any Decision or catalog proposal through the Writer. The Core writes `coverage.yaml` and the `change.yaml` index. `analysis.md` is optional.
 

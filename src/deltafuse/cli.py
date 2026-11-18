@@ -511,7 +511,8 @@ def _main(argv: list[str] | None = None) -> int:
     )
     decide_parser.add_argument(
         "--note", default=None,
-        help="With --status reopened: what the human passes on to the next Declare; with --close: the rationale"
+        help="With --task or --gap and --status reopened: what the human passes on to the step that runs "
+        "again; with --close: the rationale (required). Not with --spec or --decision"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 

@@ -105,7 +105,7 @@ Analyst, Spec Editor, Planner, Implementer и Verifier — шляпы **ворк
 1. **Стандартная доработка (Feature / Specification Change)**:
    `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → `declare` (каждая задача) → `implement` (каждая задача) → `verify` → *(Human Gate: Merge)*.
 2. **Исправление дефекта реализации (Implementation Bug)**:
-   `intake` → `analyze` *(дельта specification.operation: none)* → `specify` *(доказательство неизменности спеки в spec-delta.md)* → `decompose` *(создание задачи фикса)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
+   `intake` → `analyze` *(дельта specification.operation: none)* → `decompose` *(создание задачи фикса; Specify пропускается, пока `docs/spec/**` не изменилась с Intake)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Инициализация проекта (Bootstrap Profile)**:
    Формирование начального каталога `docs/spec/_capabilities.yaml`, принятие базовых архитектурных решений (`docs/decisions/DEC-*` с `change: null`) и фиксация `project.baseline: accepted` в `.deltafuse/config.yaml` до запуска первого Change.
 

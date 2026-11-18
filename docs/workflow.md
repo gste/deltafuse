@@ -79,11 +79,12 @@ For each capability slice:
    - `implementation`: `none | add | modify | remove | mixed` (with `refs` to production code roots);
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
+   The typed Delta is a way of reading the Change, not an artifact: no command writes it and `change.yaml` `deltas` stays empty. What carries it is `spec-delta.md` (the specification projection, accepted by the human), each task's `requirement_delta` and `allowed_paths` (tasks, tests, implementation) and the evidence records; the gates read those.
 4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
 5. The Core writes `coverage.yaml` (`deltafuse coverage`) from routing and slice frontmatter. Workers do not hand-write the matrix.
 
 ### Typed Delta Invariants
-- If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**, and the **Specify** step records formal proof in `spec-delta.md` that existing specification already requires the behavior.
+- If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**. A bugfix then skips **Specify** while `docs/spec/**` is unchanged since Intake; another intent records in `spec-delta.md` that the existing specification already requires the behavior.
 - If `specification.operation` is `add`, `modify`, `remove`, or `mixed`, the Change MUST pass through the **Specify** step to update `docs/spec/**`.
 - If `catalog.operation` is `add`, `modify`, or `remove`, a catalog delta for `_capabilities.yaml` is required (Human Gate: Capability Boundary).
 - If `decisions.operation` is `propose`, new decision records are drafted in `docs/decisions/DEC-*` with `status: proposed`, and the Change transitions to `blocked-on-decision` until human approval.
@@ -220,7 +221,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - **Forbidden Read Scope**: Production implementation code under test.
 
 ### Rules
-1. Implement the minimal test case in the file indicated by `test_target`. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
+1. Implement the minimal test case in a test file the task's `allowed_paths` (or the Declare write scope) covers. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; the gate (`advance`; `check-gate` previews it) rejects unstamped YAML.
@@ -325,7 +326,7 @@ Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks
 - **Workflow**:
   1. Intake normalizes report into `CHG-NNN`.
   2. Analyze verifies that existing specification already requires the expected behavior (`specification.operation: none`).
-  3. Specify transitions Change from `analyzed` to `specified`, recording proof in `spec-delta.md` that existing specification already requires the behavior without modifying normative spec.
+  3. Specify is skipped: with `intent: bugfix` and `docs/spec/**` exactly as it was at Intake, `deltafuse next` goes from `analyzed` to Decompose (the Core compares the specification tree itself; a moved specification sends the Change through Specify and its Human Gate).
   4. Decompose creates bugfix task.
   5. Declare writes the Red oracle (what must become true); records Red evidence.
   6. Implement fixes code; records Green & Regression evidence.
@@ -357,6 +358,6 @@ When initializing a new product repository:
 
 A DeltaFuse Change is considered complete when:
 - All claims (`CR-*`) are traced to passing tests and accepted specification.
-- All tasks are in `verified` status.
+- Every live task is `implemented` or `verified` (Verify marks the implemented ones `verified`); `cancelled` and `superseded` tasks stay as they are.
 - Red, Green, Regression, and Verification evidence files are recorded and valid.
 - Package is archived in `docs/archive/changes/<date>-<change-id>/`.

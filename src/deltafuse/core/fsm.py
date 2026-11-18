@@ -981,8 +981,9 @@ def frozen_oracle_errors(red_file: Path, repo_root: Path, label: str) -> list[st
         f"{what}. "
         "Implement may add tests but must not edit the one Red was taken against: rewriting the "
         "oracle so it passes leaves the product unchanged and proves nothing. Restore the "
-        "declared test, or - if the oracle itself was wrong - record Red again with "
-        "`deltafuse evidence --phase red` and take it from there"
+        "declared test; if the oracle itself is wrong, record Green against it as declared, mark "
+        "the task blocked (`deltafuse state <change-dir> --task <task-id> --status blocked`), say "
+        "why and stop - the human reopens it for Declare (Red is not taken in Implement)"
     ]
 
 

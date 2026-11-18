@@ -166,7 +166,7 @@ deltafuse artifact write --kind task --change docs/changes/CHG-101 --input task.
 yet: it is created; a file: only the fields given change, and the Core reads the
 expected sha256 itself. `spec-delta` lists merge per slice and its prose is
 appended. A host with tool calling exposes the same input as a typed tool.
-Kinds: `task`, `slice`, `routing`, `spec-delta`, `change`. The leash refuses a
+Kinds: `task`, `slice`, `routing`, `spec-delta`, `change`, `decision` (a proposed Decision under `docs/decisions/`). The leash refuses a
 `routing.yaml`, `spec-delta.md`, slice or task file whose bytes neither the Writer
 nor the Core (`deltafuse state`, `decide`) produced.
 
