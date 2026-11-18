@@ -7,6 +7,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.14] - 2026-11-18
+
+The fixes from two Fable 5.2 audit rounds - an audit of 3.3.13 and a second pass that probed the merged fixes - plus
+quick fixes from an audit that is still open. Several 3.3.13 fixes were bypassed within a day: a gate trusted a
+field the Worker writes, a path list was kept beside `workflow.code_roots`, a human's receipt was not voided by a
+later reopen, a fix closed one entry point but not its twin. Gates now check facts the Core computes, one product
+layout and one path normaliser serve every reader, and only the human's latest verdict counts. What the Core still
+does not stop is listed in [core-and-worker.md](docs/core-and-worker.md#what-the-core-does-not-stop).
+
+### Changed
+
+- **A Change's intent is fixed at Intake.** A feature relabelled `bugfix` through the Writer after Analyze skipped
+  the specification Human Gate. `deltafuse state <change-dir> --change --intent <value>` now sets the intent before
+  `advance --gate intake`; `artifact write --kind change` no longer takes it, and the gates read it from the intake
+  receipt.
+- **A Change skips Specify only if it is a bugfix and `docs/spec/**` is unchanged since its Intake.** The intake
+  gate records the Core's own digest of the specification (line endings ignored), every gate from `decomposed` on
+  asks for the accepted specification or that unchanged tree, and the intake gate of a bugfix refuses an uncommitted
+  change under `docs/spec/**`. A bugfix stopped by another Change's accepted specification is offered an exit that
+  works: restore the files, or the human closes the Change and opens it again on the specification as it now reads.
+- **Accepting a specification binds the text of the requirements it cites.** The receipt covered only spec-delta.md,
+  a list of anchors, so a requirement rewritten during Decompose converged as accepted. Every gate from `decomposed`
+  on now refuses when a cited section changed, until the text is restored or the human answers again.
+- **Only the human's latest verdict on an artifact counts.** An acceptance followed by a gap reopen or a rejection
+  is void, even when the file's bytes are restored by hand.
+- **Rejecting an accepted specification returns the Change to `analyzed`.** `decide --spec --status rejected` past
+  `specified` exited 0 and changed nothing else. Now evidence is archived and slices go back to `draft`; Specify
+  proposes again and, once the human accepts, the Core walks the gates the Change had passed. This works under
+  `leash: enforce`, also when evidence was recorded again and not committed before the verdict.
+- **The human closes a Change from any status before `converged`.** `decide --close --status rejected|superseded`
+  works everywhere before `converged` and passes the leash and the hook; `not-reproduced` also from Implement.
+  `next` halts with the close command when every task of a Change is closed or an active Change has no step, instead
+  of reporting nothing to do.
+- **Specify ends by proposing the specification and running `deltafuse next`.** The human's verdict applies the
+  `specified` gate; the gate's errors no longer print a `decide` command a Worker could run and point to `next`.
+  Accepting the specification also makes active the draft capabilities the Change routes into, with a Core receipt.
+- **What the whole suite is stays the human's setting.** Regression and verification accept only additions known to
+  keep the suite whole (output, logging, parallelism, offline, lifecycle phases); any other option is refused by
+  name - Maven `-f`, `-P`, `-DskipITs`, pytest `--pyargs`, `-o testpaths=`, Gradle `-p` and the like - and a suite
+  that needs one is declared by the human in `workflow.test_commands`. `workflow.test_commands`,
+  `workflow.evidence_timeout` and `context.*` are read as committed, and the leash refuses a diff that changes them.
+- **The leash judges every path that is not explicitly exempt.** `pom.xml`, `conftest.py`, `README.md`,
+  `CHANGELOG.md`, `.gitignore` and the CI workflow were never judged; they are product files now. Exempt are only
+  `.deltafuse/**` (its own guards stay), `docs/intake/**`, `docs/archive/**`, `AGENTS.md`, `docs/spec/**` while the
+  baseline is draft, and real cache files (`__pycache__/<name>.pyc`, pytest's own files in `.pytest_cache/`).
+  Git-ignored files inside a code root are judged, and a hand-written `docs/decisions/DEC-*.md` is refused. To let a
+  Change write a file outside the code roots, name it in `workflow.code_roots` - a code root may now be one file
+  such as `pom.xml`, hashed, guarded and writable by a task that lists it - and in the task's `allowed_paths`.
+- **One product layout drives the leash, the Red freeze, stale evidence and the context budget.**
+  `workflow.code_roots` (else `src/**` and `tests/**`) decides everywhere: a test is frozen wherever it lives,
+  evidence goes stale when any file under the code roots changes, tests included, and Declare opens every root whose
+  own directories are test directories (`svc/tests/**`, `app/src/test/**`). `deltafuse evidence` names a dirty file
+  outside the code roots and points to `.gitignore`; caches and build output no longer appear in the ownership
+  record, and root files a task declares are listed under `declared`.
+- **Tasks and their paths are fixed when Decompose closes.** The Writer refuses a new task or changed paths after
+  the `decomposed` gate, and the leash opens a task's envelope only as it was in the commit that recorded that gate.
+  `allowed_paths` and `forbidden_paths` must be plain product-relative paths: the decomposed gate and the Writer
+  refuse `..`, absolute paths, `.`, `//`, backslashes and control characters, and `deltafuse leash --file` resolves
+  such a path and refuses one outside the product.
+- **A write envelope covers its own Change only.** It names its Change directory (visible in `next --json`), `*` in
+  a Change glob is one path segment, and a converged Change's files are closed.
+- **A config without `workflow.leash` is `enforce`** for the leash, the hook, `advance` and all three installers;
+  the hook read it as `enforce` and `advance` as `off`.
+- **A product in a subdirectory of a git repository is refused** by `deltafuse init`, `init.sh`, `init.ps1` and
+  `deltafuse leash`, and `validate-layout` reports it: nothing in such a product was ever judged.
+- **Nothing runs on a Core the product does not pin.** Gates, `advance`, `state`, `evidence`, `coverage`, `next`,
+  `validate-layout`, `new`, the pre-commit hook and `deltafuse leash` (exit 2) refuse when the config and the lock
+  disagree or the running Core is not the pinned one; `decide` still works, so the human can close Changes before an
+  upgrade.
+- **The pre-commit hook runs the interpreter that installed DeltaFuse.** It ran the first `python` on PATH, which
+  could be another DeltaFuse. `DELTAFUSE_PYTHON` overrides it; `python` on PATH runs only if that interpreter is
+  gone.
+
+### Fixed
+
+- **A task's Red no longer counts a test another task's Red already recorded as failing**; the refusal names that
+  task. **A task is set `declared` only on its authentic Red record.**
+- **pytest is recognised however it is started**: behind `python -X ... -m pytest`, `python3`, `py`, and `uv`,
+  `poetry`, `pipenv`, `pdm`, `hatch` or `rye run`. A command that runs pytest, Maven or Gradle through something the
+  Core cannot read (`bash -c "pytest"`, `python -c "...pytest..."`) is refused instead of trusted on its exit code.
+  `workflow.test_commands` entries are split like a shell (quoted arguments work), and `./gradlew`, `gradlew.bat`,
+  `./mvnw` and `mvnw.cmd` are one program for authorization.
+- **JVM test ids use the class and method, not a JUnit 5 `@DisplayName`**, and the class of a test file is read from
+  its `package` declaration. **Surefire, Failsafe and Gradle reports are read from every module at any depth**; a
+  module two directories deep reported no test.
+- **A `core.autocrlf` checkout no longer causes false refusals.** Content hashes (`base_revision`, the frozen
+  oracle, the pytest config) ignore line endings, and a Writer-written file git checks out with CRLF (a Windows
+  clone, `git stash pop`) is no longer reported as written by hand. The leash reads committed files with
+  `git cat-file`, so a long path on Windows no longer reads as deleted.
+- **Decisions bound to a Change stop every gate and the queue** while they are proposed or answered without
+  `decide`; they were checked at `analyzed` and `specified` only.
+- **A task `cancelled` or `superseded` without the human's verdict or the Core's `state` receipt stops the gates and
+  the queue**; the status written by hand used to excuse the task. The human can cancel a task in `declaring` or
+  `implementing`.
+- **A Change status the journal does not back halts `next`** (`converged`, `archived`, or `blocked-on-decision` with
+  no proposed Decision), and `advance` finishes an interrupted transition only under its own gate.
+- **Reopening a task blocked after the `implemented` gate returns the Change to `declared`**, so it can be declared
+  and implemented again; a reopened task is restored to the first declaring snapshot, also after a gap reopen.
+- **A claim whose tasks were all superseded on an already-green Red can converge** on those Red records.
+- **Every `Outcome:` line of verification.md is read**; a gap anywhere stops `converged`.
+- **`deltafuse archive` moves the package in one rename.** It works from inside the Change directory, a directory
+  another process holds archives nothing, and the Change's intake sources move to `docs/archive/intake/`. Fuseback's
+  reports under `docs/intake/fuseback/` are not pending intake, and the archive never moves them.
+- **The CI leash passes honest histories**: a range with a Change's work and its archive, a Change done in one
+  commit, or one squashed with its archive. Without a usable base the workflow template judges the head commit
+  instead of judging nothing.
+- **The pre-commit hook lets the first commit of a repository and the commit that installs DeltaFuse through**, and
+  `deltafuse leash` in a repository with no commit says "not judged" and exits 0.
+- **The Analyze name-family rule applies only to `family.member` event and key names**; packages and property
+  prefixes are not families, so the `analyzed` gate of a JVM product can close.
+- **The context budget counts files of any encoding**; a cp1251 source is no longer almost free. **An evidence
+  record whose runner output contains U+0085 keeps a valid stamp.**
+- **A Red test reading dunders** (`type(x).__name__`, `__module__`, `__qualname__`) is no longer refused as private
+  access.
+- **The Writer writes each kind only into its own file** (`--kind routing` cannot write `coverage.yaml`); creating
+  an identity that already exists is a clean `already_exists` refusal, and `set /title` on a task rewrites its
+  heading.
+- **`init.ps1` resolves a relative target against PowerShell's current location**, not the process directory. All
+  installers write `.gitignore` entries on their own lines and add `.deltafuse/tmp/` and `.deltafuse/journal/`;
+  `init.sh` creates the file when missing, and `init.ps1` no longer corrupts the last line or writes a BOM.
+- **Docs, skills and messages match the tools**: intake `--input`, the Writer's `decision` kind, `--note` help,
+  Maven test roots, the JVM frozen-file rule, a bugfix skipping Specify, the typed Delta as a reading of the Change,
+  and the slice statuses the Core has (`draft` and `specified`). The refusal of a Green over a changed frozen oracle
+  says to block the task and stop instead of recording Red again.
+
+### Added
+
+- **Warnings when commits go unjudged.** `deltafuse leash`, `validate-layout` and `deltafuse next` warn when the
+  leash is on and no pre-commit hook runs it in this clone (a fresh clone, a changed `core.hooksPath`): `warnings`
+  in the `next --json` snapshot (always present) and on stderr, silent when CI is set. `deltafuse leash` prints its
+  warnings in text and `--json` mode and says why a diff was not judged (the first commit, DeltaFuse not installed
+  at the base). Text-mode `next` prints warnings, and `next` names `deltafuse archive` for a converged Change not
+  yet archived.
+
 ## [3.3.13] - 2026-11-16
 
 An audit of 3.3.12 in five areas (lifecycle, leash and Writer, evidence, and Fuseback's JVM harness and pipeline)
