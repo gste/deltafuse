@@ -861,25 +861,31 @@ def decompose_closed(product_root: Path, change_id: str) -> str | None:
 
 
 def _dir_of_change_at(product_root: Path, commit: str, change_id: str, live_dir: str) -> str | None:
-    """`docs/changes/<dir>` of a Change in a commit: its present directory, or (archived since) the
-    one whose change.yaml holds its id."""
-    if live_dir.startswith("docs/changes/") and _git_bytes(product_root, commit, f"{live_dir}/change.yaml") is not None:
+    """The directory of a Change in a commit: its present one, or the one under docs/changes/ or
+    docs/archive/changes/ whose change.yaml holds its id.
+
+    Audit 3 (B-2): only docs/changes/ was looked in. A Change done in one commit, or squashed, has
+    its `decomposed` receipt in the commit that also archives it, so it was found nowhere there,
+    every task read as added after Decompose, and the CI leash refused the Change's own code.
+    """
+    if live_dir.startswith(CHANGE_HOMES) and _git_bytes(product_root, commit, f"{live_dir}/change.yaml") is not None:
         return live_dir
-    try:
-        folders = _git_names(product_root, "ls-tree", "--name-only", commit, "docs/changes/", what="list Changes")
-    except LeashError:
-        return None
-    for line in folders:
-        folder = line.rstrip("/")
-        data = _git_bytes(product_root, commit, f"{folder}/change.yaml")
-        if data is None:
-            continue
+    for home in CHANGE_HOMES:
         try:
-            meta = yaml.safe_load(data.decode("utf-8"))
-        except (UnicodeDecodeError, yaml.YAMLError):
+            folders = _git_names(product_root, "ls-tree", "--name-only", commit, home, what="list Changes")
+        except LeashError:
             continue
-        if isinstance(meta, dict) and str(meta.get("id") or folder.rsplit("/", 1)[-1]) == change_id:
-            return folder
+        for line in folders:
+            folder = line.rstrip("/")
+            data = _git_bytes(product_root, commit, f"{folder}/change.yaml")
+            if data is None:
+                continue
+            try:
+                meta = yaml.safe_load(data.decode("utf-8"))
+            except (UnicodeDecodeError, yaml.YAMLError):
+                continue
+            if isinstance(meta, dict) and str(meta.get("id") or folder.rsplit("/", 1)[-1]) == change_id:
+                return folder
     return None
 
 
