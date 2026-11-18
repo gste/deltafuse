@@ -50,6 +50,10 @@ OPS_ROOTS = ("deploy/**", "docs/ops/**", "ops/**")
 SPEC_ROOT = "docs/spec"
 # A Change's own files, active or archived.
 CHANGE_HOMES = ("docs/changes/", "docs/archive/changes/")
+# Fuseback's working reports (suspects, handoff) live under docs/intake/ but are not intake: no
+# Change takes them in, and the archive never moves them - Fuseback reads them where they are
+# (audit 3, A-7).
+FUSEBACK_REPORTS = "docs/intake/fuseback"
 
 # What the leash does not judge - the whole list (audit 2026-11-17, owner's decision R5: every
 # other path is the product's, `pom.xml`, `conftest.py`, `README.md`, `CHANGELOG.md`, `.gitignore`

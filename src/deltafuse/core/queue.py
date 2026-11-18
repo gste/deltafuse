@@ -223,11 +223,15 @@ def intake_sources_pending(product_root: Path) -> bool:
     intake = product_root / "docs" / "intake"
     if not intake.is_dir():
         return False
+    from deltafuse.core.product_layout import FUSEBACK_REPORTS
+
     skip = {"readme.md", ".gitkeep"}
     consumed = _consumed_intake_refs(product_root)
     for path in intake.iterdir():
         if path.name.lower() in skip:
             continue
+        if path.relative_to(product_root).as_posix() == FUSEBACK_REPORTS:
+            continue  # Fuseback's working reports, not a source to take in (A-7)
         rel = path.relative_to(product_root).as_posix()
         if rel in consumed or any(ref.startswith(rel + "/") for ref in consumed):
             continue

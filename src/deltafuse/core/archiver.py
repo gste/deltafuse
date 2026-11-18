@@ -83,6 +83,9 @@ def archive_intake_sources(product_root: Path, change_data: dict[str, Any], arch
     root = Path(product_root).resolve()
     intake_root = root / "docs" / "intake"
     archive_root = root / "docs" / "archive" / "intake"
+    from deltafuse.core.product_layout import FUSEBACK_REPORTS
+
+    fuseback = root / FUSEBACK_REPORTS
     source = change_data.get("source") if isinstance(change_data, dict) else None
     refs = (source.get("intake_refs") if isinstance(source, dict) else None) or []
     still_cited = _other_active_refs(root, archived)
@@ -97,6 +100,8 @@ def archive_intake_sources(product_root: Path, change_data: dict[str, Any], arch
             continue
         if src == intake_root or not _inside(src, intake_root) or not src.exists():
             continue
+        if _inside(src, fuseback):
+            continue  # Fuseback reads its reports where they are, cited or not (A-7)
         if src.name.lower() in {"readme.md", ".gitkeep"} or rel in still_cited:
             continue
         target = archive_root / src.relative_to(intake_root)
