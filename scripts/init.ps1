@@ -179,12 +179,25 @@ function Sync-LeashHook {
         "cd `"`$root`" || exit 1",
         "# No DeltaFuse on this branch: the pin is in neither the working tree, the index nor HEAD.",
         "[ -f .deltafuse/lock.yaml ] || git cat-file -e :.deltafuse/lock.yaml 2>/dev/null || git cat-file -e HEAD:.deltafuse/lock.yaml 2>/dev/null || exit 0",
-        "py=`"`${DELTAFUSE_PYTHON:-python}`"",
+        "# The interpreter that ran the installer; DELTAFUSE_PYTHON overrides it, and ``python`` on PATH",
+        "# runs only when that one is gone. Running init again on another machine rewrites this line.",
+        "installed=@DELTAFUSE_PYTHON@",
+        "py=`"`${DELTAFUSE_PYTHON:-`$installed}`"",
+        "[ -n `"`$DELTAFUSE_PYTHON`" ] || [ -f `"`$py`" ] || py=python",
         "# Judge the index, which is what this commit records (df-leash #1).",
         "DELTAFUSE_LEASH_INDEX=1",
         "export DELTAFUSE_LEASH_INDEX",
         "exec `"`$py`" -m deltafuse leash `"`$root`""
     ) -join "`n") + "`n"
+    # B-9: the interpreter this install found - DELTAFUSE_PYTHON, else python3 or python on PATH -
+    # as a POSIX path, single-quoted for sh, in place of @DELTAFUSE_PYTHON@.
+    $hookPython = $env:DELTAFUSE_PYTHON
+    if (-not $hookPython) {
+        $found = Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $hookPython = if ($found) { $found.Source } else { "python" }
+    }
+    $hookPython = $hookPython.Replace('\', '/')
+    $script = $script.Replace("@DELTAFUSE_PYTHON@", "'" + $hookPython.Replace("'", "'\''") + "'")
     $utf8 = New-Object System.Text.UTF8Encoding $false
     $managed = Join-Path $TargetRoot ".deltafuse/hooks/pre-commit"
     $hooksDir = Get-LeashHooksDir -Quiet:($Mode -eq "off")

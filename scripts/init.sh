@@ -156,13 +156,27 @@ root=$(git rev-parse --show-toplevel) || exit 1
 cd "$root" || exit 1
 # No DeltaFuse on this branch: the pin is in neither the working tree, the index nor HEAD.
 [ -f .deltafuse/lock.yaml ] || git cat-file -e :.deltafuse/lock.yaml 2>/dev/null || git cat-file -e HEAD:.deltafuse/lock.yaml 2>/dev/null || exit 0
-py="${DELTAFUSE_PYTHON:-python}"
+# The interpreter that ran the installer; DELTAFUSE_PYTHON overrides it, and `python` on PATH
+# runs only when that one is gone. Running init again on another machine rewrites this line.
+installed=@DELTAFUSE_PYTHON@
+py="${DELTAFUSE_PYTHON:-$installed}"
+[ -n "$DELTAFUSE_PYTHON" ] || [ -f "$py" ] || py=python
 # Judge the index, which is what this commit records (df-leash #1).
 DELTAFUSE_LEASH_INDEX=1
 export DELTAFUSE_LEASH_INDEX
 exec "$py" -m deltafuse leash "$root"
 EOF
 )
+
+# B-9: the hook records the interpreter this install found - DELTAFUSE_PYTHON, else python3 or
+# python on PATH - single-quoted for sh, in place of @DELTAFUSE_PYTHON@.
+hook_script() {
+  local py quoted
+  py="${DELTAFUSE_PYTHON:-$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)}"
+  [ -n "$py" ] || py=python
+  quoted="'$(printf '%s' "$py" | sed "s/'/'\\\\''/g")'"
+  printf '%s' "${HOOK_SCRIPT%%@DELTAFUSE_PYTHON@*}$quoted${HOOK_SCRIPT#*@DELTAFUSE_PYTHON@}"
+}
 
 remove_marked_hook() {
   local path="$1"
@@ -206,7 +220,7 @@ sync_leash_hook() {
       ;;
   esac
   mkdir -p "$(dirname "$managed")"
-  printf '%s\n' "$HOOK_SCRIPT" > "$managed"
+  printf '%s\n' "$(hook_script)" >"$managed"
   chmod +x "$managed" 2>/dev/null || true
   hooks_dir="$(leash_hooks_dir)"
   if [ -z "$hooks_dir" ]; then
@@ -218,7 +232,7 @@ sync_leash_hook() {
     return
   fi
   mkdir -p "$(dirname "$git_hook")"
-  printf '%s\n' "$HOOK_SCRIPT" > "$git_hook"
+  printf '%s\n' "$(hook_script)" >"$git_hook"
   chmod +x "$git_hook" 2>/dev/null || true
 }
 
