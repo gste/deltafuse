@@ -53,7 +53,8 @@ def test_editing_a_frozen_test_is_refused_and_named(tmp_path: Path, frozen: Path
     errs = _errors(tmp_path, frozen)
     assert len(errs) == 1 and "frozen Red oracle" in errs[0], errs
     assert f"{TEST_FILE}::{named}" in errs[0], errs[0]
-    assert "record Red again" in errs[0]
+    # Audit 3 (B-10): not "record Red again" - Implement takes no Red; block, the human reopens.
+    assert "--status blocked" in errs[0] and "Red is not taken in Implement" in errs[0]
 
 
 def test_removing_a_skip_the_red_test_carried_is_refused(tmp_path: Path):
