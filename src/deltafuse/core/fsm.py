@@ -2060,7 +2060,9 @@ def _bugfix_intake_spec_errors(repo_root: Path) -> list[str]:
     ]
 
 
-def _unaccepted_spec_tree_errors(gate: str, facts: dict[str, Any], repo_root: Path) -> list[str]:
+def _unaccepted_spec_tree_errors(
+    gate: str, facts: dict[str, Any], repo_root: Path, *, has_delta: bool = True
+) -> list[str]:
     """A Change with no accepted specification may not have moved `docs/spec/**` (FL-1).
 
     "The specification is unchanged" was the Worker's own label - `intent: bugfix` and no
@@ -2081,10 +2083,22 @@ def _unaccepted_spec_tree_errors(gate: str, facts: dict[str, Any], repo_root: Pa
     if not changed:
         return []
     more = f" and {len(changed) - 5} more" if len(changed) > 5 else ""
-    return [
+    head = (
         f"Gate {gate}: docs/spec/** changed since this Change's Intake - {', '.join(changed[:5])}{more} - "
         "and no human accepted it. A Change skips Specify only with the specification untouched: "
-        f"restore those files, or {_PROPOSE} (from a later status the human sends it back with "
+    )
+    if not has_delta and gate != "decomposed":
+        # O4 (round 2): past `analyzed` a Change with no spec-delta.md cannot propose one, and
+        # `decide --spec --status rejected` has nothing to answer ("spec-delta.md is missing").
+        # Typically another Change's accepted specification moved the tree under this bugfix.
+        return [
+            head + "restore those files if this Change wrote them; if they are another Change's "
+            "accepted specification, this Change was opened on a specification that has since "
+            "moved: the human closes it (`deltafuse decide <change-dir> --close --status rejected "
+            '--note "<why>"`) and it is opened again on the specification as it now reads'
+        ]
+    return [
+        head + f"restore those files, or {_PROPOSE} (from a later status the human sends it back with "
         "`deltafuse decide <change-dir> --spec --status rejected`)"
     ]
 
@@ -2149,7 +2163,9 @@ def _specification_errors(
             return _accepted_text_errors(gate, repo_root, rel)
     skipping = gate == "decomposed"
     if intent == "bugfix" and not _spec_delta_changes_spec(spec_delta_file):
-        return _unaccepted_spec_tree_errors(gate, intake_facts(repo_root, change_id), repo_root)
+        return _unaccepted_spec_tree_errors(
+            gate, intake_facts(repo_root, change_id), repo_root, has_delta=spec_delta_file.is_file()
+        )
     if skipping and intent != "bugfix":
         return [
             f"Gate decomposed: a Change with intent '{intent or 'unknown'}' reaches Decompose only "
