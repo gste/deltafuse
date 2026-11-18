@@ -37,18 +37,49 @@ def _archives(product: Path) -> list[Path]:
     return [p for p in (product / "docs" / "archive" / "changes").iterdir() if p.is_dir()]
 
 
-def test_archive_from_inside_the_change_directory(tmp_path: Path, repo_root: Path):
+def test_archive_from_inside_the_change_directory(tmp_path: Path, repo_root: Path, monkeypatch):
+    """The Core leaves the directory itself before the move, so its own working directory does
+    not hold the package.
+
+    Audit 3 (B's suite run): this test ran `python -m deltafuse archive .` as a child process
+    whose working directory was the Change, and failed with WinError 32 under a virtualenv. On
+    Windows a venv's `python.exe` is a launcher that starts the real interpreter as a child: the
+    launcher keeps the Change as its working directory, and the Core's `chdir` cannot move it. It
+    passed where `sys.executable` is the interpreter itself. Here the Core runs in this process,
+    whatever launched pytest, so the test asks only what the Core controls."""
     builder = _converged(tmp_path, repo_root, "CHG-830")
-    env = dict(os.environ, PYTHONPATH=str(repo_root / "src"), PYTHONIOENCODING="utf-8")
-    proc = subprocess.run(
-        [sys.executable, "-m", "deltafuse", "archive", "."],
-        cwd=str(builder.change_dir), env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-    )
-    assert proc.returncode == 0, proc.stderr
+    monkeypatch.chdir(builder.change_dir)
+    archive_change(Path("."), repo_root=tmp_path)
+    assert Path.cwd().resolve() == tmp_path.resolve()
     assert not builder.change_dir.exists()
     (archived,) = _archives(tmp_path)
     assert yaml.safe_load((archived / "change.yaml").read_text(encoding="utf-8"))["status"] == "archived"
     assert not build_work_queue(tmp_path).blocked
+
+
+def test_a_shell_inside_the_change_directory_holds_it_on_windows(tmp_path: Path, repo_root: Path):
+    """The twin, and the environment that made the test above flaky: another process - a shell, a
+    venv launcher - whose working directory is the Change. Windows refuses the rename; the Core
+    moves nothing and says to leave the directory, as its message promises. POSIX renames it."""
+    builder = _converged(tmp_path, repo_root, "CHG-832")
+    env = dict(os.environ, PYTHONPATH=str(repo_root / "src"), PYTHONIOENCODING="utf-8")
+    command = [sys.executable, "-m", "deltafuse", "archive", "."]
+    if os.name == "nt":
+        shell = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", subprocess.list2cmdline(command)]
+    else:
+        shell = ["sh", "-c", " ".join(f"'{part}'" for part in command)]
+    proc = subprocess.run(shell, cwd=str(builder.change_dir), env=env, capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    if os.name != "nt":
+        assert proc.returncode == 0, proc.stderr
+        assert not builder.change_dir.exists()
+        return
+    assert proc.returncode != 0
+    assert "nothing was archived" in proc.stderr and "leave it in every shell" in proc.stderr, proc.stderr
+    assert (builder.change_dir / "change.yaml").is_file() and _archives(tmp_path) == []
+    assert yaml.safe_load((builder.change_dir / "change.yaml").read_text(encoding="utf-8"))["status"] == "converged"
+    # ... and from the product root it goes through.
+    assert archive_change(builder.change_dir, repo_root=tmp_path).is_dir() and not builder.change_dir.exists()
 
 
 def test_a_move_that_fails_archives_nothing(tmp_path: Path, repo_root: Path, monkeypatch):
