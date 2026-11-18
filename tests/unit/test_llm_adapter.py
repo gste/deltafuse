@@ -11,7 +11,11 @@ def test_canonical_skills_bind_worker_to_llm(repo_root: Path):
         text = skill_path.read_text(encoding="utf-8")
         for marker in WORKER_LLM_MARKERS:
             assert marker in text, f"{step}: missing {marker!r}"
-        assert f"--gate {spec['gate']}" in text, f"{step}: missing --gate {spec['gate']}"
+        if step == "specify":
+            # Audit 3 (A-11, B-7): the human's verdict applies `specified`; Specify runs no advance.
+            assert "--gate specified`" not in text and "Do not run `advance` in Specify" in text
+        else:
+            assert f"--gate {spec['gate']}" in text, f"{step}: missing --gate {spec['gate']}"
         assert "Recommend /" not in text, f"{step}: still recommends a slash command"
 
 
@@ -52,7 +56,7 @@ def test_specify_skill_follows_next_pass(repo_root: Path):
         encoding="utf-8"
     )
     assert "specify_pass" in text
-    assert "For `slice`, do not run `advance`" in text
+    assert "Do not run `advance` in Specify, for either pass" in text  # audit 3, A-11/B-7
     assert "spec_refs" in text
     assert "Never set `specified` or any other status by hand" in text
     assert "status: accepted" not in text
