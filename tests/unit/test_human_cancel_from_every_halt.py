@@ -39,9 +39,10 @@ def test_the_already_green_halt_names_a_cancel_that_works(tmp_path: Path, repo_r
     install(target_dir=tmp_path, framework_root=repo_root)
     builder = MockChangeBuilder(tmp_path, change_id="CHG-790", title="Green").step_through_decompose()
     change = builder.change_dir
+    # The already-green Red first: since audit 3 (A-13) `declared` needs the task's Red.
+    _already_green(builder)
     if task_status != "pending":
         set_artifact_status(change, status=task_status, task_id="TASK-001")
-    _already_green(builder)
 
     blocked = build_work_queue(tmp_path).blocked
     assert blocked and "--task TASK-001 --status cancelled" in blocked[0].reason
