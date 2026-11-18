@@ -11,9 +11,6 @@ from __future__ import annotations
 import re
 import shlex
 from pathlib import Path
-from typing import Any
-
-import yaml
 
 CODE_RUNNER_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("pytest",),
@@ -46,7 +43,6 @@ DEFAULT_ROUTE_PREFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     "docs": (("python",),),  # any spelling of the interpreter (`_canonical_head`)
     "ops": (("python",),),
 }
-CONFIG_PATH = Path(".deltafuse") / "config.yaml"
 
 
 def _as_runner_name(argv0: str) -> str:
@@ -108,15 +104,11 @@ def _match(argv: list[str], prefixes: tuple[tuple[str, ...], ...]) -> bool:
 def _load_config_prefixes(product_root: Path | None) -> tuple[tuple[str, ...], ...]:
     if product_root is None:
         return ()
-    path = product_root / CONFIG_PATH
-    if not path.is_file():
-        return ()
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return ()
-    workflow: Any = data.get("workflow") if isinstance(data, dict) else None
-    raw = workflow.get("test_commands") if isinstance(workflow, dict) else None
+    # Through config_section, the one reader: inside `human_settings_as_committed` it is the
+    # committed value, not the Worker's uncommitted edit (audit 3, B-6).
+    from deltafuse.core.config import config_section
+
+    raw = config_section(product_root, "workflow").get("test_commands")
     if not isinstance(raw, list):
         return ()
     out: list[tuple[str, ...]] = []
@@ -218,7 +210,8 @@ def report_less_runner_error(argv: list[str], *, route: str, product_root: Path 
             f"read through, so it cannot ask for or find the report of the tests that ran. Run {runner} "
             "in a form it reads: `pytest ...`, `python -m pytest ...` (interpreter options allowed), "
             "`uv run pytest ...`, `poetry run pytest ...`, `mvn ...`, `./mvnw ...`, `gradle ...`, "
-            "`./gradlew ...` - and declare that form in workflow.test_commands"
+            "`./gradlew ...`; if the product's runner needs another form, the human declares it in "
+            "workflow.test_commands (a human setting the Worker does not edit)"
         )
     family = product_test_runner(product_root)
     if not family:

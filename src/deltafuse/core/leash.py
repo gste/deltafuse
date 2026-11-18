@@ -197,7 +197,36 @@ def config_guard_errors(product_root: Path, *, base: str, head: str | None) -> l
             f"{list(roots_after or ())}; they decide what is product code, are the human's setting, "
             f"outside every Worker envelope, and this diff is judged with the old ones"
         )
+    # Audit 3 (B-6): what the whole suite is, how long it may run and the task budget decide how
+    # the Worker's evidence is judged, as the mode and the roots decide its envelope.
+    for key, before_value, after_value in _human_setting_changes(before, after):
+        errors.append(
+            f"leash: '{CONFIG_REL}' changes {key} from {before_value!r} to {after_value!r}; it decides "
+            "how the Worker's evidence is judged, is the human's setting, outside every Worker "
+            "envelope, and evidence is judged with the committed value (the human changes it in a "
+            "commit of their own)"
+        )
     return errors
+
+
+def _human_setting_changes(before: dict[str, Any], after: dict[str, Any]) -> list[tuple[str, Any, Any]]:
+    """(key, before, after) for each human setting besides the leash mode and the code roots that
+    differs between two config mappings (config.HUMAN_WORKFLOW_KEYS, config.HUMAN_TOP_KEYS)."""
+    from deltafuse.core.config import HUMAN_TOP_KEYS, HUMAN_WORKFLOW_KEYS
+
+    def workflow(data: dict[str, Any]) -> dict[str, Any]:
+        return data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
+
+    out: list[tuple[str, Any, Any]] = []
+    for key in HUMAN_WORKFLOW_KEYS:
+        if key in {"leash", "code_roots"}:
+            continue  # judged above, normalized
+        if workflow(before).get(key) != workflow(after).get(key):
+            out.append((f"workflow.{key}", workflow(before).get(key), workflow(after).get(key)))
+    for key in HUMAN_TOP_KEYS:
+        if before.get(key) != after.get(key):
+            out.append((key, before.get(key), after.get(key)))
+    return out
 
 
 def load_baseline(product_root: Path) -> str:

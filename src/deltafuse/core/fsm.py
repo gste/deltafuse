@@ -1716,7 +1716,11 @@ def check_gate(
         # Codebase audit 2026-10-21: an unknown gate fell through every branch and "passed",
         # while `advance` refuses the same name.
         return [f"unknown gate '{gate}'; expected one of {sorted(GATE_TARGETS)}"]
-    errors = _check_gate(change_dir, gate, registry, assume_status=assume_status, human=human)
+    from deltafuse.core.config import human_settings_as_committed
+
+    # B-6: the gate judges evidence by the human's settings as committed, not as the Worker left them.
+    with human_settings_as_committed(find_repo_root(Path(change_dir))):
+        errors = _check_gate(change_dir, gate, registry, assume_status=assume_status, human=human)
     if not errors:
         return errors
     return _hand_written_causes(Path(change_dir), errors) + errors

@@ -1037,8 +1037,11 @@ def suite_subset(command: object, repo_root: Path) -> str | None:
         return None
     base = max((d for d in declared if norm[: len(d)] == d), key=len, default=None)
     extra = norm[len(base):] if base is not None else norm[1:]
+    # Addressed to the human (audit 3, B-6): the Worker that read "declare the command" put a
+    # narrowed command into workflow.test_commands and its narrowed run passed as the suite.
     how = (
-        "declare the command with it in workflow.test_commands if that is the product's whole suite"
+        "run the whole suite; if that command is the product's whole suite, the human declares it "
+        "in workflow.test_commands (a human setting the Worker does not edit)"
     )
     positionals: list[str] = []
     if family == "pytest":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -659,7 +660,33 @@ def run_evidence(
     changed_paths: list[str] | None = None,
     timeout: int | None = None,
 ) -> EvidenceOutcome:
-    """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml."""
+    """Execute *argv* at the product root and write evidence/<phase>/<task|run>.yaml.
+
+    The run is judged by the human's settings as committed (`workflow.test_commands`,
+    `workflow.evidence_timeout`, `workflow.code_roots`, `context.*`; audit 3, B-6), not by an
+    uncommitted edit of `.deltafuse/config.yaml`.
+    """
+    from deltafuse.core.config import human_settings_as_committed
+
+    try:
+        root = find_repo_root(Path(change_dir).resolve())
+    except Exception:  # noqa: BLE001 - _run_evidence reports a missing Change itself
+        root = None
+    with human_settings_as_committed(root) if root is not None else contextlib.nullcontext():
+        return _run_evidence(
+            change_dir, phase=phase, task=task, argv=argv, changed_paths=changed_paths, timeout=timeout
+        )
+
+
+def _run_evidence(
+    change_dir: Path | str,
+    *,
+    phase: str,
+    task: str | None = None,
+    argv: list[str],
+    changed_paths: list[str] | None = None,
+    timeout: int | None = None,
+) -> EvidenceOutcome:
     if phase not in {"red", "green", "regression", "verification"}:
         raise EvidenceRunError(f"Unsupported evidence phase '{phase}'")
     if not argv:
@@ -901,7 +928,8 @@ def run_evidence(
     if not runner_ok:
         errors.append(
             f"evidence: command {argv[:3]} is not an authorized runner for route '{route}'; "
-            "configure workflow.test_commands in .deltafuse/config.yaml (DF3-006/B-04)"
+            "record it with the product's test runner; the human declares another runner in "
+            "workflow.test_commands of .deltafuse/config.yaml, which the Worker does not edit (DF3-006/B-04)"
         )
     report_less = report_less_runner_error(argv, route=route, product_root=repo_root)
     if report_less:
