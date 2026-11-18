@@ -9,7 +9,9 @@ from deltafuse.core.gate_receipts import TERMINAL_STATUSES, has_valid_receipt
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 
 
-_PRIVATE_ATTR = re.compile(r"\._[A-Za-z_]")
+# `x._name` and a name-mangled `x.__name` are private; a dunder (`type(x).__name__`, `__module__`,
+# `__qualname__`) is public, as the import rule below already reads it (3.3.14, Fuseback round).
+_PRIVATE_ATTR = re.compile(r"\._(?!_[A-Za-z0-9_]*__\b)[A-Za-z_]")
 
 
 def test_source_uses_private_symbols(source: str) -> bool:
