@@ -16,7 +16,7 @@ import pytest
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core import test_reports as reports
-from deltafuse.core.transitions import set_artifact_status
+from deltafuse.core.transitions import TransitionError, set_artifact_status
 from tests.fixtures.evidence_kit import git_init, only, product, pytest_argv, write
 
 HEAD = "import sys\nsys.path.insert(0, 'src')\nimport limiter\n\n\n"
@@ -53,8 +53,10 @@ def test_a_siblings_failing_test_is_not_this_tasks_red(tmp_path: Path, repo_root
     assert "red_oracle_tests" not in red2.payload
     assert only(red2.errors, "TASK-001's Red"), red2.errors
     # ... and so the chain that closed `implemented` with no delta stops at Declare.
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-002")
-    assert only(check_gate(builder.change_dir, "declaring"), "not-the-tasks-tests")
+    # Since audit 3 (A-13) `state --status declared` refuses it for the gate's own reason.
+    with pytest.raises(TransitionError, match="not-the-tasks-tests"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-002")
+    assert any("not-the-tasks-tests" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
 def test_a_siblings_test_in_the_same_file_is_not_this_tasks_red(tmp_path: Path, repo_root: Path):

@@ -27,7 +27,7 @@ from deltafuse.core.test_reports import (
     suite_subset,
     wants_junit_flag,
 )
-from deltafuse.core.transitions import set_artifact_status
+from deltafuse.core.transitions import TransitionError, set_artifact_status
 from tests.fixtures.evidence_kit import product, write
 
 LIMITER_TESTS = (
@@ -148,7 +148,9 @@ def test_the_gate_refuses_a_record_taken_through_an_unread_wrapper(tmp_path: Pat
                                 changed_paths=["tests/test_limiter.py"])
     assert not red.authentic
     assert any("cannot read" in e for e in red.errors), red.errors
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    # Since audit 3 (A-13) `state --status declared` refuses it for the gate's own reason.
+    with pytest.raises(TransitionError, match="cannot read"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert any("cannot read" in e for e in check_gate(builder.change_dir, "declaring"))
 
 

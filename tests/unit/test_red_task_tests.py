@@ -14,7 +14,7 @@ import pytest
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
-from deltafuse.core.transitions import set_artifact_status
+from deltafuse.core.transitions import TransitionError, set_artifact_status
 from tests.fixtures.change_builder import MockChangeBuilder
 
 HEADER = "import sys\nsys.path.insert(0, 'src')\nfrom calc import add\n"
@@ -45,7 +45,12 @@ def _red(builder: MockChangeBuilder, argv: list[str], paths: list[str] | None):
 
 
 def _declaring_errors(builder: MockChangeBuilder) -> list[str]:
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    """What stops the task at Declare: `state --status declared` (audit 3, A-13: it now refuses a
+    Red the declaring gate would refuse, with the same reason), then the gate itself."""
+    try:
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    except TransitionError as ex:
+        return [str(ex), *check_gate(builder.change_dir, "declaring")]
     return check_gate(builder.change_dir, "declaring")
 
 

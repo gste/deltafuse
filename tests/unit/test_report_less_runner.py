@@ -13,13 +13,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from deltafuse.core.runners import product_test_runner, report_less_runner_error
-from deltafuse.core.transitions import set_artifact_status
+from deltafuse.core.transitions import TransitionError, set_artifact_status
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -39,7 +40,9 @@ def test_a_script_runner_is_refused_on_a_pytest_product_and_at_the_gate(tmp_path
     assert red.payload["failure_category"] == "behavioral-mismatch"  # the log heuristic believed it
     assert not red.authentic
     assert any("bare interpreter" in e for e in red.errors), red.errors
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    # Audit 3 (A-13): `state --status declared` refuses that Red for the gate's own reason.
+    with pytest.raises(TransitionError, match="bare interpreter"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert any("bare interpreter" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
@@ -48,7 +51,8 @@ def test_the_gate_refuses_an_unauthorized_runner(tmp_path: Path, repo_root: Path
     red = run_evidence(builder.change_dir, phase="red", task="TASK-001",
                        argv=[sys.executable, "-c", "assert False, 'missing'"])
     assert not red.authentic
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    with pytest.raises(TransitionError, match="not an authorized runner"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert any("not an authorized runner" in e for e in check_gate(builder.change_dir, "declaring"))
 
 

@@ -499,30 +499,7 @@ def _validate_package(
 
                 # Phase-specific result & exit_code rules (T2)
                 if phase == "red":
-                    if result not in {"expected-failure", "not-reproduced", "already-green"}:
-                        errors.append(
-                            f"{rel_ev}: red evidence must have result "
-                            f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
-                        )
-                    if result == "already-green":
-                        if exit_code != 0:
-                            errors.append(f"{rel_ev}: already-green evidence must have exit_code 0 (got {exit_code})")
-                    elif exit_code == 0 and result != "not-reproduced":
-                        errors.append(f"{rel_ev}: red evidence must have non-zero exit_code (got 0)")
-                    if result == "expected-failure" and route == "code":
-                        category = ev_data.get("failure_category")
-                        if category != "behavioral-mismatch":
-                            errors.append(
-                                f"{rel_ev}: red expected-failure "
-                                f"must have failure_category 'behavioral-mismatch' "
-                                f"(got '{category}')" + _red_category_hint(ev_data)
-                            )
-                        changed = ev_data.get("changed_paths") or []
-                        if isinstance(changed, list):
-                            errors.extend(
-                                f"{rel_ev}: {pe}"
-                                for pe in scan_changed_paths_for_private_test_access(repo_root, changed)
-                            )
+                    errors.extend(f"{rel_ev}: {e}" for e in _red_record_rules(ev_data, route, repo_root))
                 elif phase in {"green", "regression"}:
                     if result != "passed":
                         errors.append(
@@ -573,6 +550,72 @@ def _validate_package(
                 errors.append(f"{rel_ev} parsing error: {ex}")
 
     return errors, loaded_route
+
+
+def _red_record_rules(ev_data: dict[str, Any], route: str, repo_root: Path) -> list[str]:
+    """What makes a Red record's own content evidence: its result, exit code and category."""
+    errors: list[str] = []
+    result = ev_data.get("result")
+    exit_code = ev_data.get("exit_code")
+    if result not in {"expected-failure", "not-reproduced", "already-green"}:
+        errors.append(
+            "red evidence must have result "
+            f"'expected-failure', 'not-reproduced', or 'already-green' (got '{result}')"
+        )
+    if result == "already-green":
+        if exit_code != 0:
+            errors.append(f"already-green evidence must have exit_code 0 (got {exit_code})")
+    elif exit_code == 0 and result != "not-reproduced":
+        errors.append("red evidence must have non-zero exit_code (got 0)")
+    if result == "expected-failure" and route == "code":
+        category = ev_data.get("failure_category")
+        if category != "behavioral-mismatch":
+            errors.append(
+                "red expected-failure must have failure_category 'behavioral-mismatch' "
+                f"(got '{category}')" + _red_category_hint(ev_data)
+            )
+        changed = ev_data.get("changed_paths") or []
+        if isinstance(changed, list):
+            errors.extend(scan_changed_paths_for_private_test_access(repo_root, changed))
+    return errors
+
+
+def declared_red_errors(change_path: Path, task_id: str, repo_root: Path) -> list[str]:
+    """Why a task may not be `declared` yet: it has no Red record the gate would accept.
+
+    Audit 3 (A-13, O5): `deltafuse state --task --status declared` asked only whether the move
+    was in the table. A task was set `declared` with no Red, or right after `deltafuse evidence`
+    refused its Red; from `declared` (a reopened task's, once the Change has left Declare) Red is
+    not taken again, so only the human's cancel got the task out. Declared now means what the
+    declaring gate reads it to mean: an authentic Red record of this task - a behavioural failure,
+    or an already-green run - stamped by the Core and inside the Declare contract.
+    """
+    from deltafuse.core.evidence import evidence_stamp_error
+
+    rel = f"evidence/red/{task_id}.yaml"
+    red_file = Path(change_path) / rel
+    record = _load_mapping(red_file)
+    record_red = (
+        f"record Red with `deltafuse evidence {Path(change_path).as_posix()} --phase red --task {task_id} "
+        "-- <test command>` until the Core calls it authentic, then set the task declared"
+    )
+    if record is None:
+        return [f"task {task_id} cannot be declared: it has no Red record ({rel}); {record_red}"]
+    route = load_change_route(change_path)[0] or "code"
+    errors: list[str] = []
+    stamp = evidence_stamp_error(record, repo_root)
+    if stamp:
+        errors.append(stamp)
+    if record.get("phase") != "red" or record.get("task") != task_id:
+        errors.append(f"the record is not a Red of {task_id}")
+    errors.extend(_runner_errors(record, route, repo_root))
+    errors.extend(_red_record_rules(record, route, repo_root))
+    errors.extend(
+        _validate_evidence_changed_paths_contract(change_path, "red", route=route, only_file=red_file.name)
+    )
+    if not errors:
+        return []
+    return [f"task {task_id} cannot be declared: its Red record is not authentic - {'; '.join(errors)}; {record_red}"]
 
 
 def _runner_errors(record: dict[str, Any], route: str, repo_root: Path) -> list[str]:

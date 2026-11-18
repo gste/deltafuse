@@ -321,7 +321,13 @@ def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Pa
     )
     assert red.payload["result"] == "expected-failure"
     assert [t["path"] for t in red.payload["red_oracle_tests"]["tests"]] == ["test/test_limiter.py"]
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    # `test/` lies outside the default code roots, so this Red is not one the declaring gate (or,
+    # since audit 3 A-13, `state --status declared`) accepts; the test is about the implemented
+    # gate, so the task is put in `declared` the way the fixture's step_declare does.
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    task_file.write_text(
+        task_file.read_text(encoding="utf-8").replace("status: pending", "status: declared", 1), encoding="utf-8"
+    )
     builder._core_advance("declaring")
 
     (tmp_path / "test" / "test_other.py").write_text("def test_other():\n    assert True\n", encoding="utf-8")

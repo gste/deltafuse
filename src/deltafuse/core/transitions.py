@@ -23,6 +23,7 @@ from deltafuse.core.fsm import (
     ALLOWED_CHANGE_TRANSITIONS,
     check_gate,
     can_transition,
+    declared_red_errors,
     find_repo_root,
     frozen_oracle_errors,
     product_pin_errors,
@@ -1118,6 +1119,11 @@ def set_artifact_status(
                         f"(needs the Change in {sorted(owners)}; pass the '{gate}' gate "
                         f"first with deltafuse advance)"
                     )
+            if task_id and status == "declared":
+                # A-13, O5: declared means the task holds the Red the declaring gate accepts.
+                refusals = declared_red_errors(change_path, task_id, product_root)
+                if refusals:
+                    raise TransitionError("; ".join(refusals))
             meta["status"] = status
             atomic_write(
                 file, f"---\n{yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)}---\n{body}".encode("utf-8")

@@ -23,7 +23,7 @@ from deltafuse.core.transitions import (
     receipt_chain_errors,
     set_artifact_status,
 )
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_red
 
 
 def _status(path: Path) -> str:
@@ -53,7 +53,8 @@ def test_reopening_after_the_implemented_gate_returns_the_change_to_declared(tmp
 
     selected = select_next(build_work_queue(tmp_path))
     assert (selected.step, selected.task) == ("declare", "TASK-001")
-    # The step `next` names can be carried out: declared again, then implemented again.
+    # The step `next` names can be carried out: Red again, declared again, then implemented again.
+    record_red(change)
     set_artifact_status(change, status="declared", task_id="TASK-001")
     assert select_next(build_work_queue(tmp_path)).step == "implement"
     set_artifact_status(change, status="implemented", task_id="TASK-001")

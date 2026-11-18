@@ -633,6 +633,41 @@ class MockChangeBuilder:
         return self
 
 
+def record_red(change_dir: Path, task_id: str = "TASK-001") -> Path:
+    """An authentic Red the Core recorded for a code-route task, the task's status untouched.
+
+    `deltafuse state --task --status declared` needs it (audit 3, A-13): written through the Core's
+    own stamp, as `deltafuse evidence --phase red` writes a behavioural failure.
+    """
+    from datetime import datetime, timezone
+
+    from deltafuse.core.evidence import write_stamped_evidence
+    from deltafuse.core.fsm import find_repo_root
+
+    change_dir = Path(change_dir)
+    change_id = yaml.safe_load((change_dir / "change.yaml").read_text(encoding="utf-8"))["id"]
+    red = change_dir / "evidence" / "red" / f"{task_id}.yaml"
+    write_stamped_evidence(
+        red,
+        {
+            "schema_version": 3,
+            "change": change_id,
+            "task": task_id,
+            "phase": "red",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "command": f"pytest tests/test_{task_id.lower()}.py",
+            "exit_code": 1,
+            "result": "expected-failure",
+            "failure_category": "behavioral-mismatch",
+            "summary": "Test failed as expected",
+            "changed_paths": [f"tests/test_{task_id.lower()}.py"],
+            "spec_status": "unchanged",
+        },
+        find_repo_root(change_dir),
+    )
+    return red
+
+
 def record_green_attempt(change_dir: Path, task_id: str = "TASK-001") -> Path:
     """A failed Green the Core recorded: what the Worker needs before it may block the task.
 

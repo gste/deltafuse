@@ -17,7 +17,7 @@ from deltafuse.core.transitions import (
     load_receipts,
     receipt_mismatch,
 )
-from tests.fixtures.change_builder import MockChangeBuilder
+from tests.fixtures.change_builder import MockChangeBuilder, record_red
 
 GATE = "analyzed"
 
@@ -200,6 +200,7 @@ def test_state_command_writes_core_owned_task_status(
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
     text = task_file.read_text(encoding="utf-8")
     assert "status: pending" in text
+    record_red(builder.change_dir)  # `declared` needs the task's Red (audit 3, A-13)
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     assert "status: declared" in task_file.read_text(encoding="utf-8")
 
@@ -246,6 +247,7 @@ def test_task_status_cannot_run_ahead_of_its_change(tmp_path: Path, repo_root: P
     builder.step_decompose()
     task_file = builder.change_dir / "tasks" / "TASK-001.md"
 
+    record_red(builder.change_dir)  # `declared` needs the task's Red (audit 3, A-13)
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     capsys.readouterr()
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "implementing"]) == 1
@@ -290,6 +292,7 @@ def test_declaring_gate_closes_from_decomposed(tmp_path: Path, repo_root: Path):
     builder = _analyze_ready(tmp_path, repo_root, "CHG-964", intent="bugfix")
     advance_change(builder.change_dir, GATE)
     builder.step_decompose()
+    record_red(builder.change_dir)  # `declared` needs the task's Red (audit 3, A-13)
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     builder.step_declare()
     assert _read_status(builder.change_dir) == "decomposed"
@@ -330,6 +333,7 @@ def test_state_finds_a_task_by_its_frontmatter_id(tmp_path: Path, repo_root: Pat
     slug = task.with_name("TASK-001-penalty-config.md")
     task.rename(slug)
 
+    record_red(builder.change_dir)  # `declared` needs the task's Red (audit 3, A-13)
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     assert "status: declared" in slug.read_text(encoding="utf-8")
     receipt = load_receipts(tmp_path, "CHG-965")[-1]
@@ -367,6 +371,7 @@ def test_asking_for_the_status_a_task_already_has_is_not_an_error(tmp_path: Path
     builder = _analyze_ready(tmp_path, repo_root, "CHG-967")
     advance_change(builder.change_dir, GATE)
     builder.step_decompose()
+    record_red(builder.change_dir)  # `declared` needs the task's Red (audit 3, A-13)
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
     receipts_before = len(load_receipts(tmp_path, "CHG-967"))
     assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0

@@ -525,7 +525,9 @@ def test_leash_accepts_a_state_rewrite_of_a_slug_named_task(tmp_path: Path, repo
     task.rename(task.with_name("TASK-001-penalty-config.md"))
     _git_init_commit(tmp_path)
 
-    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    # `declaring`, not `declared`: since audit 3 (A-13) `declared` needs the task's authentic Red,
+    # and this is about the leash reading the rewrite, whatever the status.
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declaring"]) == 0
     capsys.readouterr()
     ret, data = _leash_diff(tmp_path, capsys)
     assert data["violations"] == [], data["violations"]
