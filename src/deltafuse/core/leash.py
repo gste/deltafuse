@@ -29,7 +29,7 @@ from deltafuse.core.context import (
 )
 from deltafuse.core.config import config_section
 from deltafuse.core import product_layout as product_layout_module
-from deltafuse.core.product_layout import CHANGE_HOMES, product_layout
+from deltafuse.core.product_layout import CHANGE_HOMES, normalize_line_endings, product_layout
 from deltafuse.core.layout import PathRefused, product_path_error, product_relpath
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
@@ -729,9 +729,17 @@ CATALOG_REL = "docs/spec/_capabilities.yaml"
 LOCK_REL = ".deltafuse/lock.yaml"
 
 
-def _bytes_digest(product_root: Path, rel: str, *, head: str | None = None) -> str:
-    data = _bytes_at(product_root, posix_relpath(rel), head=head)
-    return hashlib.sha256(data).hexdigest() if data is not None else ""
+def _vouched_bytes(data: bytes | None, digests: set[str]) -> bool:
+    """Whether a known writer wrote *data*, its line endings aside.
+
+    Audit 3 (B, `git stash -u` / `pop` under core.autocrlf=true): git gave the Writer's LF bytes
+    back with CRLF, the digest no longer matched the receipt, and the leash called routing.yaml and
+    a slice "written by hand". Every writer writes LF; a checkout's line endings are not an edit.
+    """
+    if data is None:
+        return False
+    return (hashlib.sha256(data).hexdigest() in digests
+            or hashlib.sha256(normalize_line_endings(data)).hexdigest() in digests)
 
 
 def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str, set[str]]:
@@ -792,7 +800,7 @@ def hand_written_errors(
     data = _bytes_at(Path(product_root), rel, head=head)
     if data is None:
         return []  # deleted: the envelope decides
-    if hashlib.sha256(data).hexdigest() in vouched.get(rel, set()):
+    if _vouched_bytes(data, vouched.get(rel, set())):
         return []
     return [
         f"leash: '{rel}' was written by hand; write {kind} artifacts with "
@@ -1553,7 +1561,8 @@ def check_paths(
             # `deltafuse capability propose` adds a draft in Analyze and leaves
             # the digest of what it wrote; bytes no receipt vouches for are a
             # hand edit (q8 decision).
-            if _bytes_digest(product_root, raw, head=head) in vouched.get(CATALOG_REL, set()):
+            catalog = _bytes_at(product_root, posix_relpath(raw), head=head)
+            if _vouched_bytes(catalog, vouched.get(CATALOG_REL, set())):
                 continue
             # Not vouched: fall through to the ordinary checks. The catalog is
             # the human's file and a human edit is not a Worker violation.
