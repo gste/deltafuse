@@ -17,7 +17,7 @@ from deltafuse.core.adapters import (
 )
 from deltafuse.core.assets import manifest_identity_digest, resolve_assets, source_assets_root
 from deltafuse.core.hasher import compute_framework_content_hash
-from deltafuse.core.leash import load_leash_mode, sync_leash_hook
+from deltafuse.core.leash import load_leash_mode, repository_layout_error, sync_leash_hook
 from deltafuse.core.lock import format_lock_yaml, workflow_from_mapping
 
 
@@ -230,6 +230,9 @@ def install(
     if agents_md is not None and agents_md not in {"prompt", "bridge", "preserve", "replace"}:
         raise InstallationError("Invalid --agents-md value; expected prompt, bridge, preserve, or replace.")
     target_root = Path(target_dir).resolve()
+    layout_error = repository_layout_error(target_root)
+    if layout_error is not None:
+        raise InstallationError(layout_error)  # FW-2, before anything is written
     target_root.mkdir(parents=True, exist_ok=True)
 
     bundle_assets: Path | None
@@ -279,9 +282,11 @@ def install(
             if active:
                 raise InstallationError(
                     "Fail-closed upgrade: framework pin differs while active Changes "
-                    f"exist ({', '.join(sorted(active))}). Close or migrate the Changes "
-                    "and re-run their evidence cycle before upgrading; evidence stamps "
-                    "are never re-signed."
+                    f"exist ({', '.join(sorted(active))}). Converge and archive each with the "
+                    "Core the product pins, or have the human close it - `deltafuse decide "
+                    "<change-dir> --close --status rejected|superseded --note \"<why>\"` works "
+                    "from any status before `converged` - then upgrade; evidence stamps are "
+                    "never re-signed."
                 )
 
     # Create target directories
@@ -292,6 +297,10 @@ def install(
     gitignore_path = target_root / ".gitignore"
     gitignore_entries = [
         ".deltafuse/hooks/",
+        # Per-clone bookkeeping (audit 3, B-12): Writer inputs and runner reports, and the Writer's
+        # crash-recovery journal. Receipts and the journals the leash reads stay tracked.
+        ".deltafuse/tmp/",
+        ".deltafuse/journal/",
         ".agents/skills/",
         ".cursor/skills/",
         ".gemini/skills/",
@@ -299,9 +308,9 @@ def install(
     gitignore_content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.is_file() else ""
     new_entries = [entry for entry in gitignore_entries if entry not in gitignore_content]
     if new_entries:
+        kept = gitignore_content.rstrip()
         gitignore_path.write_text(
-            gitignore_content.rstrip() + "\n" + "\n".join(new_entries) + "\n",
-            encoding="utf-8",
+            (kept + "\n" if kept else "") + "\n".join(new_entries) + "\n", encoding="utf-8", newline="\n"
         )
 
     config_path = target_root / ".deltafuse" / "config.yaml"
@@ -431,7 +440,7 @@ def install(
         # The lock written above named the link source; the fallback copies, so re-pin it.
         write_lock(effective_source)
 
-    sync_leash_hook(target_root, load_leash_mode(target_root, missing="off"))
+    sync_leash_hook(target_root, load_leash_mode(target_root))
 
     return InstallResult(
         target_dir=target_root,

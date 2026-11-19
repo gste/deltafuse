@@ -105,7 +105,7 @@ High-level operational workflows are orchestrated by invoking these canonical pr
 1. **Standard Change (Feature / Specification Change)**:
    `intake` → `analyze` → *(Human Gate: Decisions)* → `specify` → *(Human Gate: Spec)* → `decompose` → `declare` (every task) → `implement` (every task) → `verify` → *(Human Gate: Merge)*.
 2. **Implementation Bug**:
-   `intake` → `analyze` *(delta specification.operation: none)* → `specify` *(proof of unchanged spec in spec-delta.md)* → `decompose` *(bugfix task)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
+   `intake` → `analyze` *(delta specification.operation: none)* → `decompose` *(bugfix task; Specify is skipped while `docs/spec/**` is unchanged since Intake)* → `declare` *(Red evidence)* → `implement` *(Green evidence)* → `verify` → *(Human Gate: Merge)*.
 3. **Bootstrap Profile**:
    Draft initial capability catalog `docs/spec/_capabilities.yaml`, resolve baseline architecture decisions (`docs/decisions/DEC-*` with `change: null`), and transition `project.baseline: accepted` in `.deltafuse/config.yaml` before running the first Change.
 

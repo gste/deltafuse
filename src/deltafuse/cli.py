@@ -24,6 +24,7 @@ from deltafuse.core.queue import (
     format_queue,
     intake_sources_pending,
     load_product_root,
+    product_warnings,
     queue_snapshot,
     select_next,
 )
@@ -106,6 +107,22 @@ def _fail(start: Path, what: str, error: object, code: int, **event: object) -> 
     _journal(start, **event, errors=[str(error)])
     print(f"{what}: {error}", file=sys.stderr)
     return code
+
+
+def _pin_refusal(change_dir: Path, cmd: str, **event: object) -> int | None:
+    """Exit code 2 and the reason when this Core is not the one the product pins, else None
+    (audit 2026-11, FL-11, FW-10). `advance`, `state` and `next` ask in the Core itself."""
+    from deltafuse.core.fsm import find_repo_root, product_pin_errors
+
+    try:
+        errors = product_pin_errors(find_repo_root(Path(change_dir).resolve()))
+    except OSError:
+        return None
+    if not errors:
+        return None
+    _journal(change_dir, cmd=cmd, ok=False, errors=errors, n_errors=len(errors), **event)
+    _print_errors(f"{cmd} refused: the product's lock does not match:", errors)
+    return 2
 
 
 def _print_errors(header: str, errors: list[str]) -> None:
@@ -416,7 +433,11 @@ def _main(argv: list[str] | None = None) -> int:
     group.add_argument("--task", help="Task id like TASK-001")
     group.add_argument("--slice", dest="slice_id", help="Slice id like SLICE-01")
     group.add_argument("--change", action="store_true", help="Target the Change itself (in-flight status)")
-    state_parser.add_argument("--status", required=True, help="New status")
+    state_parser.add_argument("--status", default=None, help="New status")
+    state_parser.add_argument(
+        "--intent", default=None,
+        help="With --change, before Intake closes: feature, bugfix, refactor, maintenance, documentation or unknown",
+    )
     state_parser.add_argument("--json", action="store_true", help="Write JSON result to stdout")
 
     # new command (DF3-005 / C-03): deterministic Change scaffolding
@@ -490,7 +511,8 @@ def _main(argv: list[str] | None = None) -> int:
     )
     decide_parser.add_argument(
         "--note", default=None,
-        help="With --status reopened: what the human passes on to the next Declare; with --close: the rationale"
+        help="With --task or --gap and --status reopened: what the human passes on to the step that runs "
+        "again; with --close: the rationale (required). Not with --spec or --decision"
     )
     decide_parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
 
@@ -661,16 +683,31 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "state":
         target = Path(args.change_path)
+        if (args.status is None) == (args.intent is None):
+            print("state failed: pass exactly one of --status or --intent", file=sys.stderr)
+            return 1
+        if args.intent is not None and not args.change:
+            print("state failed: --intent goes with --change", file=sys.stderr)
+            return 1
         try:
-            result = set_artifact_status(
-                target, status=args.status, task_id=args.task, slice_id=args.slice_id,
-                change_status=args.change,
-            )
+            if args.intent is not None:
+                from deltafuse.core.transitions import set_change_intent
+
+                result = set_change_intent(target, args.intent)
+            else:
+                result = set_artifact_status(
+                    target, status=args.status, task_id=args.task, slice_id=args.slice_id,
+                    change_status=args.change,
+                )
         except TransitionError as te:
-            return _fail(target, "state failed", te, 1, cmd="state", status=args.status)
-        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0)
+            return _fail(target, "state failed", te, 1, cmd="state", status=args.status, intent=args.intent)
+        _journal(target, cmd="state", status=args.status, ok=True, errors=[], n_errors=0,
+                 **({"intent": args.intent} if args.intent is not None else {}))
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.intent is not None:
+            print(f"state: change intent {result['from']} -> {result['to']}"
+                  + (" (nothing written)" if result.get("unchanged") else f" (receipt {result['receipt'][:12]})"))
         elif result.get("unchanged"):
             print(f"state: {result['artifact']} status is already {result['to']} (nothing written)")
         else:
@@ -681,6 +718,10 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "new":
         from deltafuse.core.scaffold import ScaffoldError, scaffold_change
 
+        # FW-10: a Change is not opened under a Core the product does not pin.
+        refused = _pin_refusal(Path(args.product_path), "new", change=args.change_id)
+        if refused is not None:
+            return refused
         try:
             change_dir = scaffold_change(
                 Path(args.product_path), args.change_id, route=args.route, title=args.title
@@ -698,11 +739,22 @@ def _main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-layout":
         target = Path(args.product_path)
         errors = validate_product_layout(target)
+        # FW-10: "is valid" under a Core the lock does not pin was the one answer left.
+        from deltafuse.core.lock import product_pin_errors
+
+        try:
+            pin = product_pin_errors(target.resolve())
+        except OSError:
+            pin = []
+        errors += [f"this Core is not the one the product pins: {e}" for e in pin if not any(e in known for known in errors)]
         valid = f"DeltaFuse product layout at {target} is valid."
         return _report("validate-layout", target, errors, "Product layout validation failed", valid)
 
     elif args.command == "evidence":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "evidence", phase=args.phase, task=args.task)
+        if refused is not None:
+            return refused
         try:
             outcome = run_evidence(
                 target, phase=args.phase, task=args.task, argv=evidence_argv,
@@ -733,6 +785,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     elif args.command == "coverage":
         target = Path(args.change_path)
+        refused = _pin_refusal(target, "coverage")
+        if refused is not None:
+            return refused
         try:
             dest = write_coverage(target)
         except Exception as ex:
@@ -783,6 +838,11 @@ def _main(argv: list[str] | None = None) -> int:
             if selected is not None
             else format_human_blocked_queue(queue)
         )
+        if not args.json:
+            # FW-13, O7: every text mode says what the --json snapshot carries in `warnings` - a
+            # missing hook, a converged Change that is not archived - on stderr.
+            for warning in product_warnings(load_product_root(scope)):
+                print(f"deltafuse: warning: {warning}", file=sys.stderr)
         if args.json:
             payload = queue_snapshot(queue, selected=selected, product_root=load_product_root(scope))
             if args.human:
@@ -863,8 +923,15 @@ def _main(argv: list[str] | None = None) -> int:
             skipped = payload["skipped"]
             _journal(root, cmd="leash", ok=payload["ok"], errors=errors, n_errors=len(errors),
                      skipped=skipped)
+            # FW-13: the payload's warnings go to stderr in both modes, so `--json` stdout stays
+            # one document; the note says why nothing was judged, where the text mode used to
+            # answer "no write envelope" for the first commit and for a base without DeltaFuse.
+            for warning in payload.get("warnings") or []:
+                print(f"deltafuse: warning: {warning}", file=sys.stderr)
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
+            elif payload.get("note"):
+                print(f"leash: not judged: {payload['note']}")
             elif skipped:
                 print("leash: no write envelope (no ready Worker step)")
             elif errors:

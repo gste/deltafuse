@@ -64,6 +64,9 @@ def _analyze_package(tmp_path: Path, repo_root: Path, templates_dir: Path) -> Pa
     data = yaml.safe_load((dest / "change.yaml").read_text(encoding="utf-8"))
     data["analysis"] = {"routing": "routing.yaml", "summary": None}
     data["slices"] = [{"id": "SLICE-01", "status": "draft", "file": "slices/SLICE-01.md"}]
+    # These packages go from analyzed straight to Decompose, which only a bugfix does: every
+    # gate from `decomposed` on asks any other intent for its accepted specification (FL-1).
+    data["intent"] = "bugfix"
     _write_yaml(dest / "change.yaml", data)
     _rewrite_ids(dest)
     _core_advance(tmp_path, dest, "intake")
@@ -91,6 +94,12 @@ def _core_advance(root: Path, dest: Path, gate: str) -> None:
         "to": GATE_TARGETS[gate],
         "recorded": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    if data.get("status") == "normalized":
+        # What `advance` records when a Change leaves `normalized` (audit 2026-11, FL-1).
+        from deltafuse.core.spec_acceptance import spec_tree
+
+        entry["intent"] = data.get("intent")
+        entry["spec_tree"] = spec_tree(root)
     entry["receipt"] = _receipt(entry)
     path = transitions_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)

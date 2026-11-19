@@ -704,6 +704,17 @@ def write_coverage(change_path: Path | str) -> Path:
 _BACKTICKED = re.compile(r"`([^`\n]+)`")
 _DOTTED_NAME = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 _FILE_SUFFIXES = frozenset({"py", "md", "yaml", "yml", "json", "toml", "txt", "cfg", "ini", "java", "kt", "js", "ts"})
+# An event or key name: exactly `family.member`. A longer dotted name is a path - a package, a
+# class, a property key (`ru.bank.core.limits`, `spring.datasource.url`) - and has no family.
+_FAMILY_MEMBER = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+# First segments that start a package or a framework property, never a family of the product's
+# own names, also when only two segments are written (`ru.bank`, `com.acme`, `spring.profiles`).
+# Owner decision R7 (audit 2026-11-17, FE-6).
+NOT_A_FAMILY = frozenset({
+    "ru", "com", "org", "net", "io", "de", "uk", "eu", "us", "dev", "app", "edu", "gov",
+    "java", "javax", "jakarta", "kotlin", "kotlinx", "scala", "groovy", "android", "androidx", "sun", "jdk",
+    "spring", "server", "management", "logging", "hibernate", "quarkus", "micronaut", "log4j", "logback",
+})
 _CLAIM_ID = re.compile(r"\bCR-\d{3}\b")
 
 
@@ -760,9 +771,15 @@ def new_name_family_errors(
     monitoring.audit as related only, so it got no slice, Specify never added the event to the
     catalogue and Implement never to its code; every run that routed the claim to
     monitoring.audit got both. A related capability takes no slice: a claim that adds to what
-    another capability lists changes that capability. The rule reads only names in backticks
-    with a dot (`family.member`), a member no live spec holds yet, and specs that hold others of
-    its family.
+    another capability lists changes that capability. The rule reads only event and key names:
+    a name in backticks of exactly the form `family.member`, a member no live spec holds yet, and
+    specs that list other whole names of its family in backticks.
+
+    Audit 2026-11-17 (FE-6, owner decision R7): the family was the first segment of any dotted
+    name and a member any text starting with it, so on a JVM product, where every spec names
+    classes by package, `ru.` was one family of all specs - a claim naming a new package had to
+    be primary in every capability and `analyzed` could not close. Packages, classes and
+    property paths (more than two segments, or a first segment in NOT_A_FAMILY) are not families.
 
     `spec_texts` maps capability id -> {spec path: text}.
     """
@@ -776,19 +793,25 @@ def new_name_family_errors(
     errors: list[str] = []
     for cid in sorted(texts):
         for name in _named_identifiers(texts[cid], capability_ids):
+            if not _FAMILY_MEMBER.match(name):
+                continue  # a package, a class or a property path: not a member of a family
+            family = name.split(".", 1)[0]
+            if family in NOT_A_FAMILY:
+                continue
             if re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", every_spec):
                 continue  # not new: some specification already names it
-            family = name.split(".", 1)[0]
-            member = re.compile(rf"(?<![\w.]){re.escape(family)}\.[a-z][a-z0-9_]*")
+            # A member the spec lists is a whole name of the same form, written as a name (in
+            # backticks): `ratelimit.rejected`, not the start of `ratelimit.rejected.Handler`.
+            member = re.compile(rf"`{re.escape(family)}\.[a-z][a-z0-9_]*`")
             for cap in sorted(spec_texts):
                 if cap in primaries:
                     continue
                 example = next(
                     (
-                        (path, m.group(0))
+                        (path, m.group(0).strip("`"))
                         for path, text in sorted(spec_texts[cap].items())
                         for m in member.finditer(text)
-                        if m.group(0) not in capability_ids
+                        if m.group(0).strip("`") not in capability_ids
                     ),
                     None,
                 )

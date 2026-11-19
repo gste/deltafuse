@@ -22,8 +22,8 @@ from typing import Any
 
 import yaml
 
-from deltafuse.core.context import posix_relpath
-from deltafuse.core.leash import is_exempt_path
+from deltafuse.core.context import path_is_listed, posix_relpath
+from deltafuse.core.product_layout import product_layout
 
 
 DIRECT_SUFFIX = "/*"
@@ -139,13 +139,30 @@ def change_code_paths(product_root: Path, change_path: Path) -> list[str] | None
         return None
     untracked = _git(root, "ls-files", "--others", "--exclude-standard")
     paths = set((diff.stdout or "").splitlines()) | set((untracked.stdout or "").splitlines())
-    # Not CODE_WRITE_GLOBS: a service repository keeps code in
+    # Not the code roots: a service repository keeps code in
     # `document-service/...` (bench case J03), outside `src/**`.
+    # What is not product content at all - caches, build output, a stray `*.pyc` - is the layout's
+    # to say (audit 2026-11-17, S2): the leash judges those since R5, so its exemptions no longer
+    # keep them out of this record.
+    layout = product_layout(root)
     return sorted(
         p for p in (posix_relpath(x) for x in paths if x.strip())
-        if not is_exempt_path(p)
+        if not layout.is_exempt(p)
+        and not layout.is_excluded(p)
         and not p.startswith(("tests/", "docs/", "."))
     )
+
+
+def _declared_paths(change_path: Path) -> list[str]:
+    """The allowed_paths of the Change's tasks that are not cancelled."""
+    from deltafuse.core.frontmatter import iter_frontmatter
+
+    out: list[str] = []
+    for _, meta in iter_frontmatter(change_path / "tasks"):
+        if meta.get("status") == "cancelled" or not isinstance(meta.get("allowed_paths"), list):
+            continue
+        out.extend(p for p in meta["allowed_paths"] if isinstance(p, str))
+    return out
 
 
 def under_routing(product_root: Path | str, change_path: Path | str) -> dict[str, Any]:
@@ -162,10 +179,15 @@ def under_routing(product_root: Path | str, change_path: Path | str) -> dict[str
         )
         return record
     routed = routed_capabilities(change_path)
+    declared = _declared_paths(Path(change_path))
     covered_owner_counts: list[int] = []
     for path in paths:
         found = owners(path, roots)
-        if not found:
+        if not found and declared and path_is_listed(path, declared):
+            # O7: a root file a live task of this Change declares (`pom.xml`) is that task's, not
+            # a catalog gap.
+            record.setdefault("declared", []).append(path)
+        elif not found:
             record["unowned"].append(path)
         elif found & routed:
             covered_owner_counts.append(len(found))

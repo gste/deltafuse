@@ -165,4 +165,11 @@ def test_tasks_missing_leaves_decompose_its_turn_for_a_slice_with_no_task(tmp_pa
     assert receipt_chain_errors(tmp_path, change) == []
     ready = build_work_queue(tmp_path).ready
     assert ready and ready[0].step == "declare" and ready[0].task == "TASK-002", ready
+    # Declare records the task's Red first: since audit 3 (A-13) `declared` needs it.
+    builder._write_evidence(change / "evidence" / "red" / "TASK-002.yaml", {
+        "schema_version": 3, "change": "CHG-221", "task": "TASK-002", "phase": "red",
+        "timestamp": "2026-11-18T12:00:00Z", "command": "pytest tests/test_task-002.py", "exit_code": 1,
+        "result": "expected-failure", "failure_category": "behavioral-mismatch", "summary": "failed",
+        "changed_paths": ["tests/test_task-002.py"], "spec_status": "unchanged",
+    })
     assert set_artifact_status(change, status="declared", task_id="TASK-002")["to"] == "declared"

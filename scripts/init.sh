@@ -14,6 +14,17 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# FW-2 (owner's decision R4), as src/deltafuse/core/leash.py repository_layout_error: a product
+# below the root of a git repository is refused before anything is written - the hook and the
+# leash read paths from the repository root, so nothing there would be judged.
+probe="$TARGET_DIR"
+while [ ! -d "$probe" ]; do probe="$(dirname "$probe")"; done
+if prefix="$(cd "$probe" && git rev-parse --show-prefix 2>/dev/null)"; then
+  if [ -n "$prefix" ] || [ ! -d "$TARGET_DIR" ]; then
+    printf '%s is a subdirectory of the git repository at %s. DeltaFuse supports a product only at the root of its repository (or with no git): the pre-commit hook and the leash read paths from the repository root, so nothing in a subdirectory would be judged. Give the product its own repository (a submodule works); a monorepo layout is a roadmap item.\n' "$TARGET_DIR" "$(cd "$probe" && git rev-parse --show-toplevel 2>/dev/null)" >&2
+    exit 1
+  fi
+fi
 TARGET_ROOT="$(mkdir -p "$TARGET_DIR" && cd "$TARGET_DIR" && pwd)"
 FRAMEWORK_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
 SCHEMA_VERSION=3
@@ -145,13 +156,27 @@ root=$(git rev-parse --show-toplevel) || exit 1
 cd "$root" || exit 1
 # No DeltaFuse on this branch: the pin is in neither the working tree, the index nor HEAD.
 [ -f .deltafuse/lock.yaml ] || git cat-file -e :.deltafuse/lock.yaml 2>/dev/null || git cat-file -e HEAD:.deltafuse/lock.yaml 2>/dev/null || exit 0
-py="${DELTAFUSE_PYTHON:-python}"
+# The interpreter that ran the installer; DELTAFUSE_PYTHON overrides it, and `python` on PATH
+# runs only when that one is gone. Running init again on another machine rewrites this line.
+installed=@DELTAFUSE_PYTHON@
+py="${DELTAFUSE_PYTHON:-$installed}"
+[ -n "$DELTAFUSE_PYTHON" ] || [ -f "$py" ] || py=python
 # Judge the index, which is what this commit records (df-leash #1).
 DELTAFUSE_LEASH_INDEX=1
 export DELTAFUSE_LEASH_INDEX
 exec "$py" -m deltafuse leash "$root"
 EOF
 )
+
+# B-9: the hook records the interpreter this install found - DELTAFUSE_PYTHON, else python3 or
+# python on PATH - single-quoted for sh, in place of @DELTAFUSE_PYTHON@.
+hook_script() {
+  local py quoted
+  py="${DELTAFUSE_PYTHON:-$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)}"
+  [ -n "$py" ] || py=python
+  quoted="'$(printf '%s' "$py" | sed "s/'/'\\\\''/g")'"
+  printf '%s' "${HOOK_SCRIPT%%@DELTAFUSE_PYTHON@*}$quoted${HOOK_SCRIPT#*@DELTAFUSE_PYTHON@}"
+}
 
 remove_marked_hook() {
   local path="$1"
@@ -195,7 +220,7 @@ sync_leash_hook() {
       ;;
   esac
   mkdir -p "$(dirname "$managed")"
-  printf '%s\n' "$HOOK_SCRIPT" > "$managed"
+  printf '%s\n' "$(hook_script)" >"$managed"
   chmod +x "$managed" 2>/dev/null || true
   hooks_dir="$(leash_hooks_dir)"
   if [ -z "$hooks_dir" ]; then
@@ -207,7 +232,7 @@ sync_leash_hook() {
     return
   fi
   mkdir -p "$(dirname "$git_hook")"
-  printf '%s\n' "$HOOK_SCRIPT" > "$git_hook"
+  printf '%s\n' "$(hook_script)" >"$git_hook"
   chmod +x "$git_hook" 2>/dev/null || true
 }
 
@@ -334,17 +359,22 @@ FRAMEWORK_HASH="$(framework_hash)"
 GITIGNORE="$TARGET_ROOT/.gitignore"
 GITIGNORE_ENTRIES=(
     ".deltafuse/hooks/"
+    ".deltafuse/tmp/"
+    ".deltafuse/journal/"
     ".agents/skills/"
     ".cursor/skills/"
     ".gemini/skills/"
 )
-if [ -f "$GITIGNORE" ]; then
-    for entry in "${GITIGNORE_ENTRIES[@]}"; do
-        if ! grep -F -q "$entry" "$GITIGNORE"; then
-            echo "$entry" >> "$GITIGNORE"
+# FW-19: also when the product has no .gitignore yet (the other installers write one), and on a
+# line of its own when the last line has no newline.
+for entry in "${GITIGNORE_ENTRIES[@]}"; do
+    if [ ! -f "$GITIGNORE" ] || ! grep -F -q "$entry" "$GITIGNORE"; then
+        if [ -s "$GITIGNORE" ] && [ -n "$(tail -c 1 "$GITIGNORE")" ]; then
+            echo >> "$GITIGNORE"
         fi
-    done
-fi
+        echo "$entry" >> "$GITIGNORE"
+    fi
+done
 
 LOCK_PATH="$TARGET_ROOT/.deltafuse/lock.yaml"
 
@@ -475,7 +505,7 @@ if [ -f "$config_file" ] && { [ "$update_ver" -eq 1 ] || [ "$update_src" -eq 1 ]
 fi
 
 auto_accept="false"
-leash_mode="off"
+leash_mode="enforce"  # a missing key is enforce for every reader (FW-6)
 if [ -f "$config_file" ]; then
   extracted_auto="$(awk '
     /^workflow:[[:space:]]*$/ { in_wf=1; next }

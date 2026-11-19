@@ -47,8 +47,16 @@ The Core is built against a Worker that errs, not one that attacks it. It refuse
 - A clean `git merge` runs no `pre-commit` hook; removing the lock in a `--no-verify` commit makes the branch one without DeltaFuse.
 - Environment failures of a Red are recognised from pytest's report only; on the JVM a missing resource or `NoClassDefFoundError` reads as a behavioural failure.
 - Only a bare interpreter (`python <file>.py`, `python -c`) is refused as a report-less runner; `tox`, `npm test` and the like still run without a report. Without `workflow.test_commands`, "the whole suite" is judged heuristically.
-- Maven reports are read at the root and one module level deep.
+- A runner with no report the Core reads (`npm test`, `cargo test`, `go test`) is judged by its exit code, and so is a script the human declares in `workflow.test_commands` that does not name its runner (`python run_tests.py`), whatever it runs. Reading Gradle reports is not verified on a real build; a Kotlin test class in a file of another name is matched only when that file is declared.
+- Accepting a specification binds the text of the sections the spec delta and the slices cite, not the rest of `docs/spec/**`: a requirement nobody cited can still be edited after the verdict (the leash under an accepted baseline judges it). A Change that skipped Specify is compared with the whole tree as it was at its Intake.
 - A product installed from the wheel pins the digest of the bundled assets (`assets/manifest.json`), not of the Core's code; a source checkout pins both.
+- The leash does not list a directory git ignores as a whole (`target/`, `node_modules/`, an ignored `__pycache__/`): what is written there is not judged. `.gitignore` itself is judged.
+- While the commit that records a Change's `decomposed` receipt is not made, the leash cannot date a task: a task added late is then stopped only by the Writer and the hand-written check. A squash that puts the receipt and a late task into one commit reads as in time.
+- The hook does not judge a commit with no parent, nor a commit or range whose base has no `.deltafuse/lock.yaml` (the one that installs DeltaFuse).
+- Without a usable base commit the CI leash template judges only the head commit against its parent, and says so in a workflow warning.
+- In a subdirectory of a git repository `advance` records `leash: checked: false` and does not block; `init`, `leash` and `validate-layout` refuse the layout.
+- The missing-hook warning (`leash`, `next`, `validate-layout`) is silent when `CI` is set: a Worker shell that sets it hears nothing about a clone whose commits nobody judges.
+- A Change that skipped Specify converges only while `docs/spec/**` is what it was at its Intake, whoever changed it: another Change that lands a specification edit meanwhile stops it, and the way out is a gap reopen or an accepted specification of its own.
 
 The backstop for all of these is outside the Worker's reach: the CI leash job, the human's review of the diff, and host isolation of the Worker.
 

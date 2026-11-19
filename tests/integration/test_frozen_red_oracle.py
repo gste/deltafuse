@@ -308,9 +308,10 @@ def test_an_honest_option_the_suite_needs_reaches_the_isolated_run(tmp_path: Pat
 
 
 def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Path, repo_root: Path):
-    """A Red whose tests lie outside the oracle roots (`test/`, not `tests/`)
-    gets no per-test freeze and so no isolated run. The gate itself has to see
-    that a Green recorded over a different test did not pass the Red ones."""
+    """The gate itself has to see that a Green recorded over a different test did not pass
+    the Red ones. Until 3.3.14 a test under `test/` (not `tests/`) got no per-test freeze and
+    so no isolated run; the layout freezes it now (audit 2026-11-17, FE-2), and the gate's own
+    coverage check still names the Red tests Green did not pass."""
     builder = _product(tmp_path, repo_root, "CHG-167", ["TASK-001"])
     (tmp_path / "test").mkdir()
     (tmp_path / "test" / "test_limiter.py").write_text(HEADER + RED_TEST, encoding="utf-8")
@@ -319,8 +320,14 @@ def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Pa
         argv=_pytest("test/test_limiter.py"), changed_paths=["test/test_limiter.py"],
     )
     assert red.payload["result"] == "expected-failure"
-    assert "red_oracle_tests" not in red.payload
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    assert [t["path"] for t in red.payload["red_oracle_tests"]["tests"]] == ["test/test_limiter.py"]
+    # `test/` lies outside the default code roots, so this Red is not one the declaring gate (or,
+    # since audit 3 A-13, `state --status declared`) accepts; the test is about the implemented
+    # gate, so the task is put in `declared` the way the fixture's step_declare does.
+    task_file = builder.change_dir / "tasks" / "TASK-001.md"
+    task_file.write_text(
+        task_file.read_text(encoding="utf-8").replace("status: pending", "status: declared", 1), encoding="utf-8"
+    )
     builder._core_advance("declaring")
 
     (tmp_path / "test" / "test_other.py").write_text("def test_other():\n    assert True\n", encoding="utf-8")
@@ -328,7 +335,7 @@ def test_the_gate_checks_coverage_where_there_is_no_per_test_freeze(tmp_path: Pa
         builder.change_dir, phase="green", task="TASK-001",
         argv=_pytest("test/test_other.py"), changed_paths=["test/test_limiter.py", "test/test_other.py"],
     )
-    assert "oracle_isolation" not in green.payload
+    assert green.payload["oracle_isolation"]["not_passing"] == ["test.test_limiter::test_cooldown_is_at_least_thirty"]
     set_artifact_status(builder.change_dir, status="implemented", task_id="TASK-001")
     errs = check_gate(builder.change_dir, "implemented")
     assert any("did not pass the tests Red recorded as failing" in e for e in errs), errs

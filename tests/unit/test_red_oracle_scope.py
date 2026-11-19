@@ -206,7 +206,8 @@ def test_a_pre_release_per_test_record_asks_for_red_again(tmp_path: Path):
     del record["red_oracle_tests"]["version"]
     red.write_text(yaml.safe_dump(record), encoding="utf-8")
     errs = errors(tmp_path, red)
-    assert errs and "pre-release build" in errs[0] and "record Red again" in errs[0], errs
+    # Audit 3 (B-10): Red is taken again in Declare, after the human reopens the task.
+    assert errs and "pre-release build" in errs[0] and "reopens it for Declare" in errs[0], errs
 
 
 def test_a_java_file_is_frozen_whole_by_bytes(tmp_path: Path):

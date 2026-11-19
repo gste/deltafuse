@@ -36,14 +36,32 @@ PASSED = "passed"
 
 PYTEST_RUNNERS = frozenset({"pytest", "py.test"})
 JVM_RUNNERS = frozenset({"mvn", "mvnw", "gradle", "gradlew"})
-# Where Surefire, Failsafe and Gradle leave their XML without being asked.
-JVM_REPORT_GLOBS = (
-    "target/surefire-reports/TEST-*.xml",
-    "target/failsafe-reports/TEST-*.xml",
-    "build/test-results/*/TEST-*.xml",
-    "*/target/surefire-reports/TEST-*.xml",
-    "*/build/test-results/*/TEST-*.xml",
-)
+# Where Surefire, Failsafe and Gradle leave their XML without being asked, inside a module's
+# build directory: `target/surefire-reports`, `target/failsafe-reports`, `build/test-results/<task>`.
+JVM_REPORT_DIRS = {"target": ("surefire-reports", "failsafe-reports"), "build": ("test-results/*",)}
+
+
+def jvm_report_files(repo_root: Path) -> list[Path]:
+    """Every `TEST-*.xml` a Maven or Gradle build left in a module of the product, sorted.
+
+    Audit 2026-11-17 (FE-9): the reports were looked for with five fixed globs - the root module
+    and modules one directory down, Failsafe in the root only - so an integration test of a module
+    was never read, and a module two directories deep (`services/calc`) reported no test at all.
+    The tree is walked instead: every `target/` and `build/` directory of the product, at any
+    depth, caches and dependency folders aside. A build directory is not walked into further.
+    """
+    import os
+
+    from deltafuse.core.product_layout import EXCLUDED_DIRS
+
+    found: list[Path] = []
+    for dirpath, dirnames, _filenames in os.walk(repo_root):
+        here = Path(dirpath)
+        for build_dir in [d for d in dirnames if d in JVM_REPORT_DIRS]:
+            for pattern in JVM_REPORT_DIRS[build_dir]:
+                found += (here / build_dir).glob(f"{pattern}/TEST-*.xml")
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDED_DIRS and d not in JVM_REPORT_DIRS)
+    return sorted(found)
 
 
 @dataclass
@@ -75,18 +93,89 @@ def runner_head(program: object) -> str:
     return _strip_runner_suffix(Path(str(program).replace("\\", "/")).name).lower()
 
 
+_PYTHON_HEAD = re.compile(r"^(?:python|pypy)\d*(?:\.\d+)*$")
+# Interpreter options that take their value as the next argument (`python -X utf8 -m pytest`).
+_PYTHON_VALUE_OPTIONS = frozenset({"-X", "-W"})
+# Launchers that run a command in the project's environment: `uv run pytest`, `poetry run pytest`.
+ENV_WRAPPERS: dict[str, str] = {"uv": "run", "poetry": "run", "pipenv": "run", "pdm": "run", "hatch": "run", "rye": "run"}
+_WRAPPER_VALUE_OPTIONS = frozenset({
+    "--with", "--with-requirements", "--with-editable", "--python", "-p", "--project", "--directory", "-C",
+    "--extra", "--group", "--only-group", "--no-group", "--package", "--env-file", "--env", "-e",
+    "--index", "--default-index", "--index-url", "--extra-index-url", "--find-links", "--cache-dir",
+})
+
+
+def is_python(program: object) -> bool:
+    """A Python interpreter, however it is called: `python`, `python3`, `python3.12`, `pypy3`, `py`."""
+    head = runner_head(program)
+    return head == "py" or bool(_PYTHON_HEAD.match(head))
+
+
+def pytest_args_start(argv: list[str]) -> int | None:
+    """The index of pytest's first own argument; None when the command is not pytest.
+
+    Audit 2026-11-17 (FE-3): pytest was recognised as `pytest ...` or `python -m pytest ...` and
+    nothing else, so `python -X utf8 -m pytest` and `uv run pytest` - the commands a product
+    declares in `workflow.test_commands` - were runners without a reader: no report was asked for
+    or read, and Green was no longer tied to the Red it answers. The command is read once, here:
+    environment launchers (`uv run`, `poetry run`, ...) and the interpreter's own options are
+    skipped, and everything after `pytest` is pytest's.
+    """
+    args = [str(a) for a in argv]
+    i, n = 0, len(args)
+    for _ in range(4):  # a launcher, then an interpreter, then pytest
+        if i >= n:
+            return None
+        head = runner_head(args[i])
+        if head in PYTEST_RUNNERS:
+            return i + 1
+        if is_python(head):
+            j = i + 1
+            while j < n:
+                arg = args[j]
+                if arg == "-m":
+                    return j + 2 if j + 1 < n and args[j + 1] in PYTEST_RUNNERS else None
+                if arg in _PYTHON_VALUE_OPTIONS:
+                    j += 2
+                elif arg.startswith("-") and arg != "-c":
+                    j += 1
+                else:
+                    return None  # a script or `-c`: not pytest
+            return None
+        if ENV_WRAPPERS.get(head) and i + 1 < n and args[i + 1] == ENV_WRAPPERS[head]:
+            j = i + 2
+            while j < n and args[j].startswith("-"):
+                if args[j] == "--":
+                    j += 1
+                    break
+                j += 2 if args[j] in _WRAPPER_VALUE_OPTIONS else 1
+            i = j
+            continue
+        return None
+    return None
+
+
 def runner_family(argv: list[str]) -> str:
     """`pytest`, `jvm`, or `` when the Core has no reader for this runner."""
     if not argv:
         return ""
-    head = runner_head(argv[0])
-    if head in PYTEST_RUNNERS:
-        return "pytest"
-    if head in JVM_RUNNERS:
+    if runner_head(argv[0]) in JVM_RUNNERS:
         return "jvm"
-    if head in {"python", "python3"} and "pytest" in argv[1:3]:
+    if pytest_args_start(argv) is not None:
         return "pytest"
     return ""
+
+
+_READABLE_RUNNER_WORD = re.compile(r"(?<![\w.-])(?:pytest|py\.test|mvn|mvnw|gradle|gradlew)(?![\w-])")
+
+
+def names_a_readable_runner(argv: list[str]) -> str | None:
+    """The runner (`pytest`, `mvn`, ...) a command mentions somewhere in its arguments, if any."""
+    for arg in argv:
+        found = _READABLE_RUNNER_WORD.search(str(arg).replace("\\", "/"))
+        if found:
+            return found.group(0)
+    return None
 
 
 def wants_junit_flag(argv: list[str]) -> bool:
@@ -96,36 +185,69 @@ def wants_junit_flag(argv: list[str]) -> bool:
     )
 
 
-def _case_id(case: ET.Element) -> str:
-    classname = (case.get("classname") or "").strip()
+def _case_id(case: ET.Element, classname: str | None = None) -> str:
+    classname = (case.get("classname") or "").strip() if classname is None else classname
     name = (case.get("name") or "").strip()
     return f"{classname}::{name}" if classname else name
 
 
-def read_junit_xml(path: Path, *, error_means: str) -> dict[str, str]:
-    """One JUnit XML file as neutral outcomes. `error_means` is the ecosystem's."""
+# FAILED over NOT_RUN over PASSED over SKIPPED: when two reported cases are one test id, the
+# worse outcome is the test's (two display-named `@Nested` classes with a method of one name).
+_OUTCOME_RANK = {FAILED: 3, NOT_RUN: 2, PASSED: 1, SKIPPED: 0}
+
+
+def merge_outcome(outcomes: dict[str, str], name: str, got: str) -> None:
+    """Record *got* for *name* unless a worse outcome of the same test is already there."""
+    if name not in outcomes or _OUTCOME_RANK[got] > _OUTCOME_RANK[outcomes[name]]:
+        outcomes[name] = got
+
+
+def _cases_with_suites(root: ET.Element) -> list[tuple[ET.Element, str]]:
+    """Every `<testcase>` with the `name` of the `<testsuite>` it stands in (`` when in none)."""
+    out: list[tuple[ET.Element, str]] = []
+    seen: set[int] = set()
+    for suite in root.iter("testsuite"):
+        for case in suite.findall("testcase"):
+            seen.add(id(case))
+            out.append((case, (suite.get("name") or "").strip()))
+    out += [(case, "") for case in root.iter("testcase") if id(case) not in seen]
+    return out
+
+
+def read_junit_xml(path: Path, *, error_means: str, class_names=None) -> dict[str, str]:
+    """One JUnit XML file as neutral outcomes. `error_means` is the ecosystem's.
+
+    *class_names*, for a JVM report, turns (suite name, the case's `classname`) into the class the
+    test id carries (`JvmClassNames`): Surefire writes a JUnit 5 display name there.
+    """
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError):
         return {}
     outcomes: dict[str, str] = {}
-    for case in root.iter("testcase"):
-        name = _case_id(case)
+    for case, suite in _cases_with_suites(root):
+        classname = None
+        if class_names is not None:
+            classname = class_names((case.get("classname") or "").strip(), suite, path)
+        name = _case_id(case, classname)
         if not name:
             continue
         if case.find("skipped") is not None:
-            outcomes[name] = SKIPPED
+            got = SKIPPED
         elif case.find("failure") is not None or case.find("error") is not None:
             if error_means == FAILED and _class_level(case):
                 # Audit 2026-11-16 (df-evidence #8): a throwing `@BeforeAll` (JUnit 4:
                 # `initializationError`) is reported against the class, not a method. Read as a
                 # failed test `demo.CalcTest::`, it was accepted as Red and no Green could ever
                 # pass a test of that name. The class's tests never ran.
-                outcomes[name] = NOT_RUN
+                got = NOT_RUN
+                if classname is not None:
+                    name = f"{classname}::"  # the class, also when the report shows its display name
             else:
-                outcomes[name] = FAILED if case.find("failure") is not None else error_means
+                got = FAILED if case.find("failure") is not None else error_means
         else:
-            outcomes[name] = PASSED
+            got = PASSED
+        merge_outcome(outcomes, name, got)
     return outcomes
 
 
@@ -149,6 +271,80 @@ def read_junit_failures(path: Path) -> dict[str, tuple[str, str]]:
         name = _case_id(case)
         if name and failure is not None:
             found[name] = ((failure.get("message") or "").strip(), failure.text or "")
+    return found
+
+
+_JVM_BINARY_NAME = re.compile(r"^[^\W\d][\w$]*(?:\.[^\W\d][\w$]*)*$")
+_JVM_PACKAGE = re.compile(r"(?m)^\s*package\s+([\w.]+)")
+_JVM_TYPE = re.compile(r"\b(?:class|interface|object|enum|record)\s+([^\W\d]\w*)")
+JVM_BUILD_FILES = ("pom.xml", "build.gradle", "build.gradle.kts")
+
+
+def jvm_source_classes(path: Path) -> tuple[str, set[str]]:
+    """(package, the names of the types declared in it) of a JVM source file; the file's own
+    name is always one of them. ("", {stem}) when the file cannot be read."""
+    names = {path.name.rsplit(".", 1)[0]}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "", names
+    package = _JVM_PACKAGE.search(text)
+    names.update(_JVM_TYPE.findall(text))
+    return (package.group(1) if package else ""), names
+
+
+class JvmClassNames:
+    """The class a Surefire or Gradle `<testcase>` belongs to.
+
+    Audit 2026-11-17 (FE-5): the id was `classname::name` as written, and with a JUnit 5
+    `@DisplayName` on the class Surefire writes the display name into `classname`
+    (`Calculator works::adds`). The class is the `<testsuite name>` - one report file per
+    top-level class. A `classname` is kept when it is that class or one nested in it
+    (`demo.CalcTest$Inner`), or when a source file of the module declares a class of that name
+    (a JUnit 4 suite reports other classes' tests); anything else is a display name.
+    """
+
+    def __init__(self, repo_root: Path):
+        self.repo_root = repo_root
+        self._known: dict[tuple[Path, str], bool] = {}
+
+    def __call__(self, classname: str, suite: str, report: Path) -> str:
+        if not suite or classname == suite or classname.startswith(suite + "$"):
+            return classname
+        if _JVM_BINARY_NAME.match(classname) and self._declared(_report_module_dir(report), classname):
+            return classname
+        return suite
+
+    def _declared(self, module: Path, classname: str) -> bool:
+        key = (module, classname)
+        if key not in self._known:
+            top = classname.split("$", 1)[0]
+            package, _, simple = top.rpartition(".")
+            self._known[key] = any(
+                jvm_source_classes(path)[0] == package
+                for path in _jvm_sources_named(module, simple)
+            )
+        return self._known[key]
+
+
+def _report_module_dir(report: Path) -> Path:
+    """The module a report file belongs to: the directory holding its `target/` or `build/`."""
+    for parent in report.parents:
+        if parent.name in {"target", "build"}:
+            return parent.parent
+    return report.parent
+
+
+def _jvm_sources_named(module: Path, simple: str) -> list[Path]:
+    """Source files `<simple>.<java|kt|...>` under *module*, build products and caches aside."""
+    import os
+
+    from deltafuse.core.product_layout import EXCLUDED_DIRS
+
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(module):
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS and d not in {"target", "build"}]
+        found += [Path(dirpath, f"{simple}{suffix}") for suffix in JVM_TEST_SUFFIXES if f"{simple}{suffix}" in filenames]
     return found
 
 
@@ -198,21 +394,20 @@ def read_report(
     if family == "jvm":
         outcomes: dict[str, str] = {}
         found = False
-        for pattern in JVM_REPORT_GLOBS:
-            for path in sorted(repo_root.glob(pattern)):
-                try:
-                    if newer_than is not None and path.stat().st_mtime < newer_than:
-                        continue
-                except OSError:
+        class_names = JvmClassNames(repo_root)
+        for path in jvm_report_files(repo_root):
+            try:
+                if newer_than is not None and path.stat().st_mtime < newer_than:
                     continue
-                found = True
-                # Surefire and Gradle call any non-assertion exception an
-                # `<error>`, but the test did run: a stub that throws is the
-                # normal shape of a Java red.
-                prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
-                outcomes.update(
-                    (prefix + name, got) for name, got in read_junit_xml(path, error_means=FAILED).items()
-                )
+            except OSError:
+                continue
+            found = True
+            # Surefire and Gradle call any non-assertion exception an
+            # `<error>`, but the test did run: a stub that throws is the
+            # normal shape of a Java red.
+            prefix = jvm_module_prefix(path.relative_to(repo_root).as_posix())
+            for name, got in read_junit_xml(path, error_means=FAILED, class_names=class_names).items():
+                merge_outcome(outcomes, prefix + name, got)
         return TestReport("surefire", outcomes) if found else None
     return None
 
@@ -331,12 +526,12 @@ _JVM_TEST_ROOT = re.compile(r"(?:^|/)src/test/[^/]+/")
 
 
 def is_test_file(rel: str) -> bool:
-    """A file a runner reads tests from: `test_*.py` / `*_test.py`, or JVM test source."""
-    rel = rel.replace("\\", "/")
-    name = rel.rsplit("/", 1)[-1]
-    if name.endswith(".py"):
-        return name.startswith("test_") or name.endswith("_test.py")
-    return name.endswith(JVM_TEST_SUFFIXES) and bool(_JVM_TEST_ROOT.search(rel))
+    """A file a runner reads tests from, as the product's layout names one
+    (core/product_layout.py): `test_*.py` / `*_test.py` anywhere, a JVM source file named as a
+    test (`CalcTest.java`, `CalcIT.kt`) or lying in a test directory (`src/test/**`)."""
+    from deltafuse.core.product_layout import ProductLayout
+
+    return ProductLayout(root=None).is_test_source(rel)
 
 
 def declared_test_files(changed_paths: list[str]) -> list[str]:
@@ -359,13 +554,36 @@ def _pytest_id_in(test_id: str, rel: str) -> bool:
     return any(cparts[:k] == mparts[-k:] for k in range(len(mparts), 0, -1))
 
 
-def _jvm_class_of(rel: str) -> tuple[str, str]:
-    """(module prefix, fully qualified class) of a JVM test source under `src/test/<lang>/`."""
+def _jvm_module_of(rel: str, repo_root: Path | None) -> str:
+    """The module prefix of a JVM source file: by its path when it follows the standard layout
+    (`<module>/src/test/...`), else the nearest directory above it with a build file."""
+    rel = rel.replace("\\", "/")
+    if _JVM_TEST_ROOT.search(rel) or repo_root is None:
+        return jvm_module_prefix(rel)
+    parts = rel.split("/")[:-1]
+    for depth in range(len(parts), 0, -1):
+        if any((repo_root.joinpath(*parts[:depth]) / name).is_file() for name in JVM_BUILD_FILES):
+            return "/".join(parts[:depth]) + "/"
+    return ""
+
+
+def _jvm_classes_of(rel: str, repo_root: Path | None = None) -> tuple[str, set[str]]:
+    """(module prefix, the fully qualified classes) of a JVM test source file.
+
+    The package is the one the file declares, and a Kotlin file may declare several classes
+    under any file name; only when the file cannot be read is the class derived from its path
+    under `src/test/<lang>/` (audit 2026-11-17, FE-5: a path was the only reading).
+    """
     rel = rel.replace("\\", "/")
     stem = rel.rsplit(".", 1)[0]
+    path = repo_root / rel if repo_root is not None else None
+    if path is not None and path.is_file():
+        package, names = jvm_source_classes(path)
+        dot = package + "." if package else ""
+        return _jvm_module_of(rel, repo_root), {dot + name for name in names}
     match = _JVM_TEST_ROOT.search(rel)
     start = match.end() if match else len(stem) - len(stem.rsplit("/", 1)[-1])
-    return jvm_module_prefix(rel), stem[start:].replace("/", ".")
+    return jvm_module_prefix(rel), {stem[start:].replace("/", ".")}
 
 
 def _jvm_id_class(test_id: str) -> tuple[str, str]:
@@ -375,16 +593,18 @@ def _jvm_id_class(test_id: str) -> tuple[str, str]:
     return (prefix + "/" if prefix else ""), classname.split("$", 1)[0]
 
 
-def _jvm_id_in(test_id: str, rel: str) -> bool:
+def _jvm_id_in(test_id: str, rel: str, repo_root: Path | None = None) -> bool:
     if not rel.endswith(JVM_TEST_SUFFIXES):
         return False
-    return _jvm_class_of(rel) == _jvm_id_class(test_id)
+    module, classes = _jvm_classes_of(rel, repo_root)
+    id_module, id_class = _jvm_id_class(test_id)
+    return module == id_module and id_class in classes
 
 
-def test_in_files(test_id: str, files: list[str], family: str) -> bool:
+def test_in_files(test_id: str, files: list[str], family: str, repo_root: Path | None = None) -> bool:
     """True when *test_id*, as *family*'s report spells it, is a test of one of *files*."""
     if family == "jvm":
-        return any(_jvm_id_in(test_id, rel) for rel in files)
+        return any(_jvm_id_in(test_id, rel, repo_root) for rel in files)
     return any(_pytest_id_in(test_id, rel) for rel in files)
 
 
@@ -400,9 +620,9 @@ _PYTEST_VALUE_OPTIONS = frozenset({
 
 def pytest_positionals(argv: list[str], repo_root: Path) -> list[str]:
     """The test paths and node ids a pytest command names (existing paths only), POSIX form."""
-    if runner_family(argv) != "pytest":
+    start = pytest_args_start(argv)
+    if start is None:
         return []
-    start = 1 if runner_head(argv[0]) in PYTEST_RUNNERS else argv.index("pytest") + 1
     out: list[str] = []
     rest = iter(argv[start:])
     for arg in rest:
@@ -463,15 +683,26 @@ def _named_files(argv: list[str], repo_root: Path) -> list[str]:
 
 
 def task_test_ids(
-    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path
+    report: TestReport, changed_paths: list[str], argv: list[str], repo_root: Path,
+    *, taken: dict[str, str] | None = None,
 ) -> tuple[list[str] | None, str]:
     """The report's tests that are the task's, and how they were named; (None, "") when nothing
-    names them - no declared test file and no test file or class selected on the command line."""
+    names them - no declared test file and no test file or class selected on the command line.
+
+    *taken* maps a test to the other task whose Red record already names it as failing. Those are
+    never this task's (audit 2026-11-17, FE-1): the changed paths the Core computes are the whole
+    dirty tree, and during Declare that tree holds every earlier task's still-failing test.
+    """
+    taken = taken or {}
+
+    def mine(ids: list[str]) -> list[str]:
+        return sorted(t for t in ids if t not in taken)
+
     family = report_family(report)
     declared = declared_test_files(changed_paths)
     if declared:
         return (
-            sorted(t for t in report.outcomes if test_in_files(t, declared, family)),
+            mine([t for t in report.outcomes if test_in_files(t, declared, family, repo_root)]),
             f"the test files the task declared ({', '.join(declared[:5])})",
         )
     if family == "jvm":
@@ -479,14 +710,14 @@ def task_test_ids(
         if not patterns:
             return None, ""
         return (
-            sorted(t for t in report.outcomes if _jvm_selected(t, patterns)),
+            mine([t for t in report.outcomes if _jvm_selected(t, patterns)]),
             f"the test classes the command selects ({', '.join(patterns[:5])})",
         )
     files = _named_files(argv, repo_root)
     if not files:
         return None, ""
     return (
-        sorted(t for t in report.outcomes if test_in_files(t, files, family)),
+        mine([t for t in report.outcomes if test_in_files(t, files, family, repo_root)]),
         f"the test files the command names ({', '.join(files[:5])})",
     )
 
@@ -513,10 +744,10 @@ def task_test_files(
         return _named_files(argv, repo_root)
     named, _ = task_test_ids(report, changed_paths, argv, repo_root)
     found: set[str] = set()
-    for test_id in named or []:
-        prefix, cls = _jvm_id_class(test_id)
-        for path in repo_root.glob(f"{prefix}src/test/*/{cls.replace('.', '/')}.*"):
-            if path.suffix in JVM_TEST_SUFFIXES:
+    for prefix, cls in {_jvm_id_class(test_id) for test_id in named or []}:
+        package, _, simple = cls.rpartition(".")
+        for path in _jvm_sources_named(repo_root / prefix if prefix else repo_root, simple):
+            if jvm_source_classes(path)[0] == package:
                 found.add(path.relative_to(repo_root).as_posix())
     return sorted(found)
 
@@ -528,12 +759,197 @@ def task_test_files(
 # the session's exit status to 0, or Maven's `-fn`, recorded "passed" over failing tests; a
 # command narrowed to the task's own test file converged a Change that broke the rest of the suite.
 
-# Options that run part of the suite: pytest's selection and Maven/Gradle's test and module filters.
-_PYTEST_SELECTING = ("-k", "-m", "--deselect", "--ignore", "--ignore-glob", "--lf", "--last-failed",
-                     "--sw", "--stepwise", "--sw-skip", "--stepwise-skip")
-_JVM_SELECTING = ("-Dtest=", "-Dit.test=", "-Dgroups=", "-DexcludedGroups=", "-Dsurefire.includesFile=",
-                  "-Dsurefire.excludesFile=", "-Dtest.single=", "--tests", "-pl", "--projects", "-rf",
-                  "--resume-from", "-x", "--exclude-task")
+# Audit 2026-11-17 (FE-8): the first form of this check refused the options known to select tests
+# (`-k`, `--deselect`, `-Dtest=`, `-pl`, ...), so every option it did not know narrowed the suite
+# unseen: Maven `-f b/pom.xml`, `-D test=`, `-Dsurefire.excludes`, `-DskipITs`, `-P`; pytest
+# `--pyargs`, `-o testpaths=`, `-c`. It is the other way round now: what may be added to the suite
+# command is what is listed here as leaving the suite whole, and anything else is refused. A
+# product whose whole suite needs another option declares the command in `workflow.test_commands`.
+
+# pytest: options without a value.
+_PYTEST_HARMLESS_FLAGS = frozenset({
+    "--exitfirst", "--showlocals", "--no-showlocals", "--no-header", "--no-summary", "--strict-markers",
+    "--strict-config", "--strict", "--verbose", "--quiet", "--disable-warnings", "--disable-pytest-warnings",
+    "--cache-clear", "--ff", "--failed-first", "--nf", "--new-first", "--full-trace", "--no-cov",
+    "--cov-append", "--cov-branch", "--no-cov-on-fail", "--forked",
+})
+# pytest: options with a value (`--tb short`, `--tb=short`).
+_PYTEST_HARMLESS_VALUES = frozenset({
+    "--tb", "--durations", "--durations-min", "--maxfail", "--basetemp", "--junitxml", "--junit-xml",
+    "--junit-prefix", "--color", "--code-highlight", "--capture", "--show-capture", "--import-mode",
+    "--pythonwarnings", "--log-level", "--log-cli-level", "--log-file", "--log-file-level", "--log-format",
+    "--log-date-format", "--cov", "--cov-report", "--cov-config", "--cov-fail-under", "--cov-context",
+    "--timeout", "--timeout-method", "--dist", "--numprocesses", "--maxprocesses", "--maxschedchunk",
+    "--verbosity", "--randomly-seed", "--reruns-delay",
+})
+_PYTEST_HARMLESS_SHORT_FLAGS = frozenset("qvsxl")
+_PYTEST_HARMLESS_SHORT_VALUES = frozenset({"-W", "-n", "-r"})  # `-r` takes its letters attached: -ra
+# `-o key=value`: only settings that change how the run is shown or logged.
+_PYTEST_HARMLESS_INI = frozenset({
+    "log_cli", "log_level", "log_cli_level", "log_format", "log_date_format", "log_file", "log_file_level",
+    "console_output_style", "cache_dir", "faulthandler_timeout", "junit_logging", "junit_log_passing_tests",
+    "junit_duration_report", "junit_suite_name", "tmp_path_retention_count", "tmp_path_retention_policy",
+    "verbosity_assertions", "truncation_limit_lines", "truncation_limit_chars",
+})
+
+# Maven: the lifecycle phases; a `plugin:goal` or an execution id runs part of the build.
+_MAVEN_PHASES = frozenset({
+    "clean", "validate", "initialize", "generate-sources", "process-sources", "generate-resources",
+    "process-resources", "compile", "process-classes", "generate-test-sources", "process-test-sources",
+    "generate-test-resources", "process-test-resources", "test-compile", "process-test-classes", "test",
+    "prepare-package", "package", "pre-integration-test", "integration-test", "post-integration-test",
+    "verify", "install",
+})
+_MAVEN_HARMLESS_FLAGS = frozenset({
+    "-o", "--offline", "-B", "--batch-mode", "-q", "--quiet", "-e", "--errors", "-X", "--debug", "--verbose",
+    "-U", "--update-snapshots", "-V", "--show-version", "-ntp", "--no-transfer-progress", "-fae",
+    "--fail-at-end", "-ff", "--fail-fast", "-fn", "--fail-never", "-C", "--strict-checksums", "-c",
+    "--lax-checksums", "-nsu", "--no-snapshot-updates", "-up", "--update-plugins", "--no-plugin-updates",
+})
+_MAVEN_HARMLESS_VALUES = frozenset({
+    "-T", "--threads", "-s", "--settings", "-gs", "--global-settings", "-t", "--toolchains",
+    "-gt", "--global-toolchains", "-l", "--log-file", "--color", "-b", "--builder",
+})
+# `-Dname[=value]`: properties that do not choose which modules or tests run.
+_MAVEN_HARMLESS_PROPERTIES = frozenset({
+    "maven.repo.local", "style.color", "file.encoding", "project.build.sourceEncoding",
+    "project.reporting.outputEncoding", "maven.test.failure.ignore", "testFailureIgnore", "trimStackTrace",
+    "surefire.failIfNoSpecifiedTests", "failIfNoSpecifiedTests", "failIfNoTests", "surefire.failIfNoTests",
+    "surefire.printSummary", "surefire.useFile", "surefire.reportFormat", "java.io.tmpdir", "user.timezone",
+    "user.language", "user.country", "maven.javadoc.skip", "checkstyle.skip", "spotbugs.skip", "pmd.skip",
+    "jacoco.skip", "enforcer.skip", "gpg.skip", "maven.source.skip", "license.skip", "spotless.check.skip",
+})
+_MAVEN_HARMLESS_PROPERTY_PREFIXES = ("maven.wagon.", "aether.", "jansi.", "org.slf4j.simpleLogger.", "http.", "https.")
+
+# Gradle: the tasks that run every project's tests, and what builds them.
+_GRADLE_TASKS = frozenset({"test", "check", "build", "clean", "cleanTest", "assemble", "classes", "testClasses"})
+_GRADLE_HARMLESS_FLAGS = frozenset({
+    "--no-daemon", "--daemon", "--offline", "--info", "-i", "--debug", "-d", "--quiet", "-q", "--warn", "-w",
+    "--stacktrace", "-s", "--full-stacktrace", "-S", "--rerun", "--rerun-tasks", "--no-build-cache",
+    "--build-cache", "--continue", "--parallel", "--no-parallel", "--no-configuration-cache",
+    "--configuration-cache", "--no-watch-fs", "--watch-fs", "--refresh-dependencies", "--no-scan",
+})
+_GRADLE_HARMLESS_VALUES = frozenset({
+    "--console", "--max-workers", "--warning-mode", "--priority", "-g", "--gradle-user-home",
+    "--project-cache-dir", "--no-problems-report",
+})
+_GRADLE_HARMLESS_PROPERTY_PREFIXES = ("org.gradle.", "file.encoding", "user.timezone", "user.language", "user.country")
+
+
+def _pytest_additions(args: list[str]) -> tuple[list[str], list[str]]:
+    """(additions not known to leave the suite whole, test paths) among pytest's arguments."""
+    unknown: list[str] = []
+    positionals: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if arg == "--":
+            positionals += args[i:]
+            break
+        if not arg.startswith("-") or arg == "-":
+            positionals.append(arg)
+            continue
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if name in {"--override-ini"}:
+                value, used = (value, 0) if eq else (nxt or "", 1)
+                i += used
+                if value.split("=", 1)[0].strip().lower() not in _PYTEST_HARMLESS_INI:
+                    unknown.append(f"{name} {value}".strip())
+            elif name in _PYTEST_HARMLESS_VALUES and (eq or name not in _PYTEST_HARMLESS_FLAGS):
+                if not eq:
+                    i += 1
+            elif name in _PYTEST_HARMLESS_FLAGS and not eq:
+                pass
+            else:
+                unknown.append(arg)
+            continue
+        # short options: `-q`, `-qx`, `-vv`, `-ra`, `-n 4`, `-n4`, `-W error`, `-p no:x`, `-o k=v`
+        short, attached = arg[:2], arg[2:]
+        if short in {"-p", "-o"}:
+            value = attached or (nxt or "")
+            if not attached:
+                i += 1
+            ok = value.startswith("no:") if short == "-p" else (
+                value.split("=", 1)[0].strip().lower() in _PYTEST_HARMLESS_INI)
+            if not ok:
+                unknown.append(f"{short} {value}".strip())
+        elif short in _PYTEST_HARMLESS_SHORT_VALUES:
+            if not attached and short != "-r":
+                i += 1
+        elif set(arg[1:]) <= _PYTEST_HARMLESS_SHORT_FLAGS:
+            pass
+        else:
+            unknown.append(arg if attached or nxt is None or nxt.startswith("-") else f"{arg} {nxt}")
+    return unknown, positionals
+
+
+def _maven_additions(args: list[str]) -> list[str]:
+    unknown: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if not arg.startswith("-"):
+            if arg not in _MAVEN_PHASES:
+                unknown.append(arg)
+            continue
+        if arg.startswith("-D") or arg == "--define" or arg.startswith("--define="):
+            if arg in {"-D", "--define"}:
+                prop, i = (nxt or ""), i + 1
+            else:
+                prop = arg[2:] if arg.startswith("-D") else arg.split("=", 1)[1]
+            key = prop.split("=", 1)[0]
+            if key not in _MAVEN_HARMLESS_PROPERTIES and not key.startswith(_MAVEN_HARMLESS_PROPERTY_PREFIXES):
+                unknown.append(f"-D{prop}")
+            continue
+        name, eq, _value = arg.partition("=")
+        if arg in _MAVEN_HARMLESS_FLAGS:
+            continue
+        if name in _MAVEN_HARMLESS_VALUES:
+            if not eq:
+                i += 1
+            continue
+        if arg.startswith("-T") and arg[2:3].isdigit():
+            continue  # -T4, -T1C
+        with_value = nxt is not None and not nxt.startswith("-") and nxt not in _MAVEN_PHASES and not eq
+        unknown.append(f"{arg} {nxt}" if with_value else arg)
+        if with_value:
+            i += 1
+    return unknown
+
+
+def _gradle_additions(args: list[str]) -> list[str]:
+    unknown: list[str] = []
+    i, n = 0, len(args)
+    while i < n:
+        arg = args[i]
+        nxt = args[i + 1] if i + 1 < n else None
+        i += 1
+        if not arg.startswith("-"):
+            if arg not in _GRADLE_TASKS:
+                unknown.append(arg)
+            continue
+        if arg.startswith("-D") and arg[2:].split("=", 1)[0].startswith(_GRADLE_HARMLESS_PROPERTY_PREFIXES):
+            continue
+        name, eq, _value = arg.partition("=")
+        if arg in _GRADLE_HARMLESS_FLAGS:
+            continue
+        if name in _GRADLE_HARMLESS_VALUES:
+            if not eq:
+                i += 1
+            continue
+        with_value = nxt is not None and not nxt.startswith("-") and nxt not in _GRADLE_TASKS and not eq \
+            and not arg.startswith(("-D", "-P"))
+        unknown.append(f"{arg} {nxt}" if with_value else arg)
+        if with_value:
+            i += 1
+    return unknown
+
+
 _SUITE_SKIP_DIRS = frozenset({"node_modules", "__pycache__", "site-packages", "venv", "build", "dist", "target"})
 
 
@@ -544,29 +960,15 @@ def _configured_commands(repo_root: Path) -> list[list[str]]:
 
 
 def _normalized(argv: list[str]) -> list[str]:
-    """argv with the runner as its bare name (`.venv/Scripts/pytest.exe` -> `pytest`) and a
-    `python -m pytest` read as `pytest`, so a declared command matches however it is spelled."""
+    """argv with the runner as its bare name (`.venv/Scripts/pytest.exe` -> `pytest`) and any
+    spelling of pytest (`python -X utf8 -m pytest`, `uv run pytest`) read as `pytest`, so a
+    declared command matches however it is spelled."""
     if not argv:
         return []
-    head = runner_head(argv[0])
-    if head in {"python", "python3"} and argv[1:3] == ["-m", "pytest"]:
-        return ["pytest", *[str(a) for a in argv[3:]]]
-    return [head, *[str(a) for a in argv[1:]]]
-
-
-def _selecting_options(argv: list[str]) -> list[str]:
-    family = runner_family(argv)
-    out: list[str] = []
-    for arg in argv[1:]:
-        arg = str(arg)
-        if family == "pytest":
-            if any(arg == opt or arg.startswith(opt + "=") or (len(opt) == 2 and arg.startswith(opt) and len(arg) > 2)
-                   for opt in _PYTEST_SELECTING):
-                out.append(arg)
-        elif family == "jvm":
-            if any(arg == opt or arg.startswith(opt if opt.endswith("=") else opt + "=") for opt in _JVM_SELECTING):
-                out.append(arg)
-    return out
+    start = pytest_args_start(argv)
+    if start is not None:
+        return ["pytest", *[str(a) for a in argv[start:]]]
+    return [runner_head(argv[0]), *[str(a) for a in argv[1:]]]
 
 
 def _pytest_testpaths(repo_root: Path) -> list[str] | None:
@@ -618,12 +1020,12 @@ def _pytest_test_files(repo_root: Path, scope: list[str]) -> list[str]:
 
 
 def suite_subset(command: object, repo_root: Path) -> str | None:
-    """Why *command* runs only part of the product's suite; None when it runs the whole of it.
+    """Why *command* may run only part of the product's suite; None when it runs the whole of it.
 
-    A command the product declares in `workflow.test_commands` is the whole suite as written;
-    anything added to it that selects tests narrows it. Without a declaration, a test-selecting
-    option narrows the suite, and so does a pytest path that leaves test files out (a file or
-    node id, or a directory with test files outside it).
+    A command the product declares in `workflow.test_commands` is the whole suite as written.
+    What is added to it - or, without a declaration, everything after the runner - must be known
+    to leave the suite whole (the lists above): an output or logging option, a lifecycle phase,
+    a pytest directory that leaves no test file out. Anything else is refused, known or not.
     """
     argv = _command_argv(command)
     family = runner_family(argv)
@@ -633,20 +1035,38 @@ def suite_subset(command: object, repo_root: Path) -> str | None:
     declared = [_normalized(entry) for entry in _configured_commands(repo_root)]
     if norm in declared:
         return None
-    base = next((d for d in declared if norm[: len(d)] == d), None)
+    base = max((d for d in declared if norm[: len(d)] == d), key=len, default=None)
     extra = norm[len(base):] if base is not None else norm[1:]
-    selecting = _selecting_options([norm[0], *extra])
-    if selecting:
-        return f"it selects part of the suite ({' '.join(selecting[:3])})"
-    if family != "pytest":
-        return None
-    positionals = pytest_positionals(["pytest", *extra], repo_root)
+    # Addressed to the human (audit 3, B-6): the Worker that read "declare the command" put a
+    # narrowed command into workflow.test_commands and its narrowed run passed as the suite.
+    how = (
+        "run the whole suite; if that command is the product's whole suite, the human declares it "
+        "in workflow.test_commands (a human setting the Worker does not edit)"
+    )
+    positionals: list[str] = []
+    if family == "pytest":
+        unknown, positionals = _pytest_additions(extra)
+    elif runner_head(norm[0]) in {"gradle", "gradlew"}:
+        unknown = _gradle_additions(extra)
+    else:
+        unknown = _maven_additions(extra)
+    if unknown:
+        shown = ", ".join(f"`{u}`" for u in unknown[:3])
+        return (
+            f"it adds {shown} to the suite command, and that is not known to leave the suite whole "
+            f"(it selects part of the suite, or the Core cannot tell that it does not); {how}"
+        )
     if not positionals:
         return None
-    named = [p for p in positionals if "::" in p or (repo_root / p).is_file()]
+    posix = [p.replace("\\", "/") for p in positionals]
+    named = [p for p in posix if "::" in p or (repo_root / p).is_file()]
     if named:
         return f"it names single test files or tests ({', '.join(named[:3])}), not the suite"
-    dirs = [p.rstrip("/").removeprefix("./") for p in positionals]
+    # A path that is not there selects nothing pytest would run (it exits 4 on one), and a
+    # record whose tree lost a directory since is stale on its own account.
+    dirs = [p.rstrip("/").removeprefix("./") for p in posix if (repo_root / p).exists()]
+    if not dirs:
+        return None
     if any(d in {".", ""} for d in dirs):
         return None
     scope = _pytest_testpaths(repo_root) or ["."]

@@ -35,3 +35,50 @@ properties:
       type: string
       minLength: 1
     description: Optional read globs from the step contract. Not enforced by leash v1.
+$defs:
+  payload:
+    title: DeltaFuse leash payload
+    description: >
+      stdout of `deltafuse leash --json`: the verdict on a diff. Not the envelope itself; the
+      envelope the diff was judged against rides in it. Unknown properties are allowed.
+    type: object
+    additionalProperties: true
+    required: [ok, skipped, mode, envelope, paths, violations, warnings]
+    properties:
+      ok:
+        type: boolean
+        description: No path is outside the write envelope.
+      skipped:
+        type: boolean
+        description: Nothing was judged (no ready Worker step and no violation, or see `note`).
+      mode:
+        enum: ['off', advisory, enforce]
+        description: The `workflow.leash` mode this verdict was made in.
+      envelope:
+        oneOf:
+          - type: 'null'
+          - $ref: '#'
+      paths:
+        type: array
+        items:
+          type: string
+        description: The judged paths, relative to the product root.
+      violations:
+        type: array
+        items:
+          type: string
+      warnings:
+        type: array
+        items:
+          type: string
+        description: >
+          What the human should know although nothing is refused for it: the leash is on and no
+          pre-commit hook runs it in this clone (FW-13). Empty inside the hook and when `CI` is
+          set. `deltafuse leash` prints each to stderr; `deltafuse next --json` carries the same
+          list under `warnings`.
+      note:
+        type: string
+        description: >
+          Present only when the diff was not judged at all, and says why: the first commit of the
+          repository, or a base without DeltaFuse (the commit that installs it). The text mode
+          prints `leash: not judged: <note>`.

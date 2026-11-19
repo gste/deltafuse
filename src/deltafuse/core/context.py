@@ -15,6 +15,12 @@ from typing import Any, Iterable, Sequence
 import yaml
 from deltafuse.core.config import config_section
 from deltafuse.core.integrity import path_is_inside_repo
+from deltafuse.core.product_layout import (  # noqa: F401 - re-exported: callers import them from here
+    DEFAULT_CODE_ROOTS,
+    configured_code_roots,
+    posix_relpath,
+    product_layout,
+)
 
 
 class ContextLinterError(Exception):
@@ -126,7 +132,7 @@ CHANGE_ROUTES = frozenset({"code", "docs", "ops"})
 DEFAULT_CHANGE_ROUTE = "code"
 # Where a `code`-route Change keeps its code and tests when the product does not say
 # (`workflow.code_roots` in .deltafuse/config.yaml). See code_write_globs.
-DEFAULT_CODE_WRITE_GLOBS = ("src/**", "tests/**")
+DEFAULT_CODE_WRITE_GLOBS = DEFAULT_CODE_ROOTS
 # Phases whose contracts name the code roots; the others work on docs/ only.
 _CODE_ROOT_PHASES = frozenset({"declare", "implement", "verify"})
 _ROUTE_TARGET_EVIDENCE = [
@@ -194,17 +200,6 @@ def product_root_of(path: Path | str) -> Path | None:
         if (candidate / ".deltafuse").is_dir():
             return candidate
     return None
-
-
-def configured_code_roots(product_root: Path | str | None) -> tuple[str, ...] | None:
-    """`workflow.code_roots` from the product's config, or None when it sets none."""
-    if product_root is None:
-        return None
-    roots = config_section(product_root, "workflow", tolerate=(OSError, yaml.YAMLError)).get("code_roots")
-    if not isinstance(roots, list):
-        return None
-    clean = [posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()]
-    return tuple(dict.fromkeys(clean)) or None
 
 
 def code_write_globs(product_root: Path | str | None = None) -> tuple[str, ...]:
@@ -355,6 +350,36 @@ def count_tokens(text: str) -> TokenCount:
     return TokenCount(estimate_from_bytes(text), MODE_HEURISTIC, f"{HEURISTIC_ID}:/{BYTES_PER_TOKEN}")
 
 
+def read_text_for_count(path: Path) -> str:
+    """A file's text for counting, whatever its encoding.
+
+    Audit 2026-11-17 (FE-11): files were read as UTF-8 with `errors="ignore"`, so every byte
+    that is not valid UTF-8 was dropped before it was counted - a windows-1251 source file of
+    160 000 bytes read as 9 600 tokens. UTF-8 (with or without a BOM) and UTF-16 with a BOM are
+    decoded as what they are. Any other text is decoded byte for byte (latin-1), which never
+    fails and does not depend on the machine's locale: a letter of a single-byte code page
+    becomes one two-byte character, as it would be in UTF-8. A file with NUL bytes is binary,
+    not text a Worker reads, and keeps the old reading. Line endings count as one newline, as
+    they did (a CRLF checkout of a file has the same budget).
+    """
+    return _decode_for_count(path.read_bytes()).replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _decode_for_count(data: bytes) -> str:
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    if b"\x00" in data:
+        return data.decode("utf-8", errors="ignore")
+    return data.decode("latin-1")
+
+
 def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
     """Sum tokens over unique existing files and report how they were counted.
 
@@ -374,7 +399,7 @@ def count_files_tokens(files: list[Path]) -> tuple[int, dict[str, Any]]:
             continue
         seen.add(resolved)
         try:
-            content = resolved.read_text(encoding="utf-8", errors="ignore")
+            content = read_text_for_count(resolved)
         except OSError:
             continue
         counted = count_tokens(content)
@@ -498,19 +523,6 @@ def _budget_errors(
 DEFAULT_TASK_BUDGET = {"max_tokens": 64000, "max_files": 24}
 
 
-def posix_relpath(path: str) -> str:
-    """Repo-relative POSIX form: drop leading './' and '/' only.
-
-    `str.lstrip("./")` strips a character set, not a prefix: it turned
-    '.deltafuse/x' into 'deltafuse/x', so no dot-directory ever matched a glob
-    such as '.deltafuse/**'.
-    """
-    rel = Path(path).as_posix()
-    while rel.startswith("./"):
-        rel = rel[2:]
-    return rel.lstrip("/")
-
-
 def matches_contract_globs(rel_path: str, globs: Sequence[str]) -> bool:
     """True if *rel_path* matches any PHASE_CONTRACTS glob (fnmatch, POSIX slashes)."""
     rel = posix_relpath(rel_path)
@@ -587,7 +599,7 @@ def anchored_sections(path: Path, anchors: set[str]) -> str | None:
     them over the budget however the task was split.
     """
     try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = read_text_for_count(path).splitlines()
     except OSError:
         return None
     first = next((i for i, line in enumerate(lines)
@@ -622,29 +634,13 @@ def product_task_budget(repo_root: Path) -> dict[str, int]:
     return budget
 
 
-_GLOB_SKIP_DIRS = frozenset({".git", ".deltafuse", "__pycache__", "node_modules", ".venv", "venv", "target", "build"})
-
-
 def _glob_files(root: Path, pattern: str) -> list[str]:
     """Existing files under *root* an allowed_paths glob lists (`path_is_listed`), POSIX, sorted.
-    The walk starts at the pattern's literal directory prefix."""
-    pattern = posix_relpath(pattern)
-    literal = []
-    for part in pattern.split("/"):
-        if any(ch in part for ch in "*?["):
-            break
-        literal.append(part)
-    base = root.joinpath(*literal) if literal else root
-    if base.is_file():
-        return [posix_relpath(base.relative_to(root).as_posix())]
-    out: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = [d for d in dirnames if d not in _GLOB_SKIP_DIRS]
-        for name in filenames:
-            rel = Path(dirpath, name).relative_to(root).as_posix()
-            if path_is_listed(rel, [pattern]):
-                out.append(rel)
-    return sorted(out)
+
+    What is a file of the product and what is a cache or a build product is the layout's to say
+    (core/product_layout.py): the budget skipped every directory named `build` or `target`, so a
+    package of that name counted nothing (audit 2026-11-17, S2)."""
+    return product_layout(root).glob(pattern)
 
 
 def validate_task_context_budget(

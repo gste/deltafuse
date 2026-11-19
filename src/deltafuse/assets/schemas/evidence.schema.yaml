@@ -48,13 +48,14 @@ properties:
     properties:
       unrouted: {type: object}
       unowned: {type: array, items: {type: string}}
+      declared: {type: array, items: {type: string}, description: Paths no capability owns that a live task of the Change lists in allowed_paths.}
       resolution: {type: [number, 'null']}
       measurable: {type: boolean}
       reason: {type: string}
   base_revision:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'
-    description: Content hash of docs/spec/** and src/** when the evidence was recorded.
+    description: Content hash of docs/spec/** and the product code roots (workflow.code_roots, else src/** and tests/**) when the evidence was recorded; line endings do not count.
   red_oracle:
     type: string
     pattern: '^sha256:[a-fA-F0-9]{64}$'

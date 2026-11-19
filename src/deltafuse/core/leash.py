@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+import fnmatch
 import hashlib
 import json
 import re
@@ -15,7 +16,6 @@ import yaml
 
 from deltafuse.core.context import (
     DEFAULT_CHANGE_ROUTE,
-    DEFAULT_CODE_WRITE_GLOBS,
     PHASE_CONTRACTS,
     code_write_globs,
     configured_code_roots,
@@ -28,6 +28,9 @@ from deltafuse.core.context import (
     posix_relpath,
 )
 from deltafuse.core.config import config_section
+from deltafuse.core import product_layout as product_layout_module
+from deltafuse.core.product_layout import CHANGE_HOMES, normalize_line_endings, product_layout
+from deltafuse.core.layout import PathRefused, product_path_error, product_relpath
 from deltafuse.core.lock import LEASH_MODES, normalize_leash_mode
 from deltafuse.core.frontmatter import iter_frontmatter, parse_frontmatter
 from deltafuse.core.queue import WorkItem, _item_for_step, _load_tasks
@@ -47,38 +50,37 @@ root=$(git rev-parse --show-toplevel) || exit 1
 cd "$root" || exit 1
 # No DeltaFuse on this branch: the pin is in neither the working tree, the index nor HEAD.
 [ -f .deltafuse/lock.yaml ] || git cat-file -e :.deltafuse/lock.yaml 2>/dev/null || git cat-file -e HEAD:.deltafuse/lock.yaml 2>/dev/null || exit 0
-py="${DELTAFUSE_PYTHON:-python}"
+# The interpreter that ran the installer; DELTAFUSE_PYTHON overrides it, and `python` on PATH
+# runs only when that one is gone. Running init again on another machine rewrites this line.
+installed=@DELTAFUSE_PYTHON@
+py="${DELTAFUSE_PYTHON:-$installed}"
+[ -n "$DELTAFUSE_PYTHON" ] || [ -f "$py" ] || py=python
 # Judge the index, which is what this commit records (df-leash #1).
 DELTAFUSE_LEASH_INDEX=1
 export DELTAFUSE_LEASH_INDEX
 exec "$py" -m deltafuse leash "$root"
 """
+HOOK_PYTHON_SLOT = "@DELTAFUSE_PYTHON@"
 
-CODE_WRITE_GLOBS = (
-    "src/**",
-    "tests/**",
-    "deploy/**",
-    "docs/ops/**",
-    "ops/**",
-)
+
+def _sh_quote(text: str) -> str:
+    return "'" + text.replace("'", "'\\''") + "'"
+
+
+def hook_script(python: str | None) -> str:
+    """The pre-commit hook with *python*, the installing interpreter, recorded as a POSIX path.
+
+    Audit 3 (B-9, A-17): the hook ran `python` from PATH, so another DeltaFuse - an older
+    install, the system interpreter - judged commits. The path lives only in the hook files
+    (.git/hooks and the ignored .deltafuse/hooks/), never in the repository.
+    """
+    recorded = Path(python).as_posix() if python else "python"
+    return HOOK_SCRIPT.replace(HOOK_PYTHON_SLOT, _sh_quote(recorded))
+
 SPEC_WRITE_GLOBS = ("docs/spec/**",)
-# Exact, case-sensitive names; `.deltafuse/lock.yaml` and `config.yaml` fall under `.deltafuse/**`.
-EXEMPT_EXACT = frozenset({"AGENTS.md", "CHANGELOG.md"})
-EXEMPT_GLOBS = (
-    ".git/**",
-    ".deltafuse/**",
-    "docs/intake/**",
-    "docs/archive/**",
-    # Interpreter caches: running the Red/Green tests writes them, and the
-    # Worker cannot avoid it (q0 run 20260921T111852Z: declare refused over
-    # src/ratelimit/__pycache__/*.pyc). fnmatch `*` crosses `/`.
-    "*.pyc",
-    "__pycache__/*",
-    "*/__pycache__/*",
-    ".pytest_cache/*",
-    "*/.pytest_cache/*",
-)
-EXEMPT_NAMES = frozenset({"README.md", "README.ru.md"})
+# Where the product's code is, what the leash guards and what it does not judge (owner's decision
+# R5) are the product's layout: core/product_layout.py, one definition for the leash, the Red
+# freeze, stale evidence and the context budget (audit 2026-11-17, S2).
 CHANGE_ARTIFACT_GLOB = "docs/changes/**"
 # DF3-007: Core journals change only through the deltafuse CLI. The journals a
 # lifecycle step legitimately appends to are verified; the trust roots never
@@ -99,8 +101,18 @@ CORE_OWNED_WRITER = {"bench.yaml": "the bench harness that initialized this prod
 # `capability-draft`: `deltafuse capability propose` adding a draft to the
 # catalog in Analyze (q8 decision). `gap-reopen`: `decide --gap` sending a Change
 # back to Analyze (transitions.GAP_REOPEN_KIND; 3.3.8 wrote it and left it out here).
-CORE_RECEIPT_KINDS = frozenset({"transition", "unblock", "artifact-status", "capability-draft", "gap-reopen"})
+# `capability-active`: `decide --spec --status accepted` making the drafts the accepted
+# specification routes into active (audit 3, A-4).
+CORE_RECEIPT_KINDS = frozenset(
+    {"transition", "unblock", "artifact-status", "capability-draft", "capability-active", "gap-reopen"}
+)
 
+
+
+OUTSIDE_CODE_ROOTS = (
+    " (it lies outside the product's code roots: a Change writes it only when the human names it in "
+    "`workflow.code_roots`; build output and caches belong in .gitignore)"
+)
 
 
 class LeashError(Exception):
@@ -121,13 +133,16 @@ def _unique(items: list[str]) -> list[str]:
     return out
 
 
-def load_leash_mode(product_root: Path, *, missing: str = DEFAULT_LEASH_MODE) -> str:
-    """CLI default when the key is absent is enforce. Hook install uses missing='off'."""
-    raw = config_section(product_root, "workflow").get("leash")
-    if raw is None:
-        return missing
-    mode = normalize_leash_mode(raw)
-    return mode if mode is not None else missing
+def leash_mode_of(raw: Any) -> str:
+    """The mode a `workflow.leash` value means. A missing key, or a value that is no mode, is
+    `enforce` - for every reader (FW-6: the guard and the leash command read missing as `enforce`,
+    `advance` and the installer as `off`, so a commit that deleted the key relaxed nothing in the
+    guard's eyes and switched the check at `advance` off)."""
+    return normalize_leash_mode(raw) or DEFAULT_LEASH_MODE
+
+
+def load_leash_mode(product_root: Path) -> str:
+    return leash_mode_of(config_section(product_root, "workflow").get("leash"))
 
 
 CONFIG_REL = ".deltafuse/config.yaml"
@@ -151,7 +166,7 @@ def config_at(product_root: Path, rev: str | None) -> dict[str, Any] | None:
 def _guarded_workflow(data: dict[str, Any]) -> tuple[str, tuple[str, ...] | None]:
     """(leash mode, code roots) of a config mapping, normalized the way the Core reads them."""
     workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
-    mode = normalize_leash_mode(workflow.get("leash")) or DEFAULT_LEASH_MODE
+    mode = leash_mode_of(workflow.get("leash"))
     roots = workflow.get("code_roots")
     clean = (
         tuple(dict.fromkeys(posix_relpath(r.strip()) for r in roots if isinstance(r, str) and r.strip()))
@@ -160,9 +175,7 @@ def _guarded_workflow(data: dict[str, Any]) -> tuple[str, tuple[str, ...] | None
     return mode, clean or None
 
 
-def verdict_leash_mode(
-    product_root: Path, *, base: str | None, head: str | None, missing: str = DEFAULT_LEASH_MODE
-) -> str:
+def verdict_leash_mode(product_root: Path, *, base: str | None, head: str | None) -> str:
     """The mode a diff is judged in: its base's, or a stricter one the judged tree or the working
     tree sets (df-leash #3: a tree that relaxes the mode is not judged in the mode it sets itself;
     the human who turns `enforce` on has it at once)."""
@@ -172,10 +185,9 @@ def verdict_leash_mode(
         if data is None:
             continue
         workflow = data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
-        raw = workflow.get("leash")
-        modes.append(missing if raw is None else (normalize_leash_mode(raw) or missing))
+        modes.append(leash_mode_of(workflow.get("leash")))
     if not modes:
-        return load_leash_mode(product_root, missing=missing)
+        return load_leash_mode(product_root)
     return max(modes, key=lambda mode: _LEASH_STRENGTH.get(mode, 0))
 
 
@@ -205,7 +217,36 @@ def config_guard_errors(product_root: Path, *, base: str, head: str | None) -> l
             f"{list(roots_after or ())}; they decide what is product code, are the human's setting, "
             f"outside every Worker envelope, and this diff is judged with the old ones"
         )
+    # Audit 3 (B-6): what the whole suite is, how long it may run and the task budget decide how
+    # the Worker's evidence is judged, as the mode and the roots decide its envelope.
+    for key, before_value, after_value in _human_setting_changes(before, after):
+        errors.append(
+            f"leash: '{CONFIG_REL}' changes {key} from {before_value!r} to {after_value!r}; it decides "
+            "how the Worker's evidence is judged, is the human's setting, outside every Worker "
+            "envelope, and evidence is judged with the committed value (the human changes it in a "
+            "commit of their own)"
+        )
     return errors
+
+
+def _human_setting_changes(before: dict[str, Any], after: dict[str, Any]) -> list[tuple[str, Any, Any]]:
+    """(key, before, after) for each human setting besides the leash mode and the code roots that
+    differs between two config mappings (config.HUMAN_WORKFLOW_KEYS, config.HUMAN_TOP_KEYS)."""
+    from deltafuse.core.config import HUMAN_TOP_KEYS, HUMAN_WORKFLOW_KEYS
+
+    def workflow(data: dict[str, Any]) -> dict[str, Any]:
+        return data.get("workflow") if isinstance(data.get("workflow"), dict) else {}
+
+    out: list[tuple[str, Any, Any]] = []
+    for key in HUMAN_WORKFLOW_KEYS:
+        if key in {"leash", "code_roots"}:
+            continue  # judged above, normalized
+        if workflow(before).get(key) != workflow(after).get(key):
+            out.append((f"workflow.{key}", workflow(before).get(key), workflow(after).get(key)))
+    for key in HUMAN_TOP_KEYS:
+        if before.get(key) != after.get(key):
+            out.append((key, before.get(key), after.get(key)))
+    return out
 
 
 def load_baseline(product_root: Path) -> str:
@@ -223,7 +264,9 @@ def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], lis
         meta, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
     except Exception:
         return [], []
-    allowed = [row for row in (meta.get("allowed_paths") or []) if isinstance(row, str)]
+    # FW-8: a path that is not a plain product path (`src/../.deltafuse/x`) opens nothing.
+    allowed = [row for row in (meta.get("allowed_paths") or [])
+               if isinstance(row, str) and product_path_error(row) is None]
     forbidden = [row for row in (meta.get("forbidden_paths") or []) if isinstance(row, str)]
     # df-leash #9: a task declared at the base keeps the paths it was declared with - the working
     # file only narrows them. (The Writer refuses to change them past `pending`; a hand edit of
@@ -232,17 +275,35 @@ def _task_path_lists(product_root: Path, item: WorkItem) -> tuple[list[str], lis
         declared = _git_show(product_root, ENVELOPE_BASE.get(), posix_relpath(item.task_path))
     except OSError:  # no git at all: there is no declared copy to read
         declared = None
+    fixed: list[str] = []
     if declared is not None:
         try:
             base_meta, _ = parse_frontmatter(declared)
         except Exception:
             base_meta = {}
         if isinstance(base_meta, dict) and base_meta.get("status") not in (None, "pending"):
-            base_allowed = {row for row in (base_meta.get("allowed_paths") or []) if isinstance(row, str)}
-            allowed = [row for row in allowed if row in base_allowed]
-            forbidden = _unique(forbidden + [
-                row for row in (base_meta.get("forbidden_paths") or []) if isinstance(row, str)
-            ])
+            fixed.append(declared)
+    # FW-3: and the paths Decompose left it with, whatever its status - a task still pending in a
+    # Change past Decompose took new paths from its working file.
+    if item.change_id:
+        try:
+            _, at_decompose = task_at_decompose(product_root, item.change_id, item.task_path)
+        except OSError:
+            at_decompose = None
+        if at_decompose is not None:
+            fixed.append(at_decompose)
+    for text in fixed:
+        try:
+            base_meta, _ = parse_frontmatter(text)
+        except Exception:
+            continue
+        if not isinstance(base_meta, dict):
+            continue
+        base_allowed = {row for row in (base_meta.get("allowed_paths") or []) if isinstance(row, str)}
+        allowed = [row for row in allowed if row in base_allowed]
+        forbidden = _unique(forbidden + [
+            row for row in (base_meta.get("forbidden_paths") or []) if isinstance(row, str)
+        ])
     return allowed, forbidden
 
 
@@ -261,7 +322,27 @@ def _change_dir(product_root: Path, item: WorkItem) -> Path | None:
     return None
 
 
+_ANY_CHANGE = "docs/changes/*/"
+_CHANGE_HOMES = CHANGE_HOMES
+
+
+def _own_change(globs: list[str], item: WorkItem) -> list[str]:
+    """The globs with `docs/changes/*/` narrowed to the item's own Change directory (FW-11).
+
+    The phase contracts name "a Change" as `docs/changes/*/`; an envelope built from them covered
+    the same file of every other Change, a converged one included."""
+    home = posix_relpath(item.path).rstrip("/") if item.path else ""
+    if not home.startswith(_CHANGE_HOMES):
+        return globs
+    return [home + "/" + glob[len(_ANY_CHANGE):] if glob.startswith(_ANY_CHANGE) else glob for glob in globs]
+
+
 def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
+    """What the item's step may write, with the Change's own files named in its own directory."""
+    return _own_change(_envelope_write_globs(item, product_root), item)
+
+
+def _envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
     step = item.step or ""
     if item.allowed_write:
         writes = list(item.allowed_write)
@@ -286,15 +367,26 @@ def envelope_write_globs(item: WorkItem, product_root: Path) -> list[str]:
         # as a test that ran and failed for exactly that reason). Only the
         # task's own product paths qualify, and never `docs/changes/**` - that is
         # where the declaration bounding them lives.
+        # Which globs are the Change's own files and which are test roots is the layout's to
+        # say (S2): the spelling `tests` was the test side, so under `svc/tests/**` Declare
+        # could write no test its task had not listed.
+        layout = product_layout(product_root)
+
+        def change_glob(glob: str) -> bool:
+            return glob.replace("\\", "/").startswith("docs/changes")
+
+        def test_glob(glob: str) -> bool:
+            return not change_glob(glob) and layout.is_test_root(glob)
+
         product_phase = list(phase)
         if step == "declare":
             product_phase = [
                 glob
                 for glob in phase_write_globs("implement", route, product_root)
-                if not glob.replace("\\", "/").startswith(("docs/changes", "tests"))
+                if not change_glob(glob) and not test_glob(glob)
             ]
-        change_side = [glob for glob in phase if glob.replace("\\", "/").startswith("docs/changes")]
-        test_side = [glob for glob in phase if glob.replace("\\", "/").startswith("tests")]
+        change_side = [glob for glob in phase if change_glob(glob)]
+        test_side = [glob for glob in phase if test_glob(glob)]
         product_side = [path for path in allowed_paths if matches_contract_globs(path, product_phase)]
         # A task's forbidden_paths bound its product and test scope. They never
         # remove the Change's own files: evidence is written by `deltafuse
@@ -325,20 +417,35 @@ def build_envelope(item: WorkItem | None, product_root: Path) -> dict[str, Any] 
     }
 
 
+def _segments_match(path: list[str], glob: list[str]) -> bool:
+    if not glob:
+        return not path
+    if glob[0] == "**":
+        # A trailing `**` is everything below (at least one segment); elsewhere, any depth.
+        if len(glob) == 1:
+            return bool(path)
+        return any(_segments_match(path[skip:], glob[1:]) for skip in range(len(path) + 1))
+    return bool(path) and fnmatch.fnmatchcase(path[0], glob[0]) and _segments_match(path[1:], glob[1:])
+
+
 def path_in_envelope(rel_path: str, write_globs: list[str]) -> bool:
-    return matches_contract_globs(posix_relpath(rel_path), write_globs)
+    """A Change's own files are matched segment by segment: `*` stays inside one directory, `**`
+    crosses them (FW-11: fnmatch's `*` crosses `/`, so `docs/changes/*/request.md` covered
+    `docs/changes/CHG-702/deep/nested/request.md`). Product globs keep fnmatch, as tasks write them."""
+    rel = posix_relpath(rel_path)
+    for raw in write_globs:
+        glob = raw.replace("\\", "/")
+        if glob.startswith(_CHANGE_HOMES):
+            if _segments_match(rel.split("/"), glob.split("/")):
+                return True
+        elif matches_contract_globs(rel, [glob]):
+            return True
+    return False
 
 
 def is_exempt_path(rel_path: str) -> bool:
-    rel = posix_relpath(rel_path)
-    if rel in EXEMPT_EXACT:
-        return True
-    name = rel.rsplit("/", 1)[-1]
-    if name in EXEMPT_NAMES:
-        return True
-    if matches_contract_globs(rel, EXEMPT_GLOBS):
-        return True
-    return False
+    """A path the leash does not judge (R5): the layout's exempt list, nothing else."""
+    return product_layout_module.is_exempt_path(rel_path)
 
 
 REOPEN_ARCHIVE_FILES = frozenset({"reopen.yaml", "red.yaml", "green.yaml", "regression.yaml"})
@@ -347,7 +454,9 @@ _REOPEN_ARCHIVE = re.compile(r"^docs/changes/[^/]+/reopened/(?P<task>[^/]+)\.\d+
 
 # Gate-journal kinds of a human `decide` that rewrites Change files: a task cancelled or
 # reopened, a Verify gap reopened.
-_HUMAN_REWRITE_KINDS = frozenset({"task", "gap"})
+# "change": `decide --close`, which since R8 closes a Change from any status before converged -
+# also from one whose open step does not hold change.yaml (decomposed, declared).
+_HUMAN_REWRITE_KINDS = frozenset({"task", "gap", "change"})
 
 
 def human_decision_judge(
@@ -376,6 +485,10 @@ def human_decision_judge(
     # Original path -> digests of its archived copies (df-leash #8: a digest that any archived
     # file had made any deleted file with those bytes the human's).
     archived: dict[str, set[str]] = {}
+    # Origins with an archived copy that is a record `deltafuse evidence` stamped: the Core wrote
+    # it at the origin and `decide` moved it, whatever the last commit holds there (a record
+    # taken again and not committed before the human's verdict was a dead end under enforce).
+    stamped: set[str] = set()
     restored: dict[str, str] = {}
     for change_id, change_dir in _change_dirs(root).items():
         reopened = change_dir / "reopened"
@@ -388,6 +501,8 @@ def human_decision_judge(
                 origin = archived_from(rel)
                 if origin is not None:
                     archived.setdefault(origin, set()).add(_eol_digest(path.read_bytes()))
+                    if origin not in stamped and _is_stamped_record(root, path):
+                        stamped.add(origin)
                 task_reopened = task_reopened or _REOPEN_ARCHIVE.match(rel) is not None
         if task_reopened:
             restored.update((declaring_snapshot(root, change_id) or {}).items())
@@ -403,11 +518,22 @@ def human_decision_judge(
                 before = _bytes_at(root, rel, head=rev)
                 if before is not None and _eol_digest(before) in archived.get(rel, set()):
                     return True
-            return False
+            return rel in stamped
         digest = hashlib.sha256(data).hexdigest()
         return digest in decided.get(rel, set()) or restored.get(rel) == digest
 
     return judge
+
+
+def _is_stamped_record(product_root: Path, path: Path) -> bool:
+    """The file is an evidence record carrying the Core's stamp for this product."""
+    from deltafuse.core.evidence import evidence_stamp_error
+
+    try:
+        record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return False
+    return isinstance(record, dict) and evidence_stamp_error(record, Path(product_root)) is None
 
 
 def archived_from(rel_path: str) -> str | None:
@@ -519,18 +645,16 @@ def _task_reopened_in(product_root: Path, rel: str, task: str) -> bool:
 
 
 def code_and_ops_globs(product_root: Path | None = None) -> tuple[str, ...]:
-    """Product code the leash guards: the code roots (`workflow.code_roots`) plus ops files.
-
-    Without code roots this is CODE_WRITE_GLOBS, in its order."""
-    ops = tuple(g for g in CODE_WRITE_GLOBS if g not in DEFAULT_CODE_WRITE_GLOBS)
-    return code_write_globs(product_root) + ops
+    """Product code the leash guards: the layout's code roots (`workflow.code_roots`, else
+    `src/**` and `tests/**`) plus the ops roots."""
+    return product_layout(product_root).guarded_globs()
 
 
 def is_product_path(
     rel_path: str, *, baseline: str = "draft", product_root: Path | None = None
 ) -> bool:
     rel = posix_relpath(rel_path)
-    if matches_contract_globs(rel, code_and_ops_globs(product_root)):
+    if product_layout(product_root).is_guarded(rel):
         return True
     if baseline == "accepted" and matches_contract_globs(rel, SPEC_WRITE_GLOBS):
         return True
@@ -573,7 +697,10 @@ def _git(root: Path, *args: str, text: bool = True) -> subprocess.CompletedProce
 def _git_bytes(product_root: Path, ref: str, rel_path: str) -> bytes | None:
     """File bytes at a revision (or the index, INDEX); None when the file (or the revision) is absent."""
     spec = f":{rel_path}" if ref == INDEX else f"{ref}:{rel_path}"
-    proc = _git(product_root, "show", spec, text=False)
+    # `cat-file`, not `show`: `git show <rev>:<path>` first tries the argument as a file name, and
+    # on Windows without core.longpaths a long one dies with "Filename too long" - the file then
+    # read as absent, and an archived Change's record as a deletion (re-probe 2026-11-17).
+    proc = _git(product_root, "cat-file", "blob", spec, text=False)
     return proc.stdout if proc.returncode == 0 else None
 
 
@@ -602,9 +729,17 @@ CATALOG_REL = "docs/spec/_capabilities.yaml"
 LOCK_REL = ".deltafuse/lock.yaml"
 
 
-def _bytes_digest(product_root: Path, rel: str, *, head: str | None = None) -> str:
-    data = _bytes_at(product_root, posix_relpath(rel), head=head)
-    return hashlib.sha256(data).hexdigest() if data is not None else ""
+def _vouched_bytes(data: bytes | None, digests: set[str]) -> bool:
+    """Whether a known writer wrote *data*, its line endings aside.
+
+    Audit 3 (B, `git stash -u` / `pop` under core.autocrlf=true): git gave the Writer's LF bytes
+    back with CRLF, the digest no longer matched the receipt, and the leash called routing.yaml and
+    a slice "written by hand". Every writer writes LF; a checkout's line endings are not an edit.
+    """
+    if data is None:
+        return False
+    return (hashlib.sha256(data).hexdigest() in digests
+            or hashlib.sha256(normalize_line_endings(data)).hexdigest() in digests)
 
 
 def vouched_digests(product_root: Path, *, head: str | None = None) -> dict[str, set[str]]:
@@ -665,7 +800,7 @@ def hand_written_errors(
     data = _bytes_at(Path(product_root), rel, head=head)
     if data is None:
         return []  # deleted: the envelope decides
-    if hashlib.sha256(data).hexdigest() in vouched.get(rel, set()):
+    if _vouched_bytes(data, vouched.get(rel, set())):
         return []
     return [
         f"leash: '{rel}' was written by hand; write {kind} artifacts with "
@@ -673,12 +808,151 @@ def hand_written_errors(
     ]
 
 
-def collect_ready_envelopes(queue: Any, product_root: Path, halt: Any) -> list[dict[str, Any]]:
+_GATE_STEP = {spec["gate"]: step for step, spec in STEP_CONTRACTS.items()}
+_DECOMPOSE = STEP_ORDER.index("decompose")
+_TASK_STEPS = frozenset({"declare", "implement"})
+
+
+def _last_gates(lines: list[str]) -> dict[str, str]:
+    """Change id -> the last gate its receipts closed (`intake` after a `decide --gap`)."""
+    out: dict[str, str] = {}
+    for entry in _json_rows(lines):
+        if not isinstance(entry.get("change"), str):
+            continue
+        if entry.get("kind") == "transition" and entry.get("gate") in _GATE_STEP:
+            out[entry["change"]] = entry["gate"]
+        else:
+            gate = rewind_gate(entry)
+            if gate is not None:
+                out[entry["change"]] = gate
+    return out
+
+
+def rewind_gate(entry: dict[str, Any]) -> str | None:
+    """The gate a rewind receipt takes its Change back to, or None for any other receipt.
+
+    - `gap-reopen` (`decide --gap`): back to Analyze - the chain goes on from the step after
+      intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside the
+      Specify envelope, the chain since base having gone backwards).
+    - `gap-reopen` with gap `spec-rejected` (the human rejects an accepted specification, R8):
+      back to `analyzed` - Specify proposes again.
+    - `artifact-status` of the Change with reason "task reopened" (a task reopened after the
+      `implemented` gate): back to `declared`, the state the `declaring` gate leaves.
+
+    The receipts are the ones `decide` writes; what marks them is defined once, in
+    core/transitions.py, where the receipt chain replays the same rewinds.
+    """
+    from deltafuse.core.transitions import GAP_REOPEN_KIND, SPEC_REJECTED_GAP, is_task_reopen_rewind
+
+    if entry.get("kind") == GAP_REOPEN_KIND:
+        return "analyzed" if entry.get("gap") == SPEC_REJECTED_GAP else "intake"
+    if is_task_reopen_rewind(entry):
+        return "declaring"
+    return None
+
+
+def _step_after(gate: str | None) -> int:
+    if gate is None:
+        return 0
+    return min(STEP_ORDER.index(_GATE_STEP[gate]) + 1, len(STEP_ORDER) - 1)
+
+
+def decompose_closed(product_root: Path, change_id: str) -> str | None:
+    """The last gate of a Change whose Decompose is closed, by its receipts; None while it is open."""
+    journal = Path(product_root) / ".deltafuse" / "transitions.jsonl"
+    try:
+        lines = journal.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    gate = _last_gates(lines).get(change_id)
+    return gate if _step_after(gate) > _DECOMPOSE else None
+
+
+def _dir_of_change_at(product_root: Path, commit: str, change_id: str, live_dir: str) -> str | None:
+    """The directory of a Change in a commit: its present one, or the one under docs/changes/ or
+    docs/archive/changes/ whose change.yaml holds its id.
+
+    Audit 3 (B-2): only docs/changes/ was looked in. A Change done in one commit, or squashed, has
+    its `decomposed` receipt in the commit that also archives it, so it was found nowhere there,
+    every task read as added after Decompose, and the CI leash refused the Change's own code.
+    """
+    if live_dir.startswith(CHANGE_HOMES) and _git_bytes(product_root, commit, f"{live_dir}/change.yaml") is not None:
+        return live_dir
+    for home in CHANGE_HOMES:
+        try:
+            folders = _git_names(product_root, "ls-tree", "--name-only", commit, home, what="list Changes")
+        except LeashError:
+            continue
+        for line in folders:
+            folder = line.rstrip("/")
+            data = _git_bytes(product_root, commit, f"{folder}/change.yaml")
+            if data is None:
+                continue
+            try:
+                meta = yaml.safe_load(data.decode("utf-8"))
+            except (UnicodeDecodeError, yaml.YAMLError):
+                continue
+            if isinstance(meta, dict) and str(meta.get("id") or folder.rsplit("/", 1)[-1]) == change_id:
+                return folder
+    return None
+
+
+def task_declared_in_time(
+    product_root: Path, change_id: str, task_rel: str, *, head: str | None = None
+) -> bool:
+    """Whether a task existed when its Change's Decompose closed (FW-3)."""
+    known, text = task_at_decompose(product_root, change_id, task_rel, head=head)
+    return not known or text is not None
+
+
+def task_at_decompose(
+    product_root: Path, change_id: str, task_rel: str, *, head: str | None = None
+) -> tuple[bool, str | None]:
+    """(known, the task file as Decompose left it): what a task's envelope is read from (FW-3).
+
+    In Implement a Worker added TASK-002 with `allowed_paths: [src/**]`; its file being changed,
+    the chain opened that envelope and every product file was writable under the hook, the leash
+    and `advance`. A task opens an envelope only when its file is in the commit that recorded the
+    Change's latest `decomposed` receipt - a fact of the journal and of git, not of the task file.
+    While that receipt is not committed yet the leash cannot tell (`known` is False) and lets the
+    task through: the Writer refuses a new task, or new paths, once the receipts say Decompose is
+    closed, and a task file written by hand is refused as such.
+    """
+    root = Path(product_root)
+    rev = None if head in (None, INDEX) else head
+    journal = _bytes_at(root, ".deltafuse/transitions.jsonl", head=head) or b""
+    lines = journal.decode("utf-8", errors="replace").splitlines()
+    if _step_after(_last_gates(lines).get(change_id)) <= _DECOMPOSE:
+        return False, None  # Decompose is open: tasks are being written now
+    digest = None
+    for entry in _json_rows(lines):
+        if (entry.get("change") == change_id and entry.get("kind") == "transition"
+                and entry.get("gate") == "decomposed" and isinstance(entry.get("receipt"), str)):
+            digest = entry["receipt"]
+    if digest is None:
+        return False, None  # no decomposed receipt to date it by: receipt_chain_errors' business
+    found = _git(root, "log", "--reverse", "--format=%H", "-S", digest, rev or "HEAD", "--",
+                 ".deltafuse/transitions.jsonl")
+    commit = next((line.strip() for line in (found.stdout or "").splitlines() if line.strip()), None)
+    if found.returncode != 0 or commit is None:
+        return False, None  # the receipt is not committed yet
+    rel = posix_relpath(task_rel)
+    home, _, name = rel.rpartition("/tasks/")
+    then = _dir_of_change_at(root, commit, change_id, home)
+    return True, (None if then is None else _git_show(root, commit, f"{then}/tasks/{name}"))
+
+
+def collect_ready_envelopes(
+    queue: Any, product_root: Path, halt: Any, *, head: str | None = None
+) -> list[dict[str, Any]]:
     """Envelopes of ready Worker steps. Empty when through-mode is halted."""
     if halt is not None:
         return []
     out: list[dict[str, Any]] = []
     for item in getattr(queue, "ready", []) or []:
+        if (item.step in _TASK_STEPS and item.task_path and item.change_id
+                and not task_declared_in_time(product_root, item.change_id, item.task_path, head=head)):
+            continue  # FW-3: a task added after Decompose closed opens nothing
         env = build_envelope(item, product_root)
         if env:
             out.append(env)
@@ -746,8 +1020,17 @@ def task_envelope_errors(change_path: Path) -> list[str]:
         tid = str(meta.get("id") or tf.stem)
         sid = str(meta.get("slice") or "")
         bounds = slice_bounds.get(sid) or default_bounds
+        for field in ("allowed_paths", "forbidden_paths"):
+            for raw in meta.get(field) or []:
+                problem = product_path_error(raw)
+                if problem is not None:
+                    # FW-8: `src/../.deltafuse/gate-password.yaml` begins with `src/` and was
+                    # taken as a path under `src/**`.
+                    errors.append(f"Task {tid}: {field} {problem}")
         for raw in meta.get("allowed_paths") or []:
             task_glob = str(raw)
+            if product_path_error(raw) is not None:
+                continue
             if not any(_glob_covers(task_glob, g) for g in bounds):
                 # The bound, not a field name: slices carry no target_paths in
                 # the schema, so "escapes target_paths" named nothing the
@@ -844,6 +1127,80 @@ def _change_dirs(product_root: Path) -> dict[str, Path]:
         change_id = data.get("id") if isinstance(data, dict) else None
         out[str(change_id or change_yaml.parent.name)] = change_yaml.parent
     return out
+
+
+ARCHIVE_HOME = "docs/archive/changes"
+
+
+def _archived_in_diff(product_root: Path, changed: set[str]) -> dict[str, Path]:
+    """Change id -> archive directory, for every Change the judged diff archives (FW-4, R6).
+
+    `deltafuse archive` moves a Change to docs/archive/changes/<date>-<id>/. A range that holds
+    the Change's work and that move - a whole Change in one pull request - found no Change under
+    docs/changes/, so nothing covered the product files it wrote. Its receipts are still in the
+    journal and its tasks in the archive: they count as an active Change's do."""
+    out: dict[str, Path] = {}
+    homes = {"/".join(path.split("/")[:4]) for path in changed if path.startswith(ARCHIVE_HOME + "/")}
+    for home in sorted(homes):
+        change_yaml = product_root / home / "change.yaml"
+        try:
+            data = yaml.safe_load(change_yaml.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if isinstance(data, dict) and isinstance(data.get("id"), str):
+            out.setdefault(data["id"], change_yaml.parent)
+    return out
+
+
+def archive_move_judge(product_root: Path, *, base: str | None, head: str | None) -> Callable[[str], bool]:
+    """Whether a missing file of a Change was moved by `deltafuse archive`, not deleted.
+
+    True for `docs/changes/<dir>/<file>` absent from the judged tree when the Change that held it
+    at the base is archived there (same id, status `archived`) and the archive holds `<file>`."""
+    root = Path(product_root)
+    archives: dict[str, str] | None = None
+
+    def archive_homes() -> dict[str, str]:
+        nonlocal archives
+        if archives is None:
+            archives = {}
+            if head is None:
+                names = [p.relative_to(root).as_posix() for p in (root / ARCHIVE_HOME).glob("*/change.yaml")]
+            else:
+                listing = ("ls-files", "--", ARCHIVE_HOME) if head == INDEX else (
+                    "ls-tree", "-r", "--name-only", head, "--", ARCHIVE_HOME)
+                try:
+                    names = _git_names(root, *listing, what="list archived Changes")
+                except LeashError:
+                    names = []
+            for name in names:
+                parts = name.split("/")
+                if len(parts) != 5 or parts[4] != "change.yaml":
+                    continue
+                try:
+                    data = yaml.safe_load((_bytes_at(root, name, head=head) or b"").decode("utf-8"))
+                except (UnicodeDecodeError, yaml.YAMLError):
+                    continue
+                if isinstance(data, dict) and data.get("status") == "archived" and isinstance(data.get("id"), str):
+                    archives.setdefault(data["id"], "/".join(parts[:4]))
+        return archives
+
+    def judge(raw: str) -> bool:
+        parts = posix_relpath(raw).split("/")
+        if len(parts) < 4 or parts[:2] != ["docs", "changes"]:
+            return False
+        if _bytes_at(root, "/".join(parts), head=head) is not None:
+            return False  # still there: not a move
+        before = _bytes_at(root, "/".join(parts[:3]) + "/change.yaml", head=base or "HEAD")
+        try:
+            data = yaml.safe_load((before or b"").decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError):
+            return False
+        change_id = data.get("id") if isinstance(data, dict) else None
+        home = archive_homes().get(change_id) if isinstance(change_id, str) else None
+        return home is not None and _bytes_at(root, home + "/" + "/".join(parts[3:]), head=head) is not None
+
+    return judge
 
 
 def core_journal_errors(
@@ -943,7 +1300,11 @@ def core_status_writes(
         return {}  # core_journal_errors reports the rewrite; nothing is vouched for
     dirs = _change_dirs(root)
     moves: dict[str, list[dict[str, Any]]] = {}
+    rewound: set[str] = set()  # Changes a rewind took back since the base, as the rows go by
+    reset: set[str] = set()  # files whose first status write since the base follows such a rewind
     for entry in _json_rows(new[len(old):]):
+        if entry.get("kind") == "gap-reopen":
+            rewound.add(str(entry.get("change")))
         if entry.get("kind") != "artifact-status":
             continue
         folder = {"task": "tasks", "slice": "slices"}.get(str(entry.get("artifact")))
@@ -959,6 +1320,8 @@ def core_status_writes(
             recorded = posix_relpath(recorded)
             if recorded.startswith(home + "/") and "/" not in recorded[len(home) + 1:]:
                 rel = recorded
+        if rel not in moves and str(entry.get("change")) in rewound:
+            reset.add(rel)
         moves.setdefault(rel, []).append(entry)
 
     out: dict[str, list[str]] = {}
@@ -970,7 +1333,10 @@ def core_status_writes(
         except Exception as ex:
             out[rel] = [f"cannot compare with the base: {ex}"]
             continue
-        if before_meta.get("status") != entries[0].get("from"):
+        # A rewind (`decide --gap`, a rejected accepted specification) puts slices back to `draft`
+        # and implemented tasks back to `declared` under its own receipt, not an `artifact-status` one; with
+        # the step's base before the rewind, the status there is the one the rewind took away.
+        if rel not in reset and before_meta.get("status") != entries[0].get("from"):
             reasons.append(f"status at the base is not the receipt's '{entries[0].get('from')}'")
         if after_meta.get("status") != entries[-1].get("to"):
             reasons.append(f"status is not the receipt's '{entries[-1].get('to')}'")
@@ -978,10 +1344,16 @@ def core_status_writes(
         rest_after = {k: v for k, v in after_meta.items() if k != "status"}
         if rest_before != rest_after:
             reasons.append("frontmatter changed beyond status")
-        if before_body.strip() != after_body.strip():
+        # Line endings are not content: the base is read as bytes of the blob, the working file
+        # as text, so a task committed with CRLF read as "body changed" after `deltafuse state`.
+        if _eol_text(before_body).strip() != _eol_text(after_body).strip():
             reasons.append("body changed")
         out[rel] = reasons
     return out
+
+
+def _eol_text(text: str) -> str:
+    return text.replace("\r\n", "\n")
 
 
 def _core_evidence(
@@ -1024,48 +1396,40 @@ def collect_chain_envelopes(
     transition - so a task the Worker never touched adds no paths.
     """
     root = Path(product_root)
-    gate_step = {spec["gate"]: step for step, spec in STEP_CONTRACTS.items()}
-
-    def last_gates(lines: list[str]) -> dict[str, str]:
-        out: dict[str, str] = {}
-        for entry in _json_rows(lines):
-            if not isinstance(entry.get("change"), str):
-                continue
-            if entry.get("kind") == "transition" and entry.get("gate") in gate_step:
-                out[entry["change"]] = entry["gate"]
-            elif entry.get("kind") == "gap-reopen":
-                # `decide --gap` rewinds the Change to Analyze: the chain goes on from the step after
-                # intake (2026-10-27: committed at the reopen, the gap pass's routing read as outside
-                # the Specify envelope, the chain since base having gone backwards).
-                out[entry["change"]] = "intake"
-        return out
-
-    def step_after(gate: str | None) -> int:
-        if gate is None:
-            return 0
-        return min(STEP_ORDER.index(gate_step[gate]) + 1, len(STEP_ORDER) - 1)
+    last_gates, step_after = _last_gates, _step_after
 
     rel = ".deltafuse/transitions.jsonl"
     at_base, now = _journal_lines(root, rel, base=base, head=head)
     base_last, now_last = last_gates(at_base), last_gates(now)
     changed = {posix_relpath(path) for path in (dirty or [])}
 
-    def reopens(lines: list[str]) -> dict[str, int]:
-        out: dict[str, int] = {}
+    def rewinds(lines: list[str]) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
         for entry in _json_rows(lines):
-            if entry.get("kind") == "gap-reopen" and isinstance(entry.get("change"), str):
-                out[entry["change"]] = out.get(entry["change"], 0) + 1
+            gate = rewind_gate(entry)
+            if gate is not None and isinstance(entry.get("change"), str):
+                out.setdefault(entry["change"], []).append(gate)
         return out
 
-    reopened_since_base = reopens(now)
-    for change_id, count in reopens(at_base).items():
-        reopened_since_base[change_id] = reopened_since_base.get(change_id, 0) - count
+    # Change -> the gates its rewinds since the base went back to (the journal is append-only).
+    seen = rewinds(at_base)
+    rewound_since_base = {
+        change_id: gates[len(seen.get(change_id, [])):] for change_id, gates in rewinds(now).items()
+    }
 
+    final_gate = STEP_CONTRACTS[STEP_ORDER[-1]]["gate"]
     envelopes: list[dict[str, Any]] = []
-    for change_id, change_dir in _change_dirs(root).items():
+    # R6: a Change archived in this diff counts like a live one (a live one of that id wins).
+    judged = {**_archived_in_diff(root, changed), **_change_dirs(root)}
+    for change_id, change_dir in judged.items():
         low, high = step_after(base_last.get(change_id)), step_after(now_last.get(change_id))
-        if reopened_since_base.get(change_id, 0) > 0:
-            low = step_after("intake")  # the chain since base went back to Analyze and on from there
+        if rewound_since_base.get(change_id):
+            # The chain since base went back (to Analyze, to Specify, to Implement) and on from there.
+            low = min([low] + [step_after(gate) for gate in rewound_since_base[change_id]])
+        elif base_last.get(change_id) == final_gate:
+            # FW-11: converged at the base and not reopened since - no step is left to write for.
+            # (`step_after` of the last gate is the last step, so its envelope stayed open for good.)
+            continue
         if high < low:
             continue  # a rewound chain is receipt_chain_errors' business, not a wider fence
         rel_dir = change_dir.relative_to(root).as_posix()
@@ -1090,7 +1454,9 @@ def collect_chain_envelopes(
                         )
                         for phase in phases
                     )
-                    if task_rel in changed or wrote_evidence:
+                    if (task_rel in changed or wrote_evidence) and task_declared_in_time(
+                        root, change_id, task_rel, head=head
+                    ):
                         items.append(
                             _item_for_step(
                                 step, change_id=change_id, path=rel_dir, task=task_id,
@@ -1148,6 +1514,7 @@ def check_paths(
     )
     vouched = vouched_digests(product_root, head=head) if product_root is not None else {}
     human = human_decision_judge(product_root, base=base, head=head) if product_root is not None else None
+    archived = archive_move_judge(product_root, base=base, head=head) if product_root is not None else None
     for raw in _unique(rel_paths):
         # DF3-007 runs before the exemptions: `.deltafuse/**` is exempt as a
         # whole, so checking it second would make the Core-owned guard dead code.
@@ -1183,6 +1550,8 @@ def check_paths(
             continue
         if human is not None and human(raw):
             continue  # written by the human's `deltafuse decide`, as its receipt or archive shows
+        if archived is not None and archived(raw):
+            continue  # moved by `deltafuse archive`: the file is in the Change's archive
         if _covered_by(raw, env_list) is not None:
             if product_root is not None:
                 errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
@@ -1192,7 +1561,8 @@ def check_paths(
             # `deltafuse capability propose` adds a draft in Analyze and leaves
             # the digest of what it wrote; bytes no receipt vouches for are a
             # hand edit (q8 decision).
-            if _bytes_digest(product_root, raw, head=head) in vouched.get(CATALOG_REL, set()):
+            catalog = _bytes_at(product_root, posix_relpath(raw), head=head)
+            if _vouched_bytes(catalog, vouched.get(CATALOG_REL, set())):
                 continue
             # Not vouched: fall through to the ordinary checks. The catalog is
             # the human's file and a human edit is not a Worker violation.
@@ -1220,7 +1590,9 @@ def check_paths(
             # a reopened task is declared again past Declare; its Red is still the Core's
             errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
             continue
-        if is_change_artifact(raw) and env_list:
+        if is_change_artifact(raw):
+            # FW-11: whether or not a step is ready - a file of a Change no envelope covers was
+            # judged only while some envelope was open, so a converged Change's files were free.
             # gemma-334c/glm47flash: a Worker put the Writer's input JSON in a
             # `.deltafuse/tmp/` inside the Change directory (224 refusals in two
             # runs); the exemption is for the one at the product root.
@@ -1232,9 +1604,52 @@ def check_paths(
             )
             errors.append(
                 f"leash: '{raw}' is outside the {step_label} write envelope{scratch}"
+                if env_list else
+                f"leash: '{raw}' is a Change file no open step may write{scratch}"
             )
+            continue
+        if matches_contract_globs(raw, SPEC_WRITE_GLOBS):
+            continue  # `project.baseline: draft` - Bootstrap writes the specification freely
+        if product_root is not None and structural_kind(raw) == "decision" and (
+            _bytes_at(Path(product_root), posix_relpath(raw), head=head) is not None
+        ):
+            # FW-20: a Decision lies in no step's envelope and is not product code, so the
+            # hand-written check - made only for a covered path - never ran for it.
+            errors.extend(hand_written_errors(product_root, raw, head=head, vouched=vouched))
+            continue
+        # R5 (FW-7): judged like product code - it was not judged at all.
+        errors.append(
+            (f"leash: '{raw}' is outside the {step_label} write envelope" if env_list
+             else f"leash: '{raw}' is not covered by any Change")
+            + OUTSIDE_CODE_ROOTS
+        )
     return errors
 
+
+
+def ignored_product_files(product_root: Path) -> list[str]:
+    """Untracked files git ignores that lie in the product's code roots (FW-18).
+
+    The leash listed untracked files with `--exclude-standard`, so `src/hidden.py` named by a
+    `.gitignore` line was invisible to the leash, to `advance` and to CI. A directory git ignores
+    as a whole (`target/`, `node_modules/`, an ignored `__pycache__/`) is build output and is not
+    listed: that is thousands of files the human told git to leave alone, and `.gitignore` itself
+    is judged.
+    """
+    root = Path(product_root)
+    layout = product_layout(root)
+    listing = ["ls-files", "--others", "--ignored", "--exclude-standard"]
+    out: list[str] = []
+    for name in _git_names(root, *listing, "--directory", what="list ignored files"):
+        if not name.endswith("/"):
+            out.append(name)
+            continue
+        folder = name.rstrip("/")
+        if _git(root, "check-ignore", "-q", "--", folder).returncode == 0:
+            continue  # the directory itself is ignored
+        # Named as one entry only because every file in it is ignored, each by its own rule.
+        out += _git_names(root, *listing, "--", folder, what="list ignored files")
+    return [name for name in _unique(out) if layout.is_guarded(name)]
 
 
 def git_dirty_paths(
@@ -1243,6 +1658,7 @@ def git_dirty_paths(
     base: str | None = None,
     head: str | None = None,
     since: str | None = None,
+    ignored: bool = False,
 ) -> list[str]:
     """Changed paths as repo-relative posix names.
 
@@ -1255,6 +1671,8 @@ def git_dirty_paths(
     judge the committed range. Untracked files remain a separate always-on check.
     ``head=INDEX`` (the pre-commit hook): the staged changes against HEAD, which is
     what the commit records; untracked and unstaged files are not in it.
+    ``ignored`` (the leash; not the evidence record of what a step changed): also the untracked
+    files git ignores inside the code roots - see ignored_product_files.
     """
     root = product_root.resolve()
     probe = _git(root, "rev-parse", "--show-toplevel")
@@ -1300,8 +1718,9 @@ def git_dirty_paths(
                 what="read a commit of the step",
             )
     untracked = _git_names(root, "ls-files", "--others", "--exclude-standard", what="list untracked files")
+    hidden = ignored_product_files(root) if ignored else []
     # _unique normalizes slashes and drops blank lines.
-    return _unique(tracked + committed + untracked)
+    return _unique(tracked + committed + untracked + hidden)
 
 
 def step_base(product_root: Path, change_dir: Path) -> str | None:
@@ -1322,7 +1741,7 @@ def step_base(product_root: Path, change_dir: Path) -> str | None:
     lines = text.read_text(encoding="utf-8").splitlines() if text.is_file() else []
     digest = None
     for entry in _json_rows(lines):
-        if entry.get("change") == change_id and entry.get("kind") in {"transition", "gap-reopen"}:
+        if entry.get("change") == change_id and (entry.get("kind") == "transition" or rewind_gate(entry)):
             digest = entry.get("receipt") if isinstance(entry.get("receipt"), str) else digest
     if digest:
         found = _git(root, "log", "--reverse", "--format=%H", "-S", digest, "HEAD", "--",
@@ -1356,12 +1775,68 @@ def _git_names(root: Path, *args: str, what: str) -> list[str]:
     Cyrillic file in src/ was never judged. `-z` prints names raw; git writes them in UTF-8.
     """
     proc = subprocess.run(
-        ["git", "-c", "core.quotePath=false", *args, "-z"], cwd=root, capture_output=True, check=False
+        # `-z` right after the subcommand: after a `--` it would be read as a path.
+        ["git", "-c", "core.quotePath=false", args[0], "-z", *args[1:]], cwd=root, capture_output=True,
+        check=False,
     )
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace").strip()
         raise LeashError(f"leash could not {what}: {err or 'git failed'}")
     return [name for name in proc.stdout.decode("utf-8", errors="surrogateescape").split("\0") if name]
+
+
+SUBDIRECTORY = (
+    "{root} is a subdirectory of the git repository at {top}. DeltaFuse supports a product only at "
+    "the root of its repository (or with no git): the pre-commit hook and the leash read paths "
+    "from the repository root, so nothing in a subdirectory would be judged. Give the product its "
+    "own repository (a submodule works); a monorepo layout is a roadmap item"
+)
+
+
+def repository_layout_error(product_root: Path | str) -> str | None:
+    """Why git cannot judge this product, or None (FW-2, owner's decision R4).
+
+    A product one level below its repository root was installed without a word: the hook was not
+    installed (`.git` is not there), and the leash compared repository-relative names
+    (`svc/src/app.py`) with product-relative globs (`src/**`), so no edit was ever judged."""
+    root = Path(product_root).resolve()
+    probe = root
+    while not probe.is_dir() and probe != probe.parent:
+        probe = probe.parent
+    prefix = _git(probe, "rev-parse", "--show-prefix")
+    if prefix.returncode != 0:
+        return None  # no git, or not in a work tree
+    if not (prefix.stdout or "").strip() and probe == root:
+        return None  # the repository root itself
+    top = _git(probe, "rev-parse", "--show-toplevel")
+    return SUBDIRECTORY.format(root=root, top=(top.stdout or "").strip() or "above it")
+
+
+def hook_warning(product_root: Path | str, mode: str | None = None) -> str | None:
+    """Why commits here are not judged although the leash is on, or None (FW-13).
+
+    Hooks are not cloned, and `core.hooksPath` set after `init` moves git away from the hook that
+    was installed. Either way every commit went unjudged and no command said so."""
+    root = Path(product_root)
+    mode = mode or load_leash_mode(root)
+    if mode == "off" or not (root / ".git").exists():
+        return None
+    hooks = _git_hooks_dir(root, announce=False)
+    hook = hooks / "pre-commit" if hooks is not None else None
+    if hook is not None and hook.is_file():
+        text = hook.read_text(encoding="utf-8", errors="replace")
+        if HOOK_MARKER in text or ".deltafuse/hooks/pre-commit" in text:
+            return None
+    where = f"{hook} does not run the leash" if hook is not None else "core.hooksPath points outside this repository"
+    return (
+        f"workflow.leash is '{mode}', but the leash pre-commit hook is not active in this clone "
+        f"({where}): commits are not judged here. Run `deltafuse init <product-root>` to install it "
+        "(hooks are not cloned), or call .deltafuse/hooks/pre-commit from the hook git does run"
+    )
+
+
+def has_commit(product_root: Path) -> bool:
+    return _git(Path(product_root), "rev-parse", "--verify", "--quiet", "HEAD").returncode == 0
 
 
 def _chmod_exec(path: Path) -> None:
@@ -1416,7 +1891,7 @@ def _git_hooks_dir(product_root: Path, *, announce: bool = True) -> Path | None:
     return hooks
 
 
-def sync_leash_hook(product_root: Path, mode: str) -> None:
+def sync_leash_hook(product_root: Path, mode: str, python: str | None = None) -> None:
     """Install or remove the local git pre-commit hook. Never git push.
 
     `off` removes a hook we generated. `advisory` and `enforce` write the
@@ -1436,8 +1911,9 @@ def sync_leash_hook(product_root: Path, mode: str) -> None:
         if git_hook is not None:
             _remove_marked_hook(git_hook)
         return
+    script = hook_script(python or sys.executable)  # B-9: the interpreter running the installer
     managed.parent.mkdir(parents=True, exist_ok=True)
-    managed.write_text(HOOK_SCRIPT, encoding="utf-8", newline="\n")
+    managed.write_text(script, encoding="utf-8", newline="\n")
     _chmod_exec(managed)
     if git_hook is None:
         return
@@ -1451,5 +1927,5 @@ def sync_leash_hook(product_root: Path, mode: str) -> None:
                 file=sys.stderr,
             )
             return
-    git_hook.write_text(HOOK_SCRIPT, encoding="utf-8", newline="\n")
+    git_hook.write_text(script, encoding="utf-8", newline="\n")
     _chmod_exec(git_hook)

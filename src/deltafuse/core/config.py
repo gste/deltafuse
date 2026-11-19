@@ -187,12 +187,22 @@ def validate_config(product_root: Path | str) -> list[str]:
                     errors.append("config.yaml: workflow.test_commands must be a list of non-empty strings")
             code_roots = workflow.get("code_roots")
             if code_roots is not None:
-                if not isinstance(code_roots, list) or not all(
-                    isinstance(r, str) and ("*" in r or r.endswith("/") or "/" in r)
-                    for r in code_roots
-                ):
+                # A file at the product root is a code root too (`pom.xml`): the leash judges every
+                # path (audit 2026-11-17, R5), and this is how a Change comes to write one.
+                from deltafuse.core.layout import product_path_error
+
+                def is_root(r: Any) -> bool:
+                    if not isinstance(r, str) or product_path_error(r.rstrip("/")) is not None:
+                        return False
+                    if "*" in r or "/" in r:
+                        return True
+                    # A bare name is one file (`pom.xml`); a bare directory (`src`) matches nothing.
+                    return (root / r).is_file() or ("." in r and not (root / r).is_dir())
+
+                if not isinstance(code_roots, list) or not all(is_root(r) for r in code_roots):
                     errors.append(
-                        "config.yaml: workflow.code_roots must be a list of glob paths like 'src/**'"
+                        "config.yaml: workflow.code_roots must be a list of globs like 'src/**' or "
+                        "files like 'pom.xml' (relative to the product root, no '..')"
                     )
     errors.extend(_catalog_schema_errors(root))
     errors.extend(validate_active_code_roots(root))
@@ -248,6 +258,66 @@ def config_as_of(product_root: Path | str, data: Any) -> Iterator[None]:
         yield
     finally:
         _CONFIG_OVERRIDE.reset(token)
+
+
+# The human's settings (audit 3, B-6): what decides how the Worker's own work is judged - the leash,
+# what is product code, what the whole test suite is and how long it may run, and the task budget.
+# `.deltafuse/**` is outside every Worker envelope as a whole, so these are read from the committed
+# config, and the leash refuses a diff that changes them (leash.config_guard_errors).
+HUMAN_WORKFLOW_KEYS = ("leash", "code_roots", "test_commands", "evidence_timeout")
+HUMAN_TOP_KEYS = ("context",)
+
+
+def with_human_settings(data: Any, base: Any) -> dict[str, Any]:
+    """*data* (a config mapping) with every human setting taken from *base* instead."""
+    out = dict(data) if isinstance(data, dict) else {}
+    base = base if isinstance(base, dict) else {}
+    for key in HUMAN_TOP_KEYS:
+        if key in base:
+            out[key] = base[key]
+        else:
+            out.pop(key, None)
+    workflow = dict(out.get("workflow")) if isinstance(out.get("workflow"), dict) else {}
+    base_workflow = base.get("workflow") if isinstance(base.get("workflow"), dict) else {}
+    for key in HUMAN_WORKFLOW_KEYS:
+        if key in base_workflow:
+            workflow[key] = base_workflow[key]
+        else:
+            workflow.pop(key, None)
+    out["workflow"] = workflow
+    return out
+
+
+@contextlib.contextmanager
+def human_settings_as_committed(product_root: Path | str) -> Iterator[None]:
+    """Read the human's settings from the config committed at HEAD while the block runs.
+
+    Audit 3 (B-6): a regression narrowed with `-Dtest=` was refused, the refusal said to declare
+    the command in `workflow.test_commands`, the Worker added it there, and the narrowed run was
+    then authentic - the evidence was judged by a setting the Worker had just written. Evidence
+    and gates now read those keys as committed (a human's commit; the leash refuses a Worker
+    diff that changes them). Without a commit, or a config at HEAD, the file on disk is read.
+    A config already put in place by `config_as_of` (the leash judging from its base) stands.
+    """
+    override = _CONFIG_OVERRIDE.get()
+    if override is not None and override[0] == _root_key(product_root):
+        yield
+        return
+    from deltafuse.core.leash import config_at  # leash imports this module
+
+    try:
+        committed = config_at(Path(product_root), "HEAD")
+    except Exception:  # noqa: BLE001 - no git, no commit: the file on disk is all there is
+        committed = None
+    if committed is None:
+        yield
+        return
+    try:
+        current = yaml.safe_load((Path(product_root) / ".deltafuse" / "config.yaml").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unreadable config is reported by its validator
+        current = None
+    with config_as_of(product_root, with_human_settings(current, committed)):
+        yield
 
 
 def config_section(

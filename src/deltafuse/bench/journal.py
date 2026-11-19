@@ -191,7 +191,8 @@ def _cycle_key(event: dict[str, Any]) -> tuple[str, str]:
 # on it: counting the refusal as a retry blamed the model for the queue's own
 # halt (M01 on qwen/qwen3.8-27b, 2026-09-22 - two of its three retries).
 HUMAN_WAIT_MARKERS = (
-    "accepted via deltafuse decide",
+    "it waits for the human (Human Gate)",  # 3.3.14: the specified gate names no decide command
+    "accepted via deltafuse decide",  # journals written before 3.3.14
     "without deltafuse decide",
     "is blocked-on-decision",
 )

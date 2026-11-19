@@ -13,13 +13,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deltafuse.core.evidence import run_evidence
 from deltafuse.core.fsm import check_gate
 from deltafuse.core.installer import install
 from deltafuse.core.runners import product_test_runner, report_less_runner_error
-from deltafuse.core.transitions import set_artifact_status
+from deltafuse.core.transitions import TransitionError, set_artifact_status
 from tests.fixtures.change_builder import MockChangeBuilder
 
 
@@ -39,7 +40,9 @@ def test_a_script_runner_is_refused_on_a_pytest_product_and_at_the_gate(tmp_path
     assert red.payload["failure_category"] == "behavioral-mismatch"  # the log heuristic believed it
     assert not red.authentic
     assert any("bare interpreter" in e for e in red.errors), red.errors
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    # Audit 3 (A-13): `state --status declared` refuses that Red for the gate's own reason.
+    with pytest.raises(TransitionError, match="bare interpreter"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert any("bare interpreter" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
@@ -48,7 +51,8 @@ def test_the_gate_refuses_an_unauthorized_runner(tmp_path: Path, repo_root: Path
     red = run_evidence(builder.change_dir, phase="red", task="TASK-001",
                        argv=[sys.executable, "-c", "assert False, 'missing'"])
     assert not red.authentic
-    set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
+    with pytest.raises(TransitionError, match="not an authorized runner"):
+        set_artifact_status(builder.change_dir, status="declared", task_id="TASK-001")
     assert any("not an authorized runner" in e for e in check_gate(builder.change_dir, "declaring"))
 
 
@@ -72,3 +76,27 @@ def test_which_products_report_their_tests(tmp_path: Path):
         yaml.safe_dump({"workflow": {"test_commands": ["python scripts/check.py"]}}), encoding="utf-8"
     )
     assert product_test_runner(declared) == ""  # the product declares a script runner itself
+
+
+def test_an_interpreter_that_runs_pytest_is_refused_also_when_declared(tmp_path: Path):
+    """Audit 2026-11-17, FE-3 re-probe: `python -c "...pytest.main..."` as the only entry of
+    `workflow.test_commands` was a bare interpreter on a product that "declares no reporting
+    runner", so Green over another test and a `--deselect` regression were accepted on the exit
+    code. A command that names pytest is a way to run pytest the Core cannot read through,
+    whatever its head; so is a script named after it."""
+    (tmp_path / ".deltafuse").mkdir()
+    (tmp_path / ".deltafuse" / "config.yaml").write_text(
+        "workflow:\n  test_commands:\n    - python -c \"import sys,pytest; sys.exit(pytest.main(sys.argv[1:]))\"\n",
+        encoding="utf-8",
+    )
+    argv = ["python", "-c", "import sys,pytest; sys.exit(pytest.main(sys.argv[1:]))", "tests/test_x.py"]
+    error = report_less_runner_error(argv, route="code", product_root=tmp_path)
+    assert error and "cannot read through" in error and "pytest" in error
+    # the twin spelling, undeclared
+    assert report_less_runner_error(["python3", "-c", "import pytest; pytest.main()"], route="code", product_root=None)
+    # a script that names no runner, declared by the human, stays what it was: no report, exit code
+    (tmp_path / ".deltafuse" / "config.yaml").write_text(
+        "workflow:\n  test_commands:\n    - python check.py\n", encoding="utf-8")
+    assert report_less_runner_error(["python", "check.py"], route="code", product_root=tmp_path) is None
+    # and the readable forms are not caught by the word
+    assert report_less_runner_error(["python", "-m", "pytest", "tests"], route="code", product_root=tmp_path) is None

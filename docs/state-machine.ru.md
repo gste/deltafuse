@@ -83,8 +83,10 @@ Change может быть переведён в терминальное сос
 | `blocked-on-decision` | `analyzing` | Все блокирующие решения переведены человеком в `accepted` или `rejected`. | Human Gate: нет открытых блокирующих Decisions. |
 | `analyzing` | `analyzed` | Завершён анализ всех слайсов, вычислены дельты, проведено глобальное согласование. `deltafuse next` даёт один Analyze pass за раз; комплект тот же. | На диске есть `routing.yaml`, срезы на каждую routing primary capability и `coverage.yaml`; все claims покрыты; дельты типизированы. |
 | `analyzed` | `specification-proposed` | Требуется изменение спецификации (`requirement_delta: modify/add`). `deltafuse next` даёт один Specify-срез (`spec_refs` только), затем `close`. | Сформирован проект правок в файлах `spec_refs` срезов и `spec-delta.md`, и все машинные проверки гейта `specified` проходят, кроме двух, которые человек закрывает при принятии: его receipt и возможность из routing, ещё находящаяся в статусе `draft`; иначе `deltafuse state` отказывает и возвращает ошибки воркеру. |
-| `analyzed` | `decomposed` | Багфикс: изменение спецификации не требуется (`requirement_delta: none`); `deltafuse next` сразу даёт Decompose. | Гейт `decomposed` доказывает точные ссылки задач на существующие требования `REQ-*`; с другим intent или с `spec-delta.md`, который что-то добавляет, меняет или удаляет, он отказывает: такой Change идёт через Human Gate спецификации. |
-| `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. |
+| `analyzed` | `decomposed` | Багфикс: изменение спецификации не требуется (`requirement_delta: none`); `deltafuse next` сразу даёт Decompose. | Гейт `decomposed` доказывает точные ссылки задач на существующие требования `REQ-*`; с другим intent (тем, что записан в receipt гейта intake, а не тем, что сейчас в change.yaml), с `spec-delta.md`, который что-то добавляет, меняет или удаляет, или с деревом `docs/spec/**`, отличающимся от записанного на Intake, он отказывает: такой Change идёт через Human Gate спецификации. `intent` задаётся до закрытия Intake (`deltafuse state <change-dir> --change --intent bugfix`) и после не меняется. |
+| `specification-proposed` | `specified` | Правки в спецификации согласованы и смерджены. | Human Gate: утверждённые правки в `docs/spec/**`. Receipt принятия хранит digest текста каждого раздела, на который ссылаются spec-delta и срезы; пока один из них отличается от диска, все последующие гейты отказывают. |
+| `specified` … `verifying` | `analyzed` | Человек отклоняет уже принятую спецификацию: `deltafuse decide <change-dir> --spec --status rejected`. | Verification, Green и regression уходят в `reopened/verify.<n>/`, срезы возвращаются в `draft`, реализованные задачи — в `declared`; после нового принятия ядро проходит гейты, которые задачи уже проходили. |
+| `implemented` / `verifying` | `declared` | Человек переоткрывает задачу, заблокированную после гейта `implemented`: `deltafuse decide <change-dir> --task <id> --status reopened`. | Задача объявляется и реализуется заново, гейт `implemented` проходится снова. |
 | `specified` | `decomposed` | Завершён `/decompose`. Созданы атомарные задачи `TASK-NNN`. | Все требования слайсов покрыты задачами с явным Test Oracle. |
 | `decomposed` | `declared` | `deltafuse advance <change-dir> --gate declaring`, когда каждая задача `declared` (промежуточный `declaring` перешагивается, см. ниже). | Каждая задача, кроме `cancelled` и `superseded`, `declared` со своим Red evidence. |
 | `declaring` | `declared` | Тестовый таргет упал строго по ожидаемой поведенческой причине. | Для каждой задачи записан `evidence/red/<task-id>.yaml`, код продукта не изменён. |
@@ -95,34 +97,36 @@ Change может быть переведён в терминальное сос
 | `implemented` / `verifying` | `analyzing` | Verify записал `spec-gap` или `tasks-missing`; человек переоткрывает его: `deltafuse decide <change-dir> --gap <gap> --status reopened`. | **Escalation Gate**: возврат на анализ только решением человека (квитанция `gap-reopen`), без несанкционированных правок. |
 | `verifying` | `not-reproduced` | Закрытие Change как невоспроизведённого дефекта или подтверждённого no-op. | В `verification.md` зафиксирован исход `not-reproduced`. |
 | `analyzing` / `declaring` | `not-reproduced` | Дефект не воспроизводится на кодовой базе; Red-тест не выявил ожидаемого сбоя. | Зафиксирован диагностический отчёт или evidence со статусом `result: not-reproduced`. |
-| `normalized` / `analyzing` / `analyzed` | `rejected` | Запрос нереализуем или отвергнут по результатам маршрутизации/анализа (из `analyzed` — например, после отклонённой спецификации). | Решение человека с обоснованием (`--note`). |
+| любой статус до `converged` | `rejected` | Запрос нереализуем, отвергнут или Change не будет доведён. | Решение человека с обоснованием (`--note`). |
 | `normalized` / `analyzing` / `analyzed` | `duplicate` | Запрос дублирует уже существующий активный или архивный Change. | Решение человека; заметка называет оригинальный `CHG-*`. |
-| `analyzing` / `analyzed` | `superseded` | Change заменён более широким или реструктурированным запросом. | Решение человека; заметка называет замещающий `CHG-*`. |
+| любой статус до `converged` | `superseded` | Change заменён более широким или реструктурированным запросом. | Решение человека; заметка называет замещающий `CHG-*`. |
+| `declared` / `implementing` | `not-reproduced` | Все задачи закрыты (`superseded` на already-green Red или `cancelled`): реализовывать нечего. `deltafuse next` останавливается и называет команду закрытия. | Red с `result: not-reproduced` или `already-green`. |
 | `converged` | `archived` | Пакет Change целиком перемещён в `docs/archive/changes/<date>-<change-id>/`. | Change удалён из активных списков, история неизменна. |
 
-Терминальные `rejected`, `duplicate`, `superseded` и `not-reproduced` пишет только `deltafuse decide <change-dir> --close --status <status> --note "<почему>"` (с паролем Human Gate, если он задан) из статуса, который допускает таблица (из Declare и Verify — через их промежуточный шаг); для `not-reproduced` из Declare нужен Red с `result: not-reproduced` или `already-green`, из Verify — `- Outcome: not-reproduced` в `verification.md`. Команда пишет receipt статуса в `transitions.jsonl` и receipt Human Gate на `change.yaml`; терминальный статус, записанный руками, останавливает `deltafuse next`, не архивируется и оставляет Change активным для защиты `init --force`.
+Терминальные `rejected`, `duplicate`, `superseded` и `not-reproduced` пишет только `deltafuse decide <change-dir> --close --status <status> --note "<почему>"` (с паролем Human Gate, если он задан) из статуса, который допускает таблица (`rejected` и `superseded` — из любого статуса до `converged`); для `not-reproduced` из Declare нужен Red с `result: not-reproduced` или `already-green`, из Verify — `- Outcome: not-reproduced` в `verification.md`. Команда пишет receipt статуса в `transitions.jsonl` и receipt Human Gate на `change.yaml`; терминальный статус, записанный руками, останавливает `deltafuse next`, не архивируется и оставляет Change активным для защиты `init --force`.
 
-Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может.
+Статусы `declaring`, `implementing` и `verifying` в Change не пишет ни одна команда: работа воркера в этих фазах записывается в его задачи. `deltafuse advance` закрывает следующий гейт из статуса покоя, перешагивая промежуточный, — `decomposed` → `declared`, `declared` → `implemented`, `implemented` → `converged`, — и receipt записывает этот шаг. Промежуточный статус на один законный шаг после последнего receipt Change держать по-прежнему может. Любой другой статус, не подтверждённый журналом, — `converged`, `archived`, `blocked-on-decision` без предложенного Decision, отмотанный руками статус — останавливает `deltafuse next` и все команды ядра; прерванный `advance` завершает только `advance` того же гейта. Действует последний вердикт человека по артефакту: принятие, за которым последовало переоткрытие или отклонение, не засчитывается, даже если байты файла вернуть.
 
-Гейты `declaring` и `implemented` проверяют каждую задачу, кроме `cancelled` и `superseded`: каждая должна быть на статусе гейта со своим evidence. Green и regression evidence штампуются деревом `docs/spec/**` и `src/**`; следующая задача, меняющая его, делает evidence предыдущей устаревшим, и `deltafuse next` направляет воркера перезапустить evidence этой задачи на текущем дереве, прежде чем гейт закроется.
+Гейты `declaring` и `implemented` проверяют каждую задачу, кроме `cancelled` и `superseded`: каждая должна быть на статусе гейта со своим evidence. У закрытой задачи гейты и очередь спрашивают, чем она закрыта: `cancelled` — вердиктом человека `decide --task`, `superseded` — receipt команды `deltafuse state` и already-green Red у задачи с `requirement_delta: none`; статус, выставленный руками, останавливает гейты. Decision, привязанный к Change (`proposed` или принятый без `decide`), останавливает каждый гейт, а не только Analyze и Specify. Гейты, `state`, `evidence` и `next` отказывают, если config не совпадает с lock или работающее ядро — не то, что закреплено в lock (`decide` не отказывает: Change можно закрыть перед обновлением). Green и regression evidence штампуются деревом `docs/spec/**` и корней кода продукта (`workflow.code_roots`, иначе `src/**` и `tests/**`), включая тесты; следующая задача, меняющая его, делает evidence предыдущей устаревшим, и `deltafuse next` направляет воркера перезапустить evidence этой задачи на текущем дереве, прежде чем гейт закроется.
 
 ---
 
 ## Slice State Machine
 
-Слайсы (`slices/SLICE-NN.md`) управляют параллельным или независимым анализом крупных частей Change:
+Срез (`slices/SLICE-NN.md`) — независимо проверяемая часть Change. Ядро ведёт для него два
+статуса и один переход:
 
 ```text
-draft -> analyzing -> blocked -> analyzed -> specified -> decomposed -> verified
+draft -> specified        deltafuse state <change-dir> --slice <id> --status specified
+specified -> draft        только решением человека: decide --gap / decide --spec --status rejected
 ```
 
-- `draft`: слайс выделен на этапе маршрутизации;
-- `analyzing`: читаются релевантные модули спецификации, формируется дельта;
-- `blocked`: слайс ожидает разрешения зависимого Decision или соседнего слайса;
-- `analyzed`: дельта слайса полностью типизирована;
-- `specified`: нормативная база слайса зафиксирована в спецификации;
-- `decomposed`: сформированы задачи по реализации слайса;
-- `verified`: все задачи слайса завершены и проверены.
+- `draft`: срез записан в Analyze; Specify берёт срезы в `draft` по одному;
+- `specified`: Specify записал часть спецификации этого среза; `deltafuse next` его больше не называет. Обратно в `draft` все срезы Change возвращает только `decide` человека: переоткрытый gap из Verify или отклонение уже принятой спецификации.
+
+Схема среза по-прежнему допускает `analyzing`, `blocked`, `analyzed`, `decomposed` и `verified`,
+и Specify читает `decomposed` и `verified` как уже специфицированные, но ни одна команда ядра их
+не пишет: что происходит со срезом после Specify, записано в его задачах и в Change.
 
 ---
 

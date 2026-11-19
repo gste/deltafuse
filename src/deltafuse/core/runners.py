@@ -9,10 +9,8 @@ as ``python -c "print('green')"`` cannot stamp authentic evidence.
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
-from typing import Any
-
-import yaml
 
 CODE_RUNNER_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("pytest",),
@@ -34,7 +32,7 @@ JVM_TEST_GOALS = frozenset({"test", "verify", "check", "integration-test"})
 
 
 def _is_jvm_test_command(argv: list[str]) -> bool:
-    if _as_runner_name(argv[0]).lower() not in JVM_RUNNERS:
+    if _canonical_head(argv[0]) not in JVM_RUNNERS:
         return False
     return any(arg.split(":")[-1].lower() in JVM_TEST_GOALS for arg in argv[1:])
 
@@ -42,10 +40,9 @@ def _is_jvm_test_command(argv: list[str]) -> bool:
 # docs/ops routes verify file-oracle style checks; plain interpreters are fine.
 DEFAULT_ROUTE_PREFIXES: dict[str, tuple[tuple[str, ...], ...]] = {
     "code": CODE_RUNNER_PREFIXES,
-    "docs": (("python",), ("python3",)),
-    "ops": (("python",), ("python3",)),
+    "docs": (("python",),),  # any spelling of the interpreter (`_canonical_head`)
+    "ops": (("python",),),
 }
-CONFIG_PATH = Path(".deltafuse") / "config.yaml"
 
 
 def _as_runner_name(argv0: str) -> str:
@@ -65,36 +62,75 @@ def _as_runner_name(argv0: str) -> str:
     return name
 
 
+def _canonical_head(program: object) -> str:
+    """The program a command starts with, as one name however it is spelled: no directory, no
+    `.exe`/`.cmd`/`.bat`, lower case, and any Python interpreter as `python`.
+
+    Audit 2026-11-17: the allowlist compared the first word almost literally, so `python3 -m
+    pytest` and `py -m pytest` were not `python -m pytest` (FE-12), and a declared `./gradlew
+    test` - the form `fuseback runner` writes - matched nothing, because the command's first word
+    lost its directory and the declared one did not (FP-6).
+    """
+    from deltafuse.core.test_reports import is_python, runner_head
+
+    head = runner_head(program)
+    return "python" if is_python(head) else head
+
+
+def _canonical(argv: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return (_canonical_head(argv[0]), *[str(a) for a in argv[1:]]) if argv else ()
+
+
 def _match(argv: list[str], prefixes: tuple[tuple[str, ...], ...]) -> bool:
     if not argv:
         return False
-    head = [_as_runner_name(argv[0]), *argv[1:]]
-    return any(
-        len(head) >= len(prefix) and tuple(head[: len(prefix)]) == prefix
-        for prefix in prefixes
-    )
+    from deltafuse.core.test_reports import _normalized, runner_family
+
+    head = _canonical(argv)
+    # pytest is pytest however it is started: a declared `python -m pytest` also authorizes
+    # `python -X utf8 -m pytest` and the virtualenv's `pytest`, compared from `pytest` on.
+    as_pytest = tuple(_normalized(list(argv))) if runner_family(list(argv)) == "pytest" else None
+    for prefix in prefixes:
+        want = _canonical(prefix)
+        if len(head) >= len(want) and head[: len(want)] == want:
+            return True
+        if as_pytest is not None and runner_family(list(prefix)) == "pytest":
+            want = tuple(_normalized(list(prefix)))
+            if as_pytest[: len(want)] == want:
+                return True
+    return False
 
 
 def _load_config_prefixes(product_root: Path | None) -> tuple[tuple[str, ...], ...]:
     if product_root is None:
         return ()
-    path = product_root / CONFIG_PATH
-    if not path.is_file():
-        return ()
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return ()
-    workflow: Any = data.get("workflow") if isinstance(data, dict) else None
-    raw = workflow.get("test_commands") if isinstance(workflow, dict) else None
+    # Through config_section, the one reader: inside `human_settings_as_committed` it is the
+    # committed value, not the Worker's uncommitted edit (audit 3, B-6).
+    from deltafuse.core.config import config_section
+
+    raw = config_section(product_root, "workflow").get("test_commands")
     if not isinstance(raw, list):
         return ()
     out: list[tuple[str, ...]] = []
     for entry in raw:
-        parts = tuple(str(p) for p in str(entry).replace("\\", "/").split(" ") if p)
+        parts = split_command(str(entry))
         if parts:
             out.append(parts)
     return tuple(out)
+
+
+def split_command(text: str) -> tuple[str, ...]:
+    """A declared command as arguments, the way a shell would pass them.
+
+    Audit 2026-11-17 (FE-13): the entry was split on spaces with its quotes kept, so
+    `pytest -m "not slow"` became four words, one of them `"not`, and no command ever matched it.
+    A backslash is a path separator here (`.venv\\Scripts\\pytest.exe`), not an escape.
+    """
+    text = text.replace("\\", "/")
+    try:
+        return tuple(shlex.split(text))
+    except ValueError:  # an unbalanced quote: the words as written
+        return tuple(p for p in text.split(" ") if p)
 
 
 _JVM_BUILD_FILES = ("pom.xml", "mvnw", "build.gradle", "build.gradle.kts", "settings.gradle",
@@ -156,12 +192,27 @@ def report_less_runner_error(argv: list[str], *, route: str, product_root: Path 
     """
     if route != "code" or not argv:
         return None
-    if _as_runner_name(str(argv[0])).lower() not in {"python", "python3"}:
-        return None
-    from deltafuse.core.test_reports import runner_family
+    from deltafuse.core.test_reports import names_a_readable_runner, runner_family
 
     if runner_family(argv):
-        return None  # `python -m pytest`: the runner itself
+        return None  # `python -m pytest`, `uv run pytest`, `mvn test`: the runner itself
+    # Audit 2026-11-17 (FE-3): a command that runs pytest or Maven through something the
+    # Core does not read through (`pipx run pytest`, `bash -c "pytest"`) was a runner without
+    # a reader, accepted on its exit code alone - whatever tests it ran. An interpreter is no
+    # exception (`python -c "...pytest.main..."`, `python run_pytest.py`): declared as the only
+    # entry of workflow.test_commands it read as a product with no reporting runner.
+    runner = names_a_readable_runner(argv[1:] if _canonical_head(argv[0]) == "python" else argv)
+    if _canonical_head(argv[0]) != "python" or runner is not None:
+        if runner is None:
+            return None  # `npm test`, `cargo test`: no report the Core reads, judged as before
+        return (
+            f"`{' '.join(str(a) for a in argv[:4])}` runs {runner} through a command the Core cannot "
+            f"read through, so it cannot ask for or find the report of the tests that ran. Run {runner} "
+            "in a form it reads: `pytest ...`, `python -m pytest ...` (interpreter options allowed), "
+            "`uv run pytest ...`, `poetry run pytest ...`, `mvn ...`, `./mvnw ...`, `gradle ...`, "
+            "`./gradlew ...`; if the product's runner needs another form, the human declares it in "
+            "workflow.test_commands (a human setting the Worker does not edit)"
+        )
     family = product_test_runner(product_root)
     if not family:
         return None
@@ -185,11 +236,13 @@ def runner_is_authorized(
     configured = _load_config_prefixes(product_root)
     if configured:
         return _match(argv, configured)
-    python_like = _as_runner_name(argv[0]).lower() in {"python", "python3"}
+    from deltafuse.core.test_reports import runner_family
+
+    python_like = _canonical_head(argv[0]) == "python"
     if route == "code":
         # pytest-family runners, or a real script file on disk — never a
         # ``python -c`` one-liner substituted for the project runner.
-        if _match(argv, CODE_RUNNER_PREFIXES) or _is_jvm_test_command(argv):
+        if _match(argv, CODE_RUNNER_PREFIXES) or _is_jvm_test_command(argv) or runner_family(argv) == "pytest":
             return True
         return (
             python_like

@@ -525,7 +525,9 @@ def test_leash_accepts_a_state_rewrite_of_a_slug_named_task(tmp_path: Path, repo
     task.rename(task.with_name("TASK-001-penalty-config.md"))
     _git_init_commit(tmp_path)
 
-    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declared"]) == 0
+    # `declaring`, not `declared`: since audit 3 (A-13) `declared` needs the task's authentic Red,
+    # and this is about the leash reading the rewrite, whatever the status.
+    assert main(["state", str(builder.change_dir), "--task", "TASK-001", "--status", "declaring"]) == 0
     capsys.readouterr()
     ret, data = _leash_diff(tmp_path, capsys)
     assert data["violations"] == [], data["violations"]
@@ -568,8 +570,10 @@ def test_task_forbidding_docs_keeps_the_changes_own_files(tmp_path: Path, repo_r
     assert ret == 0
     write = data["envelope"]["write"]
     assert data["envelope"]["step"] == "declare"
-    assert "docs/changes/*/evidence/red/**" in write
-    assert "docs/changes/*/change.yaml" in write
+    # FW-11 (audit 2026-11-17): the envelope names the Change's own directory, not `docs/changes/*/`.
+    home = builder.change_dir.relative_to(tmp_path).as_posix()
+    assert f"{home}/evidence/red/**" in write
+    assert f"{home}/change.yaml" in write
     assert "src/secret.py" not in write
 
 
@@ -631,10 +635,11 @@ def test_leash_in_a_repo_with_no_commits_names_the_missing_commit(
     assert "ambiguous argument" not in str(exc_info.value)
     assert "no commit" in str(exc_info.value)
 
-    assert main(["leash", str(tmp_path)]) == 2
-    _, err = capsys.readouterr()
-    assert "ambiguous argument" not in err
-    assert "git commit" in err
+    # Since 3.3.14 (O7) the command answers "not judged", exit 0, and still names the commit.
+    assert main(["leash", str(tmp_path)]) == 0
+    out, err = capsys.readouterr()
+    assert "ambiguous argument" not in out + err
+    assert "not judged" in out and "git commit" in out
 
     # An initial commit is the whole fix: the same command then judges the diff.
     _git_init_commit(tmp_path)

@@ -42,6 +42,69 @@ from deltafuse.core.artifact_transactions import (
 FROZEN_TASK_FIELDS = ("allowed_paths", "forbidden_paths")
 
 
+def _check_task_paths(metadata: dict[str, Any]) -> None:
+    """FW-8: a task's paths are plain product paths - the one form the leash and the gate read."""
+    from deltafuse.core.layout import product_path_error
+
+    for field in FROZEN_TASK_FIELDS:
+        for raw in metadata.get(field) or []:
+            problem = product_path_error(raw)
+            if problem is not None:
+                raise ArtifactServiceError(
+                    f"{field}: {problem}. Name each path relative to the product root, with '/' "
+                    "and without '..'", code="policy_denied", path=f"/{field}",
+                )
+
+
+# Where a kind's file lies, relative to its Change (a Decision: to docs/decisions/). The Core-only
+# kinds have no place a Worker may name.
+_KIND_PLACE = {
+    "task": re.compile(r"^tasks/TASK-[^/]+\.md$"),
+    "slice": re.compile(r"^slices/SLICE-[^/]+\.md$"),
+    "spec-delta": re.compile(r"^spec-delta\.md$"),
+    "routing": re.compile(r"^routing\.yaml$"),
+    "change": re.compile(r"^change\.yaml$"),
+    "decision": re.compile(r"^DEC-[^/]+\.md$"),
+}
+
+
+def kind_place_error(kind: str, rel: str) -> str | None:
+    """FW-9: a kind writes its own file. `--kind routing` with `target: coverage.yaml` passed the
+    routing schema and replaced coverage.yaml - a file only the Core writes - with a routing
+    mapping; any kind could name any file of the Change."""
+    place = _KIND_PLACE.get(kind)
+    if place is None or place.match(rel):
+        return None
+    return f"'{rel}' is not where a {kind} lies (expected {place.pattern.strip('^$')})"
+
+
+def late_task_error(product_root: Path, change_id: str) -> str | None:
+    """FW-3: tasks are written in Decompose. Once the receipts say that step is closed a new task
+    is not part of the plan the gate checked - and its `allowed_paths` opened a write envelope."""
+    from deltafuse.core.leash import decompose_closed
+
+    gate = decompose_closed(product_root, change_id)
+    if gate is None:
+        return None
+    return (
+        f"{change_id} is past Decompose (its last gate is '{gate}'): the tasks are the ones the "
+        "decomposed gate checked, and a task added now opens no write envelope. If the plan lacks "
+        "a task, stop and report it; the human returns the Change upstream"
+    )
+
+
+def existing_identity_file(target_path: Path, kind: str, identity: str) -> Path | None:
+    """The file that already holds this identity: the target itself, or (a task, a slice, a
+    Decision) `<ID>-<slug>.md` beside it."""
+    if target_path.exists():
+        return target_path
+    if kind in ("task", "slice", "decision") and target_path.parent.is_dir():
+        found = sorted(target_path.parent.glob(f"{identity}-*.md"))
+        if found:
+            return found[0]
+    return None
+
+
 class ArtifactServiceError(Exception):
     """Raised when artifact service operations fail."""
 
@@ -165,6 +228,10 @@ class ArtifactService:
                 code="change_boundary_violation",
                 path=str(identity_or_target),
             )
+
+        misplaced = kind_place_error(kind, target_path.relative_to(fence).as_posix())
+        if misplaced is not None:
+            raise ArtifactPolicyError(misplaced, code="kind_target_mismatch", path=str(identity_or_target))
 
         if self.auth_context and self.auth_context.change_id and "docs/changes/" in target_path.as_posix():
             expected_prefix = (self.product_root / "docs" / "changes" / self.auth_context.change_id).as_posix()
@@ -378,6 +445,9 @@ class ArtifactService:
         payload_copy = dict(semantic_payload)
 
         if kind == "task":
+            late = late_task_error(self.product_root, change_id)
+            if late is not None:
+                raise ArtifactServiceError(late, code="policy_denied", path=str(target_path))
             raw_slice = payload_copy.pop("slice", None)
             if not raw_slice and self.auth_context and self.auth_context.work_item:
                 if re.match(r"^SLICE-[0-9]{2,}", str(self.auth_context.work_item)):
@@ -430,6 +500,8 @@ class ArtifactService:
 
         if kind not in ("task", "slice", "decision"):
             metadata.pop("id", None)
+        if kind == "task":
+            _check_task_paths(metadata)
 
         self._require_valid(
             self.registry.validate_storage_schema(kind, metadata),
@@ -467,6 +539,15 @@ class ArtifactService:
             receipt = self._replay(req_id, raw_req_hash, recorded_outcome=False)
             if receipt is not None:
                 return receipt
+            taken = existing_identity_file(target_path, kind, identity)
+            if taken is not None:
+                # FW-14: found only at publication, inside the transaction - a traceback for the
+                # Worker and a prepared journal entry that was never closed.
+                raise ArtifactServiceError(
+                    f"{identity} already exists ({taken.name}); to change it, write it again by its "
+                    "identity or that file - it cannot be created under another name",
+                    code="already_exists", path=str(taken),
+                )
             tx = self._prepare(
                 req_id, raw_req_bytes, kind, target_path, "create",
                 None, expected_sha256, expected_sha256, schema_hashes,
@@ -531,7 +612,14 @@ class ArtifactService:
         existing_meta = parse_res.metadata
         existing_body = parse_res.raw_body
 
-        if kind == "task" and existing_meta.get("status") not in (None, "pending"):
+        closed_gate = None
+        if kind == "task" and existing_meta.get("status") in (None, "pending"):
+            # FW-3: a task still pending in a Change whose Decompose is closed (a second task
+            # waiting its turn) is just as fixed - its paths were what the decomposed gate checked.
+            from deltafuse.core.leash import decompose_closed
+
+            closed_gate = decompose_closed(self.product_root, str(existing_meta.get("change") or ""))
+        if kind == "task" and (existing_meta.get("status") not in (None, "pending") or closed_gate):
             # Audit 2026-11-16 (df-leash #9): a task's paths bound its own write envelope; once it
             # is past Decompose (declaring and on) the Worker widened them through the Writer.
             pointers = [item.get("path") for item in (patch.get("set") or []) if isinstance(item, dict)]
@@ -539,12 +627,29 @@ class ArtifactService:
             for field in FROZEN_TASK_FIELDS:
                 if any(isinstance(p, str) and (p == f"/{field}" or p.startswith(f"/{field}/")) for p in pointers):
                     raise ArtifactServiceError(
-                        f"{existing_meta.get('id', 'the task')} is '{existing_meta.get('status')}': its "
-                        f"{field} were fixed when it was declared and bound its write envelope. If they "
+                        f"{existing_meta.get('id', 'the task')} is '{existing_meta.get('status')}'"
+                        + (f" and its Change is past Decompose (last gate '{closed_gate}')" if closed_gate else "")
+                        + f": its {field} were fixed when Decompose closed and bound its write envelope. If they "
                         "are wrong, stop and return the task upstream; the human reopens it",
                         code="policy_denied",
                         path=f"/{field}",
                     )
+
+        # FW-16: a task's title is the heading of its body, not a frontmatter field. `set /title` -
+        # the contract's own example, and updatable in the descriptor - reached the storage
+        # schema as an unknown property and was refused.
+        new_title: str | None = None
+        if kind == "task" and isinstance(patch, dict):
+            kept = []
+            for item in patch.get("set") or []:
+                if isinstance(item, dict) and item.get("path") == "/title":
+                    if not isinstance(item.get("value"), str) or not item["value"].strip():
+                        raise ArtifactServiceError("title must be a non-empty string", code="invalid_payload", path="/title")
+                    new_title = item["value"].strip()
+                else:
+                    kept.append(item)
+            if new_title is not None:
+                patch = {**patch, "set": kept}
 
         patch_outcome = apply_artifact_patch(
             existing_meta,
@@ -558,9 +663,12 @@ class ArtifactService:
         updated_meta = patch_outcome.updated_metadata
         body_text = patch_outcome.updated_body
 
-        if kind == "task" and "title" in updated_meta:
-            title_text = updated_meta.pop("title")
-            body_text = f"# {updated_meta.get('id', 'TASK')}: {title_text}\n\n" + re.sub(r"^# [^\n]*\n*", "", body_text)
+        if kind == "task":
+            _check_task_paths(updated_meta)
+        if new_title is not None:
+            body_text = f"# {updated_meta.get('id', 'TASK')}: {new_title}\n\n" + re.sub(
+                r"^# [^\n]*\n*", "", (body_text or "").lstrip("\n")
+            )
 
         self._require_valid(
             self.registry.validate_storage_schema(kind, updated_meta),

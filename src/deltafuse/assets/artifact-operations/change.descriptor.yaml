@@ -6,7 +6,6 @@ allowed_operations:
 creatable_semantic_fields: []
 updatable_semantic_fields:
   - /title
-  - /intent
   - /risk
   - /source/request
   - /source/intake_refs
@@ -16,6 +15,7 @@ core_owned_fields:
   - schema_version
   - id
   - status
+  - intent
   - framework
   - analysis/routing
   - deltas

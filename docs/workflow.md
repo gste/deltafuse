@@ -79,11 +79,12 @@ For each capability slice:
    - `implementation`: `none | add | modify | remove | mixed` (with `refs` to production code roots);
    - `evidence`: `none | record` (with `refs` to evidence files).
    Assign delta `kind`: `requirements | conformance | structural | operational | mixed`.
+   The typed Delta is a way of reading the Change, not an artifact: no command writes it and `change.yaml` `deltas` stays empty. What carries it is `spec-delta.md` (the specification projection, accepted by the human), each task's `requirement_delta` and `allowed_paths` (tasks, tests, implementation) and the evidence records; the gates read those.
 4. Optionally record analysis narrative in `analysis.md`. The `analyzed` gate does not require it.
 5. The Core writes `coverage.yaml` (`deltafuse coverage`) from routing and slice frontmatter. Workers do not hand-write the matrix.
 
 ### Typed Delta Invariants
-- If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**, and the **Specify** step records formal proof in `spec-delta.md` that existing specification already requires the behavior.
+- If `specification.operation` is `none`, the Change does not alter accepted specification; it is classified as an **Implementation Bug** or **Refactoring**. A bugfix then skips **Specify** while `docs/spec/**` is unchanged since Intake; another intent records in `spec-delta.md` that the existing specification already requires the behavior.
 - If `specification.operation` is `add`, `modify`, `remove`, or `mixed`, the Change MUST pass through the **Specify** step to update `docs/spec/**`.
 - If `catalog.operation` is `add`, `modify`, or `remove`, a catalog delta for `_capabilities.yaml` is required (Human Gate: Capability Boundary).
 - If `decisions.operation` is `propose`, new decision records are drafted in `docs/decisions/DEC-*` with `status: proposed`, and the Change transitions to `blocked-on-decision` until human approval.
@@ -91,7 +92,7 @@ For each capability slice:
 ### Analytical Outcomes
 - **Feasible**: all claims mapped, deltas computed, ready for specification or declaring.
 - **Decision Required**: architectural or product uncertainty identified; create `docs/decisions/DEC-NNNN-*.md` in `status: proposed` and transition Change to `blocked-on-decision`.
-- **Capability Gap**: new capability required; propose it with `deltafuse capability propose <domain>.<name> --summary "…" --spec docs/spec/<domain>/<name>.md`, which the Core records in `_capabilities.yaml` as `status: draft`. Routing accepts a draft, and the slice may cite the spec file the draft promises in `spec_refs` even though Specify has not written it yet - both the Artifact Writer and the `analyzed` gate allow exactly that path while the capability is a draft. The human makes it `active` when accepting the specification; `specified` and `converged` refuse to close while a capability the Change routes into is still a draft.
+- **Capability Gap**: new capability required; propose it with `deltafuse capability propose <domain>.<name> --summary "…" --spec docs/spec/<domain>/<name>.md`, which the Core records in `_capabilities.yaml` as `status: draft`. Routing accepts a draft, and the slice may cite the spec file the draft promises in `spec_refs` even though Specify has not written it yet - both the Artifact Writer and the `analyzed` gate allow exactly that path while the capability is a draft. The human makes it `active` when accepting the specification: `deltafuse decide <change-dir> --spec --status accepted` writes `status: active` for every draft the Change routes into, with a Core receipt; `specified` and `converged` refuse to close while a capability the Change routes into is still a draft.
 - **Duplicate**: Change duplicates an existing active or archived Change; stop and report: the human closes it with `deltafuse decide <change-dir> --close --status duplicate --note "<the other CHG-NNN>"`.
 - **Rejected**: Request conflicts with core architecture or is unfeasible; stop and report: the human closes it with `deltafuse decide <change-dir> --close --status rejected --note "<why>"`. A terminal status written into `change.yaml` by hand is not one (docs/state-machine.md).
 
@@ -105,7 +106,7 @@ Analysis repeats iteratively until zero blocking decisions remain in `proposed`.
 ### Gate
 - `change.yaml` status transitioned to `analyzed` (or `blocked-on-decision`).
 - `routing.yaml` validates against `routing.schema.yaml`.
-- A claim that adds a new name to a family another capability's specification lists - a name in backticks with a dot, `family.member`, that no live spec holds yet, while that capability's spec holds others of the family - needs that capability as a primary: the gate refuses the routing unless a claim of the routing has that capability as primary, and names the claim, the name and the spec line - route the claim that adds the name there. A related capability gets no slice, so nothing it owns would change (bench case M04: the audit event catalogue).
+- A claim that adds a new name to a family another capability's specification lists - a name in backticks of exactly two parts joined by one dot, `family.member` (an event or key name), that no live spec holds yet, while that capability's spec holds others of the family - needs that capability as a primary: the gate refuses the routing unless a claim of the routing has that capability as primary, and names the claim, the name and the spec line - route the claim that adds the name there. A related capability gets no slice, so nothing it owns would change (bench case M04: the audit event catalogue). A package or property prefix (`ru.`, `com.`, `spring.`) is not a family, and a name of three or more parts (`ru.bank.Document`, `spring.datasource.url`) is not read as a member of one.
 - `coverage.yaml` validates against `coverage.schema.yaml`.
 - Each slice validates against `slice.schema.yaml`.
 - Zero unresolved blocking decisions.
@@ -128,7 +129,7 @@ Apply analyzed specification deltas to the authoritative product specification i
 ### Rules
 1. Draft the specification diff in `docs/changes/<change-id>/spec-delta.md`.
 2. Update normative requirement files under `docs/spec/**` in imperative, unambiguous language. Use RFC 2119 `MUST` / `MUST NOT` / `SHOULD` / `MAY` (or `ДОЛЖЕН` / `НЕ ДОЛЖЕН`). Prefer EARS: WHEN [condition] THE SYSTEM SHALL [observable behavior]. EARS is style, not a new file format and not a Specify gate.
-3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close`: `deltafuse advance <change-dir> --gate specified`. Added/modified `spec-delta` paths must stay inside those slice files.
+3. Every new or modified requirement must be traceable to at least one `CR-*` claim. `deltafuse next` selects one Specify pass: one unspecified slice (`spec_refs` only), then `close`: `deltafuse state <change-dir> --change --status specification-proposed` and `deltafuse next` - the human's verdict applies the `specified` gate. Added/modified `spec-delta` paths must stay inside those slice files.
 4. If specification delta was marked with operation `none` during analysis (Implementation Bug), record explicit proof in `spec-delta.md` that existing specification already mandates the requested behavior.
 
 ### Gate
@@ -220,7 +221,7 @@ Declare what must become true for one atomic task: freeze a Red oracle that fail
 - **Forbidden Read Scope**: Production implementation code under test.
 
 ### Rules
-1. Implement the minimal test case in the file indicated by `test_target`. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
+1. Implement the minimal test case in a test file the task's `allowed_paths` (or the Declare write scope) covers. On a compiled language the test cannot reference a symbol that does not exist yet, so add the throwing stub first and take Red against it; the stub must already be listed in the task's `allowed_paths` (Decompose declares it, Declare cannot). Without it there is no compilation, no test report and no Red.
 2. Execute the test target against the unmodified codebase with the kernel:
    `deltafuse evidence <change-dir> --phase red --task <task-id> --changed-path <test-rel> -- <command>`.
    Do not hand-write `evidence/red/*.yaml`. The Core stamps the file; the gate (`advance`; `check-gate` previews it) rejects unstamped YAML.
@@ -277,7 +278,7 @@ Author the minimal production code necessary to turn the failing test target gre
 ### Gate
 - Test target passes cleanly.
 - Full regression suite passes without failures.
-- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current `docs/spec/**` and `src/**` content hash.
+- `evidence/green/<task-id>.yaml` and `evidence/regression/<task-id>.yaml` recorded and valid, each with `base_revision` matching the current content hash of `docs/spec/**` and the product's code roots (`workflow.code_roots`, else `src/**` and `tests/**`).
 - On `route: code`, the Green must answer a Red that actually failed. A Green whose matching Red is `already-green` proves no delta and does not close the gate; a task whose oracle is already met is closed instead: `superseded` when it changes no requirement (`requirement_delta: none`; the Core refuses it otherwise), or by the human when it promised one. A Change whose every requirement is already met closes on the no-op path (terminal `not-reproduced`). A declared oracle that Implement shows no code can pass (it contradicts the accepted spec or itself) is not edited and not re-declared from Implement: the Worker records Green against it as declared - the run fails, and the Core keeps the record for the human - and then marks the task `blocked` (the Core refuses `blocked` from the Worker until the task has a Green it recorded no earlier than the task's Red); the human settles it: `deltafuse decide <change-dir> --task <id> --status cancelled` drops the task, `--status reopened [--note "<why>"]` archives its evidence under `reopened/<task>.<n>/`, puts the task's product files back as the `declaring` gate found them (the gate copies them to `.deltafuse/snapshots/<sha256>`, named by content, and records `{path: sha256}` in its receipt), and returns it to `pending`. A reopened task, and only it, is declared again while its Change is past Declare; `deltafuse next` names the archive and the human's note.
 - On `route: code`, the frozen oracle must be intact: the gate recomputes `red_oracle_tests` (or, on an older record, `red_oracle`) and refuses a difference, naming the test or the file that moved, so weakening the assertion during Implement does not produce a Green; and with pytest the frozen tests must have passed on their own in the Green's isolated run (`oracle_isolation`).
 - On `route: code`, each Green must have passed the tests its Red recorded as failing (`tests.failed`): the gate reads the Green record's own runner report and refuses a Green over other tests, or one with no report, whatever its exit code.
@@ -296,11 +297,11 @@ The Verifier checks that:
 2. Every claim traces to an accepted requirement in `docs/spec/**` (or proven `unchanged` for bugfixes).
 3. Every claim traces to at least one completed task in `coverage.yaml`.
 4. Every task has verified `red`, `green`, and `regression` evidence artifacts. The Core checks these records at the `implemented` gate and again at `converged`, and names any record at fault; the Verifier reads the trace from `coverage.yaml` - including `task_evidence`, the Core's per-task summary of those records, refreshed at the `implemented` gate - and opens a record only when that summary or a gate error names it, so this step's context does not grow with the number of tasks.
-5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses.
+5. Active tasks in the Change are transitioned to `verified`. `cancelled` and `superseded` tasks remain in those terminal statuses. A claim whose tasks were all superseded converges on their Red: each such task holds an `already-green` Red (`requirement_delta: none`), the tests in it passed on the unchanged product and the verification run must pass them again, so the claim needs no Green or regression record. A superseded task without such a Red does not cover its claim, and a claim whose tasks were all cancelled still has no task.
 
 ### Convergence Analysis
 1. Execute full project verification suite.
-2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching current `docs/spec/**` and `src/**`). The `converged` gate refuses a run that did not pass every test the Change's Red and regression records name (the Red tests of every task not cancelled, a superseded task's passing tests, each regression run's tests): a failing test is fixed, never left out of the command.
+2. Record change-level verification evidence in `evidence/verification/run.yaml` (`phase: verification`, `task: null`, `base_revision` matching the current `docs/spec/**` and the product's code roots (`workflow.code_roots`, else `src/**` and `tests/**`)). The `converged` gate refuses a run that did not pass every test the Change's Red and regression records name (the Red tests of every task not cancelled, a superseded task's passing tests, each regression run's tests): a failing test is fixed, never left out of the command.
 3. Generate `docs/changes/<change-id>/verification.md` detailing:
    - A `- Outcome:` line holding exactly one verdict - `converged`, or an exact gap (`tasks-missing`, `spec-gap`, `test-gap`, `scope-drift`, `decision-gap`, `not-reproduced`). The `converged` gate reads this line and refuses any gap verdict, so a gap stops the Change here. `deltafuse next` then halts for the human instead of selecting Verify again. For `spec-gap` and `tasks-missing` the human answers with `deltafuse decide <change-dir> --gap <gap> --status reopened [--note "<why>"]`: verification.md, the verification run and every task's Green and regression move to `reopened/verify.<n>/`, the slices return to `draft`, the tasks to `declared` and spec-delta.md to `proposed`, and the Change rewinds to `analyzing` (a `gap-reopen` receipt the chain replays). Analyze gets a `gap` pass that names the gap and may widen the slices' bounds (`spec-gap`) or route the claims no task carried to the slice whose task tests them (`tasks-missing`); Specify follows; once the human accepts the specification again the Core walks `decomposed` and `declaring` - unless a `tasks-missing` pass left a slice with no task: then the Change stays `specified` and `deltafuse next` sends Decompose to give that slice its task, which is declared before the `declaring` gate - and Implement re-records Green and regression on the code already there. Other gaps have no Core route back yet and halt.;
    - Traceability matrix;
@@ -311,9 +312,9 @@ The Verifier checks that:
 
 ### Archiving
 Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks the gate and writes the status in one call), then `deltafuse archive <change-dir>`. Archive applies only from status `converged`, which `advance` writes; `check-gate` is the read-only preview of the same check and moves nothing. Archiving:
-1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>`.
-2. Updates any related intake requests in `docs/intake/` and moves them to `docs/archive/intake/`.
-3. Updates `change.yaml` status to `archived`.
+1. Moves the complete Change directory from `docs/changes/<change-id>` to `docs/archive/changes/<date>-<change-id>` in one rename: if the directory cannot be moved (it is in use), nothing is archived.
+2. Records the archive receipt and updates `change.yaml` status to `archived`.
+3. Moves the intake sources the Change names in `source.intake_refs` from `docs/intake/` to `docs/archive/intake/` - never over an existing entry, and not while another active Change cites the same source.
 4. Leaves the archived Change package as an immutable historical record.
 
 ---
@@ -325,7 +326,7 @@ Close the gate with `deltafuse advance <change-dir> --gate converged` (it checks
 - **Workflow**:
   1. Intake normalizes report into `CHG-NNN`.
   2. Analyze verifies that existing specification already requires the expected behavior (`specification.operation: none`).
-  3. Specify transitions Change from `analyzed` to `specified`, recording proof in `spec-delta.md` that existing specification already requires the behavior without modifying normative spec.
+  3. Specify is skipped: with `intent: bugfix` and `docs/spec/**` exactly as it was at Intake, `deltafuse next` goes from `analyzed` to Decompose (the Core compares the specification tree itself; a moved specification sends the Change through Specify and its Human Gate).
   4. Decompose creates bugfix task.
   5. Declare writes the Red oracle (what must become true); records Red evidence.
   6. Implement fixes code; records Green & Regression evidence.
@@ -357,6 +358,6 @@ When initializing a new product repository:
 
 A DeltaFuse Change is considered complete when:
 - All claims (`CR-*`) are traced to passing tests and accepted specification.
-- All tasks are in `verified` status.
+- Every live task is `implemented` or `verified` (Verify marks the implemented ones `verified`); `cancelled` and `superseded` tasks stay as they are.
 - Red, Green, Regression, and Verification evidence files are recorded and valid.
 - Package is archived in `docs/archive/changes/<date>-<change-id>/`.
